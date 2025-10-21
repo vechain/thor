@@ -56,16 +56,16 @@ func (n *Node) packerLoop(ctx context.Context) {
 		base := now
 		// a block proposer will be given higher priority in the range of (slotTime, slotTime+2*thor.BlockInterval)
 		// and here we left at maximum 3 second as buffer for packing and broadcasting the block
-		buff := min(thor.BlockInterval/2, uint64(3))
+		buff := min(thor.BlockInterval()/2, uint64(3))
 		parentTime := n.repo.BestBlockSummary().Header.Timestamp()
 		// if now is in the prioritized window, use the optimal timestamp as base to schedule next time slot
-		if now > parentTime && now < parentTime+3*thor.BlockInterval-buff {
-			base = parentTime + thor.BlockInterval
+		if now > parentTime && now < parentTime+3*thor.BlockInterval()-buff {
+			base = parentTime + thor.BlockInterval()
 		}
 		// otherwise, use now as base
-		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), base)
+		flow, pos, err := n.packer.Schedule(n.repo.BestBlockSummary(), base)
 		if err != nil {
-			if authorized {
+			if !packer.IsSchedulingError(err) && authorized {
 				authorized = false
 				logger.Warn("unable to pack block", "err", err)
 			}
@@ -81,10 +81,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 			authorized = true
 			logger.Info("prepared to pack block")
 		}
-		logger.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
+		logger.Info("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore(), "pos", pos)
 
 		for {
-			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
+			if uint64(time.Now().Unix())+thor.BlockInterval()/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
 				if err := n.pack(flow); err != nil {
@@ -130,7 +130,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) (thor.Bytes32, error) {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.options.SkipLogs && !n.logDBFailed
@@ -155,27 +155,27 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			var err error
 			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 			if err != nil {
-				return errors.Wrap(err, "get vote")
+				return thor.Bytes32{}, errors.Wrap(err, "get vote")
 			}
 		}
 
 		// pack the new block
 		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {
-			return errors.Wrap(err, "failed to pack block")
+			return thor.Bytes32{}, errors.Wrap(err, "failed to pack block")
 		}
 		execElapsed := mclock.Now() - startTime
 
 		// write logs
 		if logEnabled {
 			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return errors.Wrap(err, "write logs")
+				return thor.Bytes32{}, errors.Wrap(err, "write logs")
 			}
 		}
 
 		// commit the state
 		if _, err := stage.Commit(); err != nil {
-			return errors.Wrap(err, "commit state")
+			return thor.Bytes32{}, errors.Wrap(err, "commit state")
 		}
 
 		// sync the log-writing task
@@ -188,15 +188,16 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts, true); err != nil {
-			return errors.Wrap(err, "add block")
+			return thor.Bytes32{}, errors.Wrap(err, "add block")
 		}
 
 		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
-				return errors.Wrap(err, "bft commits")
+				return thor.Bytes32{}, errors.Wrap(err, "bft commits")
 			}
 		}
+
 		realElapsed := mclock.Now() - startTime
 
 		n.processFork(newBlock, oldBest.Header.ID())
@@ -217,6 +218,6 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
-		return nil
+		return newBlock.Header().ID(), nil
 	})
 }

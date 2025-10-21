@@ -87,7 +87,7 @@ func TestP(t *testing.T) {
 	for {
 		best := repo.BestBlockSummary()
 		p := packer.New(repo, stater, a1.Address, &a1.Address, &thor.NoFork, 0)
-		flow, err := p.Schedule(best, uint64(time.Now().Unix()))
+		flow, _, err := p.Schedule(best, uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,7 +153,7 @@ func TestForkVIP191(t *testing.T) {
 
 	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a1.Address, &a1.Address, &fc, 0)
-	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
+	flow, _, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,13 +198,14 @@ func TestBlocklist(t *testing.T) {
 		ETH_CONST: math.MaxUint32,
 		BLOCKLIST: 0,
 		GALACTICA: math.MaxUint32,
+		HAYABUSA:  math.MaxUint32,
 	}
 
 	thor.MockBlocklist([]string{a0.Address.String()})
 
 	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig, 0)
-	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
+	flow, _, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,13 +245,13 @@ func TestMock(t *testing.T) {
 	best := repo.BestBlockSummary()
 
 	// Create a packing flow mock with header gas limit
-	_, err := p.Mock(best, uint64(time.Now().Unix()), b0.Header().GasLimit())
+	_, _, err := p.Mock(best, uint64(time.Now().Unix()), b0.Header().GasLimit())
 	if err != nil {
 		t.Fatal("Failure to create a packing flow mock")
 	}
 
 	// Create a packing flow mock with 0 gas limit
-	_, err = p.Mock(best, uint64(time.Now().Unix()), 0)
+	_, _, err = p.Mock(best, uint64(time.Now().Unix()), 0)
 	if err != nil {
 		t.Fatal("Failure to create a packing flow mock")
 	}

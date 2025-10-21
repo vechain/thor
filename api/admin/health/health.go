@@ -10,6 +10,7 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -19,10 +20,9 @@ type Health struct {
 	p2p  *comm.Communicator
 }
 
-const (
-	defaultBlockTolerance = time.Duration(2*thor.BlockInterval) * time.Second // 2 blocks tolerance
-	defaultMinPeerCount   = 2
-)
+const defaultMinPeerCount = 2
+
+var defaultBlockTolerance = time.Duration(2*thor.BlockInterval()) * time.Second // 2 blocks tolerance
 
 func New(repo *chain.Repository, p2p *comm.Communicator) *Health {
 	return &Health{
@@ -41,7 +41,7 @@ func (h *Health) isNodeConnectedP2P(peerCount int, minPeerCount int) bool {
 	return peerCount >= minPeerCount
 }
 
-func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*api.HealthStatus, error) {
+func (h *Health) Status(blockTolerance time.Duration, minPeerCount int, master *node.Master) (*api.HealthStatus, error) {
 	// Fetch the best block details
 	bestBlock := h.repo.BestBlockSummary()
 	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
@@ -63,11 +63,25 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int) (*api.He
 	// Calculate overall health status
 	healthy := networkProgressing && nodeConnected
 
+	var masterAddress, beneficiaryAddress *string
+
+	if master != nil {
+		addr := master.Address().Hex()
+		masterAddress = &addr
+
+		if master.Beneficiary != nil {
+			beneAddr := master.Beneficiary.Hex()
+			beneficiaryAddress = &beneAddr
+		}
+	}
+
 	// Return the current status
 	return &api.HealthStatus{
 		Healthy:              healthy,
 		BestBlockTime:        &bestBlockTimestamp,
 		IsNetworkProgressing: networkProgressing,
 		PeerCount:            connectedPeerCount,
+		NodeMaster:           masterAddress,
+		Beneficiary:          beneficiaryAddress,
 	}, nil
 }

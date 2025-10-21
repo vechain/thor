@@ -2,7 +2,17 @@ name: E2E Tests
 
 on:
   workflow_call:
-    
+    inputs:
+      hayabusa-e2e-branch:
+        type: string
+        default: 'release/hayabusa'
+  workflow_dispatch:
+    inputs:
+      hayabusa-e2e-branch:
+        description: 'Branch to test against'
+        required: true
+        default: 'release/hayabusa'
+
 permissions:
   contents: read
 
@@ -41,7 +51,7 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Tests
     steps:
-      # Main: https://github.com/vechain/thor-e2e-tests/tree/edff19f6b2b670f0c5700c26ed7fe576e74c17ce
+      # Main: https://github.com/vechain/thor-e2e-tests/tree/a51bdc9833d1a4641c2d7969414dbe23a4fa345e
       # For release branches, names in the thor and thor-e2e-tests repos should match
       - name: Set e2e repo reference
         id: set-ref
@@ -51,7 +61,7 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           # Default fallback commit
-          DEFAULT_COMMIT="edff19f6b2b670f0c5700c26ed7fe576e74c17ce"
+          DEFAULT_COMMIT="a51bdc9833d1a4641c2d7969414dbe23a4fa345e"
           REF="$DEFAULT_COMMIT"
       
           if [ "$EVENT_NAME" = "pull_request" ]; then
@@ -67,7 +77,7 @@ jobs:
           fi
 
           # Verify if branch exists
-          if ! git ls-remote --heads https://github.com/vechain/thor-e2e-tests.git $REF; then
+          if ! git ls-remote --heads https://github.com/vechain/thor-e2e-tests.git "$REF"; then
             echo "Branch does not exist, using default commit"
             echo "ref=$DEFAULT_COMMIT" >> "$GITHUB_OUTPUT"
           else
@@ -109,3 +119,12 @@ jobs:
           name: e2e-test-results-${{ github.sha }}
           path: ./junit.xml
           retention-days: 14
+
+  run-hayabusa-tests:
+    uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@release/hayabusa
+    with:
+      codebuild-name: codebuild-ThorGHA
+      thor-branch: ${{ github.ref }}
+    permissions:
+      contents: read
+    secrets: inherit

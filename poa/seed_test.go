@@ -23,7 +23,10 @@ import (
 )
 
 func TestSeeder_Generate(t *testing.T) {
-	mockEpochInterval(10)
+	thor.SetConfig(thor.Config{
+		SeederInterval: 10,
+	})
+
 	db := muxdb.NewMem()
 	g := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
@@ -41,19 +44,19 @@ func TestSeeder_Generate(t *testing.T) {
 	rand.Read(sig[:])
 
 	parent := b0
-	for i := 1; i <= int(epochInterval*3); i++ {
+	for i := 1; i <= int(thor.SeederInterval()*3); i++ {
 		b := new(block.Builder).
 			ParentID(parent.Header().ID()).
 			Build().WithSignature(sig[:])
 
-		asBest := i == int(epochInterval*3)
+		asBest := i == int(thor.SeederInterval()*3)
 		if err := repo.AddBlock(b, nil, 0, asBest); err != nil {
 			t.Fatal(err)
 		}
 		parent = b
 	}
 
-	b30ID, err := repo.NewBestChain().GetBlockID(epochInterval * 3)
+	b30ID, err := repo.NewBestChain().GetBlockID(thor.SeederInterval() * 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +97,7 @@ func TestSeeder_Generate(t *testing.T) {
 
 	// 31 - 35
 	parent, _ = repo.GetBlock(repo.BestBlockSummary().Header.ID())
-	for i := 1; i <= int(epochInterval/2); i++ {
+	for i := 1; i <= int(thor.SeederInterval()/2); i++ {
 		b := new(block.Builder).
 			ParentID(parent.Header().ID()).
 			Build().WithSignature(sig[:])
@@ -107,7 +110,7 @@ func TestSeeder_Generate(t *testing.T) {
 
 	// 36 -  55
 	priv, _ := crypto.GenerateKey()
-	for i := 1; i <= int(epochInterval*2); i++ {
+	for i := 1; i <= int(thor.SeederInterval()*2); i++ {
 		sum, err := repo.GetBlockSummary(parent.Header().ID())
 		if err != nil {
 			t.Fatal(err)
@@ -141,7 +144,7 @@ func TestSeeder_Generate(t *testing.T) {
 
 		b = b.WithSignature(cs)
 
-		asBest := i == int(epochInterval*2)
+		asBest := i == int(thor.SeederInterval()*2)
 		if err := repo.AddBlock(b, nil, 0, asBest); err != nil {
 			t.Fatal(err)
 		}

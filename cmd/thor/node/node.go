@@ -21,6 +21,7 @@ import (
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
@@ -62,8 +63,8 @@ type ConsensusEngine interface {
 
 // PackerEngine defines the interface for packing blocks
 type PackerEngine interface {
-	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, err error)
-	Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*packer.Flow, error)
+	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, pos bool, err error)
+	Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*packer.Flow, bool, error)
 	SetTargetGasLimit(gl uint64)
 }
 
@@ -73,6 +74,7 @@ type Node struct {
 	master      *Master
 	repo        *chain.Repository
 	bft         *bft.Engine
+	stater      *state.Stater
 	logDB       *logdb.LogDB
 	txPool      *txpool.TxPool
 	txStashPath string
@@ -92,6 +94,7 @@ func New(
 	master *Master,
 	repo *chain.Repository,
 	bft *bft.Engine,
+	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
 	txStashPath string,
@@ -107,6 +110,7 @@ func New(
 		master:      master,
 		repo:        repo,
 		bft:         bft,
+		stater:      stater,
 		logDB:       logDB,
 		txPool:      txPool,
 		txStashPath: txStashPath,
@@ -186,7 +190,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	newBlockCh := make(chan *comm.NewBlockEvent)
 	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 
-	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
+	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
 	defer futureTicker.Stop()
 
 	connectivityTicker := time.NewTicker(time.Second)
@@ -299,17 +303,15 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
-func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) (err error) {
+func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) (thor.Bytes32, error)) error {
 	n.processLock.Lock()
-	defer func() {
-		// post process block hook, executed only if the block is processed successfully
-		if err == nil {
-			if n.initialSynced && blockNum == n.forkConfig.GALACTICA {
-				printGalacticaWelcomeInfo()
-			}
-		}
-		n.processLock.Unlock()
-	}()
+	defer n.processLock.Unlock()
+
+	var (
+		err       error
+		blockID   thor.Bytes32
+		conflicts []thor.Bytes32
+	)
 
 	if blockNum > n.maxBlockNum {
 		if blockNum > n.maxBlockNum+1 {
@@ -318,42 +320,104 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 		}
 
 		// don't increase maxBlockNum if the block is unprocessable
-		if e := process(0); e != nil {
-			return e
+		if blockID, err = process(0); err != nil {
+			return err
+		}
+
+		if n.initialSynced {
+			if needPrintWelcomeInfo() &&
+				blockNum >= n.forkConfig.HAYABUSA+thor.HayabusaTP() &&
+				// if transition period are set to 0, transition will attempt to happen on every block
+				(thor.HayabusaTP() == 0 || (blockNum-n.forkConfig.HAYABUSA)%thor.HayabusaTP() == 0) {
+				summary, err := n.repo.GetBlockSummary(blockID)
+				if err != nil {
+					return err
+				}
+				state := n.stater.NewState(summary.Root())
+				active, err := builtin.Staker.Native(state).IsPoSActive()
+				if err != nil {
+					return nil
+				}
+				if active {
+					printWelcomeInfo()
+				}
+			}
 		}
 
 		n.maxBlockNum = blockNum
 		return nil
 	}
 
-	conflicts, err := n.repo.ScanConflicts(blockNum)
+	conflicts, err = n.repo.GetConflicts(blockNum)
 	if err != nil {
 		return err
 	}
-	return process(conflicts)
+	blockID, err = process(uint32(len(conflicts)))
+	if err != nil {
+		return err
+	}
+
+	// post process block hook, executed only if the block is processed successfully
+	if err = func() error {
+		if len(conflicts) > 0 {
+			newBlock, err := n.repo.GetBlock(blockID)
+			if err != nil {
+				return err
+			}
+
+			newSigner, err := newBlock.Header().Signer()
+			if err != nil {
+				return err
+			}
+			// iter over conflicting blocks
+			for _, conflict := range conflicts {
+				conflictBlock, err := n.repo.GetBlock(conflict)
+				if err != nil {
+					return err
+				}
+				// logic to verify that the blocks are different and from the same signer
+				existingSigner, err := conflictBlock.Header().Signer()
+				if err != nil {
+					return err
+				}
+				if existingSigner == newSigner &&
+					conflictBlock.Header().ID() != newBlock.Header().ID() {
+					log.Warn("Double signing", "block", shortID(newBlock.Header().ID()), "previous", shortID(conflict), "signer", existingSigner)
+					metricDoubleSignedBlocks().AddWithLabel(1, map[string]string{"signer": existingSigner.String()})
+				}
+			}
+		}
+
+		return nil
+	}(); err != nil {
+		logger.Warn("failed to run post process hook", "err", err)
+	}
+
+	return nil
 }
 
 func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
 	var isTrunk *bool
 
-	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
+	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) (thor.Bytes32, error) {
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
 		if conflicts > 0 {
-			if _, err := n.repo.GetBlockSummary(newBlock.Header().ID()); err != nil {
+			_, err := n.repo.GetBlockSummary(newBlock.Header().ID())
+			if err != nil {
 				if !n.repo.IsNotFound(err) {
-					return err
+					return thor.Bytes32{}, err
 				}
 			} else {
-				return errKnownBlock
+				return thor.Bytes32{}, errKnownBlock
 			}
 		}
 		parentSummary, err := n.repo.GetBlockSummary(newBlock.Header().ParentID())
 		if err != nil {
 			if !n.repo.IsNotFound(err) {
-				return err
+				return thor.Bytes32{}, err
 			}
-			return errParentMissing
+			return thor.Bytes32{}, errParentMissing
 		}
 
 		var (
@@ -362,15 +426,15 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		)
 
 		if ok, err := n.bft.Accepts(newBlock.Header().ParentID()); err != nil {
-			return errors.Wrap(err, "bft accepts")
+			return thor.Bytes32{}, errors.Wrap(err, "bft accepts")
 		} else if !ok {
-			return errBFTRejected
+			return thor.Bytes32{}, errBFTRejected
 		}
 
 		// process the new block
 		stage, receipts, err := n.cons.Process(parentSummary, newBlock, uint64(time.Now().Unix()), conflicts)
 		if err != nil {
-			return err
+			return thor.Bytes32{}, err
 		}
 
 		var becomeNewBest bool
@@ -378,7 +442,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY && oldBest.Header.Number() >= n.forkConfig.FINALITY {
 			becomeNewBest, err = n.bft.Select(newBlock.Header())
 			if err != nil {
-				return errors.Wrap(err, "bft select")
+				return thor.Bytes32{}, errors.Wrap(err, "bft select")
 			}
 		} else {
 			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
@@ -391,13 +455,13 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		// write logs
 		if logEnabled {
 			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return errors.Wrap(err, "write logs")
+				return thor.Bytes32{}, errors.Wrap(err, "write logs")
 			}
 		}
 
 		// commit produced states
 		if _, err := stage.Commit(); err != nil {
-			return errors.Wrap(err, "commit state")
+			return thor.Bytes32{}, errors.Wrap(err, "commit state")
 		}
 
 		// sync the log-writing task
@@ -410,13 +474,13 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts, becomeNewBest); err != nil {
-			return errors.Wrap(err, "add block")
+			return thor.Bytes32{}, errors.Wrap(err, "add block")
 		}
 
 		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			if err := n.bft.CommitBlock(newBlock.Header(), false); err != nil {
-				return errors.Wrap(err, "bft commits")
+				return thor.Bytes32{}, errors.Wrap(err, "bft commits")
 			}
 		}
 
@@ -436,7 +500,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
 		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
-		return nil
+		return newBlock.Header().ID(), nil
 	}); err != nil {
 		switch {
 		case err == errKnownBlock:
@@ -560,7 +624,7 @@ func checkClockOffset() {
 		logger.Debug("failed to access NTP", "err", err)
 		return
 	}
-	if resp.ClockOffset > time.Duration(thor.BlockInterval)*time.Second/2 {
+	if resp.ClockOffset > time.Duration(thor.BlockInterval())*time.Second/2 {
 		logger.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
 	}
 }

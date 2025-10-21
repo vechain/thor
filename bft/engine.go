@@ -92,14 +92,14 @@ func (engine *Engine) Justified() (thor.Bytes32, error) {
 	finalized := engine.Finalized()
 
 	// if head is in the first epoch and not concluded yet
-	if head.Number() < getCheckPoint(engine.forkConfig.FINALITY)+thor.CheckpointInterval-1 {
+	if head.Number() < getCheckPoint(engine.forkConfig.FINALITY)+thor.EpochLength()-1 {
 		return finalized, nil
 	}
 
 	// find the recent concluded checkpoint
 	concluded := getCheckPoint(head.Number())
 	if head.Number() < getStorePoint(head.Number()) {
-		concluded -= thor.CheckpointInterval
+		concluded -= thor.EpochLength()
 	}
 
 	headChain := engine.repo.NewChain(head.ID())
@@ -221,7 +221,7 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	}
 
 	// do not vote COM at the first round
-	if absRound := (block.Number(parentID)+1)/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
+	if absRound := (block.Number(parentID)+1)/thor.EpochLength() - engine.forkConfig.FINALITY/thor.EpochLength(); absRound == 0 {
 		return false, nil
 	}
 
@@ -251,7 +251,7 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 		recentJC = checkpoint
 	} else {
 		// if current round is not justified, find the most recent justified checkpoint
-		prev, err := chain.GetBlockID(getStorePoint(block.Number(parentID) - thor.CheckpointInterval))
+		prev, err := chain.GetBlockID(getStorePoint(block.Number(parentID) - thor.EpochLength()))
 		if err != nil {
 			return false, err
 		}
@@ -317,17 +317,48 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	h := header
 	for h.Number() >= engine.forkConfig.FINALITY {
 		signer, _ := h.Signer()
-		js.AddBlock(signer, h.COM())
+
+		var parentBlockSummary *chain.BlockSummary
+		var err error
+
+		if h.Number() > engine.forkConfig.HAYABUSA+thor.HayabusaTP() {
+			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
+			if err != nil {
+				return nil, err
+			}
+			state := engine.stater.NewState(parentBlockSummary.Root())
+			staker := builtin.Staker.Native(state)
+
+			var weight uint64
+			if posActive, _ := staker.IsPoSActive(); posActive {
+				// PoS is active, get validator weight
+				validator, err := staker.GetValidation(signer)
+				if err != nil {
+					return nil, err
+				}
+				if validator == nil {
+					return nil, errors.New("validator not found")
+				}
+				weight = validator.Weight
+			}
+			// If PoS is not active or error occurred, weight remains 0
+			js.AddBlock(signer, h.COM(), weight)
+		} else {
+			js.AddBlock(signer, h.COM(), 0)
+		}
 
 		if h.Number() <= end {
 			break
 		}
 
-		sum, err := engine.repo.GetBlockSummary(h.ParentID())
-		if err != nil {
-			return nil, err
+		if parentBlockSummary == nil {
+			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
+			if err != nil {
+				return nil, err
+			}
 		}
-		h = sum.Header
+
+		h = parentBlockSummary.Header
 	}
 
 	st := js.Summarize()
@@ -353,7 +384,7 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 
 	c := engine.repo.NewChain(headID)
 	get := func(i int) (uint32, error) {
-		id, err := c.GetBlockID(getStorePoint(searchStart + uint32(i)*thor.CheckpointInterval))
+		id, err := c.GetBlockID(getStorePoint(searchStart + uint32(i)*thor.EpochLength()))
 		if err != nil {
 			return 0, err
 		}
@@ -361,7 +392,7 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 	}
 
 	// sort.Search searches from [0, n)
-	n := int((block.Number(headID)-searchStart)/thor.CheckpointInterval) + 1
+	n := int((block.Number(headID)-searchStart)/thor.EpochLength()) + 1
 	num := sort.Search(n, func(i int) bool {
 		quality, err := get(i)
 		if err != nil {
@@ -385,7 +416,24 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 		return thor.Bytes32{}, errors.New("failed to find the block by quality")
 	}
 
-	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
+	return c.GetBlockID(searchStart + uint32(num)*thor.EpochLength())
+}
+
+func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (uint64, error) {
+	state := engine.stater.NewState(sum.Root())
+	staker := builtin.Staker.Native(state)
+
+	// Get total weight including delegations
+	_, totalWeight, err := staker.LockedStake()
+	if err != nil {
+		return 0, err
+	}
+
+	if totalWeight == 0 {
+		return 0, errors.New("total weight is zero or nil")
+	}
+
+	return totalWeight, nil
 }
 
 func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
@@ -398,7 +446,6 @@ func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, err
 	if mbp == 0 || mbp > thor.InitialMaxBlockProposers {
 		mbp = thor.InitialMaxBlockProposers
 	}
-
 	return mbp, nil
 }
 
@@ -422,7 +469,7 @@ func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {
 }
 
 func getCheckPoint(blockNum uint32) uint32 {
-	return blockNum / thor.CheckpointInterval * thor.CheckpointInterval
+	return blockNum / thor.EpochLength() * thor.EpochLength()
 }
 
 func isCheckPoint(blockNum uint32) bool {
@@ -431,7 +478,7 @@ func isCheckPoint(blockNum uint32) bool {
 
 // save quality at the end of round
 func getStorePoint(blockNum uint32) uint32 {
-	return getCheckPoint(blockNum) + thor.CheckpointInterval - 1
+	return getCheckPoint(blockNum) + thor.EpochLength() - 1
 }
 
 type mockedEngine thor.Bytes32

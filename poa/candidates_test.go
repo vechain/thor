@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -112,7 +113,18 @@ func TestPick(t *testing.T) {
 	// Call NewCandidates with the mock data
 	candidates := NewCandidates(candidateList)
 
-	proposers, err := candidates.Pick(state)
+	endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+	assert.NoError(t, err)
+
+	checkBalance := func(master, endorser thor.Address) (bool, error) {
+		bal, err := state.GetBalance(endorser)
+		if err != nil {
+			return false, err
+		}
+		return bal.Cmp(endorsement) >= 0, nil
+	}
+
+	proposers, err := candidates.Pick(state, checkBalance)
 
 	assert.NoError(t, err)
 

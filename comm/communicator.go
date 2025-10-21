@@ -76,7 +76,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 	isSynced := func() bool {
 		bestBlockTime := c.repo.BestBlockSummary().Header.Timestamp()
 		now := uint64(time.Now().Unix())
-		if bestBlockTime+thor.BlockInterval >= now {
+		if bestBlockTime+thor.BlockInterval() >= now {
 			return true
 		}
 		if syncCount > 2 {
@@ -199,7 +199,7 @@ func (c *Communicator) runPeer(peer *Peer) {
 	if localClock < remoteClock {
 		diff = remoteClock - localClock
 	}
-	if diff > thor.BlockInterval*2 {
+	if diff > thor.BlockInterval()*2 {
 		peer.logger.Debug("failed to handshake", "err", "sys time diff too large")
 		return
 	}

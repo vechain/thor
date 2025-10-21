@@ -8,6 +8,8 @@ package builtin
 import (
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/vechain/thor/v2/builtin/gascharger"
+
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -115,18 +117,24 @@ func init() {
 				return []any{false}
 			}
 
-			env.UseGas(thor.GetBalanceGas)
-			bal, err := env.State().GetBalance(endorsor)
-			if err != nil {
-				panic(err)
-			}
-
 			env.UseGas(thor.SloadGas)
 			endorsement, err := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
 			if err != nil {
 				panic(err)
 			}
-			return []any{bal.Cmp(endorsement) >= 0}
+
+			// Use staker Transition Period logic
+			// to ensure that transitioning validators are marked as endorsed
+			env.UseGas(thor.GetBalanceGas)
+			isEndorsed, err := Staker.NativeMetered(env.State(), gascharger.New(env)).TransitionPeriodBalanceCheck(
+				env.ForkConfig(),
+				env.BlockContext().Number,
+				endorsement,
+			)(thor.Address(nodeMaster), endorsor)
+			if err != nil {
+				panic(err)
+			}
+			return []any{isEndorsed}
 		}},
 	}
 	abi := Authority.NativeABI()

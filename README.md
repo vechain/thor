@@ -82,7 +82,7 @@ For more configuration options, see [Command Line Arguments](https://github.com/
 
 #### Prerequisites
 
-Thor requires Go 1.19+ and a C compiler to build. Install them using your preferred package manager before continuing.
+Thor requires <a href="https://golang.org"><img src="https://img.shields.io/github/go-mod/go-version/vechain/thor"/></a> and a C compiler to build. Install them using your preferred package manager before continuing.
 
 #### Commands
 
@@ -122,11 +122,15 @@ Thor will begin syncing the mainnet and can be accessed at [http://localhost:866
 
 #### Docker CLI
 
-```sh
-docker run -d\
-  -v {path-to-your-data-directory}/.org.vechain.thor:/home/thor/.org.vechain.thor\
-  --api-addr 0.0.0.0:8669 -p 127.0.0.1:8669:8669 -p 11235:11235 -p 11235:11235/udp\
-  --name thor-node vechain/thor --network main
+```html
+docker run -d \
+  -v <local-data-dir>/.org.vechain.thor:/home/thor/.org.vechain.thor \
+  -p 127.0.0.1:8669:8669 \
+  -p 11235:11235 \
+  -p 11235:11235/udp \
+  --name thor-node vechain/thor \
+    --network main  \
+    --api-addr 0.0.0.0:8669
 ```
 
 Thor will begin syncing the mainnet and can be accessed at [http://localhost:8669/](http://localhost:8669/).

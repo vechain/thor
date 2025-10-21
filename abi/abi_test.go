@@ -17,7 +17,7 @@ import (
 )
 
 func TestABI(t *testing.T) {
-	data := gen.MustAsset("compiled/Params.abi")
+	data := gen.MustABI("compiled/Params.abi")
 	abi, err := New(data)
 	assert.Nil(t, err)
 
@@ -81,5 +81,32 @@ func TestABI(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, value, d)
+	}
+}
+
+func TestStakerABI(t *testing.T) {
+	data := gen.MustABI("compiled/Staker.abi")
+	abi, err := New(data)
+	assert.Nil(t, err)
+
+	type testCase struct {
+		name     string
+		constant bool
+	}
+
+	testCases := []testCase{
+		{"totalStake", true},
+		{"queuedStake", true},
+		{"addValidation", false},
+		{"withdrawStake", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			method, found := abi.MethodByName(tc.name)
+			assert.True(t, found)
+			assert.NotNil(t, method)
+			assert.Equal(t, tc.constant, method.Const())
+		})
 	}
 }

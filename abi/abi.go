@@ -28,12 +28,13 @@ type ABI struct {
 // New create an ABI instance.
 func New(data []byte) (*ABI, error) {
 	var fields []struct {
-		Type      string
-		Name      string
-		Constant  bool
-		Anonymous bool
-		Inputs    []ethabi.Argument
-		Outputs   []ethabi.Argument
+		Type            string
+		Name            string
+		Constant        bool
+		Anonymous       bool
+		Inputs          []ethabi.Argument
+		Outputs         []ethabi.Argument
+		StateMutability string
 	}
 
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -58,7 +59,7 @@ func New(data []byte) (*ABI, error) {
 		case "function", "":
 			ethMethod := ethabi.Method{
 				Name:    field.Name,
-				Const:   field.Constant,
+				Const:   field.Constant || field.StateMutability == "view" || field.StateMutability == "pure",
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}

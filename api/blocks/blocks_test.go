@@ -232,8 +232,11 @@ func initBlockServer(t *testing.T) {
 		VIP191:    1,
 		GALACTICA: 1,
 		VIP214:    2,
+		HAYABUSA:  math.MaxUint32,
 	}
-	thorChain, err := testchain.NewWithFork(&forks)
+	hayabusaTP := uint32(math.MaxUint32)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+	thorChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)
 
 	addr := thor.BytesToAddress([]byte("to"))

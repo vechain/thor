@@ -6,6 +6,7 @@ package bft
 
 import (
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -16,14 +17,34 @@ type bftState struct {
 	Committed bool
 }
 
+type vote struct {
+	isCOM  bool
+	weight uint64
+}
+
 // justifier tracks all block vote in one bft round and justify the round.
 type justifier struct {
-	parentQuality uint32
-	checkpoint    uint32
-	threshold     uint64
+	parentQuality   uint32
+	checkpoint      uint32
+	thresholdVotes  uint64
+	thresholdWeight uint64
 
-	votes    map[thor.Address]bool
-	comVotes uint64
+	votes           map[thor.Address]vote
+	comVotes        uint64
+	comWeight       uint64
+	justifiedWeight uint64
+}
+
+func newJustifier(parentQuality, checkpoint uint32, thresholdVotes uint64, thresholdWeight uint64) *justifier {
+	return &justifier{
+		votes:           make(map[thor.Address]vote),
+		parentQuality:   parentQuality,
+		checkpoint:      checkpoint,
+		thresholdVotes:  thresholdVotes,
+		thresholdWeight: thresholdWeight,
+		comWeight:       0,
+		justifiedWeight: 0,
+	}
 }
 
 func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
@@ -41,14 +62,9 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	if err != nil {
 		return nil, err
 	}
-	mbp, err := engine.getMaxBlockProposers(sum)
-	if err != nil {
-		return nil, err
-	}
-	threshold := mbp * 2 / 3
 
 	var parentQuality uint32 // quality of last round
-	if absRound := blockNum/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
+	if absRound := blockNum/thor.EpochLength() - engine.forkConfig.FINALITY/thor.EpochLength(); absRound == 0 {
 		parentQuality = 0
 	} else {
 		var err error
@@ -58,33 +74,68 @@ func (engine *Engine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 		}
 	}
 
-	return &justifier{
-		votes:         make(map[thor.Address]bool),
-		parentQuality: parentQuality,
-		checkpoint:    checkpoint,
-		threshold:     threshold,
-	}, nil
+	state := engine.stater.NewState(sum.Root())
+	staker := builtin.Staker.Native(state)
+	posActive, err := staker.IsPoSActive()
+	if err != nil {
+		return nil, err
+	}
+
+	if posActive {
+		totalWeight, err := engine.getTotalWeight(sum)
+		if err != nil {
+			return nil, err
+		}
+		thresholdWeight := totalWeight * 2 / 3
+		return newJustifier(parentQuality, checkpoint, 0, thresholdWeight), nil
+	} else {
+		mbp, err := engine.getMaxBlockProposers(sum)
+		if err != nil {
+			return nil, err
+		}
+		thresholdVotes := mbp * 2 / 3
+		return newJustifier(parentQuality, checkpoint, thresholdVotes, 0), nil
+	}
 }
 
 // AddBlock adds a new block to the set.
-func (js *justifier) AddBlock(signer thor.Address, isCOM bool) {
+func (js *justifier) AddBlock(signer thor.Address, isCOM bool, weight uint64) {
 	if prev, ok := js.votes[signer]; !ok {
-		js.votes[signer] = isCOM
+		js.votes[signer] = vote{isCOM: isCOM, weight: weight}
+		if weight != 0 {
+			js.justifiedWeight += weight
+		}
 		if isCOM {
 			js.comVotes++
+			if weight != 0 {
+				js.comWeight += weight
+			}
 		}
-	} else if prev != isCOM {
+	} else if prev.isCOM != isCOM {
 		// if one votes both COM and non-COM in one round, count as non-COM
-		js.votes[signer] = false
-		if prev {
+		js.votes[signer] = vote{isCOM: false, weight: prev.weight}
+
+		if prev.isCOM {
 			js.comVotes--
+			if prev.weight != 0 {
+				js.comWeight -= prev.weight
+			}
 		}
 	}
 }
 
 // Summarize summarizes the state of vote set.
 func (js *justifier) Summarize() *bftState {
-	justified := len(js.votes) > int(js.threshold)
+	var justified, committed bool
+
+	// Pre-HAYABUSA
+	if js.thresholdWeight == 0 {
+		justified = uint64(len(js.votes)) > js.thresholdVotes
+		committed = js.comVotes > js.thresholdVotes
+	} else {
+		justified = js.justifiedWeight > js.thresholdWeight
+		committed = js.comWeight > js.thresholdWeight
+	}
 
 	var quality uint32
 	if justified {
@@ -96,6 +147,6 @@ func (js *justifier) Summarize() *bftState {
 	return &bftState{
 		Quality:   quality,
 		Justified: justified,
-		Committed: js.comVotes > js.threshold,
+		Committed: committed,
 	}
 }

@@ -6,12 +6,14 @@
 package packer
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -33,7 +35,7 @@ type Packer struct {
 }
 
 // New create a new Packer instance.
-// The beneficiary is optional, it defaults to endorsor if not set.
+// The beneficiary is optional, it defaults to endorser if not set.
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
@@ -54,82 +56,38 @@ func New(
 	}
 }
 
-// Schedule schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *Flow, err error) {
-	state := p.stater.NewState(parent.Root())
+type scheduler func(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error)
+
+// Schedule a packing flow to pack new block upon given parent and clock time.
+func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flow, bool, error) {
+	st := p.stater.NewState(parent.Root())
 
 	var features tx.Features
 	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
 		features |= tx.DelegationFeature
 	}
 
-	authority := builtin.Authority.Native(state)
-	endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+	var sched scheduler
+	checkpoint := st.NewCheckpoint()
+	dPosStatus, err := builtin.Staker.Native(st).SyncPOS(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
-		return nil, err
+		log.Error("staker sync pos failed - reverting state", "err", err, "height", parent.Header.Number()+1, "parent", parent, "checkpoint", checkpoint)
+		st.RevertTo(checkpoint)
 	}
-
-	mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
-	if err != nil {
-		return nil, err
-	}
-
-	maxBlockProposers := mbp.Uint64()
-	if maxBlockProposers == 0 || maxBlockProposers > thor.InitialMaxBlockProposers {
-		maxBlockProposers = thor.InitialMaxBlockProposers
-	}
-
-	candidates, err := authority.Candidates(endorsement, maxBlockProposers)
-	if err != nil {
-		return nil, err
-	}
-	var (
-		proposers   = make([]poa.Proposer, 0, len(candidates))
-		beneficiary thor.Address
-	)
-	if p.beneficiary != nil {
-		beneficiary = *p.beneficiary
-	}
-
-	for _, c := range candidates {
-		if p.beneficiary == nil && c.NodeMaster == p.nodeMaster {
-			// no beneficiary not set, set it to endorsor
-			beneficiary = c.Endorsor
-		}
-		proposers = append(proposers, poa.Proposer{
-			Address: c.NodeMaster,
-			Active:  c.Active,
-		})
-	}
-
-	// calc the time when it's turn to produce block
-	var sched poa.Scheduler
-	if parent.Header.Number()+1 < p.forkConfig.VIP214 {
-		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp())
+	if dPosStatus.Active {
+		sched = p.schedulePOS
 	} else {
-		var seed []byte
-		seed, err = p.seeder.Generate(parent.Header.ID())
-		if err != nil {
-			return nil, err
-		}
-		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
+		sched = p.schedulePOA
 	}
+
+	beneficiary, newBlockTime, score, err := sched(parent, nowTimestamp, st)
 	if err != nil {
-		return nil, err
-	}
-
-	newBlockTime := sched.Schedule(nowTimestamp)
-	updates, score := sched.Updates(newBlockTime)
-
-	for _, u := range updates {
-		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, err
-		}
+		return nil, false, err
 	}
 
 	rt := runtime.New(
 		p.repo.NewChain(parent.Header.ID()),
-		state,
+		st,
 		&xenv.BlockContext{
 			Beneficiary: beneficiary,
 			Signer:      p.nodeMaster,
@@ -141,18 +99,74 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, dPosStatus.Active), dPosStatus.Active, nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
 // It will skip the PoA verification and scheduling, and the block produced by
 // the returned flow is not in consensus.
-func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*Flow, error) {
+func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*Flow, bool, error) {
 	state := p.stater.NewState(parent.Root())
 
 	var features tx.Features
 	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
 		features |= tx.DelegationFeature
+	}
+
+	staker := builtin.Staker.Native(state)
+	dPosStatus, err := staker.SyncPOS(p.forkConfig, parent.Header.Number()+1)
+	if err != nil {
+		return nil, false, err
+	}
+
+	beneficiary := p.beneficiary
+
+	var score uint64
+	if dPosStatus.Active {
+		leaders, err := staker.LeaderGroup()
+		if err != nil {
+			return nil, false, err
+		}
+		_, totalWeight, err := staker.LockedStake()
+		if err != nil {
+			return nil, false, err
+		}
+
+		onlineWeight := uint64(0)
+		for _, leader := range leaders {
+			if leader.Active {
+				onlineWeight += leader.Weight
+			}
+			if leader.Address == p.nodeMaster {
+				if leader.Beneficiary != nil {
+					beneficiary = leader.Beneficiary
+				} else if beneficiary == nil {
+					beneficiary = &leader.Endorser
+				}
+			}
+		}
+		score = onlineWeight * thor.MaxPosScore / totalWeight
+	} else {
+		endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+		if err != nil {
+			return nil, false, err
+		}
+		checker := staker.TransitionPeriodBalanceCheck(p.forkConfig, parent.Header.Number()+1, endorsement)
+		authorities, err := builtin.Authority.Native(state).Candidates(checker, thor.InitialMaxBlockProposers)
+		if err != nil {
+			return nil, false, err
+		}
+		for _, authority := range authorities {
+			if authority.Active {
+				score++
+			}
+			if beneficiary == nil && authority.NodeMaster == p.nodeMaster {
+				beneficiary = &authority.Endorsor
+			}
+		}
+	}
+	if beneficiary == nil {
+		return nil, false, errors.New("no beneficiary set, cannot pack block")
 	}
 
 	gl := gasLimit
@@ -169,17 +183,17 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 		p.repo.NewChain(parent.Header.ID()),
 		state,
 		&xenv.BlockContext{
-			Beneficiary: p.nodeMaster,
+			Beneficiary: *beneficiary,
 			Signer:      p.nodeMaster,
 			Number:      parent.Header.Number() + 1,
 			Time:        targetTime,
 			GasLimit:    gl,
-			TotalScore:  parent.Header.TotalScore() + 1,
+			TotalScore:  parent.Header.TotalScore() + score,
 			BaseFee:     baseFee,
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features), nil
+	return newFlow(p, parent.Header, rt, features, dPosStatus.Active), dPosStatus.Active, nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

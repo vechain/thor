@@ -7,6 +7,7 @@ package packer_test
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func TestAdopt(t *testing.T) {
 		t.Fatal("Error getting block summary:", err)
 	}
 
-	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, _, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal("Error scheduling:", err)
 	}
@@ -113,10 +114,14 @@ func TestAdopt(t *testing.T) {
 }
 
 func TestAdoptTypedTxs(t *testing.T) {
+	fc := &thor.SoloFork
+	fc.HAYABUSA = math.MaxUint32
 	// Setup environment
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
+		ForkConfig: fc,
+	})
 
 	// Build genesis block
 	b, _, _, _ := g.Build(stater)
@@ -128,13 +133,13 @@ func TestAdoptTypedTxs(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &thor.ForkConfig{GALACTICA: 1}, 0)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, fc, 0)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
 	}
 
-	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, _, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal("Error scheduling:", err)
 	}
@@ -180,7 +185,7 @@ func TestPack(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 
@@ -212,7 +217,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 
 	// Block 1: Galactica is not enabled
 	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false)
@@ -229,7 +234,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 
 	// Block 2: Galactica is enabled
 	parentSum, _ = repo.GetBlockSummary(block.Header().ID())
-	flow, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval)
+	flow, _, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval())
 	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(2), block.Header().Number())
@@ -254,10 +259,14 @@ func TestAdoptErr(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	launchTime := uint64(1526400000)
+
+	config := &thor.NoFork
+	config.BLOCKLIST = 0
+
 	g := new(genesis.Builder).
 		GasLimit(0).
 		Timestamp(launchTime).
-		ForkConfig(&thor.NoFork).
+		ForkConfig(config).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
@@ -279,10 +288,10 @@ func TestAdoptErr(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &thor.SoloFork, 0)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, config, 0)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
-	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, _, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
 
 	// Test chain tag mismatch
 	tx1 := createTx(tx.TypeLegacy, byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
@@ -341,8 +350,8 @@ func TestAdoptErr(t *testing.T) {
 }
 
 func TestAdoptErrorAfterGalactica(t *testing.T) {
-	forks := thor.ForkConfig{GALACTICA: 2}
-	chain, err := testchain.NewWithFork(&forks)
+	forks := thor.ForkConfig{GALACTICA: 2, HAYABUSA: math.MaxUint32}
+	chain, err := testchain.NewWithFork(&forks, 180)
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee tx before galactica fork activates - FAILS
@@ -403,7 +412,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 }
 
 func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
-	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1})
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32}, 180)
 	assert.NoError(t, err)
 
 	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
@@ -432,10 +441,10 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 
 func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	config := genesis.DevConfig{
-		ForkConfig:      &thor.ForkConfig{GALACTICA: 1},
+		ForkConfig:      &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32},
 		KeyBaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
 	}
-	chain, err := testchain.NewIntegrationTestChain(config)
+	chain, err := testchain.NewIntegrationTestChain(config, 180)
 	assert.NoError(t, err)
 
 	// Mint a block to activate Galactica fork
@@ -492,7 +501,7 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig, 2)
 
-	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
+	flow, _, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
 
 	expectedErrorMessage := "bad tx: effective priority fee too low"
 	if err := flow.Adopt(txNoPriorityFee); err.Error() != expectedErrorMessage {

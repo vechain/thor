@@ -9,22 +9,30 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"math/rand/v2"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 // Chain represents the blockchain structure.
@@ -71,35 +79,47 @@ var DefaultForkConfig = thor.ForkConfig{
 	ETH_IST:   math.MaxUint32,
 	FINALITY:  math.MaxUint32,
 	GALACTICA: math.MaxUint32,
+	HAYABUSA:  math.MaxUint32,
 }
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
 func NewDefault() (*Chain, error) {
-	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig})
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: &DefaultForkConfig}, 180)
 }
 
 // NewWithFork is a wrapper function that creates a Chain for testing with custom forkConfig.
-func NewWithFork(forkConfig *thor.ForkConfig) (*Chain, error) {
-	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig})
+func NewWithFork(forkConfig *thor.ForkConfig, epochLength uint32) (*Chain, error) {
+	return NewIntegrationTestChain(genesis.DevConfig{ForkConfig: forkConfig}, epochLength)
 }
 
-// newIntegrationTestChain is a convenience function that creates a Chain for testing.
+// NewIntegrationTestChain is a convenience function that creates a Chain for testing.
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
-func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
-	// Initialize the database
-	db := muxdb.NewMem()
-
-	// Create the state manager (Stater) with the initialized database.
-	stater := state.NewStater(db)
-
+func NewIntegrationTestChain(config genesis.DevConfig, epochLength uint32) (*Chain, error) {
 	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
 	if config.LaunchTime == 0 {
 		now := uint64(time.Now().Unix())
-		config.LaunchTime = now - now%thor.BlockInterval
+		config.LaunchTime = now - now%thor.BlockInterval()
 	}
 
 	// Initialize the genesis and retrieve the genesis block
 	gene := genesis.NewDevnetWithConfig(config)
+	return NewIntegrationTestChainWithGenesis(gene, config.ForkConfig, epochLength)
+}
+
+func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.ForkConfig, epochLength uint32) (*Chain, error) {
+	// Initialize the database
+	db := muxdb.NewMem()
+	st := state.New(db, trie.Root{})
+
+	thor.SetConfig(thor.Config{
+		EpochLength: epochLength,
+	})
+
+	prm := params.New(thor.BytesToAddress([]byte("params")), st)
+	_ = staker.New(builtin.Staker.Address, st, prm, nil)
+
+	// Create the state manager (Stater) with the initialized database.
+	stater := state.NewStater(db)
 	geneBlk, _, _, err := gene.Build(stater)
 	if err != nil {
 		return nil, err
@@ -125,8 +145,13 @@ func NewIntegrationTestChain(config genesis.DevConfig) (*Chain, error) {
 		stater,
 		geneBlk,
 		logDb,
-		config.ForkConfig,
+		forkConfig,
 	), nil
+}
+
+// Genesis returns the genesis information of the chain, which includes the initial state and configuration.
+func (c *Chain) Genesis() *genesis.Genesis {
+	return c.genesis
 }
 
 // Repo returns the blockchain's repository, which stores blocks and other data.
@@ -155,9 +180,14 @@ func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx
 	return c.MintBlock(account, transactions...)
 }
 
+// Contract creates a new contract instance with the provided address and ABI.
+func (c *Chain) Contract(addr thor.Address, abi *abi.ABI, acc genesis.DevAccount) *Contract {
+	return NewContract(c, acc, addr, abi)
+}
+
 // MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
 func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
-	builer := new(tx.Builder).GasPriceCoef(255).
+	builder := new(tx.Builder).GasPriceCoef(255).
 		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
 		Expiration(1000).
 		ChainTag(c.Repo().ChainTag()).
@@ -165,10 +195,10 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 		Nonce(rand.Uint64()) //#nosec G404
 
 	for _, clause := range clauses {
-		builer.Clause(clause)
+		builder.Clause(clause)
 	}
 
-	tx := builer.Build()
+	tx := builder.Build()
 	signature, err := crypto.Sign(tx.SigningHash().Bytes(), account.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("unable to sign tx: %w", err)
@@ -185,9 +215,9 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig, 0)
 
 	// Create a new block
-	blkFlow, err := blkPacker.Mock(
+	blkFlow, _, err := blkPacker.Mock(
 		c.Repo().BestBlockSummary(),
-		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval,
+		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval(),
 		c.Repo().BestBlockSummary().Header.GasLimit(),
 	)
 	if err != nil {
@@ -207,6 +237,11 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 		return fmt.Errorf("unable to pack tx: %w", err)
 	}
 
+	return c.AddBlock(newBlk, stage, receipts)
+}
+
+// AddBlock manually adds a new block to the chain.
+func (c *Chain) AddBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
 	// Commit the new block to the chain's state.
 	if _, err := stage.Commit(); err != nil {
 		return fmt.Errorf("unable to commit tx: %w", err)
@@ -226,6 +261,55 @@ func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transa
 		return err
 	}
 	return nil
+}
+
+// ClauseCall executes contract call with clause referenced by the clauseIdx parameter, the rest of tx is passed as is.
+func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clauseIdx int) ([]byte, uint64, error) {
+	ch := c.repo.NewBestChain()
+	summary, err := c.repo.GetBlockSummary(ch.HeadID())
+	if err != nil {
+		return nil, 0, err
+	}
+	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
+	rt := runtime.New(
+		ch,
+		st,
+		&xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address},
+		c.forkConfig,
+	)
+	maxGas := uint64(math.MaxUint32)
+	exec, _ := rt.PrepareClause(trx.Clauses()[clauseIdx],
+		0, maxGas, &xenv.TransactionContext{
+			ID:         trx.ID(),
+			Origin:     account.Address,
+			GasPrice:   &big.Int{},
+			GasPayer:   account.Address,
+			ProvedWork: trx.UnprovedWork(),
+			BlockRef:   trx.BlockRef(),
+			Expiration: trx.Expiration(),
+		})
+
+	out, _, err := exec()
+	if err != nil {
+		return nil, 0, err
+	}
+	if out.VMErr != nil {
+		return nil, 0, out.VMErr
+	}
+	return out.Data, maxGas - out.LeftOverGas, err
+}
+
+func (c *Chain) GetTxReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
+	return c.repo.NewBestChain().GetTransactionReceipt(txID)
+}
+
+func (c *Chain) GetTxBlock(txID *thor.Bytes32) (*block.Block, error) {
+	_, meta, err := c.repo.NewBestChain().GetTransaction(*txID)
+	if err != nil {
+		return nil, err
+	}
+	block, err := c.repo.NewBestChain().GetBlock(meta.BlockNum)
+	return block, err
 }
 
 // GetAllBlocks retrieves all blocks from the blockchain, starting from the best block and moving backward to the genesis block.
@@ -266,6 +350,11 @@ func (c *Chain) BestBlock() (*block.Block, error) {
 // GetForkConfig returns the current fork configuration based on the ID of the genesis block.
 func (c *Chain) GetForkConfig() *thor.ForkConfig {
 	return c.forkConfig
+}
+
+// ChainTag returns the chain tag of the genesis block.
+func (c *Chain) ChainTag() byte {
+	return c.Repo().ChainTag()
 }
 
 // Database returns the current database.

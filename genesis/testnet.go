@@ -16,6 +16,7 @@ import (
 
 // NewTestnet create genesis for testnet.
 func NewTestnet() *Genesis {
+	thor.LockConfig()                // mark config as locked for testnet
 	launchTime := uint64(1530014400) // 'Tue Jun 26 2018 20:00:00 GMT+0800 (CST)'
 
 	// use this address as executor instead of builtin one, for test purpose
@@ -23,7 +24,7 @@ func NewTestnet() *Genesis {
 	acccount0 := thor.MustParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d")
 
 	master0 := thor.MustParseAddress("0x25AE0ef84dA4a76D5a1DFE80D3789C2c46FeE30a")
-	endorser0 := thor.MustParseAddress("0xb4094c25f86d628fdD571Afc4077f0d0196afB48")
+	endorsor0 := thor.MustParseAddress("0xb4094c25f86d628fdD571Afc4077f0d0196afB48")
 
 	builder := new(Builder).
 		Timestamp(launchTime).
@@ -59,12 +60,12 @@ func NewTestnet() *Genesis {
 			}
 			tokenSupply.Add(tokenSupply, amount)
 
-			// 25 million for endorser0
+			// 25 million for endorsor0
 			amount = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25*1000*1000))
-			if err := state.SetBalance(endorser0, amount); err != nil {
+			if err := state.SetBalance(endorsor0, amount); err != nil {
 				return err
 			}
-			if err := state.SetEnergy(endorser0, &big.Int{}, launchTime); err != nil {
+			if err := state.SetEnergy(endorsor0, &big.Int{}, launchTime); err != nil {
 				return err
 			}
 			tokenSupply.Add(tokenSupply, amount)
@@ -89,7 +90,7 @@ func NewTestnet() *Genesis {
 			executor).
 
 		// add master0 as the initial block proposer
-		Call(tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", master0, endorser0, thor.BytesToBytes32([]byte("master0")))),
+		Call(tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", master0, endorsor0, thor.BytesToBytes32([]byte("master0")))),
 			executor)
 
 	id, err := builder.ComputeID()
