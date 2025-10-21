@@ -98,6 +98,13 @@ jobs:
           done <<< "${{ steps.meta.outputs.tags }}"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
+      - name: Debug tags
+        run: |
+          echo "META TAGS:"
+          printf '%s\n' "${{ steps.meta.outputs.tags }}"
+          echo "SUFFIXED TAGS:"
+          printf '%s\n' "${{ steps.tags.outputs.tags }}"
+
       - name: Build and push (${{ matrix.platform }})
         id: build
         if: ${{ github.event_name != 'pull_request' || matrix.platform == 'linux/amd64' }}
