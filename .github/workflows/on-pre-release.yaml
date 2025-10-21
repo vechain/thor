@@ -19,7 +19,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # This step validates that the tag is a pre-release
         run: |
-          prerelease=$(gh release view ${GITHUB_REF_NAME} --json isPrerelease | jq -r '.isPrerelease')
+          prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
           if [ "$prerelease" != "true" ]; then
             echo "Tag is not a pre-release"
             exit 1
@@ -28,7 +28,7 @@ jobs:
       - name: Validate VERSION
         run: |
           version=$(cat cmd/thor/VERSION)
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ github.ref_name }}"
           tag="${tag#v}"  # Remove the "v" prefix from the tag
           tag="${tag%%-rc.*}" # Remove the "-rc.*" suffix from the tag
           if [ "$tag" != "$version" ]; then
@@ -50,7 +50,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # This step validates that the tag is an official release
         run: |
-          prerelease=$(gh release view ${GITHUB_REF_NAME} --json isPrerelease | jq -r '.isPrerelease')
+          prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
           if [ "$prerelease" != "true" ]; then
             echo "Tag is not a release candidate"
             exit 1

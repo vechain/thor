@@ -13,4 +13,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: License Check
-        uses: apache/skywalking-eyes@cd7b195c51fd3d6ad52afceb760719ddc6b3ee91 # v0.6.0
+        uses: apache/skywalking-eyes@v0.6.0
