@@ -201,7 +201,7 @@ jobs:
         uses: crazy-max/ghaction-container-scan@v3
         if: ${{ (github.event_name == 'pull_request' && matrix.platform == 'linux/amd64') || (github.ref_name == 'master' && matrix.platform == 'linux/amd64') }}
         with:
-          image: ${{ github.event_name == 'pull_request' && steps.tags.outputs.tags || fromJSON(steps.meta.outputs.json).tags[0] || steps.meta.outputs.tags }}
+          image: ${{ github.event_name == 'pull_request' && steps.tags.outputs.tags || fromJSON(steps.meta.outputs.json).tags[0] }}
           annotations: true
           severity: LOW
           dockerfile: ./Dockerfile
