@@ -80,6 +80,24 @@ jobs:
           # use the branch + sha if workflow_dispatch
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
+      - name: Compute arch-suffixed tags
+        id: tags
+        shell: bash
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+          case "$PLATFORM" in
+            linux/amd64) ARCH="amd64" ;;
+            linux/arm64) ARCH="arm64" ;;
+            *) echo "Unsupported platform: $PLATFORM" >&2; exit 1 ;;
+          esac
+          echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "${tag}-${ARCH}"
+          done <<< "${{ steps.meta.outputs.tags }}"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Build and push (${{ matrix.platform }})
         id: build
         if: ${{ github.event_name != 'pull_request' || matrix.platform == 'linux/amd64' }}
@@ -91,7 +109,7 @@ jobs:
           load: ${{ github.event_name == 'pull_request' }}
           provenance: ${{ github.event_name != 'pull_request' }}
           sbom: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: ${{ github.event_name != 'pull_request' && 'type=gha' || '' }}
           cache-to:   ${{ github.event_name != 'pull_request' && 'type=gha,mode=max' || '' }}
