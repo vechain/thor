@@ -80,12 +80,14 @@ jobs:
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
       - name: Compute cache scopes
-        # BuildKit GHA cache is partitioned to avoid clobbering across platforms and PRs.
-        # Behavior by event:
-        # - pull_request: read from shared (warmed by default/base branch) + PR branch scopes; write only to PR branch scope.
-        # - workflow_dispatch: if targeting default or release/* branches, treat as non-PR (write shared+branch);
-        #                      otherwise treat like PR (read shared+branch, write branch only) to avoid polluting shared.
-        # - other (push to master/release/*): read from shared; write to shared+branch (warm cache for future PRs).
+        # BuildKit GHA cache scopes to avoid cross-arch/branch clobbering.
+        # Shared scope depends on TARGET branch (PRs use github.base_ref):
+        #   - default   -> shared-default
+        #   - release/* -> shared-release-<release-branch>
+        # Writes per event:
+        #   - pull_request           : read shared+branch, write branch
+        #   - workflow_dispatch      : if TARGET is default/release/* write shared+branch; else like PR
+        #   - push (master/release/*): read shared, write shared+branch
         id: cache
         shell: bash
         env:
@@ -94,9 +96,23 @@ jobs:
           REF: ${{ github.ref_name }}
           EVENT: ${{ github.event_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          SHARED="${REPO}-${PLATFORM}-shared"
+          # Determine TARGET branch for shared cache (default/master or a specific release/*)
+          TARGET_REF="${REF}"
+          if [ "${EVENT}" = "pull_request" ] && [ -n "${BASE_REF}" ]; then
+            TARGET_REF="${BASE_REF}"
+          fi
+          if [ "${TARGET_REF}" = "${DEFAULT_BRANCH}" ]; then
+            SHARED_SUFFIX="default"
+          elif [[ "${TARGET_REF}" == release/* ]]; then
+            SANITIZED_TARGET=$(echo "${TARGET_REF}" | sed 's|/|-|g')
+            SHARED_SUFFIX="release-${SANITIZED_TARGET}"
+          else
+            SHARED_SUFFIX="default"
+          fi
+          SHARED="${REPO}-${PLATFORM}-shared-${SHARED_SUFFIX}"
           BRANCH="${REPO}-${PLATFORM}-${REF}"
           case "${EVENT}" in
             pull_request)
@@ -104,7 +120,7 @@ jobs:
               TO=$(printf '%s\n' "type=gha,mode=max,scope=${BRANCH}")
               ;;
             workflow_dispatch)
-              if [ "${REF}" = "${DEFAULT_BRANCH}" ] || [[ "${REF}" == release/* ]]; then
+              if [ "${TARGET_REF}" = "${DEFAULT_BRANCH}" ] || [[ "${TARGET_REF}" == release/* ]]; then
                 FROM=$(printf '%s\n' "type=gha,scope=${SHARED}")
                 TO=$(printf '%s\n' "type=gha,mode=max,scope=${SHARED}" "type=gha,mode=max,scope=${BRANCH}")
               else
