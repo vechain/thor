@@ -93,8 +93,8 @@ jobs:
           sbom: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: ${{ github.event_name != 'pull_request' && 'type=gha' || '' }}
+          cache-to:   ${{ github.event_name != 'pull_request' && 'type=gha,mode=max' || '' }}
 
       - name: Compute safe platform name
         id: platform
