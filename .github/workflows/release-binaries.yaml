@@ -82,7 +82,7 @@ jobs:
           tar czf "${ARCHIVE_NAME##*/}" "$(basename "$RELEASE_BINARY_NAME")"
 
       - name: Upload Binary
-        uses: alexellis/upload-assets@0.4.1
+        uses: alexellis/upload-assets@13926a61cdb2cb35f5fdef1c06b8b591523236d3 # 0.4.1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
@@ -135,7 +135,7 @@ jobs:
           Compress-Archive -Path (Split-Path -Leaf $Env:RELEASE_BINARY_NAME) -DestinationPath (Split-Path -Leaf $Env:ARCHIVE_NAME)
 
       - name: Upload Binary
-        uses: alexellis/upload-assets@0.4.1
+        uses: alexellis/upload-assets@13926a61cdb2cb35f5fdef1c06b8b591523236d3 # 0.4.1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
