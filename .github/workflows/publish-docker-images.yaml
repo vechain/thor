@@ -257,8 +257,8 @@ jobs:
           IMAGE: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
         shell: bash
         run: |
-          AMD64_DIGEST=$(cat digests/digest-linux_amd64.txt 2>/dev/null || cat digests/digest-linux-amd64.txt)
-          ARM64_DIGEST=$(cat digests/digest-linux_arm64.txt 2>/dev/null || cat digests/digest-linux-arm64.txt)
+          AMD64_DIGEST=$(cat digests/digest-linux_amd64.txt)
+          ARM64_DIGEST=$(cat digests/digest-linux_arm64.txt)
           TAG_ARGS=""
           while IFS= read -r tag; do
             [ -z "$tag" ] && continue
