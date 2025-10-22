@@ -181,14 +181,6 @@ func NewHayabusaDevnet() (*Genesis, *thor.ForkConfig) {
 		Params: Params{
 			ExecutorAddress: &DevAccounts()[0].Address,
 		},
-		Executor: Executor{
-			Approvers: []Approver{
-				{
-					Address:  DevAccounts()[0].Address,
-					Identity: thor.BytesToBytes32([]byte("Solo Block Signer")),
-				},
-			},
-		},
 		ForkConfig: &fc,
 		Config: &thor.Config{
 			BlockInterval:       10,
