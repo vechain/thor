@@ -40,9 +40,18 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		gen.GasLimit = thor.InitialGasLimit
 	}
 
+	// When a Params.ExecutorAddress is set, the gen.Executor.Approvers cannot be set by the genesis
+	// as the ExecutorAddress can be a contract or an EOA
+	if gen.Params.ExecutorAddress != nil && len(gen.Executor.Approvers) > 0 {
+		return nil, errors.New("can not specify both executorAddress and approvers")
+	}
+
 	executor := builtin.Executor.Address
+	externalExecutor := false
+
 	if gen.Params.ExecutorAddress != nil {
 		executor = *gen.Params.ExecutorAddress
+		externalExecutor = true
 	}
 
 	builder := new(Builder).
@@ -66,13 +75,11 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
 				return err
 			}
-
-			// Always deploy the executor code at the default executor address
-			// if genesis Executor address is different it's the genesis creator responsibility to manually deploy the executor code
-			if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
-				return err
+			if !externalExecutor {
+				if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
+					return err
+				}
 			}
-
 			if isHayabusaGenesis(gen) {
 				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 					return err
@@ -181,12 +188,12 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 
-	// if genesis Executor address is different from default
-	// the genesis creator must manually deploy the executor code and manually add the approvers
-	for _, approver := range gen.Executor.Approvers {
-		data = mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
-		// using builtin.Executor.Address guarantees the execution of this clause
-		builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), builtin.Executor.Address)
+	if !externalExecutor {
+		for _, approver := range gen.Executor.Approvers {
+			data = mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
+			// using builtin.Executor.Address guarantees the execution of this clause
+			builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), builtin.Executor.Address)
+		}
 	}
 
 	if isHayabusaGenesis(gen) {

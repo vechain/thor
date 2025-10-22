@@ -419,6 +419,47 @@ func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...O
 	return c.httpConn.GetAccountStorage(addr, key, options.revision)
 }
 
+// RawAccountStorage retrieves the raw value stored at a specific storage position in a smart contract.
+//
+// This method corresponds to the GET /accounts/{address}/storage/raw/{key} API endpoint and
+// allows you to read the raw storage of a smart contract at a specific storage slot.
+// Each storage slot can hold a 32-byte value.
+//
+// Smart contract storage is organized as a key-value mapping where:
+//   - Keys are 32-byte storage positions (usually determined by variable layout)
+//   - Values are 32-byte data stored at those positions
+//   - Storage layout depends on the contract's variable declarations and Solidity compiler version
+//
+// This is useful for:
+//   - Reading contract state variables directly
+//   - Analyzing contract storage layout
+//   - Debugging smart contract behavior
+//   - Historical storage analysis at different block revisions
+//   - Bypassing contract getter functions
+//
+// Parameters:
+//   - addr: The VeChain address of the contract
+//   - key: The 32-byte storage position to read
+//   - opts: Optional parameters (Revision)
+//
+// Returns:
+//   - *api.GetRawStorageResponse: Contains the 32-byte storage value as a hex string
+//   - error: Error if the request fails or parameters are invalid
+//
+// Example:
+//
+//	// Read storage slot 0 (often used for the first state variable)
+//	storageKey := thor.BytesToBytes32([]byte{0})
+//	storageResult, err := client.RawAccountStorage(contractAddr, &storageKey)
+//	if err != nil {
+//		return err
+//	}
+//	fmt.Printf("Storage value: %s\n", storageResult.Value)
+func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*api.GetRawStorageResponse, error) {
+	options := applyOptions(opts)
+	return c.httpConn.GetRawAccountStorage(addr, key, options.revision)
+}
+
 // Transaction retrieves a transaction by its ID from the VeChainThor blockchain.
 //
 // This method corresponds to the GET /transactions/{id} API endpoint and returns
