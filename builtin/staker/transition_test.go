@@ -83,18 +83,10 @@ func TestTransitionWithPreExistingVET(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			staker := newTest(t).SetMBP(2).Fill(2)
-
-			// Add validators
-			node1 := datagen.RandAddress()
-			node2 := datagen.RandAddress()
-			stake := RandomStake()
-
-			staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
-			staker.AddValidation(node2, node2, uint32(360)*24*15, stake)
+			staker := newTest(t).SetMBP(2).Fill(2).Transition(0)
 
 			// Modify balance
-			currentBalance, err := staker.State().GetBalance(staker.Address())
+			currentBalance, err := staker.state.GetBalance(staker.Address())
 			assert.NoError(t, err)
 
 			changeAmount := ToWei(1000000) // 1M VET
