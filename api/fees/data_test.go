@@ -207,7 +207,7 @@ func TestRewardsBeforeAndAfterGalactica(t *testing.T) {
 	}
 }
 
-func TestLazyPopulateCachedRewards(t *testing.T) {
+func TestRewardsComputedAfterWarmupWithoutPercentiles(t *testing.T) {
 	forkConfig := thor.NoFork
 	forkConfig.GALACTICA = 1
 
@@ -253,11 +253,11 @@ func TestLazyPopulateCachedRewards(t *testing.T) {
 	feesData := newFeesData(thorChain.Repo(), thorChain.Stater(), 10)
 	newestBlockSummary := thorChain.Repo().BestBlockSummary()
 
-	// Warm the cache without reward percentiles: cachedRewards should remain nil
+	// Warm the cache without reward percentiles: entries are cached, rewards were computed at miss
 	_, _, _, _, err = feesData.resolveRange(newestBlockSummary, 3, nil)
 	require.NoError(t, err)
 
-	// Now request with percentiles; lazy population should compute non-zero rewards
+	// Now request with percentiles
 	_, _, _, rewards, err := feesData.resolveRange(newestBlockSummary, 3, []float64{25, 50, 75})
 	require.NoError(t, err)
 
