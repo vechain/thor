@@ -82,11 +82,11 @@ jobs:
       - name: Compute cache scopes
         # BuildKit GHA cache scopes to avoid cross-arch/branch clobbering.
         # Shared scope depends on TARGET branch (PRs use github.base_ref):
-        #   - default   -> shared-default
+        #   - default(master)   -> shared-default
         #   - release/* -> shared-release-<release-branch>
         # Writes per event:
         #   - pull_request           : read shared+branch, write branch
-        #   - workflow_dispatch      : if TARGET is default/release/* write shared+branch; else like PR
+        #   - workflow_dispatch      : if TARGET is master/release/* write shared+branch; else like PR
         #   - push (master/release/*): read shared, write shared+branch
         id: cache
         shell: bash
@@ -99,7 +99,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          # Determine TARGET branch for shared cache (default/master or a specific release/*)
+          # Determine TARGET branch for shared cache (master or a specific release/*)
           TARGET_REF="${REF}"
           if [ "${EVENT}" = "pull_request" ] && [ -n "${BASE_REF}" ]; then
             TARGET_REF="${BASE_REF}"
