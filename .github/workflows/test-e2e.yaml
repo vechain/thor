@@ -18,14 +18,18 @@ jobs:
         uses: actions/checkout@v4
       - name: Set e2e repo reference
         id: set-ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           # Default fallback commit
-          DEFAULT_COMMIT="bc6537b3255bacf1397fc8f530ce1950047d2b51"
+          DEFAULT_COMMIT="a51bdc9833d1a4641c2d7969414dbe23a4fa345e"
           REF="$DEFAULT_COMMIT"
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
-            if [[ "$GITHUB_BASE_REF" == release/* ]]; then
-              REF="$GITHUB_BASE_REF"
+            if [[ "$PR_BASE_REF" == release/* ]]; then
+              REF="$PR_BASE_REF"
             fi
           else
             # For push events, we check the branch or tag that was pushed
@@ -33,7 +37,7 @@ jobs:
               REF="$GITHUB_REF_NAME"
             fi
           fi
-          
+
           # Verify if branch exists
           if ! git ls-remote --heads https://github.com/vechain/thor-e2e-tests.git "$REF"; then
             echo "Branch does not exist, using default commit"

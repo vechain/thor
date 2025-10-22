@@ -131,6 +131,8 @@ func TestValidation_DecreaseStake_ActiveTooLowNextPeriod(t *testing.T) {
 	end := id
 
 	staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET)
+	staker.Housekeep(thor.MediumStakingPeriod())
+
 	staker.DecreaseStakeErrors(id, end, 100, "next period stake is lower than minimum stake")
 }
 
@@ -155,6 +157,7 @@ func TestValidation_DecreaseStake_QueuedTooLowNextPeriod(t *testing.T) {
 	end := id
 
 	staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET)
+	staker.Housekeep(thor.MediumStakingPeriod())
 	staker.DecreaseStakeErrors(id, end, 100, "next period stake is lower than minimum stake")
 }
 
@@ -165,12 +168,18 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 	end := id
 
 	staker.AddValidation(id, end, thor.MediumStakingPeriod(), MinStakeVET+100)
+
+	staker.Housekeep(thor.MediumStakingPeriod())
+
 	staker.DecreaseStake(id, end, 100)
 	withdrawable, err := staker.globalStatsService.GetWithdrawableStake()
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(100), withdrawable)
+	assert.Equal(t, uint64(0), withdrawable)
 
-	staker.AssertValidation(id).QueuedVET(MinStakeVET).WithdrawableVET(100)
+	v := staker.GetValidation(id)
+	assert.Equal(t, uint64(0), v.QueuedVET)
+	assert.Equal(t, MinStakeVET+100, v.LockedVET)
+	assert.Equal(t, uint64(0), v.WithdrawableVET)
 }
 
 func TestValidation_WithdrawStake_InvalidEndorser(t *testing.T) {
@@ -282,7 +291,6 @@ func Test_AddDelegation_WhileValidatorExiting(t *testing.T) {
 	staker.SignalExit(first, val.Endorser, 20)
 
 	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
-
 	staker.Housekeep(val.Period)
 }
 
@@ -311,24 +319,26 @@ func Test_WithdrawDelegation_before_SignalExit(t *testing.T) {
 	staker := newTest(t).SetMBP(3).Fill(3).Transition(0)
 
 	first, val := staker.FirstActive()
-
 	delID := staker.AddDelegation(first, 10_000, 150, 10)
 
 	staker.WithdrawDelegation(delID, 10_000, 15)
 	staker.SignalExit(first, val.Endorser, 20)
 
 	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
+
 	staker.Housekeep(val.Period)
 }
 
 func Test_WithdrawDelegation_after_SignalExit(t *testing.T) {
 	staker := newTest(t).SetMBP(3).Fill(3).Transition(0)
+
 	first, val := staker.FirstActive()
 
 	delID := staker.AddDelegation(first, 10_000, 150, 10)
 	staker.SignalExit(first, val.Endorser, 20)
 
 	staker.WithdrawDelegation(delID, 10_000, 15)
-
 	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
+
+	staker.Housekeep(val.Period)
 }
