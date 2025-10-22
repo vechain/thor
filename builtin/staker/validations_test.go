@@ -1078,7 +1078,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	thousand := uint64(1000)
 	fiveHundred := uint64(500)
 
-	period := thor.MediumStakingPeriod()
+	period := uint32(360) * 24 * 15
 
 	// QUEUED
 	staker.AddValidation(acc, acc, period, initialStake)
