@@ -107,7 +107,20 @@ func (fd *FeesData) resolveRange(
 func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []float64) (*FeeCacheEntry, error) {
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
-		return fees.(*FeeCacheEntry), nil
+		entry := fees.(*FeeCacheEntry)
+		// Lazy-populate rewards on cache hit if percentiles are requested and block is post-Galactica
+		if len(rewardPercentiles) > 0 && entry.cachedRewards == nil && (*big.Int)(entry.baseFee).Cmp(big.NewInt(0)) > 0 {
+			summary, err := fd.repo.GetBlockSummary(blockID)
+			if err != nil {
+				return nil, err
+			}
+			priorityRewards, err := fd.getRewardsForCache(summary.Header)
+			if err != nil {
+				return nil, err
+			}
+			entry.cachedRewards = priorityRewards
+		}
+		return entry, nil
 	}
 
 	summary, err := fd.repo.GetBlockSummary(blockID)
