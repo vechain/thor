@@ -6,6 +6,8 @@
 package energy
 
 import (
+	"errors"
+	"io"
 	"math"
 	"math/big"
 
@@ -104,7 +106,7 @@ func (e *Energy) TokenTotalSupply() (*big.Int, error) {
 	return init.Token, nil
 }
 
-// TotalSupply returns total supply of energy.
+// TotalSupply returns total supply of energy. Does not account for burned tokens.
 func (e *Energy) TotalSupply() (*big.Int, error) {
 	initialSupply, err := e.getInitialSupply()
 	if err != nil {
@@ -235,7 +237,9 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 		if len(raw) == 0 {
 			return nil
 		}
-		return rlp.DecodeBytes(raw, &time)
+		var err error
+		time, err = decodeUint64(raw)
+		return err
 	}); err != nil {
 		return math.MaxUint64, err
 	}
@@ -285,7 +289,7 @@ func (e *Energy) DistributeRewards(beneficiary, signer thor.Address, staker stak
 
 	// If delegated amount of VET is 0 then transfer the whole reward to the validator
 	proposerReward := new(big.Int).Set(reward)
-	if hasDelegations {
+	if hasDelegations && validatorRewardPerc.Cmp(big.NewInt(100)) < 0 {
 		proposerReward.Mul(proposerReward, validatorRewardPerc)
 		proposerReward.Div(proposerReward, big.NewInt(100))
 
@@ -348,4 +352,41 @@ func (e *Energy) CalculateRewards(staker staker) (*big.Int, error) {
 	reward.Mul(reward, sqrtStake)
 	reward.Div(reward, thor.NumberOfBlocksPerYear)
 	return reward, nil
+}
+
+// decodeUint64 efficiently decodes RLP data to uint64 without reflection
+func decodeUint64(encoded []byte) (uint64, error) {
+	if len(encoded) == 0 {
+		return 0, io.EOF
+	}
+
+	b := encoded[0] // kind byte
+	switch {
+	case b < 0x80: // type bytes [0x00, 0x7F]
+		return uint64(b), nil
+	case b < 0xB8: // type string 0-55 bytes
+		size := uint64(b - 0x80)
+		if size > 8 {
+			return 0, errors.New("rlp: uint overflow")
+		}
+		if len(encoded) < int(1+size) {
+			return 0, errors.New("rlp: unexpected EOF")
+		}
+		switch size {
+		case 0:
+			return 0, nil
+		case 1:
+			return uint64(encoded[1]), nil
+		default:
+			var decoded uint64
+			for _, b := range encoded[1 : 1+size] {
+				decoded = (decoded << 8) | uint64(b)
+			}
+			return decoded, nil
+		}
+	case b < 0xC0: // type string > 55 bytes
+		return 0, errors.New("rlp: uint overflow")
+	default:
+		return 0, errors.New("rlp: expected string")
+	}
 }

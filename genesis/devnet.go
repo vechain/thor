@@ -147,7 +147,7 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 }
 
 // NewHayabusaDevnet create genesis for solo mode.
-func NewHayabusaDevnet() *Genesis {
+func NewHayabusaDevnet() (*Genesis, *thor.ForkConfig) {
 	hayabusaTP := uint32(0)
 	largeNo := (*HexOrDecimal256)(new(big.Int).SetBytes(hexutil.MustDecode("0xffffffffffffffffffffffffffffffffff")))
 	fc := thor.ForkConfig{
@@ -181,14 +181,6 @@ func NewHayabusaDevnet() *Genesis {
 		Params: Params{
 			ExecutorAddress: &DevAccounts()[0].Address,
 		},
-		Executor: Executor{
-			Approvers: []Approver{
-				{
-					Address:  DevAccounts()[0].Address,
-					Identity: thor.BytesToBytes32([]byte("Solo Block Signer")),
-				},
-			},
-		},
 		ForkConfig: &fc,
 		Config: &thor.Config{
 			BlockInterval:       10,
@@ -205,5 +197,5 @@ func NewHayabusaDevnet() *Genesis {
 	if err != nil {
 		panic(err)
 	}
-	return customNet
+	return customNet, &fc
 }
