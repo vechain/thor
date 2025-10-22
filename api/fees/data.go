@@ -108,7 +108,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
 		entry := fees.(*FeeCacheEntry)
-		// Lazy-populate rewards on cache hit if percentiles are requested and block is post-Galactica
+		// Lazy-populate rewards on cache hit if percentiles are requested
 		if len(rewardPercentiles) > 0 && entry.cachedRewards == nil && (*big.Int)(entry.baseFee).Cmp(big.NewInt(0)) > 0 {
 			summary, err := fd.repo.GetBlockSummary(blockID)
 			if err != nil {
