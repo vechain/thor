@@ -117,7 +117,7 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32) (*FeeCacheEntry, error) 
 	header := summary.Header
 
 	var priorityRewards *rewards
-	// Fetch the only for post-Galactica blocks
+	// Fetch rewards only for post-Galactica blocks
 	// The rewards refer to priority fees per gas, which are different from pre-Galactica validator rewards
 	if header.BaseFee() != nil {
 		priorityRewards, err = fd.getRewardsForCache(header)
