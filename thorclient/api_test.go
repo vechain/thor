@@ -444,7 +444,7 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 		result, err := c.PoolTransactionIDs(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		require.GreaterOrEqual(t, len(result), 1, "Expected at least one transaction in pool")
+		require.GreaterOrEqual(t, len(result), 1, "Expected at least one transaction ID in pool")
 
 		// Test with origin filter
 		origin := genesis.DevAccounts()[0].Address
