@@ -654,16 +654,12 @@ func TestGetRawStorage(t *testing.T) {
 }
 
 func TestRawStorageStaker(t *testing.T) {
-	fc := thor.SoloFork
-	fc.HAYABUSA = 0
-	fc.GALACTICA = 0
-
-	gene := genesis.NewHayabusaDevnet()
-	thorChain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &fc, thor.EpochLength())
+	gene, fc := genesis.NewHayabusaDevnet()
+	thorChain, err := testchain.NewIntegrationTestChainWithGenesis(gene, fc, thor.EpochLength())
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &fc, nil, true).
+	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), fc, nil, true).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)
