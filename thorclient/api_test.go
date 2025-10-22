@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -41,12 +42,14 @@ func initTestNode(t *testing.T) testnode.Node {
 	thorChain, err := testchain.NewWithFork(&forks, 180)
 	require.NoError(t, err)
 
-	// mint some transactions to be used in the endpoints
-	mintTransactions(t, thorChain)
-
 	testNode, err := testnode.NewNodeBuilder().WithChain(thorChain).Build()
 	require.NoError(t, err)
 	require.NoError(t, testNode.Start())
+
+	// mint some transactions to be used in the endpoints
+	mintTransactions(t, thorChain)
+	// add the transactions to the mempool
+	addTransactionToPool(t, testNode)
 
 	return testNode
 }
@@ -98,6 +101,29 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
 }
 
+func addTransactionToPool(t *testing.T, testNode testnode.Node) {
+	toAddr := datagen.RandAddress()
+	chainTag := testNode.Chain().ChainTag()
+
+	cla := tx.NewClause(&toAddr).WithValue(big.NewInt(10000))
+	testTx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chainTag).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	testTx = tx.MustSign(testTx, genesis.DevAccounts()[0].PrivateKey)
+
+	// Add transaction to the pool
+	c := New(testNode.APIServer().URL)
+	_, err := c.SendTransaction(testTx)
+	require.NoError(t, err)
+}
+
 func TestAPIs(t *testing.T) {
 	testNode := initTestNode(t)
 	defer func() {
@@ -146,9 +172,17 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 	// 3. Test GET /accounts/{address}/storage/{key}
 	t.Run("GetStorage", func(t *testing.T) {
 		c := New(ts.URL)
-		_, err := c.AccountStorage(&address1, &storageKey)
+		response, err := c.AccountStorage(&address1, &storageKey)
 		require.NoError(t, err)
-		// TODO validate the response body here
+		require.Equal(t, thor.Bytes32{}.String(), response.Value)
+	})
+
+	// 3. Test GET /accounts/{address}/storage/raw/{key}
+	t.Run("GetRawStorage", func(t *testing.T) {
+		c := New(ts.URL)
+		response, err := c.RawAccountStorage(&address1, &storageKey)
+		require.NoError(t, err)
+		require.Equal(t, "0x", response.Value)
 	})
 
 	// 4. Test POST /accounts/*
@@ -403,6 +437,54 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	t.Run("GetPeersStats", func(t *testing.T) {
 		_, err := c.Peers()
 		require.NoError(t, err)
+	})
+
+	// 2. Test GET /node/txpool
+	t.Run("GetTxPool", func(t *testing.T) {
+		// Test with transaction IDs only
+		result, err := c.TxPool(false, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		txIDs, ok := result.([]thor.Bytes32)
+		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
+		require.GreaterOrEqual(t, len(txIDs), 1, "Expected at least one transaction in pool")
+
+		// Test with expanded transactions
+		result, err = c.TxPool(true, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		txs, ok := result.([]transactions.Transaction)
+		require.True(t, ok, "Expected []transactions.Transaction, got %T", result)
+		require.GreaterOrEqual(t, len(txs), 1, "Expected at least one transaction in pool")
+
+		// Test with origin filter
+		origin := genesis.DevAccounts()[0].Address
+		result, err = c.TxPool(false, &origin)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		txIDsFiltered, ok := result.([]thor.Bytes32)
+		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
+		require.GreaterOrEqual(t, len(txIDsFiltered), 1, "Expected non-negative length")
+
+		// Origin does not exist
+		origin = thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
+		result, err = c.TxPool(false, &origin)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		txIDsFilteredNoOrigin, ok := result.([]thor.Bytes32)
+		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
+		require.Equal(t, len(txIDsFilteredNoOrigin), 0, "No tx expected")
+	})
+
+	// 3. Test GET /node/txpool/status
+	t.Run("GetTxPoolStatus", func(t *testing.T) {
+		status, err := c.TxPoolStatus()
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		require.True(t, status.Amount >= 1 && status.Amount <= 3, "Expected 1 or 3 transactions, got %d", status.Amount)
 	})
 }
 

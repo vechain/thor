@@ -3,19 +3,17 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package genesis_test
+package genesis
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/genesis"
 )
 
 // TestNewMainnet tests the NewMainnet function for creating the mainnet genesis block
 func TestNewMainnet(t *testing.T) {
-	genesisBlock := genesis.NewMainnet()
+	genesisBlock := NewMainnet()
 
 	// Check if the returned genesis block is not nil
 	assert.NotNil(t, genesisBlock, "NewMainnet should return a non-nil Genesis object")

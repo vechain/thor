@@ -14,8 +14,6 @@
 //
 // Current Status:
 //   - Covers basic read operations (no arguments)
-//   - TODO: Implement argument handling for functions that require parameters
-//   - TODO: Add test cases for state-modifying operations
 package builtin_test
 
 import (
@@ -108,7 +106,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_addValidation",
-			expectedGas: 122000,
+			expectedGas: 121800,
 			args:        []any{account1, account1, thor.LowStakingPeriod(), staker.MinStake},
 			description: "Add a new validator (not implemented yet)",
 		},
@@ -135,7 +133,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:     "native_withdrawStake",
-			expectedGas:  12000,
+			expectedGas:  17200,
 			args:         []any{account1, account1},
 			description:  "Withdraw stake for a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1)},
@@ -152,7 +150,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		// },
 		{
 			function:    "native_increaseStake",
-			expectedGas: 16600,
+			expectedGas: 400,
 			args: []any{
 				account1,
 				account1,
@@ -163,7 +161,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_decreaseStake",
-			expectedGas: 36600,
+			expectedGas: 400,
 			args: []any{
 				account1,
 				account1,
@@ -201,7 +199,6 @@ func TestStakerNativeGasCosts(t *testing.T) {
 			description:  "Withdraw delegation from a validator",
 			preTestHooks: []TestHook{preTestAddValidation(account1), preTestAddDelegation(account1)},
 		},
-		// TODO: How can we mint thousands of blocks and perform housekeeping?
 		{
 			function:    "native_signalDelegationExit",
 			expectedGas: 600,
@@ -239,7 +236,7 @@ func TestStakerNativeGasCosts(t *testing.T) {
 		},
 		{
 			function:    "native_issuance",
-			expectedGas: 200,
+			expectedGas: 400,
 			description: "Get issuance for the current block",
 		},
 	}
@@ -340,6 +337,7 @@ func (s *testSetup) Xenv(method *abi.Method) *xenv.Environment {
 		nil,
 		s.state,
 		blkContext,
+		nil,
 		txContext,
 		s.evm,
 		s.contract,
@@ -369,9 +367,10 @@ func executeNativeFunction(t *testing.T, setup *testSetup, functionName string, 
 
 	// Get the native method implementation
 	methodID := method.ID()
-	nativeMethod, run, found := builtin.FindNativeCall(builtin.Staker.Address, methodID[:])
+	nativeMethod, run, found, returnsGas := builtin.FindNativeCall(builtin.Staker.Address, methodID[:])
 	require.True(t, found, "Native method not found for %s", functionName)
 	require.NotNil(t, nativeMethod, "Native method is nil for %s", functionName)
+	require.False(t, returnsGas, "Method %s should marked as return gas", functionName)
 
 	// Execute the native function - this will trigger our test hook
 	result = run(setup.Xenv(nativeMethod))

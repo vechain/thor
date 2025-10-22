@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package vrf_test
+package vrf
 
 import (
 	"crypto/ecdsa"
@@ -15,8 +15,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-
-	"github.com/vechain/thor/v2/vrf"
 )
 
 // Case Testing cases structure.

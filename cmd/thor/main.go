@@ -28,11 +28,13 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/pruner"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
+	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
@@ -325,6 +327,7 @@ func defaultAction(ctx *cli.Context) error {
 		MinTxPriorityFee: minTxPriorityFee,
 		TargetGasLimit:   ctx.Uint64(targetGasLimitFlag.Name),
 	}
+	stater := state.NewStater(mainDB)
 
 	return node.New(
 		master,
@@ -337,6 +340,8 @@ func defaultAction(ctx *cli.Context) error {
 		p2pCommunicator.Communicator(),
 		forkConfig,
 		options,
+		consensus.New(repo, stater, forkConfig),
+		packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.MinTxPriorityFee),
 	).Run(exitSignal)
 }
 
@@ -354,6 +359,7 @@ func soloAction(ctx *cli.Context) error {
 	if blockInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
+	thor.SetConfig(thor.Config{BlockInterval: blockInterval})
 
 	// enable metrics as soon as possible
 	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
@@ -376,15 +382,10 @@ func soloAction(ctx *cli.Context) error {
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
 		if isHayabusa {
-			fc := thor.SoloFork
-			fc.GALACTICA = 0
-			fc.HAYABUSA = 0
-
-			forkConfig = &fc
-			gene = genesis.NewHayabusaDevnet(&fc)
+			gene, forkConfig = genesis.NewHayabusaDevnet()
 		} else {
-			gene = genesis.NewDevnet()
 			forkConfig = &thor.SoloFork
+			gene = genesis.NewDevnet()
 		}
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
@@ -461,7 +462,7 @@ func soloAction(ctx *cli.Context) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    blockInterval,
+		BlockInterval:    thor.BlockInterval(),
 	}
 
 	stater := state.NewStater(mainDB)

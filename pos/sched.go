@@ -37,7 +37,7 @@ type Scheduler struct {
 
 // NewScheduler create a Scheduler object.
 // `addr` is the proposer to be scheduled.
-// If `addr` is not listed in `proposers` or not active, an error returned.
+// If `addr` is not listed in `proposers`, an error is returned.
 func NewScheduler(
 	addr thor.Address,
 	proposers []Proposer,

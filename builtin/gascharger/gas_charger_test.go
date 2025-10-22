@@ -121,7 +121,7 @@ func TestChargeBasicFunctionality(t *testing.T) {
 	ClearTestHook()
 
 	contract := vm.NewContract(vm.AccountRef(datagen.RandAddress()), nil, big.NewInt(10_000_000), 10_000_000)
-	env := xenv.New(nil, nil, nil, nil, nil, nil, contract, 0)
+	env := xenv.New(nil, nil, nil, nil, nil, nil, nil, contract, 0)
 	charger := New(env)
 
 	// Test SLOAD gas charging
@@ -147,7 +147,7 @@ func TestBreakdown(t *testing.T) {
 	ClearTestHook()
 
 	contract := vm.NewContract(vm.AccountRef(datagen.RandAddress()), nil, big.NewInt(10_000_000), 10_000_000)
-	env := xenv.New(nil, nil, nil, nil, nil, nil, contract, 0)
+	env := xenv.New(nil, nil, nil, nil, nil, nil, nil, contract, 0)
 	charger := New(env)
 
 	// Add various operations
@@ -170,7 +170,7 @@ func TestTotalGas(t *testing.T) {
 	ClearTestHook()
 
 	contract := vm.NewContract(vm.AccountRef(datagen.RandAddress()), nil, big.NewInt(10_000_000), 10_000_000)
-	env := xenv.New(nil, nil, nil, nil, nil, nil, contract, 0)
+	env := xenv.New(nil, nil, nil, nil, nil, nil, nil, contract, 0)
 	charger := New(env)
 
 	expectedTotal := thor.SloadGas + thor.SstoreSetGas + 500

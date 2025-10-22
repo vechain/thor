@@ -27,20 +27,24 @@ jobs:
     steps:
       - name: Set Rosetta repo reference
         id: set-ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Default fallback branch
           DEFAULT_BRANCH="master"
           REF="$DEFAULT_BRANCH"
       
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
-            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
-              REF="${{ github.event.pull_request.base.ref }}"
+            if [[ "$PR_BASE_REF" == release/* ]]; then
+              REF="$PR_BASE_REF"
             fi
           else
             # For push events, we check the branch or tag that was pushed
-            if [[ "${{ github.ref_name }}" == release/* ]]; then
-              REF="${{ github.ref_name }}"
+            if [[ "$REF_NAME" == release/* ]]; then
+              REF="$REF_NAME"
             fi
           fi
 

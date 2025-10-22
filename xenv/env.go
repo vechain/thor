@@ -54,6 +54,7 @@ type Environment struct {
 	evm         *vm.EVM
 	contract    *vm.Contract
 	clauseIndex uint32
+	forkConfig  *thor.ForkConfig
 }
 
 // New create a new env.
@@ -62,6 +63,7 @@ func New(
 	chain *chain.Chain,
 	state *state.State,
 	blockCtx *BlockContext,
+	forkConfig *thor.ForkConfig,
 	txCtx *TransactionContext,
 	evm *vm.EVM,
 	contract *vm.Contract,
@@ -71,6 +73,7 @@ func New(
 		abi:         abi,
 		chain:       chain,
 		state:       state,
+		forkConfig:  forkConfig,
 		blockCtx:    blockCtx,
 		txCtx:       txCtx,
 		evm:         evm,
@@ -86,6 +89,7 @@ func (env *Environment) BlockContext() *BlockContext             { return env.bl
 func (env *Environment) Caller() thor.Address                    { return thor.Address(env.contract.Caller()) }
 func (env *Environment) To() thor.Address                        { return thor.Address(env.contract.Address()) }
 func (env *Environment) ClauseIndex() uint32                     { return env.clauseIndex }
+func (env *Environment) ForkConfig() *thor.ForkConfig            { return env.forkConfig }
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {

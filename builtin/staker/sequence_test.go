@@ -79,6 +79,8 @@ func (ts *StakerTest) subContractVET(amount uint64) {
 	require.NoError(ts.t, err, "failed to get contract balance")
 	newBalance := big.NewInt(0).Sub(balance, ToWei(amount))
 	require.NoError(ts.t, ts.state.SetBalance(ts.Staker.Address(), newBalance), "failed to set contract balance")
+	newBalanceBytes := thor.BytesToBytes32(newBalance.Bytes())
+	ts.state.SetStorage(ts.Staker.Address(), thor.Bytes32{}, newBalanceBytes)
 }
 
 // addContractVET adds `amount` VET to the contract balance
@@ -88,6 +90,8 @@ func (ts *StakerTest) addContractVET(amount uint64) {
 	require.NoError(ts.t, err, "failed to get contract balance")
 	newBalance := big.NewInt(0).Add(balance, ToWei(amount))
 	require.NoError(ts.t, ts.state.SetBalance(ts.Staker.Address(), newBalance), "failed to set contract balance")
+	newBalanceBytes := thor.BytesToBytes32(newBalance.Bytes())
+	ts.state.SetStorage(ts.Staker.Address(), thor.Bytes32{}, newBalanceBytes)
 }
 
 func (ts *StakerTest) AssertActive(active bool) *StakerTest {
@@ -466,6 +470,13 @@ func (ts *StakerTest) WithdrawDelegation(delegationID *big.Int, expectedOut uint
 
 	ts.subContractVET(amount)
 
+	return ts
+}
+
+func (ts *StakerTest) WithdrawDelegationErrors(delegationID *big.Int, currentBlock uint32, errMsg string) *StakerTest {
+	_, err := ts.Staker.WithdrawDelegation(delegationID, currentBlock)
+	assert.NotNil(ts.t, err, "expected error when withdrawing for delegation %s", delegationID.String())
+	assert.ErrorContains(ts.t, err, errMsg, "expected error message when withdrawing for delegation %s", delegationID.String())
 	return ts
 }
 
