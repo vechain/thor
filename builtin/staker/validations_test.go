@@ -283,31 +283,75 @@ func TestStaker_IncreaseQueued(t *testing.T) {
 	stake := RandomStake()
 
 	staker.IncreaseStakeErrors(addr, thor.Address{}, stake, "validation does not exist")
-
-	// add the validator
-	staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
-
-	validator := staker.GetValidation(addr)
-	assert.Equal(t, validation.StatusQueued, validator.Status)
-	assert.Equal(t, stake, validator.QueuedVET)
-	assert.Equal(t, uint64(0), validator.Weight)
-
-	staker.Housekeep(validator.Period)
+	staker.AddValidation(addr, addr, thor.MediumStakingPeriod(), stake)
+	staker.AssertValidation(addr).
+		Status(validation.StatusQueued).
+		QueuedVET(stake).
+		Weight(0)
 
 	// increase stake queued
-	expectedStake := 1000 + stake
-	staker.IncreaseStake(addr, addr, 1000)
-	validator = staker.GetValidation(addr)
-	newAmount := validator.QueuedVET + validator.LockedVET
-	assert.Equal(t, newAmount, expectedStake)
+	increase := uint64(1000)
+	staker.IncreaseStake(addr, addr, increase)
 
-	staker.Housekeep(validator.Period)
+	staker.AssertValidation(addr).
+		Status(validation.StatusQueued).
+		QueuedVET(increase + stake).
+		Weight(0)
+}
 
-	validator = staker.GetValidation(addr)
-	assert.False(t, validator == nil)
-	assert.Equal(t, validator.Status, validation.StatusActive)
-	assert.Equal(t, validator.LockedVET, expectedStake)
-	assert.Equal(t, expectedStake, validator.Weight)
+func TestStaker_IncreaseQueued_Order(t *testing.T) {
+	staker := newTest(t).Fill(68).Transition(0)
+	addr := datagen.RandAddress()
+	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+	stake := RandomStake()
+
+	// add addr
+	staker.AddValidation(addr, addr, thor.MediumStakingPeriod(), stake)
+	staker.AssertValidation(addr).Status(validation.StatusQueued).QueuedVET(stake).Weight(0)
+
+	// add addr1
+	staker.AddValidation(addr1, addr1, thor.MediumStakingPeriod(), stake)
+	staker.AssertValidation(addr1).Status(validation.StatusQueued).QueuedVET(stake).Weight(0)
+
+	// add addr2
+	staker.AddValidation(addr2, addr2, thor.MediumStakingPeriod(), stake)
+	staker.AssertValidation(addr2).Status(validation.StatusQueued).QueuedVET(stake).Weight(0)
+
+	// verify order
+	staker.AssertFirstQueued(addr).
+		AssertNext(addr, addr1).
+		AssertNext(addr1, addr2).
+		AssertNext(addr2, thor.Address{})
+}
+
+func TestStaker_DecreaseQueued_Order(t *testing.T) {
+	staker := newTest(t).Fill(68).Transition(0)
+	addr := datagen.RandAddress()
+	addr1 := datagen.RandAddress()
+	addr2 := datagen.RandAddress()
+	stake := RandomStake()
+
+	staker.DecreaseStakeErrors(addr, thor.Address{}, stake, "validation does not exist")
+
+	// add the validator
+	staker.AddValidation(addr, addr, thor.MediumStakingPeriod(), stake)
+	staker.AssertValidation(addr).Status(validation.StatusQueued).QueuedVET(stake).Weight(0)
+
+	staker.AddValidation(addr1, addr1, thor.MediumStakingPeriod(), stake)
+	staker.AssertValidation(addr1).Status(validation.StatusQueued).QueuedVET(stake).Weight(0)
+
+	staker.AddValidation(addr2, addr2, thor.MediumStakingPeriod(), stake)
+	staker.AssertValidation(addr2).Status(validation.StatusQueued).QueuedVET(stake).Weight(0)
+
+	// verify order
+	staker.AssertFirstQueued(addr).AssertNext(addr, addr1).AssertNext(addr1, addr2).AssertNext(addr2, thor.Address{})
+
+	// increase stake queued
+	decreaseBy := uint64(1000)
+	staker.DecreaseStake(addr1, addr1, decreaseBy)
+	staker.AssertFirstQueued(addr).AssertNext(addr, addr1).AssertNext(addr1, addr2).AssertNext(addr2, thor.Address{})
+	staker.AssertValidation(addr1).QueuedVET(stake - decreaseBy).Weight(0)
 }
 
 func TestStaker_IncreaseActive(t *testing.T) {
@@ -1074,6 +1118,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	acc := datagen.RandAddress()
 	initialStake := RandomStake()
 	increases := uint64(0)
+	decreases := uint64(0)
 	withdrawnTotal := uint64(0)
 	thousand := uint64(1000)
 	fiveHundred := uint64(500)
@@ -1083,6 +1128,12 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	// QUEUED
 	staker.AddValidation(acc, acc, period, initialStake)
 
+	increases += thousand
+	staker.IncreaseStake(acc, acc, thousand)
+	// 1st decrease
+	decreases += fiveHundred
+	staker.DecreaseStake(acc, acc, fiveHundred)
+
 	validator := staker.GetValidation(acc)
 	assert.Equal(t, validation.StatusQueued, validator.Status)
 
@@ -1091,40 +1142,33 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 
 	validator = staker.GetValidation(acc)
 	assert.Equal(t, validation.StatusActive, validator.Status)
-	assert.Equal(t, initialStake, validator.LockedVET)
+	expected := initialStake - decreases
+	expected += increases
+	assert.Equal(t, expected, validator.LockedVET)
 
-	// Now that validator is active, we can increase/decrease stake
-	increases += thousand
-	staker.IncreaseStake(acc, acc, thousand)
-	// 1st decrease
-	staker.DecreaseStake(acc, acc, fiveHundred)
+	// See `1st decrease` -> validator should be able withdraw the decrease amount
+	staker.WithdrawStake(acc, acc, period+1, fiveHundred)
+	withdrawnTotal += fiveHundred
 
+	expectedLocked := initialStake - decreases
+	expectedLocked += increases
 	validator = staker.GetValidation(acc)
-	// LockedVET stays the same, increases go to QueuedVET
-	assert.Equal(t, initialStake, validator.LockedVET)
-	assert.Equal(t, thousand, validator.QueuedVET)
-	assert.Equal(t, fiveHundred, validator.PendingUnlockVET)
-
-	// There should be some withdrawable amount available
-	staker.WithdrawStake(acc, acc, period+1, 1000)
-	withdrawnTotal += 1000
-
-	validator = staker.GetValidation(acc)
-	assert.Equal(t, initialStake, validator.LockedVET)
+	assert.Equal(t, expectedLocked, validator.LockedVET)
 
 	// 2nd decrease
+	decreases += thousand
 	staker.DecreaseStake(acc, acc, thousand)
 	increases += fiveHundred
 	staker.IncreaseStake(acc, acc, fiveHundred)
 
-	// 2nd STAKING PERIOD - this will process the increases and decreases
+	// 2nd STAKING PERIOD
 	staker.Housekeep(period * 2)
 	validator = staker.GetValidation(acc)
 	assert.Equal(t, validation.StatusActive, validator.Status)
 
-	// Check what's withdrawable after housekeep
-	staker.WithdrawStake(acc, acc, period*2+thor.CooldownPeriod(), 1500)
-	withdrawnTotal += 1500
+	// See `2nd decrease` -> validator should be able withdraw the decrease amount
+	staker.WithdrawStake(acc, acc, period*2+thor.CooldownPeriod(), thousand)
+	withdrawnTotal += thousand
 
 	staker.SignalExit(acc, acc, period*2)
 
@@ -1133,13 +1177,13 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 
 	validator = staker.GetValidation(acc)
 	assert.Equal(t, validation.StatusExit, validator.Status)
+	expectedLocked = initialStake - decreases
+	expectedLocked += increases
+	validator = staker.GetValidation(acc)
+	assert.Equal(t, expectedLocked, validator.CooldownVET)
 
-	// Withdraw the final amount
-	expectedWithdraw := initialStake - withdrawnTotal + increases
-	staker.WithdrawStake(acc, acc, period*3+thor.CooldownPeriod(), expectedWithdraw)
-	withdrawnTotal += expectedWithdraw
-
-	// Total deposits = initial + increases, total withdrawals should match
+	staker.WithdrawStake(acc, acc, period*3+thor.CooldownPeriod(), expectedLocked)
+	withdrawnTotal += expectedLocked
 	depositTotal := initialStake + increases
 	assert.Equal(t, depositTotal, withdrawnTotal)
 }
@@ -1279,44 +1323,36 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 	staker := newTest(t).SetMBP(1)
 	acc := datagen.RandAddress()
 
-	// Add validator
+	// Add & activate validator
 	staker.AddValidation(acc, acc, thor.LowStakingPeriod(), MinStakeVET)
 
-	// Increase and decrease should fail on queued validators
-	staker.IncreaseStakeErrors(acc, acc, MinStakeVET, "can't increase stake while validator not active")
-	staker.DecreaseStakeErrors(acc, acc, MinStakeVET, "can't decrease stake while validator not active")
+	// Increase and decrease - both should be okay since we're only dealing with QueuedVET
+	staker.IncreaseStake(acc, acc, MinStakeVET) // 25m + 25m = 50m
+	staker.DecreaseStake(acc, acc, MinStakeVET) // 25m - 50m = 25m
 
-	// Activate the validator
+	// Activate the validator.
 	staker.ActivateNext(0)
 
-	// Verify validator is active with expected initial state
-	val := staker.GetValidation(acc)
-	assert.Equal(t, validation.StatusActive, val.Status)
-	assert.Equal(t, MinStakeVET, val.LockedVET)
-	assert.Equal(t, uint64(0), val.QueuedVET)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(0), val.WithdrawableVET)
-
-	// Now operations should work on active validator
-	staker.IncreaseStake(acc, acc, MinStakeVET)
-
-	// Check validator state after operations
-	val = staker.GetValidation(acc)
-	assert.Equal(t, MinStakeVET, val.LockedVET)
-	assert.Equal(t, MinStakeVET, val.QueuedVET)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-
-	staker.DecreaseStakeErrors(acc, acc, MinStakeVET, "next period stake is lower than minimum stake")
-
-	// Check if there are any withdrawals available (there shouldn't be any yet)
+	// Withdraw the previous decrease amount
 	staker.WithdrawStake(acc, acc, 0, MinStakeVET)
 
-	// Process through housekeep to apply the changes
+	// Assert previous increase/decrease had no effect since they requested the same amount
+	staker.AssertValidation(acc).Status(validation.StatusActive).LockedVET(MinStakeVET).Weight(MinStakeVET)
+
+	// Increase stake (ok): 25m + 25m = 50m
+	staker.IncreaseStake(acc, acc, MinStakeVET)
+	// Decrease stake (NOT ok): 25m - 25m = 0. The Previous increase is not applied since it is still currently withdrawable.
+	staker.DecreaseStakeErrors(acc, acc, MinStakeVET, "next period stake is lower than minimum stake")
+	// Instantly withdraw - This is bad, it pulls from the QueuedVET, which means total stake later will be 0.
+	// The decrease previously marked as okay since the current TVL + pending TVL was greater than the min stake.
+	staker.WithdrawStake(acc, acc, 0, MinStakeVET)
+
+	// Housekeep, should move pending locked to locked, and pending withdraw to withdrawable
 	staker.Housekeep(thor.LowStakingPeriod())
 
-	// After housekeep, check final state
-	validator := staker.GetValidation(acc)
-	assert.True(t, validator.LockedVET >= MinStakeVET, "locked VET should be at least minimum stake")
+	// Withdraw again
+	staker.WithdrawStake(acc, acc, thor.LowStakingPeriod()+thor.CooldownPeriod(), 0)
+	staker.AssertValidation(acc).LockedVET(MinStakeVET)
 }
 
 func TestStaker_AddValidation_CannotAddValidationWithSameMaster(t *testing.T) {
@@ -1933,12 +1969,11 @@ func TestValidation_IncreaseOverflow(t *testing.T) {
 	endorser := datagen.RandAddress()
 
 	staker.AddValidation(addr, endorser, thor.MediumStakingPeriod(), MinStakeVET)
-	staker.Housekeep(thor.MediumStakingPeriod())
 
 	overflowIncrease := math.MaxUint64 - MinStakeVET + 1
 	staker.IncreaseStakeErrors(addr, endorser, overflowIncrease, "increase amount is too large")
 
-	staker.AssertValidation(addr).LockedVET(MinStakeVET)
+	staker.AssertValidation(addr).QueuedVET(MinStakeVET)
 }
 
 func TestValidation_WithdrawBeforeAfterCooldown(t *testing.T) {
