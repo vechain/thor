@@ -75,7 +75,7 @@ func (fd *FeesData) resolveRange(
 	var oldestBlockID thor.Bytes32
 	for i := blockCount; i > 0; i-- {
 		oldestBlockID = newestBlockID
-		fees, err := fd.getOrLoadFees(newestBlockID, rewardPercentiles)
+		fees, err := fd.getOrLoadFees(newestBlockID)
 		if err != nil {
 			// This should happen only when "next" since the boundaries are validated beforehand
 			// We do not cache the data in this case since it does not belong to an actual block
@@ -104,7 +104,7 @@ func (fd *FeesData) resolveRange(
 	return oldestBlockID, baseFees, gasUsedRatios, rewards, nil
 }
 
-func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []float64) (*FeeCacheEntry, error) {
+func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32) (*FeeCacheEntry, error) {
 	fees, _, found := fd.cache.Get(blockID)
 	if found {
 		return fees.(*FeeCacheEntry), nil
@@ -117,9 +117,9 @@ func (fd *FeesData) getOrLoadFees(blockID thor.Bytes32, rewardPercentiles []floa
 	header := summary.Header
 
 	var priorityRewards *rewards
-	// Fetch the rewards if rewardPercentiles is set and only for post-Galactica blocks
+	// Fetch rewards only for post-Galactica blocks
 	// The rewards refer to priority fees per gas, which are different from pre-Galactica validator rewards
-	if len(rewardPercentiles) > 0 && header.BaseFee() != nil {
+	if header.BaseFee() != nil {
 		priorityRewards, err = fd.getRewardsForCache(header)
 		if err != nil {
 			return nil, err
