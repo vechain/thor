@@ -45,7 +45,14 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 	// check the endorsor balance has reduced
 	newEndorsorBal, err := getEndorsorBalance(best.Header, setup.chain)
 	assert.NoError(t, err)
-	assert.Equal(t, staker.ToVET(newEndorsorBal)+minStake, staker.ToVET(endorsorBal))
+
+	expectedEndorserVetBalance, err := staker.ToVET(newEndorsorBal)
+	assert.NoError(t, err)
+	expectedEndorserVetBalance = expectedEndorserVetBalance + minStake
+
+	endorserVetBalance, err := staker.ToVET(endorsorBal)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedEndorserVetBalance, endorserVetBalance)
 
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(setup.chain, blk.Header)

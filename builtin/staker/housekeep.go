@@ -310,7 +310,10 @@ func (s *Staker) ContractBalanceCheck(pendingWithdraw uint64) error {
 	if err != nil {
 		return err
 	}
-	balanceVET := ToVET(balance)
+	balanceVET, err := ToVET(balance)
+	if err != nil {
+		return err
+	}
 
 	// Get the Effective VET tracked
 	effectiveVET, err := s.GetEffectiveVET()
