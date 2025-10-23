@@ -91,7 +91,7 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		VIP214:    10_606_800,
 		FINALITY:  13_086_360,
 		GALACTICA: 21_770_500, // ~ Tue, 20 May 2025 12:00:00 UTC
-		HAYABUSA:  23_222_700, // ~ Tue, 4 Nov  2025 12:09:30 UTC
+		HAYABUSA:  23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
 	},
 }
 
