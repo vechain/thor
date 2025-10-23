@@ -26,7 +26,9 @@ func workToGas(work *big.Int, blockNum uint32) uint64 {
 		return 0
 	}
 
-	months := new(big.Int).SetUint64(uint64(blockNum) * thor.BlockInterval() / 3600 / 24 / 30)
+	months := new(big.Int).SetUint64(uint64(blockNum))
+	months.Mul(months, new(big.Int).SetUint64(thor.BlockInterval()))
+	months.Div(months, new(big.Int).SetUint64(3600*24*30))
 	if months.Sign() != 0 {
 		x := &big.Int{}
 		gas.Mul(gas, x.Exp(big100, months, nil))
