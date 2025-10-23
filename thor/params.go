@@ -6,6 +6,7 @@
 package thor
 
 import (
+	"errors"
 	"math/big"
 	"time"
 
@@ -77,6 +78,9 @@ func GetMaxBlockProposers(params interface {
 		return 0, err
 	}
 
+	if !mbp.IsUint64() {
+		return 0, errors.New("max block proposers is not a uint64")
+	}
 	maxBlockProposers := mbp.Uint64()
 	if maxBlockProposers == 0 || (capToInitial && maxBlockProposers > InitialMaxBlockProposers) {
 		maxBlockProposers = InitialMaxBlockProposers
