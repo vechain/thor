@@ -670,6 +670,9 @@ func parseNodeList(list string) ([]*discover.Node, error) {
 }
 
 func readIntFromUInt64Flag(val uint64) (int, error) {
+	if val > math.MaxInt {
+		return 0, fmt.Errorf("value %d is too large", val)
+	}
 	i := int(val)
 
 	if i < 0 {
