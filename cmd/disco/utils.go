@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"os/signal"
 	"os/user"
@@ -111,6 +112,9 @@ func mustHomeDir() string {
 }
 
 func readIntFromUInt64Flag(val uint64) (int, error) {
+	if val > math.MaxInt {
+		return 0, fmt.Errorf("value %d is too large", val)
+	}
 	i := int(val)
 
 	if i < 0 {
