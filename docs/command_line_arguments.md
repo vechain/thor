@@ -43,6 +43,10 @@ bin/thor -h
 | `--min-effective-priority-fee`   | Sets a minimum effective priority fee for transactions to be included in the block proposed by the block proposer (default: 0) |
 | `--help, -h`                     | Show help                                                                                                                      |
 | `--version, -v`                  | Print the version                                                                                                              |
+| `--json-logs`                  | Output logs in JSON format                                                                                   |
+| `--verbosity-staker`           | Log verbosity for staker (0-9)                                                                               |
+| `--api-enable-deprecated`      | Enable deprecated API endpoints (POST /accounts/{address}, POST /accounts, WS /subscriptions/beat)          |
+| `--api-enable-txpool`          | Enable txpool REST API endpoints                                                                             |
 
 ## Thor Solo Commands
 
@@ -54,6 +58,7 @@ bin/thor -h
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
 | `--txpool-limit`             | Transaction pool size limit                        |
+| `--hayabusa`                  | Start solo immediately as hayabusa |
 
 
 ## Discovery Node Commands
