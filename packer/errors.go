@@ -12,7 +12,6 @@ var (
 	errTxNotAdoptableNow     = errors.New("tx not adoptable now")
 	errTxNotAdoptableForever = errors.New("tx not adoptable forever")
 	errKnownTx               = errors.New("known tx")
-	errNotScheduled          = errors.New("node not scheduled")
 )
 
 // IsGasLimitReached block if full of txs.
@@ -23,11 +22,6 @@ func IsGasLimitReached(err error) bool {
 // IsTxNotAdoptableNow tx can not be adopted now.
 func IsTxNotAdoptableNow(err error) bool {
 	return errors.Is(err, errTxNotAdoptableNow)
-}
-
-// IsSchedulingError node not scheduled.
-func IsSchedulingError(err error) bool {
-	return errors.Is(err, errNotScheduled)
 }
 
 // IsBadTx not a valid tx.
