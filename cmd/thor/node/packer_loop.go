@@ -63,7 +63,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 		// otherwise, use now as base
 		flow, pos, err := n.packer.Schedule(n.repo.BestBlockSummary(), base)
 		if err != nil {
-			if !packer.IsSchedulingError(err) && authorized {
+			if authorized {
+				// if was authorized before, now mark as not authorized and log the error
 				authorized = false
 				logger.Warn("unable to pack block", "err", err)
 			}
