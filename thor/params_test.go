@@ -5,6 +5,7 @@
 package thor
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -90,5 +91,31 @@ func TestGetMaxBlockProposers(t *testing.T) {
 		maxBlockProposers, err := GetMaxBlockProposers(params, true)
 		assert.NoError(t, err)
 		assert.Equal(t, uint64(50), maxBlockProposers)
+	})
+
+	t.Run("uses MaxUint64 when mbp does not fit in uint64 and capToInitial is false", func(t *testing.T) {
+		params := &mockParams{
+			values: map[Bytes32]*big.Int{
+				// 2^80 to ensure it does not fit in uint64
+				KeyMaxBlockProposers: new(big.Int).Lsh(big.NewInt(1), 80),
+			},
+		}
+
+		maxBlockProposers, err := GetMaxBlockProposers(params, false)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(math.MaxUint64), maxBlockProposers)
+	})
+
+	t.Run("caps to InitialMaxBlockProposers when mbp does not fit in uint64 and capToInitial is true", func(t *testing.T) {
+		params := &mockParams{
+			values: map[Bytes32]*big.Int{
+				// 2^80 to ensure it does not fit in uint64
+				KeyMaxBlockProposers: new(big.Int).Lsh(big.NewInt(1), 80),
+			},
+		}
+
+		maxBlockProposers, err := GetMaxBlockProposers(params, true)
+		assert.NoError(t, err)
+		assert.Equal(t, InitialMaxBlockProposers, maxBlockProposers)
 	})
 }
