@@ -15,18 +15,7 @@ on:
         type: string
         required: true
         description: 'The images to publish'
-      trigger_internal_ci:
-        description: 'Trigger the internal CI'
-        required: false
-        type: boolean
-        default: false
   workflow_dispatch:
-    inputs:
-      trigger_internal_ci:
-        description: 'Trigger the internal CI'
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
