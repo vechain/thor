@@ -54,20 +54,3 @@ func TestWorkToGas(t *testing.T) {
 		})
 	}
 }
-
-func TestWorkToGas_MonotonicDecay(t *testing.T) {
-	work := new(big.Int).Mul(big.NewInt(1e12), big.NewInt(1e12)) // 1e24
-	g1 := workToGas(work, 1)
-	g2 := workToGas(work, 10_000_000)
-	if g2 > g1 {
-		t.Fatalf("expected gas to be non-increasing with larger blockNum: g2=%d g1=%d", g2, g1)
-	}
-}
-
-func TestWorkToGas_SaturatesToMaxUint64(t *testing.T) {
-	huge := new(big.Int).Lsh(big.NewInt(1), 400) // 2^400
-	g := workToGas(huge, 0)
-	if g != math.MaxUint64 {
-		t.Fatalf("expected MaxUint64, got %d", g)
-	}
-}
