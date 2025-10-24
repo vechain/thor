@@ -255,6 +255,17 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, queuedID, decreaseEvents[0].Validator)
 	require.Equal(t, minStake, decreaseEvents[0].Removed)
 
+	receipt, _, err = staker.DecreaseStake(queuedID, big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(0).SetUint64(math.MaxUint64))).
+		Send().
+		WithSigner(validatorKey).
+		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
+	require.NoError(t, err)
+	require.True(t, receipt.Reverted)
+
+	decreaseEvents, err = staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
+	require.NoError(t, err)
+	require.Len(t, decreaseEvents, 0)
+
 	//thor.SetConfig(thor.Config{
 	//	EpochLength: 180,
 	//})
@@ -296,7 +307,7 @@ func TestStaker(t *testing.T) {
 	// GetDelegationPeriodDetails
 	delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(delegationID)
 	require.NoError(t, err)
-	require.Equal(t, uint32(5), delegationPeriodDetails.StartPeriod)
+	require.Equal(t, uint32(6), delegationPeriodDetails.StartPeriod)
 	require.Equal(t, uint32(math.MaxUint32), delegationPeriodDetails.EndPeriod)
 
 	// GetValidatorsTotals

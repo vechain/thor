@@ -777,5 +777,5 @@ func (s *Staker) GetEffectiveVET() (uint64, error) {
 		return 0, err
 	}
 
-	return ToVET(new(big.Int).SetBytes(val.Bytes())), nil
+	return ToVET(new(big.Int).SetBytes(val.Bytes()))
 }

@@ -60,8 +60,22 @@ func (s *Staker) SyncPOS(forkConfig *thor.ForkConfig, current uint32) (Status, e
 	return status, nil
 }
 
-func ToVET(wei *big.Int) uint64 {
-	return new(big.Int).Div(wei, bigE18).Uint64()
+func ToVET(wei *big.Int) (uint64, error) {
+	if wei == nil {
+		return 0, fmt.Errorf("wei amount cannot be nil")
+	}
+
+	if wei.Sign() < 0 {
+		return 0, fmt.Errorf("wei amount cannot be negative")
+	}
+
+	result := new(big.Int).Div(wei, bigE18)
+
+	if !result.IsUint64() {
+		return 0, fmt.Errorf("wei amount too large")
+	}
+
+	return result.Uint64(), nil
 }
 
 func ToWei(vet uint64) *big.Int {

@@ -7,6 +7,7 @@
 package staker
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -400,4 +401,28 @@ func TestSyncPOS_NegativeCases(t *testing.T) {
 
 	_, err = staker.SyncPOS(forkConfig, current)
 	require.Error(t, err)
+}
+
+func TestToVET(t *testing.T) {
+	weiValue := big.NewInt(-1)
+	_, err := ToVET(weiValue)
+	assert.ErrorContains(t, err, "wei amount cannot be negative")
+
+	_, err = ToVET(nil)
+	assert.ErrorContains(t, err, "wei amount cannot be nil")
+
+	weiValue = big.NewInt(0).SetUint64(math.MaxUint64)
+	vetValue, err := ToVET(weiValue)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(math.MaxUint64)/1e18, vetValue)
+
+	weiValue = big.NewInt(0).SetUint64(math.MaxUint64)
+	weiValue = big.NewInt(0).Mul(weiValue, big.NewInt(1e18))
+	vetValue, err = ToVET(weiValue)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(math.MaxUint64), vetValue)
+
+	weiValue = big.NewInt(0).Add(weiValue, big.NewInt(1e18))
+	_, err = ToVET(weiValue)
+	assert.ErrorContains(t, err, "wei amount too large")
 }
