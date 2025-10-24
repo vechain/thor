@@ -122,7 +122,7 @@ func (s *Solo) init(ctx context.Context) error {
 	if err != nil {
 		return errors.WithMessage(err, "failed to get the current base gas price")
 	}
-	if currentBGP == nil || currentBGP.Cmp(baseGasPrice) == 0 {
+	if currentBGP != nil && currentBGP.Cmp(baseGasPrice) == 0 {
 		return nil
 	}
 
