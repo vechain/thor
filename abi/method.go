@@ -12,6 +12,17 @@ import (
 	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 )
 
+// MethodID method id.
+type MethodID [4]byte
+
+// EmptyMethodID represents an empty method ID (used for constructors).
+var EmptyMethodID = MethodID{}
+
+// IsEmpty returns true if the MethodID is empty.
+func (id MethodID) IsEmpty() bool {
+	return id == EmptyMethodID
+}
+
 // Method see abi.Method in go-ethereum.
 type Method struct {
 	id     MethodID
@@ -33,20 +44,34 @@ func (m *Method) Const() bool {
 	return m.method.Const
 }
 
-// EncodeInput encode args to data, and the data is prefixed with method id.
+// EncodeInput encode args to data.
 func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 	data, err := m.method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
 	}
+
+	if m.id.IsEmpty() {
+		return data, nil
+	}
+
 	return append(m.id[:], data...), nil
 }
 
 // DecodeInput decode input data into args.
 func (m *Method) DecodeInput(input []byte, v any) error {
+	if m.id.IsEmpty() {
+		if len(input) != 0 {
+			return m.method.Inputs.Unpack(v, input)
+		}
+		// if constructor with no parameters
+		return nil
+	}
+
 	if !bytes.HasPrefix(input, m.id[:]) {
 		return errors.New("input has incorrect prefix")
 	}
+
 	return m.method.Inputs.Unpack(v, input[4:])
 }
 
@@ -62,9 +87,6 @@ func (m *Method) DecodeOutput(output []byte, v any) error {
 	}
 	return m.method.Outputs.Unpack(v, output)
 }
-
-// MethodID method id.
-type MethodID [4]byte
 
 // ExtractMethodID extract method id from input data.
 func ExtractMethodID(input []byte) (id MethodID, err error) {
