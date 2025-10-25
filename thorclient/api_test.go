@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -434,53 +433,46 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	c := New(ts.URL)
 	// 1. Test GET /node/network/peers
-	t.Run("GetPeersStats", func(t *testing.T) {
+	t.Run("Peers", func(t *testing.T) {
 		_, err := c.Peers()
 		require.NoError(t, err)
 	})
 
 	// 2. Test GET /node/txpool
-	t.Run("GetTxPool", func(t *testing.T) {
+	t.Run("PoolTransactionIDs", func(t *testing.T) {
 		// Test with transaction IDs only
-		result, err := c.TxPool(false, nil)
+		result, err := c.PoolTransactionIDs(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		txIDs, ok := result.([]thor.Bytes32)
-		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
-		require.GreaterOrEqual(t, len(txIDs), 1, "Expected at least one transaction in pool")
-
-		// Test with expanded transactions
-		result, err = c.TxPool(true, nil)
-		require.NoError(t, err)
-		require.NotNil(t, result)
-
-		txs, ok := result.([]transactions.Transaction)
-		require.True(t, ok, "Expected []transactions.Transaction, got %T", result)
-		require.GreaterOrEqual(t, len(txs), 1, "Expected at least one transaction in pool")
+		require.GreaterOrEqual(t, len(result), 1, "Expected at least one transaction ID in pool")
 
 		// Test with origin filter
 		origin := genesis.DevAccounts()[0].Address
-		result, err = c.TxPool(false, &origin)
+		result, err = c.PoolTransactionIDs(&origin)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		txIDsFiltered, ok := result.([]thor.Bytes32)
-		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
-		require.GreaterOrEqual(t, len(txIDsFiltered), 1, "Expected non-negative length")
+		require.GreaterOrEqual(t, len(result), 1, "Expected non-negative length")
 
 		// Origin does not exist
 		origin = thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
-		result, err = c.TxPool(false, &origin)
+		result, err = c.PoolTransactionIDs(&origin)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		txIDsFilteredNoOrigin, ok := result.([]thor.Bytes32)
-		require.True(t, ok, "Expected []thor.Bytes32, got %T", result)
-		require.Equal(t, len(txIDsFilteredNoOrigin), 0, "No tx expected")
+		require.Equal(t, len(result), 0, "No tx expected")
 	})
 
-	// 3. Test GET /node/txpool/status
-	t.Run("GetTxPoolStatus", func(t *testing.T) {
+	// 3. Test GET /node/txpool?expanded=true
+	t.Run("PoolTransactions", func(t *testing.T) {
+		result, err := c.PoolTransactions(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.GreaterOrEqual(t, len(result), 1, "Expected at least one transaction in pool")
+	})
+
+	// 4. Test GET /node/txpool/status
+	t.Run("TxPoolStatus", func(t *testing.T) {
 		status, err := c.TxPoolStatus()
 		require.NoError(t, err)
 		require.NotNil(t, status)
