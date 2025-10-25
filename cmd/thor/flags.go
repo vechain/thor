@@ -113,6 +113,11 @@ var (
 		Value: 11235,
 		Usage: "P2P network listening port",
 	}
+	p2pHostFlag = cli.StringFlag{
+		Name:  "p2p-host",
+		Usage: "an ipv4 address (eg. 0.0.0.0) or an ipv6 address (eg. [::]). Defaults to ipv4",
+		Value: "",
+	}
 	natFlag = cli.StringFlag{
 		Name:  "nat",
 		Value: "any",
