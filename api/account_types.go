@@ -93,15 +93,6 @@ func ConvertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallRes
 	}
 }
 
-type Clause struct {
-	To    *thor.Address         `json:"to"`
-	Value *math.HexOrDecimal256 `json:"value"`
-	Data  string                `json:"data"`
-}
-
-// Clauses array of clauses.
-type Clauses []*Clause
-
 // BatchCallData executes a batch of codes
 type BatchCallData struct {
 	Clauses    Clauses               `json:"clauses"`
