@@ -8,93 +8,80 @@ package block
 import (
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vrf"
 )
 
-func TestBlock(t *testing.T) {
+func TestBlockProof(t *testing.T) {
 	tx1 := tx.NewBuilder(tx.TypeLegacy).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
 	tx2 := tx.NewBuilder(tx.TypeDynamicFee).Clause(tx.NewClause(nil)).Build()
 
 	privKey := string("dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65")
-
-	now := uint64(time.Now().UnixNano())
+	alpha := thor.MustParseBytes32("0x68abc4fe6b911dd388eac9252513071dd4edea83e183c4b477dc65dd59359c2c")
 
 	var (
-		gasUsed     uint64 = 1000
-		gasLimit    uint64 = 14000
-		totalScore  uint64 = 101
-		emptyRoot          = thor.BytesToBytes32([]byte("0"))
-		beneficiary        = thor.BytesToAddress([]byte("abc"))
+		emptyRoot   = thor.BytesToBytes32([]byte("0"))
+		beneficiary = thor.BytesToAddress([]byte("abc"))
 	)
 
 	blk := new(Builder).
-		GasUsed(gasUsed).
+		GasUsed(1000).
 		Transaction(tx1).
 		Transaction(tx2).
-		GasLimit(gasLimit).
-		TotalScore(totalScore).
+		GasLimit(14000).
+		TotalScore(101).
 		StateRoot(emptyRoot).
 		ReceiptsRoot(emptyRoot).
-		Timestamp(now).
+		Timestamp(1761554386318816000).
 		BaseFee(big.NewInt(thor.InitialBaseFee)).
 		ParentID(emptyRoot).
+		Alpha(alpha.Bytes()).
 		Beneficiary(beneficiary).
 		Build()
-
-	h := blk.Header()
-
-	txs := blk.Transactions()
-	txsRootHash := txs.RootHash()
-
-	assert.Equal(t, Compose(h, txs), blk)
-	assert.Equal(t, gasLimit, h.GasLimit())
-	assert.Equal(t, gasUsed, h.GasUsed())
-	assert.Equal(t, totalScore, h.TotalScore())
-	assert.Equal(t, emptyRoot, h.StateRoot())
-	assert.Equal(t, emptyRoot, h.ReceiptsRoot())
-	assert.Equal(t, now, h.Timestamp())
-	assert.Equal(t, big.NewInt(thor.InitialBaseFee), h.BaseFee())
-	assert.Equal(t, emptyRoot, h.ParentID())
-	assert.Equal(t, beneficiary, h.Beneficiary())
-	assert.Equal(t, txsRootHash, h.TxsRoot())
 
 	key, _ := crypto.HexToECDSA(privKey)
-	sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), key)
+	ec, err := crypto.Sign(blk.Header().SigningHash().Bytes(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	_, proof, err := vrf.Prove(key, alpha.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sig, err := NewComplexSignature(ec, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blk = blk.WithSignature(sig)
 
-	data, _ := rlp.EncodeToBytes(blk)
+	_, err = blk.Header().Beta()
+	assert.Nil(t, err)
 
-	b := Block{}
-	rlp.DecodeBytes(data, &b)
+	newProof := make([]byte, len(proof))
 
-	blk = new(Builder).
-		GasUsed(gasUsed).
-		GasLimit(gasLimit).
-		TotalScore(totalScore).
-		StateRoot(emptyRoot).
-		ReceiptsRoot(emptyRoot).
-		Timestamp(now).
-		ParentID(emptyRoot).
-		BaseFee(big.NewInt(thor.InitialBaseFee)).
-		Beneficiary(beneficiary).
-		TransactionFeatures(1).
-		Build()
-
-	sig, _ = crypto.Sign(blk.Header().SigningHash().Bytes(), key)
+	copy(newProof, proof[0:33])
+	sig, err = NewComplexSignature(ec, newProof)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blk = blk.WithSignature(sig)
 
-	assert.Equal(t, tx.Features(1), blk.Header().TxsFeatures())
-	data, _ = rlp.EncodeToBytes(blk)
-	var bx Block
-	assert.Nil(t, rlp.DecodeBytes(data, &bx))
-	assert.Equal(t, blk.Header().ID(), bx.Header().ID())
-	assert.Equal(t, blk.Header().TxsFeatures(), bx.Header().TxsFeatures())
+	_, err = blk.Header().Beta()
+	assert.ErrorContains(t, err, "invalid proof: value c is zero")
+
+	copy(newProof, proof[0:47])
+	sig, err = NewComplexSignature(ec, newProof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blk = blk.WithSignature(sig)
+
+	_, err = blk.Header().Beta()
+	assert.ErrorContains(t, err, "invalid proof: value s is zero")
 }
