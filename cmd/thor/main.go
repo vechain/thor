@@ -470,7 +470,10 @@ func soloAction(ctx *cli.Context) error {
 
 	var pool solo.TxPool
 	if ctx.Bool(onDemandFlag.Name) {
-		pool = solo.NewOnDemandTxPool(core)
+		txPool := solo.NewOnDemandTxPool(core)
+		defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+		// TODO add the Close method to the transactions.Pool interface
+		pool = txPool
 	} else {
 		txPoolOption := defaultTxPoolOptions
 		txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
@@ -484,6 +487,7 @@ func soloAction(ctx *cli.Context) error {
 
 		txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
 		defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+		// TODO add the Close method to the transactions.Pool interface
 		pool = txPool
 	}
 
