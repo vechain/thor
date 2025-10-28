@@ -483,20 +483,20 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(1860).
+		ShouldUseGas(1886).
 		ShouldRevert("staker: staker is paused").
 		Assert(t)
 
 	test.Case("increaseStake", validator1).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(1749).
+		ShouldUseGas(1775).
 		ShouldRevert("staker: staker is paused").
 		Assert(t)
 
 	test.Case("decreaseStake", validator1, minStake).
 		Caller(endorser).
-		ShouldUseGas(1796).
+		ShouldUseGas(1822).
 		ShouldRevert("staker: staker is paused").
 		Assert(t)
 
@@ -516,7 +516,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addDelegation", validator1, uint8(100)).
 		Value(minStake).
 		Caller(delegator).
-		ShouldUseGas(3132).
+		ShouldUseGas(3158).
 		ShouldRevert("staker: staker is paused").
 		Assert(t)
 
@@ -560,18 +560,18 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(132571).
+		ShouldUseGas(132597).
 		Assert(t)
 
 	test.Case("increaseStake", validator1).
 		Value(minStake).
 		Caller(endorser).
-		ShouldUseGas(67189).
+		ShouldUseGas(67215).
 		Assert(t)
 
 	test.Case("decreaseStake", validator1, minStake).
 		Caller(endorser).
-		ShouldUseGas(16344).
+		ShouldUseGas(16370).
 		Assert(t)
 
 	test.Case("withdrawStake", validator1).
@@ -587,7 +587,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addDelegation", validator1, uint8(100)).
 		Value(minStake).
 		Caller(delegator).
-		ShouldUseGas(48922).
+		ShouldUseGas(48948).
 		Assert(t)
 
 	// cannot add delegation after the signal validation exit
