@@ -12,17 +12,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type LogMeta struct {
-	BlockID        thor.Bytes32 `json:"blockID"`
-	BlockNumber    uint32       `json:"blockNumber"`
-	BlockTimestamp uint64       `json:"blockTimestamp"`
-	TxID           thor.Bytes32 `json:"txID"`
-	TxOrigin       thor.Address `json:"txOrigin"`
-	ClauseIndex    uint32       `json:"clauseIndex"`
-	TxIndex        *uint32      `json:"txIndex,omitempty"`
-	LogIndex       *uint32      `json:"logIndex,omitempty"`
-}
-
 type FilteredTransfer struct {
 	Sender    thor.Address          `json:"sender"`
 	Recipient thor.Address          `json:"recipient"`
