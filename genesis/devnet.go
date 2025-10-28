@@ -160,17 +160,21 @@ func NewHayabusaDevnet() (*Genesis, *thor.ForkConfig) {
 		HAYABUSA:  0,
 		GALACTICA: 0,
 	}
+	// Create accounts for all DevAccounts
+	accounts := make([]Account, len(DevAccounts()))
+	for i, devAcc := range DevAccounts() {
+		accounts[i] = Account{
+			Address: devAcc.Address,
+			Balance: largeNo,
+			Energy:  largeNo,
+		}
+	}
+
 	gen := &CustomGenesis{
 		LaunchTime: uint64(1526400000), // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)',
 		GasLimit:   thor.InitialGasLimit,
 		ExtraData:  "hayabusa solo",
-		Accounts: []Account{
-			{
-				Address: DevAccounts()[0].Address,
-				Balance: largeNo,
-				Energy:  largeNo,
-			},
-		},
+		Accounts:   accounts,
 		Authority: []Authority{
 			{
 				MasterAddress:   DevAccounts()[0].Address,

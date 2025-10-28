@@ -521,8 +521,8 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 			},
 			Reward: [][]*hexutil.Big{
 				{
-					(*hexutil.Big)(big.NewInt(0)),
-					(*hexutil.Big)(big.NewInt(0)),
+					(*hexutil.Big)(big.NewInt(0x9184e72a000)),
+					(*hexutil.Big)(big.NewInt(0x9184e72a000)),
 				},
 			},
 		}

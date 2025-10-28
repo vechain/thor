@@ -198,12 +198,17 @@ func init() {
 				}
 			}
 
+			stake, err := staker.ToVET(args.Stake) // convert from wei to VET
+			if err != nil {
+				return nil, staker.NewReverts(err.Error())
+			}
+
 			err = Staker.NativeMetered(env.State(), charger).
 				AddValidation(
 					val,
 					end,
 					args.Period,
-					staker.ToVET(args.Stake), // convert from wei to VET
+					stake,
 				)
 			if err != nil {
 				return nil, err
@@ -239,11 +244,16 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			stake, err := staker.ToVET(args.Amount) // convert from wei to VET
+			if err != nil {
+				return nil, staker.NewReverts(err.Error())
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				IncreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
-					staker.ToVET(args.Amount), // convert from wei to VET
+					stake,
 				)
 			if err != nil {
 				return nil, err
@@ -280,11 +290,16 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			stake, err := staker.ToVET(args.Amount) // convert from wei to VET
+			if err != nil {
+				return nil, staker.NewReverts(err.Error())
+			}
+
+			err = Staker.NativeMetered(env.State(), charger).
 				DecreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
-					staker.ToVET(args.Amount), // convert from wei to VET,
+					stake,
 				)
 			if err != nil {
 				return nil, err
@@ -300,10 +315,15 @@ func init() {
 			env.ParseArgs(&args)
 			charger := gascharger.New(env)
 
+			stake, err := staker.ToVET(args.Stake) // convert from wei to VET,
+			if err != nil {
+				return nil, staker.NewReverts(err.Error())
+			}
+
 			delegationID, err := Staker.NativeMetered(env.State(), charger).
 				AddDelegation(
 					thor.Address(args.Validator),
-					staker.ToVET(args.Stake), // convert from wei to VET,
+					stake,
 					args.Multiplier,
 					env.BlockContext().Number,
 				)

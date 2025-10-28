@@ -206,3 +206,75 @@ func TestRewardsBeforeAndAfterGalactica(t *testing.T) {
 		assert.True(t, expectedReward.Cmp((*big.Int)(reward)) == 0)
 	}
 }
+
+func TestRewardsComputedAfterWarmupWithoutPercentiles(t *testing.T) {
+	forkConfig := thor.NoFork
+	forkConfig.GALACTICA = 1
+
+	thorChain, err := testchain.NewWithFork(&forkConfig, 180)
+	require.NoError(t, err)
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	// Create several post-Galactica blocks with dynamic fee transactions
+	const numberOfBlocks = 5
+	for i := range numberOfBlocks {
+		trx1 := tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(thorChain.Repo().ChainTag()).
+			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
+			MaxPriorityFeePerGas(big.NewInt(10)).
+			Expiration(720).
+			Gas(21000).
+			Nonce(uint64(i * 2)).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(uint32(i))).
+			Build()
+		trx2 := tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(thorChain.Repo().ChainTag()).
+			MaxFeePerGas(big.NewInt(250_000_000_000_000)).
+			MaxPriorityFeePerGas(big.NewInt(12)).
+			Expiration(720).
+			Gas(21000).
+			Nonce(uint64(i*2 + 1)).
+			Clause(cla).
+			BlockRef(tx.NewBlockRef(uint32(i))).
+			Build()
+		require.NoError(
+			t,
+			thorChain.MintBlock(
+				genesis.DevAccounts()[0],
+				tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey),
+				tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey),
+			),
+		)
+	}
+
+	feesData := newFeesData(thorChain.Repo(), thorChain.Stater(), 10)
+	newestBlockSummary := thorChain.Repo().BestBlockSummary()
+
+	// Warm the cache without reward percentiles: entries are cached, rewards were computed at miss
+	_, _, _, _, err = feesData.resolveRange(newestBlockSummary, 3, nil)
+	require.NoError(t, err)
+
+	// Now request with percentiles
+	_, _, _, rewards, err := feesData.resolveRange(newestBlockSummary, 3, []float64{25, 50, 75})
+	require.NoError(t, err)
+
+	require.NotNil(t, rewards)
+	require.Len(t, rewards, 3)
+
+	expected := []*hexutil.Big{
+		(*hexutil.Big)(big.NewInt(10)), // 25th percentile
+		(*hexutil.Big)(big.NewInt(10)), // 50th percentile
+		(*hexutil.Big)(big.NewInt(12)), // 75th percentile
+	}
+
+	for i := range rewards {
+		require.NotNil(t, rewards[i])
+		require.Len(t, rewards[i], 3)
+		for j := range rewards[i] {
+			assert.Equal(t, expected[j].String(), rewards[i][j].String())
+		}
+	}
+}

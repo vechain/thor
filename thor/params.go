@@ -6,6 +6,7 @@
 package thor
 
 import (
+	"math"
 	"math/big"
 	"time"
 
@@ -77,7 +78,12 @@ func GetMaxBlockProposers(params interface {
 		return 0, err
 	}
 
-	maxBlockProposers := mbp.Uint64()
+	var maxBlockProposers uint64
+	if !mbp.IsUint64() {
+		maxBlockProposers = math.MaxUint64
+	} else {
+		maxBlockProposers = mbp.Uint64()
+	}
 	if maxBlockProposers == 0 || (capToInitial && maxBlockProposers > InitialMaxBlockProposers) {
 		maxBlockProposers = InitialMaxBlockProposers
 	}
