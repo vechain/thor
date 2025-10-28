@@ -295,6 +295,7 @@ contract Staker {
     modifier checkStake(uint256 amount) {
         require(amount > 0, "staker: stake is empty");
         require(amount % 1e18 == 0, "staker: stake is not multiple of 1VET");
+        require(amount <= 100_000_000_000*1e18, "staker: stake is above max supply");
         _;
     }
 

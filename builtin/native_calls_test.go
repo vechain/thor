@@ -1690,6 +1690,19 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, receipt.Reverted)
 
+	decreaseStakeArgs = []any{genesis.DevAccounts()[2].Address, big.NewInt(0).Mul(big.NewInt(0).SetUint64(math.MaxUint64), big.NewInt(1e18))}
+	desc = TestTxDescription{
+		t:          t,
+		abi:        abi,
+		methodName: "decreaseStake",
+		address:    toAddr,
+		acc:        genesis.DevAccounts()[2],
+		args:       decreaseStakeArgs,
+	}
+	receipt, _, err = executeTxAndGetReceipt(desc)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+
 	// update delegator auto renew
 	updateDelegatorAutoRenewArgs := []any{big.NewInt(0)}
 	desc = TestTxDescription{
