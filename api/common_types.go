@@ -5,8 +5,6 @@
 package api
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
@@ -59,14 +57,4 @@ func ConvertClause(c *tx.Clause) Clause {
 		Value: (*math.HexOrDecimal256)(c.Value()),
 		Data:  hexutil.Encode(c.Data()),
 	}
-}
-
-func (c *Clause) String() string {
-	return fmt.Sprintf(`Clause(
-		To    %v
-		Value %v
-		Data  %v
-		)`, c.To,
-		c.Value,
-		c.Data)
 }
