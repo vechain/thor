@@ -338,6 +338,7 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	isHayabusa := ctx.Bool(hayabusaFlag.Name)
+	isStargateSandbox := ctx.Bool(stargateSandboxFlag.Name)
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockInterval := ctx.Uint64(blockInterval.Name)
 	if blockInterval == 0 {
@@ -367,7 +368,9 @@ func soloAction(ctx *cli.Context) error {
 	if flagGenesis == "" {
 		if isHayabusa {
 			gene, forkConfig = genesis.NewHayabusaDevnet()
-		} else {
+		} else if isStargateSandbox {
+			gene, forkConfig = genesis.NewHayabusaSandbox()
+		}else {
 			forkConfig = &thor.SoloFork
 			gene = genesis.NewDevnet()
 		}

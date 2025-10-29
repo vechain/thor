@@ -1,0 +1,21 @@
+[
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "oldBaseURI",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "newBaseURI",
+          "type": "string"
+        }
+      ],
+      "name": "BaseURIUpdated",
+      "type": "event"
+    }
+  ]

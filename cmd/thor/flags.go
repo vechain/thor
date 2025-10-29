@@ -203,6 +203,12 @@ var (
 		Name:  "hayabusa",
 		Usage: "start solo immediately as hayabusa",
 	}
+
+	stargateSandboxFlag = cli.BoolFlag{
+		Name:  "stargate-sandbox",
+		Usage: "start solo immediately as stargate sandbox",
+	}
+
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
 		Usage: "create new block when there is pending transaction",

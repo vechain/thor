@@ -38,6 +38,7 @@ type Config struct {
 	HighStakingPeriod   uint32  `json:"highStakingPeriod"`
 	CooldownPeriod      uint32  `json:"cooldownPeriod"`
 	HayabusaTP          *uint32 `json:"hayabusaTP"`
+	BuiltInStargate     *uint32 `json:"builtInStargate"`
 }
 
 // SetConfig sets the config.

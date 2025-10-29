@@ -85,6 +85,32 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					return err
 				}
 			}
+			if deployBuiltinStargate(gen) {
+				if err := state.SetCode(builtin.ClockLib.Address, builtin.ClockLib.RuntimeBytecodes()); err != nil {
+					return err
+				}
+				if err := state.SetCode(builtin.LevelsLib.Address, builtin.LevelsLib.RuntimeBytecodes()); err != nil {
+					return err
+				}
+				if err := state.SetCode(builtin.MintingLogicLib.Address, builtin.MintingLogicLib.RuntimeBytecodes()); err != nil {
+					return err
+				}
+				if err := state.SetCode(builtin.SettingsLib.Address, builtin.SettingsLib.RuntimeBytecodes()); err != nil {
+					return err
+				}
+				if err := state.SetCode(builtin.TokenLib.Address, builtin.TokenLib.RuntimeBytecodes()); err != nil {
+					return err
+				}
+				if err := state.SetCode(builtin.TokenManagerLib.Address, builtin.TokenManagerLib.RuntimeBytecodes()); err != nil {
+					return err
+				}
+				if err := state.SetCode(builtin.Stargate.Address, builtin.Stargate.RuntimeBytecodes()); err != nil {
+					return err
+				}
+				if err := state.SetCode(builtin.StargateNFT.Address, builtin.StargateNFT.RuntimeBytecodes()); err != nil {
+					return err
+				}
+			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
@@ -204,6 +230,180 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		}
 	}
 
+	if deployBuiltinStargate(gen) {
+		// initialize stargate nft
+		blocksPerDay := 6 * 60 * 24
+		strengthVetAmountRequiredToStake, _ := new(big.Int).SetString("1000000000000000000000000", 10)
+		thunderVetAmountRequiredToStake, _ := new(big.Int).SetString("5000000000000000000000000", 10)
+		mjolnirVetAmountRequiredToStake, _ := new(big.Int).SetString("15000000000000000000000000", 10)
+		vethorXVetAmountRequiredToStake, _ := new(big.Int).SetString("600000000000000000000000", 10)
+		strengthXVetAmountRequiredToStake, _ := new(big.Int).SetString("1600000000000000000000000", 10)
+		thunderXVetAmountRequiredToStake, _ := new(big.Int).SetString("5600000000000000000000000", 10)
+		mjolnirXVetAmountRequiredToStake, _ := new(big.Int).SetString("15600000000000000000000000", 10)
+		dawnVetAmountRequiredToStake, _ := new(big.Int).SetString("10000000000000000000000", 10)
+		lighningVetAmountRequiredToStake, _ := new(big.Int).SetString("50000000000000000000000", 10)
+		flashVetAmountRequiredToStake, _ := new(big.Int).SetString("200000000000000000000000", 10)
+		data = mustEncodeInput(builtin.StargateNFT.ABI, "initialize", builtin.StargatNFTInitializeV1Params{
+			TokenCollectionName:   "StarGate Delegator Token",
+			TokenCollectionSymbol: "SDT",
+			BaseTokenURI:          "ipfs://bafybeibmpgruasnoqgyemcprpkygtelvxl3b5d2bf5aqqciw6dds33yw7y/metadata/",
+			Admin:                 executor,
+			Upgrader:              executor,
+			Pauser:                executor,
+			LevelOperator:         executor,
+			LegacyNodes:           executor, // We dont care about the legacy nodes right now
+			StargateDelegation:    executor, // We dont care about the stargate delegation right now
+			VthoToken:             builtin.Energy.Address,
+			LegacyLastTokenId:     10000,
+			LevelsAndSupplies: []builtin.LevelAndSupply{
+				{
+					Level: builtin.Level{
+						ID:                       1,
+						Name:                     "Strength",
+						IsX:                      false,
+						VetAmountRequiredToStake: strengthVetAmountRequiredToStake,
+						MaturityBlocks:           uint64(blocksPerDay * 30),
+						ScaledRewardFactor:       150,
+					},
+					Cap:               1382,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       2,
+						Name:                     "Thunder",
+						IsX:                      false,
+						VetAmountRequiredToStake: thunderVetAmountRequiredToStake,
+						MaturityBlocks:           uint64(blocksPerDay * 45),
+						ScaledRewardFactor:       250,
+					},
+					Cap:               234,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       3,
+						Name:                     "Mjolnir",
+						IsX:                      false,
+						VetAmountRequiredToStake: mjolnirVetAmountRequiredToStake,
+						MaturityBlocks:           uint64(blocksPerDay * 60),
+						ScaledRewardFactor:       350,
+					},
+					Cap:               13,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       4,
+						Name:                     "VeThorX",
+						IsX:                      true,
+						VetAmountRequiredToStake: vethorXVetAmountRequiredToStake,
+						MaturityBlocks:           0,
+						ScaledRewardFactor:       200,
+					},
+					Cap:               0,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       5,
+						Name:                     "StrengthX",
+						IsX:                      true,
+						VetAmountRequiredToStake: strengthXVetAmountRequiredToStake,
+						MaturityBlocks:           0,
+						ScaledRewardFactor:       300,
+					},
+					Cap:               0,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       6,
+						Name:                     "ThunderX",
+						IsX:                      true,
+						VetAmountRequiredToStake: thunderXVetAmountRequiredToStake,
+						MaturityBlocks:           0,
+						ScaledRewardFactor:       400,
+					},
+					Cap:               0,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       7,
+						Name:                     "MjolnirX",
+						IsX:                      true,
+						VetAmountRequiredToStake: mjolnirXVetAmountRequiredToStake,
+						MaturityBlocks:           0,
+						ScaledRewardFactor:       500,
+					},
+					Cap:               0,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       8,
+						Name:                     "Dawn",
+						IsX:                      false,
+						VetAmountRequiredToStake: dawnVetAmountRequiredToStake,
+						MaturityBlocks:           uint64(blocksPerDay * 2),
+						ScaledRewardFactor:       100,
+					},
+					Cap:               500000,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       9,
+						Name:                     "Lighning",
+						IsX:                      false,
+						VetAmountRequiredToStake: lighningVetAmountRequiredToStake,
+						MaturityBlocks:           uint64(blocksPerDay * 5),
+						ScaledRewardFactor:       115,
+					},
+					Cap:               100000,
+					CirculatingSupply: 0,
+				},
+				{
+					Level: builtin.Level{
+						ID:                       10,
+						Name:                     "Flash",
+						IsX:                      false,
+						VetAmountRequiredToStake: flashVetAmountRequiredToStake,
+						MaturityBlocks:           uint64(blocksPerDay * 15),
+						ScaledRewardFactor:       130,
+					},
+					Cap:               25000,
+					CirculatingSupply: 0,
+				},
+			},
+		})
+		builder.Call(tx.NewClause(&builtin.StargateNFT.Address).WithData(data), executor)
+
+		tokenIds := []uint8{8, 9, 10, 1, 2, 3}
+		dawnBoostPricePerBlock, _ := new(big.Int).SetString("539351851851852n", 10)
+		lighningBoostPricePerBlock, _ := new(big.Int).SetString("2870370370370370n", 10)
+		flashBoostPricePerBlock, _ := new(big.Int).SetString("12523148148148100n", 10)
+		strengthBoostPricePerBlock, _ := new(big.Int).SetString("75925925925925900n", 10)
+		thunderBoostPricePerBlock, _ := new(big.Int).SetString("530092592592593000n", 10)
+		mjolnirBoostPricePerBlock, _ := new(big.Int).SetString("1995370370370370000n", 10)
+
+		boostPricesPerBlock := []big.Int{
+			*dawnBoostPricePerBlock,
+			*lighningBoostPricePerBlock,
+			*flashBoostPricePerBlock,
+			*strengthBoostPricePerBlock,
+			*thunderBoostPricePerBlock,
+			*mjolnirBoostPricePerBlock,
+		}
+
+		data = mustEncodeInput(builtin.StargateNFT.ABI, "initializeV3", builtin.Stargate.Address, tokenIds, boostPricesPerBlock)
+		builder.Call(tx.NewClause(&builtin.StargateNFT.Address).WithData(data), executor)
+
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyDelegatorContractAddress, builtin.Stargate.Address)
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
 	builder.PostCallState(func(state *state.State) error {
 		if isHayabusaGenesis(gen) {
 			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
@@ -230,4 +430,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 
 func isHayabusaGenesis(gen *CustomGenesis) bool {
 	return gen.ForkConfig.HAYABUSA == 0 && gen.Config != nil && gen.Config.HayabusaTP != nil && *gen.Config.HayabusaTP == 0
+}
+
+func deployBuiltinStargate(gen *CustomGenesis) bool {
+	return gen.Config != nil && gen.Config.BuiltInStargate != nil && *gen.Config.BuiltInStargate == 0
 }

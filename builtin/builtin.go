@@ -6,6 +6,8 @@
 package builtin
 
 import (
+	"math/big"
+
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/abi"
@@ -33,8 +35,17 @@ var (
 		mustLoadContract("ExtensionV2"),
 		mustLoadContract("ExtensionV3"),
 	}
-	Staker  = &stakerContract{mustLoadContract("Staker")}
-	Measure = mustLoadContract("Measure")
+	Staker          = &stakerContract{mustLoadContract("Staker")}
+	Measure         = mustLoadContract("Measure")
+	Stargate        = &stargateContract{mustLoadContract("Stargate")}       // 0x0000000000000000000000005374617267617465
+	StargateNFT     = &stargateNFTContract{mustLoadContract("StargateNFT")} // 0x00000000000000000053746172676174654e4654
+	StargateProxy   = mustLoadContract("StargateProxy")
+	ClockLib        = mustLoadContract("ClockLib")        // 0x000000000000000000000000436C6F636B4C6962
+	LevelsLib       = mustLoadContract("LevelsLib")       // 0x00000000000000000000004c6576656c734C6962
+	MintingLogicLib = mustLoadContract("MintingLogicLib") // 0x00000000004D696e74696E674c6f6769634C6962
+	SettingsLib     = mustLoadContract("SettingsLib")     // 0x00000000000000000053657474696E67734C6962
+	TokenLib        = mustLoadContract("TokenLib")        // 0x000000000000000000000000546F6b656e4C6962
+	TokenManagerLib = mustLoadContract("TokenManagerLib") // 0x0000000000546f6b656e4D616E616765724C6962
 
 	// return gas map maintains the builtin contracts that can be made native call cheaper
 	// only the 0.4.24 compiled contracts are allowed to return gas, as the newer compiler
@@ -60,7 +71,9 @@ type (
 		V2 *contract
 		V3 *contract
 	}
-	stakerContract struct{ *contract }
+	stakerContract      struct{ *contract }
+	stargateContract    struct{ *contract }
+	stargateNFTContract struct{ *contract }
 )
 
 func (p *paramsContract) Native(state *state.State) *params.Params {
@@ -115,6 +128,39 @@ type nativeMethod struct {
 type methodKey struct {
 	thor.Address
 	abi.MethodID
+}
+
+// Level represents a single NFT or staking level configuration.
+type Level struct {
+	Name                     string   // Name of the level (e.g., "Thunder", "Mjolnir")
+	IsX                      bool     // Whether the level is for X-tokens
+	ID                       uint8    // ID to identify the level, as a continuation of the legacy strength levels
+	MaturityBlocks           uint64   // Maturity period in blocks
+	ScaledRewardFactor       uint64   // Reward multiplier for that level scaled by 100 (i.e., 1.5 becomes 150)
+	VetAmountRequiredToStake *big.Int // VET amount required for staking
+}
+
+// LevelAndSupply links a Level with its circulating supply and cap.
+type LevelAndSupply struct {
+	Level             Level  // Level details
+	CirculatingSupply uint32 // Current circulating supply (Solidity uint208 → big.Int)
+	Cap               uint32 // Maximum supply cap
+}
+
+// StargateInitializeV1Params represents the initialization parameters for Stargate V1.
+type StargatNFTInitializeV1Params struct {
+	TokenCollectionName   string           // ERC721 token collection name
+	TokenCollectionSymbol string           // ERC721 token collection symbol
+	BaseTokenURI          string           // Base URI for the token metadata
+	Admin                 thor.Address     // Access control: Default admin address
+	Upgrader              thor.Address     // Access control: Upgrader address
+	Pauser                thor.Address     // Access control: Pauser address
+	LevelOperator         thor.Address     // Access control: Level operator address
+	LegacyNodes           thor.Address     // Address of the legacy TokenAuction contract
+	StargateDelegation    thor.Address     // Address of the Stargate delegation contract
+	VthoToken             thor.Address     // Address of the VTHO token contract
+	LegacyLastTokenId     uint64           // Last token ID minted in the legacy TokenAuction contract
+	LevelsAndSupplies     []LevelAndSupply // A list of levels and their supply
 }
 
 var nativeMethods = make(map[methodKey]*nativeMethod)
