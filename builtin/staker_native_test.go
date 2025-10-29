@@ -281,46 +281,54 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(big.NewInt(0)).
 		Caller(caller).
+		ShouldUseGas(516).
 		ShouldRevertError("StakeIsEmpty").
 		Assert(t)
 
 	test.Case("addValidation", master, thor.LowStakingPeriod()).
 		Value(big.NewInt(1)).
 		Caller(caller).
+		ShouldUseGas(593).
 		ShouldRevertError("StakeIsNotMultipleOf1VET").
 		Assert(t)
 
 	test.Case("increaseStake", validation).
 		Value(big.NewInt(0)).
 		Caller(caller).
+		ShouldUseGas(405).
 		ShouldRevertError("StakeIsEmpty").
 		Assert(t)
 
 	test.Case("increaseStake", validation).
 		Value(big.NewInt(1)).
 		Caller(caller).
+		ShouldUseGas(482).
 		ShouldRevertError("StakeIsNotMultipleOf1VET").
 		Assert(t)
 
 	test.Case("decreaseStake", validation, big.NewInt(0)).
 		Caller(caller).
+		ShouldUseGas(452).
 		ShouldRevertError("StakeIsEmpty").
 		Assert(t)
 
 	test.Case("decreaseStake", validation, big.NewInt(1)).
 		Caller(caller).
+		ShouldUseGas(529).
 		ShouldRevertError("StakeIsNotMultipleOf1VET").
 		Assert(t)
 
 	test.Case("addDelegation", validation, uint8(100)).
 		Caller(delegator).
 		Value(big.NewInt(0)).
+		ShouldUseGas(1788).
 		ShouldRevertError("StakeIsEmpty").
 		Assert(t)
 
 	test.Case("addDelegation", validation, uint8(100)).
 		Caller(delegator).
 		Value(big.NewInt(1)).
+		ShouldUseGas(1865).
 		ShouldRevertError("StakeIsNotMultipleOf1VET").
 		Assert(t)
 }
