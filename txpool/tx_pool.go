@@ -103,49 +103,56 @@ func (p *TxPool) housekeeping() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			var headBlockChanged bool
-			if newHeadSummary := p.repo.BestBlockSummary(); newHeadSummary.Header.ID() != headSummary.Header.ID() {
-				headSummary = newHeadSummary
-				headBlockChanged = true
-			}
-			if !isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-				// skip washing txs if not synced
-				continue
-			}
-			poolLen := p.all.Len()
-			// do wash on
-			// 1. head block changed
-			// 2. pool size exceeds limit
-			// 3. new tx added while pool size is small
-			if headBlockChanged ||
-				poolLen > p.options.Limit ||
-				(poolLen < 200 && atomic.LoadUint32(&p.addedAfterWash) > 0) {
-				atomic.StoreUint32(&p.addedAfterWash, 0)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Error("panic in housekeeping", "error", r)
+					}
+				}()
+				var headBlockChanged bool
+				if newHeadSummary := p.repo.BestBlockSummary(); newHeadSummary.Header.ID() != headSummary.Header.ID() {
+					headSummary = newHeadSummary
+					headBlockChanged = true
+				}
+				if !isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
+					// skip washing txs if not synced
+					return
+				}
+				poolLen := p.all.Len()
+				// do wash on
+				// 1. head block changed
+				// 2. pool size exceeds limit
+				// 3. new tx added while pool size is small
+				if headBlockChanged ||
+					poolLen > p.options.Limit ||
+					(poolLen < 200 && atomic.LoadUint32(&p.addedAfterWash) > 0) {
+					atomic.StoreUint32(&p.addedAfterWash, 0)
 
-				startTime := mclock.Now()
-				executables, removedLegacy, removedDynamicFee, err := p.wash(headSummary)
-				elapsed := mclock.Now() - startTime
+					startTime := mclock.Now()
+					executables, removedLegacy, removedDynamicFee, err := p.wash(headSummary)
+					elapsed := mclock.Now() - startTime
 
-				ctx := []any{
-					"len", poolLen,
-					"removed", removedLegacy + removedDynamicFee,
-					"elapsed", common.PrettyDuration(elapsed),
-				}
-				if err != nil {
-					ctx = append(ctx, "err", err)
-				} else {
-					p.executables.Store(executables)
-					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
-				}
+					ctx := []any{
+						"len", poolLen,
+						"removed", removedLegacy + removedDynamicFee,
+						"elapsed", common.PrettyDuration(elapsed),
+					}
+					if err != nil {
+						ctx = append(ctx, "err", err)
+					} else {
+						p.executables.Store(executables)
+						metricTxPoolExecutablesGauge().Set(int64(len(executables)))
+					}
 
-				if removedLegacy > 0 {
-					metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "type": "Legacy"})
+					if removedLegacy > 0 {
+						metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "type": "Legacy"})
+					}
+					if removedDynamicFee > 0 {
+						metricTxPoolGauge().AddWithLabel(0-int64(removedDynamicFee), map[string]string{"source": "washed", "type": "DynamicFee"})
+					}
+					logger.Trace("wash done", ctx...)
 				}
-				if removedDynamicFee > 0 {
-					metricTxPoolGauge().AddWithLabel(0-int64(removedDynamicFee), map[string]string{"source": "washed", "type": "DynamicFee"})
-				}
-				logger.Trace("wash done", ctx...)
-			}
+			}()
 		}
 	}
 }
