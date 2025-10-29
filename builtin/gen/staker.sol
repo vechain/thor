@@ -6,6 +6,15 @@ uint256 constant STAKER_PAUSED_BIT = 1 << 1;
 
 contract Staker {
     uint256 private effectiveVET;
+
+    error TransferFailed();
+    error StakerPaused();
+    error DelegatorPaused();
+    error OnlyDelegatorContract();
+    error StakeIsEmpty();
+    error StakeIsNotMultipleOf1VET();
+    error StakeAboveMaxSupply();
+
     event ValidationQueued(
         address indexed validator,
         address indexed endorser,
@@ -91,7 +100,9 @@ contract Staker {
 
         effectiveVET -= stake;
         (bool success, ) = msg.sender.call{value: stake}("");
-        require(success, "Transfer failed");
+        if (!success) {
+            revert TransferFailed();
+        }
         emit ValidationWithdrawn(validator, stake);
     }
 
@@ -149,7 +160,9 @@ contract Staker {
         effectiveVET -= stake;
         emit DelegationWithdrawn(delegationID, stake);
         (bool success, ) = msg.sender.call{value: stake}("");
-        require(success, "Transfer failed");
+        if (!success) {
+            revert TransferFailed();
+        }
     }
 
     /**
@@ -288,27 +301,41 @@ contract Staker {
     modifier onlyDelegatorContract() {
         address expected = StakerNative(address(this)).native_getDelegatorContract();
 
-        require(msg.sender == expected, "staker:only delegator");
+        if (msg.sender != expected) {
+            revert OnlyDelegatorContract();
+        }
         _;
     }
 
     modifier checkStake(uint256 amount) {
-        require(amount > 0, "staker: stake is empty");
-        require(amount % 1e18 == 0, "staker: stake is not multiple of 1VET");
-        require(amount <= 100_000_000_000*1e18, "staker: stake is above max supply");
+        if (amount <= 0) {
+            revert StakeIsEmpty();
+        }
+        if (amount % 1e18 != 0) {
+            revert StakeIsNotMultipleOf1VET();
+        }
+        if (amount > 100_000_000_000*1e18) {
+            revert StakeAboveMaxSupply();
+        }
         _;
     }
 
     modifier stakerNotPaused() {
         uint256 switches = StakerNative(address(this)).native_getControlSwitches();
-        require((switches & STAKER_PAUSED_BIT) == 0, "staker: staker is paused");
+        if ((switches & STAKER_PAUSED_BIT) != 0) {
+            revert StakerPaused();
+        }
         _;
     }
 
     modifier delegatorNotPaused() {
         uint256 switches = StakerNative(address(this)).native_getControlSwitches();
-        require((switches & STAKER_PAUSED_BIT) == 0, "staker: staker is paused");
-        require((switches & DELEGATOR_PAUSED_BIT) == 0, "staker: delegator is paused");
+        if ((switches & STAKER_PAUSED_BIT) != 0) {
+            revert StakerPaused();
+        }
+        if ((switches & DELEGATOR_PAUSED_BIT) != 0) {
+            revert DelegatorPaused();
+        }
         _;
     }
 
