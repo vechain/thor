@@ -541,18 +541,21 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 	test.Case("addDelegation", validator1, uint8(100)).
 		Value(minStake).
 		Caller(delegator).
+		ShouldUseGas(3097).
 		ShouldRevertError("DelegatorPaused").
 		Assert(t)
 
 	// withdraw delegation2 on exited validator3
 	test.Case("withdrawDelegation", big.NewInt(2)).
 		Caller(delegator).
+		ShouldUseGas(2781).
 		ShouldRevertError("DelegatorPaused").
 		Assert(t)
 
 	// signal exit delegation1 on validator1
 	test.Case("signalDelegationExit", big.NewInt(1)).
 		Caller(delegator).
+		ShouldUseGas(2870).
 		ShouldRevertError("DelegatorPaused").
 		Assert(t)
 
