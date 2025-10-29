@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -195,6 +196,39 @@ func TestTxPoolMetrics(t *testing.T) {
 
 	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
 	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
+}
+
+func TestHousekeepingRecoverPerTick(t *testing.T) {
+	metrics.InitializePrometheusMetrics()
+
+	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+	defer pool.Close()
+
+	// Induce a panic in wash() regardless of pool contents by nil'ing baseFeeCache
+	pool.baseFeeCache = nil
+
+	atomic.StoreUint32(&pool.addedAfterWash, 1)
+
+	// Give the ticker time to trigger and the recover wrapper to catch the panic
+	time.Sleep(1200 * time.Millisecond)
+
+	// Restore baseFeeCache so subsequent ticks can proceed normally
+	pool.baseFeeCache = newBaseFeeCache(pool.forkConfig)
+
+	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+	require.NoError(t, pool.AddLocal(tx1))
+
+	// Wait until housekeeping runs again and updates executables
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if exec := pool.Executables(); len(exec) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("housekeeping did not resume after induced panic; executables not updated")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func TestNewCloseWithServer(t *testing.T) {
