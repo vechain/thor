@@ -27,118 +27,155 @@ func setupTestNodeForTxstashLoop(db *leveldb.DB) *Node {
 	return originalNode
 }
 
-func TestNode_TxStashLoop_TxEvents(t *testing.T) {
-	tests := []struct {
-		name       string
-		txEvent    *txpool.TxEvent
-		beforeFunc func(t *testing.T, values map[string]any)
-		assertFunc func(t *testing.T, values map[string]any)
-	}{
-		{
-			name: "Send executable Tx Event to txStashLoop",
-			txEvent: &txpool.TxEvent{
-				Tx:         newTx(tx.TypeLegacy),
-				Executable: &[]bool{true}[0],
-			},
-			assertFunc: func(t *testing.T, values map[string]any) {
-				assert.True(t, values["processed"].(bool), "TxEvent should be processed")
-				node := values["node"].(*Node)
-				log := values["logs"].(string)
-				assert.True(t, len(node.txStash.LoadAll()) == 0, "TxStash should be empty")
-				assert.Contains(t, log, "received executable tx signal", "Log should contain executable tx signal")
-			},
-		},
-		{
-			name: "Send unexecutable Tx Event to txStashLoop",
-			txEvent: &txpool.TxEvent{
-				Tx:         newTx(tx.TypeLegacy),
-				Executable: &[]bool{false}[0],
-			},
-			assertFunc: func(t *testing.T, values map[string]any) {
-				assert.True(t, values["processed"].(bool), "TxEvent should be processed")
-				node := values["node"].(*Node)
-				log := values["logs"].(string)
-				assert.True(t, len(node.txStash.LoadAll()) == 1, "TxStash should contain 1 item")
-				assert.Contains(t, log, values["tx"].(*tx.Transaction).ID().String(), "Log should contain executable txid")
-			},
-		},
-		{
-			name: "TxStash save error handling",
-			txEvent: &txpool.TxEvent{
-				Tx:         newTx(tx.TypeLegacy),
-				Executable: &[]bool{false}[0],
-			},
-			beforeFunc: func(t *testing.T, values map[string]any) {
-				db := values["db"].(*leveldb.DB)
-				if db != nil {
-					db.Close() // Close DB to force error on Save
-				}
-			},
-			assertFunc: func(t *testing.T, values map[string]any) {
-				assert.True(t, values["processed"].(bool), "TxEvent should be processed")
-				log := values["logs"].(string)
-				assert.Contains(t, log, "leveldb: closed", "Log should contain stash error")
-				assert.Contains(t, log, values["tx"].(*tx.Transaction).ID().String(), "Log should contain executable txid")
-			},
-		},
+func TestNode_TxStashLoop_ExecutableTx_Processing(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	node := setupTestNodeForTxstashLoop(db)
+
+	buf, restore := captureLogs()
+	defer restore()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done := make(chan bool, 1)
+
+	txEvent := txpool.TxEvent{
+		Tx:         newTx(tx.TypeLegacy),
+		Executable: &[]bool{true}[0],
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db, err := leveldb.Open(storage.NewMemStorage(), nil)
-			assert.NoError(t, err)
-			defer db.Close()
+	go func() {
+		defer func() { done <- true }()
 
-			node := setupTestNodeForTxstashLoop(db)
-
-			buf, restore := captureLogs()
-			defer restore()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
-
-			var processed bool
-			done := make(chan bool, 1)
-
-			if tt.beforeFunc != nil {
-				tt.beforeFunc(t, map[string]any{
-					"node": node,
-					"db":   db,
-				})
+		// Monitor for processing
+		go func() {
+			select {
+			case node.txCh <- &txEvent:
+			case <-ctx.Done():
 			}
+		}()
 
-			go func() {
-				defer func() { done <- true }()
+		// Run txStashLoop briefly
+		select {
+		case <-ctx.Done():
+		default:
+			node.txStashLoop(ctx)
+		}
+	}()
 
-				// Monitor for processing
-				go func() {
-					select {
-					case node.txCh <- tt.txEvent:
-						processed = true
-					case <-ctx.Done():
-					}
-				}()
+	// Allow some time for processing
+	time.Sleep(200 * time.Millisecond)
 
-				// Run txStashLoop briefly
-				select {
-				case <-ctx.Done():
-				default:
-					node.txStashLoop(ctx)
-				}
-			}()
+	// Signal completion before reading logs
+	cancel()
+	<-done
 
-			// Allow some time for processing
-			time.Sleep(200 * time.Millisecond)
+	assert.True(t, len(node.txStash.LoadAll()) == 0, "TxStash should be empty")
+	assert.Contains(t, buf.String(), "received executable tx signal", "Log should contain executable tx signal")
+}
 
-			// Verify expectations
-			if tt.assertFunc != nil {
-				tt.assertFunc(t, map[string]any{
-					"processed": processed,
-					"node":      node,
-					"logs":      buf.String(),
-					"tx":        tt.txEvent.Tx,
-				})
-			}
-		})
+func TestNode_TxStashLoop_UnexecutableTx_Processing(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	node := setupTestNodeForTxstashLoop(db)
+
+	buf, restore := captureLogs()
+	defer restore()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done := make(chan bool, 1)
+
+	txEvent := txpool.TxEvent{
+		Tx:         newTx(tx.TypeLegacy),
+		Executable: &[]bool{false}[0],
 	}
+
+	go func() {
+		defer func() { done <- true }()
+
+		// Monitor for processing
+		go func() {
+			select {
+			case node.txCh <- &txEvent:
+			case <-ctx.Done():
+			}
+		}()
+
+		// Run txStashLoop briefly
+		select {
+		case <-ctx.Done():
+		default:
+			node.txStashLoop(ctx)
+		}
+	}()
+
+	// Allow some time for processing
+	time.Sleep(200 * time.Millisecond)
+
+	// Signal completion before reading logs
+	cancel()
+	<-done
+
+	assert.True(t, len(node.txStash.LoadAll()) == 1, "TxStash should contain 1 item")
+	assert.Contains(t, buf.String(), txEvent.Tx.ID().String(), "Log should contain executable txid")
+}
+
+func TestNode_TxStashLoop_StashErrorHandling(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	node := setupTestNodeForTxstashLoop(db)
+
+	buf, restore := captureLogs()
+	defer restore()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done := make(chan bool, 1)
+
+	txEvent := txpool.TxEvent{
+		Tx:         newTx(tx.TypeLegacy),
+		Executable: &[]bool{false}[0],
+	}
+
+	// Close DB to force error on Save
+	db.Close()
+
+	go func() {
+		defer func() { done <- true }()
+
+		// Monitor for processing
+		go func() {
+			select {
+			case node.txCh <- &txEvent:
+			case <-ctx.Done():
+			}
+		}()
+
+		// Run txStashLoop briefly
+		select {
+		case <-ctx.Done():
+		default:
+			node.txStashLoop(ctx)
+		}
+	}()
+
+	// Allow some time for processing
+	time.Sleep(200 * time.Millisecond)
+
+	// Signal completion before reading logs
+	cancel()
+	<-done
+
+	assert.Contains(t, buf.String(), "leveldb: closed", "Log should contain stash error")
+	assert.Contains(t, buf.String(), txEvent.Tx.ID().String(), "Log should contain executable txid")
 }

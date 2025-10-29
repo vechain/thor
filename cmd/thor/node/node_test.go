@@ -7,9 +7,12 @@ package node
 
 import (
 	"bytes"
+	"context"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,10 +20,57 @@ import (
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
+
+// Mock implementations for testing
+type mockTxPool struct{}
+
+func (m *mockTxPool) Fill(txs tx.Transactions) {
+}
+
+func (m *mockTxPool) Add(newTx *tx.Transaction) error {
+	return nil
+}
+
+func (m *mockTxPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
+	return &mockSubscription{}
+}
+
+func (m *mockTxPool) Executables() tx.Transactions {
+	return tx.Transactions{}
+}
+
+func (m *mockTxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
+	return true
+}
+
+func (m *mockTxPool) Close() {}
+
+func (m *mockTxPool) AddLocal(newTx *tx.Transaction) error {
+	return nil
+}
+
+func (m *mockTxPool) Get(id thor.Bytes32) *tx.Transaction {
+	return nil
+}
+
+func (m *mockTxPool) StrictlyAdd(newTx *tx.Transaction) error {
+	return nil
+}
+
+func (m *mockTxPool) Dump() tx.Transactions {
+	return tx.Transactions{}
+}
+
+func (m *mockTxPool) Len() int {
+	return 0
+}
 
 func createDevAccounts(t *testing.T, accountNo int) []genesis.DevAccount {
 	var accs []genesis.DevAccount
@@ -42,9 +92,15 @@ func testNode(t *testing.T) (*Node, error) {
 	// create test db
 	db := muxdb.NewMem()
 
+	memLogdb, err := logdb.NewMem()
+	require.NoError(t, err)
+
 	// Initialize the test chain and dependencies
 	thorChain, err := createChain(db, accounts)
 	require.NoError(t, err)
+
+	//
+	tempDir := t.TempDir()
 
 	proposer := &accounts[0]
 
@@ -54,15 +110,19 @@ func testNode(t *testing.T) (*Node, error) {
 	masterAddr := &Master{
 		PrivateKey: proposer.PrivateKey,
 	}
+
+	mockComm := &mockCommunicator{peerCount: 1}
+	mockTxPool := &mockTxPool{}
+
 	node := New(
 		masterAddr,
 		thorChain.Repo(),
 		engine,
 		thorChain.Stater(),
-		nil, // *logdb.LogDB (not required for this test)
-		nil, // TxPoolEngine (nil stub for test)
-		"",
-		nil, // CommunicatorEngine (nil stub for test)
+		memLogdb,
+		mockTxPool,
+		tempDir,
+		mockComm,
 		&thor.NoFork,
 		Options{
 			SkipLogs:         true,
@@ -85,6 +145,22 @@ func captureLogs() (*bytes.Buffer, func()) {
 	newLogger := log.NewLogger(h)
 	log.SetDefault(newLogger)
 	return buf, func() { log.SetDefault(old) }
+}
+
+func TestNode_Run(t *testing.T) {
+	node, err := testNode(t)
+	assert.NoError(t, err, "Failed to create test node")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	go func() {
+		err := node.Run(ctx)
+		assert.NoError(t, err, "Node run should not return an error")
+	}()
+
+	// Allow some time for the node to start
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestNode_GuardBlockProcessing_NormalNewBlock(t *testing.T) {

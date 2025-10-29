@@ -7,6 +7,7 @@ package node
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -290,6 +291,7 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 			defer cancel()
 
 			var processedBlock bool
+			var processedMu sync.Mutex
 			done := make(chan bool, 1)
 
 			go func() {
@@ -299,7 +301,9 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 				go func() {
 					select {
 					case node.newBlockCh <- newBlockEvent:
+						processedMu.Lock()
 						processedBlock = true
+						processedMu.Unlock()
 					case <-ctx.Done():
 					}
 				}()
@@ -318,8 +322,12 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 			// Allow some time for processing
 			time.Sleep(200 * time.Millisecond)
 
-			// Verify expectations
-			assert.True(t, processedBlock, "Block should have been sent to processing channel")
+			// Verify expectations using mutex
+			processedMu.Lock()
+			processedValue := processedBlock
+			processedMu.Unlock()
+
+			assert.True(t, processedValue, "Block should have been sent to processing channel")
 			if tt.assertFunc != nil {
 				tt.assertFunc(t, map[string]any{
 					"node": node,
@@ -344,6 +352,7 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 	defer cancel()
 
 	var processedBlock bool
+	var processedMu sync.Mutex
 	done := make(chan bool, 1)
 
 	normalBlock := createTestBlock(node.repo.BestBlockSummary().Header.ID())
@@ -354,6 +363,10 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 
 	assert.True(t, node.futureBlocksCache.Contains(futureBlock.Header().ID()), "Future blocks cache should contain the future block before processing")
 
+	// Stop the original ticker and create a faster one before starting housekeeping
+	node.futureTicker.Stop()
+	node.futureTicker = time.NewTicker(10 * time.Millisecond)
+
 	go func() {
 		defer func() { done <- true }()
 
@@ -361,14 +374,11 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 		go func() {
 			select {
 			case node.newBlockCh <- newBlockEvent:
+				processedMu.Lock()
 				processedBlock = true
+				processedMu.Unlock()
 			case <-ctx.Done():
 			}
-		}()
-
-		go func() {
-			node.futureTicker.Stop()
-			node.futureTicker = time.NewTicker(10 * time.Millisecond)
 		}()
 
 		// Run housekeeping briefly
