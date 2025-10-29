@@ -1329,11 +1329,16 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*wsclient.Subscription[*ap
 	return c.wsConn.SubscribeTxPool(txID)
 }
 
-// TxPool retrieves transactions from the transaction pool.
-// If expanded is true, returns full transaction objects; otherwise returns transaction IDs.
+// PoolTransactionIDs retrieves transaction IDs from the transaction pool.
 // If origin is provided, filters transactions by sender address.
-func (c *Client) TxPool(expanded bool, origin *thor.Address) (any, error) {
-	return c.httpConn.GetTxPool(expanded, origin)
+func (c *Client) PoolTransactionIDs(origin *thor.Address) ([]*thor.Bytes32, error) {
+	return c.httpConn.GetTxPool(origin)
+}
+
+// PoolTransactions retrieves expanded transactions from the transaction pool.
+// If origin is provided, filters transactions by sender address.
+func (c *Client) PoolTransactions(origin *thor.Address) ([]*transactions.Transaction, error) {
+	return c.httpConn.GetExpandedTxPool(origin)
 }
 
 // TxPoolStatus retrieves the current status of the transaction pool.
