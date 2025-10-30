@@ -408,7 +408,15 @@ func (p *TxPool) Dump() tx.Transactions {
 
 // wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
 // this method should only be called in housekeeping go routine
-func (p *TxPool) wash(headSummary *chain.BlockSummary, headBlockChanged bool) (executables tx.Transactions, removedLegacy int, removedDynamicFee int, err error) {
+func (p *TxPool) wash(
+	headSummary *chain.BlockSummary,
+	headBlockChanged bool,
+) (
+	executables tx.Transactions,
+	removedLegacy int,
+	removedDynamicFee int,
+	err error,
+) {
 	all := p.all.ToTxObjects()
 	var toRemove []*TxObject
 	var toUpdateCost []*TxObject
