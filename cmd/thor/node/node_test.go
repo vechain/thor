@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
@@ -201,4 +202,87 @@ func TestNode_GuardBlockProcessing_KnownBlock(t *testing.T) {
 	})
 	assert.ErrorContains(t, err, errKnownBlock.Error(), "Future block should return temporary unprocessable error")
 	assert.Equal(t, node.maxBlockNum, uint32(1000), "maxBlockNum should remain unchanged for old block")
+}
+
+func TestNode_HandleBlockStream_SendNil(t *testing.T) {
+	node, err := testNode(t)
+	assert.NoError(t, err, "Failed to create test node")
+
+	buf, restore := captureLogs()
+	defer restore()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	blockStream := make(chan *block.Block, 1) // Make buffered to avoid blocking
+
+	done := make(chan bool, 1)
+
+	go func() {
+		defer func() { done <- true }()
+		err := node.handleBlockStream(ctx, blockStream)
+		assert.NoError(t, err, "handleBlockStream should not return an error")
+	}()
+
+	// Send nil block to stream
+	select {
+	case blockStream <- nil:
+		// Successfully sent
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Timeout sending nil block to stream")
+	}
+
+	// Allow some time for the block stream to be processed
+	time.Sleep(200 * time.Millisecond)
+
+	// Close the block stream
+	close(blockStream)
+
+	// Wait for the handler to complete
+	select {
+	case <-done:
+		// Handler completed successfully
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("Timeout waiting for handler to complete")
+	}
+
+	assert.Contains(t, buf.String(), "received nil from stream", "Log should contain message about nil block")
+}
+
+func TestNode_HandleBlockStream_SendNormalBlock(t *testing.T) {
+	node, err := testNode(t)
+	assert.NoError(t, err, "Failed to create test node")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	blockStream := make(chan *block.Block, 1) // Make buffered to avoid blocking
+
+	done := make(chan bool, 1)
+
+	go func() {
+		defer func() { done <- true }()
+		err := node.handleBlockStream(ctx, blockStream)
+		assert.NoError(t, err, "handleBlockStream should not return an error")
+	}()
+
+	// Mock normal block and send it
+	parentBlock := node.repo.BestBlockSummary()
+	select {
+	case blockStream <- block.Compose(parentBlock.Header, nil):
+		// Successfully sent
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Timeout sending block to stream")
+	}
+
+	// Close the channel to signal end of stream
+	close(blockStream)
+
+	// Wait for the handler to complete
+	select {
+	case <-done:
+		// Handler completed successfully
+	case <-time.After(400 * time.Millisecond):
+		t.Fatal("Timeout waiting for handler to complete")
+	}
 }
