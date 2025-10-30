@@ -468,7 +468,29 @@ func (p *TxPool) wash(
 	if err != nil {
 		return executables, removedLegacy, removedDynamicFee, err
 	}
-	isPostGalactica := headSummary.Header.Number() >= p.forkConfig.GALACTICA
+	needPriorityGasPriceUpdate := func() bool {
+		if !headBlockChanged {
+			return false
+		}
+
+		currentBaseFee := headSummary.Header.BaseFee()
+		if currentBaseFee == nil {
+			return false
+		}
+		parentBlock, err := p.repo.GetBlock(headSummary.Header.ParentID())
+		if err != nil {
+			logger.Warn("failed to get parent block for baseFee comparison", "err", err)
+			// Fallback: assume baseFee might have changed if we can't check
+			return true
+		}
+		parentBaseFee := parentBlock.Header().BaseFee()
+		if parentBaseFee == nil {
+			// Transitioning into GALACTICA, we need to recompute the priority gas price
+			return true
+		}
+
+		return parentBaseFee.Cmp(currentBaseFee) != 0
+	}()
 
 	for _, txObj := range all {
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
@@ -498,7 +520,7 @@ func (p *TxPool) wash(
 		}
 
 		// Only recalculate the priority gas price when the base fee might be changed
-		if isPostGalactica && headBlockChanged {
+		if needPriorityGasPriceUpdate {
 			nextBlockNum := headSummary.Header.Number() + 1
 			provedWork, err := txObj.ProvedWork(nextBlockNum, chain.GetBlockID)
 			if err != nil {

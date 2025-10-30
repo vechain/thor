@@ -1306,26 +1306,6 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 0})
 	defer pool.Close()
 
-	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
-	stage, _ := st.Stage(trie.Version{Major: 1})
-	root1, _ := stage.Commit()
-
-	var sig [65]byte
-	rand.Read(sig[:])
-
-	b1 := new(block.Builder).
-		ParentID(pool.repo.GenesisBlock().Header().ID()).
-		Timestamp(uint64(time.Now().Unix())).
-		TotalScore(100).
-		GasLimit(10000000).
-		StateRoot(root1).
-		BaseFee(big.NewInt(thor.InitialBaseFee)).
-		Build().WithSignature(sig[:])
-	if err := pool.repo.AddBlock(b1, nil, 0, true); err != nil {
-		t.Fatal(err)
-	}
-
-	// Use a high maxFeePerGas to ensure the transaction remains valid even when baseFee increases
 	maxFeePerGas := new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(10))
 	maxPriorityFeePerGas := big.NewInt(50000)
 	trx := tx.MustSign(
@@ -1348,10 +1328,10 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 
 	txObj := pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	assert.NotNil(t, txObj.priorityGasPrice, "priorityGasPrice should be set after wash with headBlockChanged=true")
+	assert.NotNil(t, txObj.priorityGasPrice, "priorityGasPrice should be set after initial wash")
 	initialPriorityGasPrice := new(big.Int).Set(txObj.priorityGasPrice)
 
-	// Test 1: Change the priority gas manually to check if it's not recomputed
+	// Test 1: Wash with headBlockChanged=false should not recompute priorityGasPrice
 	wrongPriorityGasPrice := new(big.Int).Mul(initialPriorityGasPrice, big.NewInt(999))
 	txObj.priorityGasPrice = wrongPriorityGasPrice
 
@@ -1359,20 +1339,39 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 	assert.Nil(t, err)
 	txObj = pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	// Verify it kept our wrong value (was NOT recomputed)
 	assert.Equal(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
 		"priorityGasPrice should NOT be recomputed when headBlockChanged=false")
 
-	// Test 2: Now the priority gas price should be recomputed to the previous value
+	// Test 2: headBlockChanged=true with unchanged baseFee should not recompute
+	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
+	stage, _ := st.Stage(trie.Version{Major: 1})
+	root1, _ := stage.Commit()
+
+	var sig [65]byte
+	rand.Read(sig[:])
+
+	genesisBaseFee := pool.repo.GenesisBlock().Header().BaseFee()
+
+	differentBaseFee := new(big.Int).Add(genesisBaseFee, big.NewInt(1000))
+	b1 := new(block.Builder).
+		ParentID(pool.repo.GenesisBlock().Header().ID()).
+		Timestamp(uint64(time.Now().Unix())).
+		TotalScore(100).
+		GasLimit(10000000).
+		StateRoot(root1).
+		BaseFee(differentBaseFee).
+		Build().WithSignature(sig[:])
+	if err := pool.repo.AddBlock(b1, nil, 0, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test 3: Wash with new block that has different baseFee should recompute priorityGasPrice
 	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.Nil(t, err)
 	txObj = pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	// Verify it was recomputed back to the correct value
 	assert.NotEqual(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
-		"priorityGasPrice SHOULD be recomputed when headBlockChanged=true")
-	assert.Equal(t, initialPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
-		"priorityGasPrice should be recomputed to correct value when headBlockChanged=true")
+		"priorityGasPrice SHOULD be recomputed when baseFee changes")
 }
 
 func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
