@@ -123,7 +123,7 @@ func (p *TxPool) housekeeping() {
 				atomic.StoreUint32(&p.addedAfterWash, 0)
 
 				startTime := mclock.Now()
-				executables, removedLegacy, removedDynamicFee, err := p.wash(headSummary)
+				executables, removedLegacy, removedDynamicFee, err := p.wash(headSummary, headBlockChanged)
 				elapsed := mclock.Now() - startTime
 
 				ctx := []any{
@@ -408,7 +408,15 @@ func (p *TxPool) Dump() tx.Transactions {
 
 // wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
 // this method should only be called in housekeeping go routine
-func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transactions, removedLegacy int, removedDynamicFee int, err error) {
+func (p *TxPool) wash(
+	headSummary *chain.BlockSummary,
+	headBlockChanged bool,
+) (
+	executables tx.Transactions,
+	removedLegacy int,
+	removedDynamicFee int,
+	err error,
+) {
 	all := p.all.ToTxObjects()
 	var toRemove []*TxObject
 	var toUpdateCost []*TxObject
@@ -455,6 +463,35 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		now                 = time.Now().UnixNano()
 		baseFee             = p.baseFeeCache.Get(headSummary.Header)
 	)
+
+	legacyTxBaseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyLegacyTxBaseGasPrice)
+	if err != nil {
+		return executables, removedLegacy, removedDynamicFee, err
+	}
+	needPriorityGasPriceUpdate := func() bool {
+		if !headBlockChanged {
+			return false
+		}
+
+		currentBaseFee := headSummary.Header.BaseFee()
+		if currentBaseFee == nil {
+			return false
+		}
+		parentBlock, err := p.repo.GetBlock(headSummary.Header.ParentID())
+		if err != nil {
+			logger.Warn("failed to get parent block for baseFee comparison", "err", err)
+			// Fallback: assume baseFee might have changed if we can't check
+			return true
+		}
+		parentBaseFee := parentBlock.Header().BaseFee()
+		if parentBaseFee == nil {
+			// Transitioning into GALACTICA, we need to recompute the priority gas price
+			return true
+		}
+
+		return parentBaseFee.Cmp(currentBaseFee) != 0
+	}()
+
 	for _, txObj := range all {
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
 			toRemove = append(toRemove, txObj)
@@ -480,6 +517,18 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 			continue
+		}
+
+		// Only recalculate the priority gas price when the base fee might be changed
+		if needPriorityGasPriceUpdate {
+			nextBlockNum := headSummary.Header.Number() + 1
+			provedWork, err := txObj.ProvedWork(nextBlockNum, chain.GetBlockID)
+			if err != nil {
+				toRemove = append(toRemove, txObj)
+				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
+				continue
+			}
+			txObj.priorityGasPrice = txObj.EffectivePriorityFeePerGas(baseFee, legacyTxBaseGasPrice, provedWork)
 		}
 
 		if executable {
