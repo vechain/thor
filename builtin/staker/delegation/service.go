@@ -93,7 +93,7 @@ func (s *Service) newDelegationID() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	// fist seen will be a nil pointer
+	// first seen will be a nil pointer
 	if id == nil {
 		id = big.NewInt(0)
 	}

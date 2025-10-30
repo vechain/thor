@@ -130,6 +130,26 @@ func (c *Client) GetAccountStorage(addr *thor.Address, key *thor.Bytes32, revisi
 	return &res, nil
 }
 
+// GetRawAccountStorage retrieves the storage value for the given address and key at the specified revision.
+func (c *Client) GetRawAccountStorage(addr *thor.Address, key *thor.Bytes32, revision string) (*api.GetRawStorageResponse, error) {
+	url := c.url + "/accounts/" + addr.String() + "/storage/raw/" + key.String()
+	if revision != "" {
+		url += "?revision=" + revision
+	}
+
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve raw account storage - %w", err)
+	}
+
+	var res api.GetRawStorageResponse
+	if err = json.Unmarshal(body, &res); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal raw storage result - %w", err)
+	}
+
+	return &res, nil
+}
+
 // GetTransaction retrieves the transaction details by the transaction ID, along with options for head and pending status.
 func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool) (*transactions.Transaction, error) {
 	url := c.url + "/transactions/" + txID.String() + "?"
@@ -337,21 +357,12 @@ func (c *Client) GetFeesPriority() (*api.FeesPriority, error) {
 	return &priority, nil
 }
 
-// GetTxPool retrieves transactions from the transaction pool.
-func (c *Client) GetTxPool(expanded bool, origin *thor.Address) (any, error) {
+// GetTxPool retrieves transaction IDs from the transaction pool.
+func (c *Client) GetTxPool(origin *thor.Address) ([]*thor.Bytes32, error) {
 	url := c.url + "/node/txpool"
-	params := []string{}
-
-	if expanded {
-		params = append(params, "expanded=true")
-	}
 
 	if origin != nil {
-		params = append(params, "origin="+origin.String())
-	}
-
-	if len(params) > 0 {
-		url += "?" + strings.Join(params, "&")
+		url += "?origin=" + origin.String()
 	}
 
 	body, err := c.httpGET(url)
@@ -359,19 +370,31 @@ func (c *Client) GetTxPool(expanded bool, origin *thor.Address) (any, error) {
 		return nil, fmt.Errorf("unable to get txpool - %w", err)
 	}
 
-	if expanded {
-		var transactions []transactions.Transaction
-		if err = json.Unmarshal(body, &transactions); err != nil {
-			return nil, fmt.Errorf("unable to unmarshal txpool transactions - %w", err)
-		}
-		return transactions, nil
-	}
-
-	var txIDs []thor.Bytes32
+	var txIDs []*thor.Bytes32
 	if err = json.Unmarshal(body, &txIDs); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal txpool transaction IDs - %w", err)
 	}
 	return txIDs, nil
+}
+
+// GetExpandedTxPool retrieves expanded transactions from the transaction pool.
+func (c *Client) GetExpandedTxPool(origin *thor.Address) ([]*transactions.Transaction, error) {
+	url := c.url + "/node/txpool?expanded=true"
+
+	if origin != nil {
+		url += "&origin=" + origin.String()
+	}
+
+	body, err := c.httpGET(url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get expanded txpool - %w", err)
+	}
+
+	var transactions []*transactions.Transaction
+	if err = json.Unmarshal(body, &transactions); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal expanded txpool transactions - %w", err)
+	}
+	return transactions, nil
 }
 
 // GetTxPoolStatus retrieves the current status of the transaction pool.

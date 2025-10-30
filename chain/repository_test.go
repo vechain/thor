@@ -7,12 +7,14 @@ package chain
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -188,4 +190,83 @@ func TestScanHeads(t *testing.T) {
 	} else {
 		assert.Equal(t, []thor.Bytes32{b3x.Header().ID(), b3.Header().ID(), b2x.Header().ID()}, heads)
 	}
+}
+
+type errorStore struct {
+	putErr    error
+	getErr    error
+	deleteErr error
+	data      map[string][]byte
+}
+
+func (e *errorStore) Put(key, value []byte) error {
+	if e.putErr != nil {
+		return e.putErr
+	}
+	if e.data == nil {
+		e.data = make(map[string][]byte)
+	}
+	e.data[string(key)] = value
+	return nil
+}
+
+func (e *errorStore) Get(key []byte) ([]byte, error) {
+	if e.getErr != nil {
+		return nil, e.getErr
+	}
+	if e.data == nil {
+		return nil, nil
+	}
+	return e.data[string(key)], nil
+}
+
+func (e *errorStore) Delete(key []byte) error {
+	if e.deleteErr != nil {
+		return e.deleteErr
+	}
+	if e.data != nil {
+		delete(e.data, string(key))
+	}
+	return nil
+}
+
+func (e *errorStore) DeleteRange(ctx context.Context, r kv.Range) error { return nil }
+func (e *errorStore) Iterate(_ kv.Range) kv.Iterator                    { return nil }
+func (e *errorStore) IsNotFound(err error) bool                         { return err == assert.AnError }
+func (e *errorStore) Bulk() kv.Bulk                                     { return nil }
+func (e *errorStore) Has(key []byte) (bool, error)                      { return false, e.getErr }
+func (e *errorStore) Snapshot() kv.Snapshot                             { return nil }
+
+func TestRepository_ErrorBranches(t *testing.T) {
+	_, repo := newTestRepo()
+	repo.bodyStore = &errorStore{getErr: assert.AnError}
+	repo.hdrStore = &errorStore{getErr: assert.AnError}
+	repo.txIndexer = &errorStore{getErr: assert.AnError}
+
+	t.Run("getTransaction error", func(t *testing.T) {
+		_, err := repo.getTransaction([]byte("key"))
+		assert.Error(t, err)
+	})
+	t.Run("getReceipt error", func(t *testing.T) {
+		_, err := repo.getReceipt([]byte("key"))
+		assert.Error(t, err)
+	})
+	t.Run("loadTransaction decode error", func(t *testing.T) {
+		es := &errorStore{data: map[string][]byte{"key": {0xff, 0xff}}}
+		_, err := loadTransaction(es, []byte("key"))
+		assert.Error(t, err)
+	})
+	t.Run("loadReceipt decode error", func(t *testing.T) {
+		es := &errorStore{data: map[string][]byte{"key": {0xff, 0xff}}}
+		_, err := loadReceipt(es, []byte("key"))
+		assert.Error(t, err)
+	})
+
+	t.Run("AddBlock parent error", func(t *testing.T) {
+		repo2 := repo
+		repo2.hdrStore = &errorStore{getErr: assert.AnError}
+		b := new(block.Builder).Build()
+		err := repo2.AddBlock(b, nil, 0, false)
+		assert.Error(t, err)
+	})
 }

@@ -37,6 +37,10 @@ type GetStorageResult struct {
 	Value string `json:"value"`
 }
 
+type GetRawStorageResponse struct {
+	Value string `json:"value"`
+}
+
 type CallResult struct {
 	Data      string      `json:"data"`
 	Events    []*Event    `json:"events"`
@@ -88,15 +92,6 @@ func ConvertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallRes
 		VMError:   vmError,
 	}
 }
-
-type Clause struct {
-	To    *thor.Address         `json:"to"`
-	Value *math.HexOrDecimal256 `json:"value"`
-	Data  string                `json:"data"`
-}
-
-// Clauses array of clauses.
-type Clauses []*Clause
 
 // BatchCallData executes a batch of codes
 type BatchCallData struct {
