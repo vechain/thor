@@ -17,7 +17,11 @@ jobs:
         go-version: [1.24.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
+<<<<<<< HEAD
           - go-version: 1.23.x
+=======
+          - go-version: 1.25.x
+>>>>>>> 3226ee24 (chore: add go 1.25 go test suite (#1469))
             os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
