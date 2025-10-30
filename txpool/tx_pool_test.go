@@ -1302,6 +1302,79 @@ func TestWashWithDynFeeTx(t *testing.T) {
 	}
 }
 
+func TestWashPriorityGasPriceRecomputation(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 0})
+	defer pool.Close()
+
+	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
+	stage, _ := st.Stage(trie.Version{Major: 1})
+	root1, _ := stage.Commit()
+
+	var sig [65]byte
+	rand.Read(sig[:])
+
+	b1 := new(block.Builder).
+		ParentID(pool.repo.GenesisBlock().Header().ID()).
+		Timestamp(uint64(time.Now().Unix())).
+		TotalScore(100).
+		GasLimit(10000000).
+		StateRoot(root1).
+		BaseFee(big.NewInt(thor.InitialBaseFee)).
+		Build().WithSignature(sig[:])
+	if err := pool.repo.AddBlock(b1, nil, 0, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// Use a high maxFeePerGas to ensure the transaction remains valid even when baseFee increases
+	maxFeePerGas := new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(10))
+	maxPriorityFeePerGas := big.NewInt(50000)
+	trx := tx.MustSign(
+		tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(pool.repo.ChainTag()).
+			BlockRef(tx.BlockRef{}).
+			Expiration(100).
+			Gas(21000).
+			MaxFeePerGas(maxFeePerGas).
+			MaxPriorityFeePerGas(maxPriorityFeePerGas).
+			Nonce(r.Uint64()). //#nosec G404
+			Build(),
+		devAccounts[0].PrivateKey,
+	)
+	err := pool.add(trx, false, false)
+	assert.Nil(t, err)
+
+	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
+	assert.Nil(t, err)
+
+	txObj := pool.all.GetByID(trx.ID())
+	assert.NotNil(t, txObj)
+	assert.NotNil(t, txObj.priorityGasPrice, "priorityGasPrice should be set after wash with headBlockChanged=true")
+	initialPriorityGasPrice := new(big.Int).Set(txObj.priorityGasPrice)
+
+	// Test 1: Change the priority gas manually to check if it's not recomputed
+	wrongPriorityGasPrice := new(big.Int).Mul(initialPriorityGasPrice, big.NewInt(999))
+	txObj.priorityGasPrice = wrongPriorityGasPrice
+
+	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	assert.Nil(t, err)
+	txObj = pool.all.GetByID(trx.ID())
+	assert.NotNil(t, txObj)
+	// Verify it kept our wrong value (was NOT recomputed)
+	assert.Equal(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
+		"priorityGasPrice should NOT be recomputed when headBlockChanged=false")
+
+	// Test 2: Now the priority gas price should be recomputed to the previous value
+	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
+	assert.Nil(t, err)
+	txObj = pool.all.GetByID(trx.ID())
+	assert.NotNil(t, txObj)
+	// Verify it was recomputed back to the correct value
+	assert.NotEqual(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
+		"priorityGasPrice SHOULD be recomputed when headBlockChanged=true")
+	assert.Equal(t, initialPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
+		"priorityGasPrice should be recomputed to correct value when headBlockChanged=true")
+}
+
 func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 	pool := newPool(1, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 0})
 	defer pool.Close()
