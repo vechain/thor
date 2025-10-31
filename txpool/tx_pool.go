@@ -258,13 +258,6 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 	headSummary := p.repo.BestBlockSummary()
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-		if !localSubmitted {
-			// reject when pool size exceeds 120% of limit
-			if p.all.Len() >= p.options.Limit*12/10 {
-				return txRejectedError{"pool is full"}
-			}
-		}
-
 		state := p.stater.NewState(headSummary.Root())
 		executable, err := txObj.Executable(
 			p.repo.NewChain(headSummary.Header.ID()),
@@ -275,6 +268,33 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		)
 		if err != nil {
 			return txRejectedError{err.Error()}
+		}
+
+		if !localSubmitted && p.all.Len() >= p.options.Limit*12/10 {
+			// hasPriority checks if the new tx has higher priority than 90% of existing executable txs
+			// it does not evict any of the existing txs, it will be handled by the wash process
+			hasPriority := func() bool {
+				if !executable {
+					return false
+				}
+
+				// check if the new tx has higher priority than 10% of the existing executable txs
+				executables := p.Executables()
+				if len(executables) == 0 {
+					return true
+				}
+				thresholdIdx := len(executables) * 9 / 10 // 90th percentile, executables are sorted by price desc
+				thresholdTxObj := p.all.GetByID(executables[thresholdIdx].ID())
+				if thresholdTxObj == nil {
+					return false
+				}
+
+				return txObj.priorityGasPrice.Cmp(thresholdTxObj.priorityGasPrice) > 0
+			}
+
+			if !hasPriority() {
+				return txRejectedError{"pool is full"}
+			}
 		}
 
 		if rejectNonExecutable && !executable {
