@@ -235,16 +235,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return nil
 	}
 
-	origin, _ := newTx.Origin()
-	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
-		// tx origin blocked
-		return nil
-	}
-
-	delegator, _ := newTx.Delegator()
-	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
-		// tx delegator blocked
-		return nil
+	if err := p.checkOriginAndDelegatorBlocked(newTx); err != nil {
+		return err
 	}
 
 	if err := p.validateTxBasics(newTx); err != nil {
@@ -258,95 +250,150 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 
 	headSummary := p.repo.BestBlockSummary()
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-		state := p.stater.NewState(headSummary.Root())
-		executable, err := txObj.Executable(
-			p.repo.NewChain(headSummary.Header.ID()),
-			state,
-			headSummary.Header,
-			p.forkConfig,
-			p.baseFeeCache.Get(headSummary.Header),
-		)
-		if err != nil {
-			return txRejectedError{err.Error()}
-		}
-
-		if !localSubmitted && p.all.Len() >= p.options.Limit*12/10 {
-			// hasPriority checks if the new tx has higher priority than 90% of existing executable txs
-			// it does not evict any of the existing txs, it will be handled by the wash process
-			// it allows for a temporary pool size extension until the wash function runs
-			hasPriority := func() bool {
-				if !executable {
-					return false
-				}
-
-				// check if the new tx has higher priority than 10% of the existing executable txs
-				executables := p.Executables()
-				if len(executables) == 0 {
-					return true
-				}
-				thresholdIdx := len(executables) * 9 / 10 // 90th percentile, executables are sorted by price desc
-				thresholdTxObj := p.all.GetByID(executables[thresholdIdx].ID())
-				if thresholdTxObj == nil {
-					return false
-				}
-
-				return txObj.priorityGasPrice.Cmp(thresholdTxObj.priorityGasPrice) > 0
-			}
-
-			if !hasPriority() {
-				return txRejectedError{"pool is full"}
-			}
-		}
-
-		if rejectNonExecutable && !executable {
-			return txRejectedError{"tx is not executable"}
-		}
-
-		if !executable {
-			if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
-				return txRejectedError{"non executable pool is full"}
-			}
-		}
-
-		txObj.executable = executable
-		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
-			// check payer's balance
-			balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
-			if err != nil {
-				return err
-			}
-
-			if balance.Cmp(needs) < 0 {
-				return errors.New("insufficient energy for overall pending cost")
-			}
-
-			return nil
-		}); err != nil {
-			return txRejectedError{err.Error()}
-		}
-
-		p.goes.Go(func() {
-			p.txFeed.Send(&TxEvent{newTx, &executable})
-		})
-		logger.Trace("tx added", "id", newTx.ID(), "executable", executable)
+		err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable, localSubmitted)
 	} else {
-		// we skip steps that rely on head block when chain is not synced,
-		// but check the pool's limit
-		if p.all.Len() >= p.options.Limit {
-			return txRejectedError{"pool is full"}
-		}
-
-		// skip pending cost check when chain is not synced
-		if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
-			return txRejectedError{err.Error()}
-		}
-		logger.Trace("tx added", "id", newTx.ID())
-		p.goes.Go(func() {
-			p.txFeed.Send(&TxEvent{newTx, nil})
-		})
+		err = p.addWhenNotSynced(newTx, txObj)
 	}
+
+	if err != nil {
+		return err
+	}
+
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
+	return nil
+}
+
+// checkOriginAndDelegatorBlocked checks if the transaction origin or delegator is blocked.
+func (p *TxPool) checkOriginAndDelegatorBlocked(newTx *tx.Transaction) error {
+	origin, _ := newTx.Origin()
+	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
+		// tx origin blocked
+		return nil
+	}
+
+	delegator, _ := newTx.Delegator()
+	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+		// tx delegator blocked
+		return nil
+	}
+
+	return nil
+}
+
+// checkTxPriority checks if the new tx has higher priority than the bottom 10% of existing executable txs.
+// Since executables are sorted descending by price, the threshold at 90th percentile represents
+// the boundary where 90% have higher priority and 10% have lower priority.
+func (p *TxPool) checkTxPriority(txObj *TxObject, executable bool) bool {
+	if !executable {
+		return false
+	}
+
+	executables := p.Executables()
+	if len(executables) == 0 {
+		return true
+	}
+
+	// Get the transaction at the 90th percentile (bottom 10% threshold)
+	thresholdIdx := len(executables) * 9 / 10 // 90th percentile, executables are sorted by price desc
+	thresholdTxObj := p.all.GetByID(executables[thresholdIdx].ID())
+	if thresholdTxObj == nil {
+		return false
+	}
+
+	return txObj.priorityGasPrice.Cmp(thresholdTxObj.priorityGasPrice) > 0
+}
+
+// validateNonExecutableLimit validates that adding a non-executable transaction won't exceed pool limits.
+func (p *TxPool) validateNonExecutableLimit(executable bool) error {
+	// Check non-executable pool limit (20% of total)
+	if !executable {
+		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
+			return txRejectedError{"non executable pool is full"}
+		}
+	}
+
+	return nil
+}
+
+// addWhenSynced handles transaction addition when the chain is synced.
+func (p *TxPool) addWhenSynced(
+	newTx *tx.Transaction,
+	txObj *TxObject,
+	headSummary *chain.BlockSummary,
+	rejectNonExecutable bool,
+	localSubmitted bool,
+) error {
+	state := p.stater.NewState(headSummary.Root())
+	executable, err := txObj.Executable(
+		p.repo.NewChain(headSummary.Header.ID()),
+		state,
+		headSummary.Header,
+		p.forkConfig,
+		p.baseFeeCache.Get(headSummary.Header),
+	)
+	if err != nil {
+		return txRejectedError{err.Error()}
+	}
+
+	// Check pool limits and priority for remote transactions
+	if !localSubmitted && p.all.Len() >= p.options.Limit*12/10 {
+		if !p.checkTxPriority(txObj, executable) {
+			return txRejectedError{"pool is full"}
+		}
+	}
+
+	if rejectNonExecutable && !executable {
+		return txRejectedError{"tx is not executable"}
+	}
+
+	if err := p.validateNonExecutableLimit(executable); err != nil {
+		return err
+	}
+
+	txObj.executable = executable
+	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
+		// check payer's balance
+		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+		if err != nil {
+			return err
+		}
+
+		if balance.Cmp(needs) < 0 {
+			return errors.New("insufficient energy for overall pending cost")
+		}
+
+		return nil
+	}); err != nil {
+		return txRejectedError{err.Error()}
+	}
+
+	p.goes.Go(func() {
+		p.txFeed.Send(&TxEvent{newTx, &executable})
+	})
+	logger.Trace("tx added", "id", newTx.ID(), "executable", executable)
+
+	return nil
+}
+
+// addWhenNotSynced handles transaction addition when the chain is not synced.
+func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error {
+	// we skip steps that rely on head block when chain is not synced,
+	// but check the pool's limit
+	if p.all.Len() >= p.options.Limit {
+		return txRejectedError{"pool is full"}
+	}
+
+	// skip pending cost check when chain is not synced
+	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
+		return txRejectedError{err.Error()}
+	}
+
+	logger.Trace("tx added", "id", newTx.ID())
+	p.goes.Go(func() {
+		p.txFeed.Send(&TxEvent{newTx, nil})
+	})
+
 	return nil
 }
 
