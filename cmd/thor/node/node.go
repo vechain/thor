@@ -8,7 +8,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -19,20 +18,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 
-	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/comm"
-	"github.com/vechain/thor/v2/consensus"
+	comm2 "github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -53,54 +47,51 @@ type Options struct {
 	MinTxPriorityFee uint64
 }
 
-// ConsensusEngine defines the interface for consensus processing
-type ConsensusEngine interface {
-	Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error)
-}
-
-// PackerEngine defines the interface for packing blocks
-type PackerEngine interface {
-	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, posActive bool, err error)
-	SetTargetGasLimit(gl uint64)
-}
-
 type Node struct {
 	packer      PackerEngine
 	cons        ConsensusEngine
 	master      *Master
-	repo        *chain.Repository
-	bft         *bft.Engine
+	repo        RepositoryEngine
+	bft         BFTEngine
 	stater      *state.Stater
 	logDB       *logdb.LogDB
-	txPool      *txpool.TxPool
+	txPool      TxPoolEngine
 	txStashPath string
-	comm        *comm.Communicator
+	comm        CommunicatorEngine
 	forkConfig  *thor.ForkConfig
 	options     Options
 
-	logDBFailed   bool
-	initialSynced bool // true if the initial synchronization process is done
-	bandwidth     bandwidth.Bandwidth
-	maxBlockNum   uint32
-	processLock   sync.Mutex
-	logWorker     *worker
+	logDBFailed        bool
+	initialSynced      bool // true if the initial synchronization process is done
+	bandwidth          bandwidth.Bandwidth
+	maxBlockNum        uint32
+	processLock        sync.Mutex
+	logWorker          *worker
+	scope              event.SubscriptionScope
+	newBlockCh         chan *comm2.NewBlockEvent
+	txCh               chan *txpool.TxEvent
+	futureTicker       *time.Ticker
+	connectivityTicker *time.Ticker
+	clockSyncTicker    *time.Ticker
+	futureBlocksCache  *cache.RandCache
+	txStash            *txStash
 }
 
 func New(
 	master *Master,
-	repo *chain.Repository,
-	bft *bft.Engine,
+	repo RepositoryEngine,
+	bft BFTEngine,
 	stater *state.Stater,
 	logDB *logdb.LogDB,
-	txPool *txpool.TxPool,
+	txPool TxPoolEngine,
 	txStashPath string,
-	comm *comm.Communicator,
+	comm CommunicatorEngine,
 	forkConfig *thor.ForkConfig,
 	options Options,
 	consensusEngine ConsensusEngine,
 	packerEngine PackerEngine,
 ) *Node {
-	return &Node{
+	n := &Node{
 		packer:      packerEngine,
 		cons:        consensusEngine,
 		master:      master,
@@ -114,19 +105,46 @@ func New(
 		forkConfig:  forkConfig,
 		options:     options,
 	}
+
+	// initialize members
+	n.logWorker = newWorker()
+	n.futureBlocksCache = cache.NewRandCache(32)
+	n.scope = event.SubscriptionScope{}
+
+	n.newBlockCh = make(chan *comm2.NewBlockEvent)
+	n.scope.Track(n.comm.SubscribeBlock(n.newBlockCh))
+
+	n.txCh = make(chan *txpool.TxEvent)
+	n.scope.Track(n.txPool.SubscribeTxEvent(n.txCh))
+
+	n.futureTicker = time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
+	n.connectivityTicker = time.NewTicker(time.Second)
+	n.clockSyncTicker = time.NewTicker(10 * time.Minute)
+
+	return n
 }
 
 func (n *Node) Run(ctx context.Context) error {
-	logWorker := newWorker()
-	defer logWorker.Close()
-
-	n.logWorker = logWorker
+	defer n.logWorker.Close()
+	defer n.scope.Close()
+	defer n.futureTicker.Stop()
+	defer n.connectivityTicker.Stop()
+	defer n.clockSyncTicker.Stop()
 
 	maxBlockNum, err := n.repo.GetMaxBlockNum()
 	if err != nil {
 		return err
 	}
 	n.maxBlockNum = maxBlockNum
+
+	db, err := leveldb.OpenFile(n.txStashPath, nil)
+	if err != nil {
+		logger.Error("create tx stash", "err", err)
+		return err
+	}
+	defer db.Close()
+
+	n.txStash = newTxStash(db, 1000)
 
 	var goes co.Goes
 	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
@@ -153,6 +171,7 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 	var blk *block.Block
 	for blk = range stream {
 		if blk == nil {
+			logger.Debug("received nil from stream")
 			continue
 		}
 		if _, err := n.processBlock(blk, &stats); err != nil {
@@ -174,128 +193,6 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 		report(blk)
 	}
 	return nil
-}
-
-func (n *Node) houseKeeping(ctx context.Context) {
-	logger.Debug("enter house keeping")
-	defer logger.Debug("leave house keeping")
-
-	var scope event.SubscriptionScope
-	defer scope.Close()
-
-	newBlockCh := make(chan *comm.NewBlockEvent)
-	scope.Track(n.comm.SubscribeBlock(newBlockCh))
-
-	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
-	defer futureTicker.Stop()
-
-	connectivityTicker := time.NewTicker(time.Second)
-	defer connectivityTicker.Stop()
-
-	clockSyncTicker := time.NewTicker(10 * time.Minute)
-	defer clockSyncTicker.Stop()
-
-	var noPeerTimes int
-
-	futureBlocks := cache.NewRandCache(32)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case newBlock := <-newBlockCh:
-			var stats blockStats
-			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
-				if consensus.IsFutureBlock(err) ||
-					((err == errParentMissing || err == errBlockTemporaryUnprocessable) && futureBlocks.Contains(newBlock.Header().ParentID())) {
-					logger.Debug("future block added", "id", newBlock.Header().ID())
-					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
-				}
-			} else if isTrunk {
-				n.comm.BroadcastBlock(newBlock.Block)
-				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Header())...)
-			}
-		case <-futureTicker.C:
-			// process future blocks
-			var blocks []*block.Block
-			futureBlocks.ForEach(func(ent *cache.Entry) bool {
-				blocks = append(blocks, ent.Value.(*block.Block))
-				return true
-			})
-			sort.Slice(blocks, func(i, j int) bool {
-				return blocks[i].Header().Number() < blocks[j].Header().Number()
-			})
-			var stats blockStats
-			for i, block := range blocks {
-				if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
-					logger.Debug("future block consumed", "id", block.Header().ID())
-					futureBlocks.Remove(block.Header().ID())
-					if isTrunk {
-						n.comm.BroadcastBlock(block)
-					}
-				}
-
-				if stats.processed > 0 && i == len(blocks)-1 {
-					logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
-				}
-			}
-		case <-connectivityTicker.C:
-			if n.comm.PeerCount() == 0 {
-				noPeerTimes++
-				if noPeerTimes > 30 {
-					noPeerTimes = 0
-					go checkClockOffset()
-				}
-			} else {
-				noPeerTimes = 0
-			}
-		case <-clockSyncTicker.C:
-			go checkClockOffset()
-		}
-	}
-}
-
-func (n *Node) txStashLoop(ctx context.Context) {
-	logger.Debug("enter tx stash loop")
-	defer logger.Debug("leave tx stash loop")
-
-	db, err := leveldb.OpenFile(n.txStashPath, nil)
-	if err != nil {
-		logger.Error("create tx stash", "err", err)
-		return
-	}
-	defer db.Close()
-
-	stash := newTxStash(db, 1000)
-
-	{
-		txs := stash.LoadAll()
-		n.txPool.Fill(txs)
-		logger.Debug("loaded txs from stash", "count", len(txs))
-	}
-
-	var scope event.SubscriptionScope
-	defer scope.Close()
-
-	txCh := make(chan *txpool.TxEvent)
-	scope.Track(n.txPool.SubscribeTxEvent(txCh))
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case txEv := <-txCh:
-			// skip executables
-			if txEv.Executable != nil && *txEv.Executable {
-				continue
-			}
-			// only stash non-executable txs
-			if err := stash.Save(txEv.Tx); err != nil {
-				logger.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
-			} else {
-				logger.Trace("stashed tx", "id", txEv.Tx.ID())
-			}
-		}
-	}
 }
 
 func checkClockOffset() {
