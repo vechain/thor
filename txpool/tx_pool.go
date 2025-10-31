@@ -273,6 +273,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		if !localSubmitted && p.all.Len() >= p.options.Limit*12/10 {
 			// hasPriority checks if the new tx has higher priority than 90% of existing executable txs
 			// it does not evict any of the existing txs, it will be handled by the wash process
+			// it allows for a temporary pool size extension until the wash function runs
 			hasPriority := func() bool {
 				if !executable {
 					return false
