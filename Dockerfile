@@ -10,7 +10,8 @@ RUN make all
 FROM alpine:3.21.3
 
 RUN apk add --no-cache ca-certificates
-RUN apk upgrade --available libssl3 libcrypto3
+RUN apk update && \
+    apk add --no-cache libssl3=3.3.5-r0 libcrypto3=3.3.5-r0
 COPY --from=builder /go/thor/bin/thor /usr/local/bin/
 COPY --from=builder /go/thor/bin/disco /usr/local/bin/
 RUN adduser -D -s /bin/ash thor
