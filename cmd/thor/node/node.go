@@ -22,7 +22,7 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/comm"
+	comm2 "github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -68,7 +68,7 @@ type Node struct {
 	processLock        sync.Mutex
 	logWorker          *worker
 	scope              event.SubscriptionScope
-	newBlockCh         chan *comm.NewBlockEvent
+	newBlockCh         chan *comm2.NewBlockEvent
 	txCh               chan *txpool.TxEvent
 	futureTicker       *time.Ticker
 	connectivityTicker *time.Ticker
@@ -91,7 +91,7 @@ func New(
 	consensusEngine ConsensusEngine,
 	packerEngine PackerEngine,
 ) *Node {
-	return &Node{
+	n := &Node{
 		packer:      packerEngine,
 		cons:        consensusEngine,
 		master:      master,
@@ -105,15 +105,32 @@ func New(
 		forkConfig:  forkConfig,
 		options:     options,
 	}
+
+	// initialize members
+	n.logWorker = newWorker()
+	n.futureBlocksCache = cache.NewRandCache(32)
+	n.scope = event.SubscriptionScope{}
+
+	n.newBlockCh = make(chan *comm2.NewBlockEvent)
+	n.scope.Track(n.comm.SubscribeBlock(n.newBlockCh))
+
+	n.txCh = make(chan *txpool.TxEvent)
+	n.scope.Track(n.txPool.SubscribeTxEvent(n.txCh))
+
+	n.futureTicker = time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
+	n.connectivityTicker = time.NewTicker(time.Second)
+	n.clockSyncTicker = time.NewTicker(10 * time.Minute)
+
+	return n
 }
 
 func (n *Node) Run(ctx context.Context) error {
-	logWorker := newWorker()
-	defer logWorker.Close()
 
-	n.logWorker = logWorker
-
-	n.futureBlocksCache = cache.NewRandCache(32)
+	defer n.logWorker.Close()
+	defer n.scope.Close()
+	defer n.futureTicker.Stop()
+	defer n.connectivityTicker.Stop()
+	defer n.clockSyncTicker.Stop()
 
 	maxBlockNum, err := n.repo.GetMaxBlockNum()
 	if err != nil {
@@ -129,27 +146,6 @@ func (n *Node) Run(ctx context.Context) error {
 	defer db.Close()
 
 	n.txStash = newTxStash(db, 1000)
-
-	// Initialization channels
-	n.scope = event.SubscriptionScope{}
-
-	n.newBlockCh = make(chan *comm.NewBlockEvent)
-	n.scope.Track(n.comm.SubscribeBlock(n.newBlockCh))
-
-	n.txCh = make(chan *txpool.TxEvent)
-	n.scope.Track(n.txPool.SubscribeTxEvent(n.txCh))
-
-	defer n.scope.Close()
-
-	// Initialization tickers
-	n.futureTicker = time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
-	defer n.futureTicker.Stop()
-
-	n.connectivityTicker = time.NewTicker(time.Second)
-	defer n.connectivityTicker.Stop()
-
-	n.clockSyncTicker = time.NewTicker(10 * time.Minute)
-	defer n.clockSyncTicker.Stop()
 
 	var goes co.Goes
 	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
