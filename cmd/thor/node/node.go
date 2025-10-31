@@ -125,7 +125,6 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
-
 	defer n.logWorker.Close()
 	defer n.scope.Close()
 	defer n.futureTicker.Stop()
