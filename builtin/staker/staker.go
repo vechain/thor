@@ -158,7 +158,7 @@ func (s *Staker) GetDelegation(
 		return nil, nil, nil
 	}
 	// any valid delegation must have a valid validation
-	val, err := s.validationService.GetExistingValidation(del.Validation)
+	val, err := s.validationService.GetExistingValidation(del.Validation())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -582,16 +582,16 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int, currentBlock uint32
 	if del == nil {
 		return NewReverts("delegation is empty")
 	}
-	if del.LastIteration != nil {
+	if del.LastIteration() != nil {
 		return NewReverts("delegation is already signaled exit")
 	}
-	if del.Stake == 0 {
+	if del.Stake() == 0 {
 		return NewReverts("delegation has already been withdrawn")
 	}
 
 	// there can never be a delegation pointing to a non-existent validation
 	// if the validation does not exist it's a system error
-	val, err := s.validationService.GetExistingValidation(del.Validation)
+	val, err := s.validationService.GetExistingValidation(del.Validation())
 	if err != nil {
 		return err
 	}
@@ -621,13 +621,13 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int, currentBlock uint32
 		return err
 	}
 
-	err = s.aggregationService.SignalExit(del.Validation, del.WeightedStake())
+	err = s.aggregationService.SignalExit(del.Validation(), del.WeightedStake())
 	if err != nil {
 		return err
 	}
 
 	if val.Status() == validation.StatusActive {
-		if err = s.validationService.AddToRenewalList(del.Validation); err != nil {
+		if err = s.validationService.AddToRenewalList(del.Validation()); err != nil {
 			return err
 		}
 	}
@@ -654,7 +654,7 @@ func (s *Staker) WithdrawDelegation(
 
 	// there can never be a delegation pointing to a non-existent validation
 	// if the validation does not exist it's a system error
-	val, err := s.validationService.GetExistingValidation(del.Validation)
+	val, err := s.validationService.GetExistingValidation(del.Validation())
 	if err != nil {
 		return 0, err
 	}
@@ -682,8 +682,8 @@ func (s *Staker) WithdrawDelegation(
 	// start and finish values are sanitized: !started and finished is impossible
 	// delegation is still queued
 	if !started && val.Status() != validation.StatusExit {
-		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier)
-		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
+		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier())
+		if err = s.aggregationService.SubPendingVet(del.Validation(), weightedStake); err != nil {
 			return 0, err
 		}
 

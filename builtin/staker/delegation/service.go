@@ -22,25 +22,28 @@ var (
 )
 
 type Service struct {
-	delegations *solidity.Mapping[*big.Int, *Delegation]
+	delegations *solidity.Mapping[*big.Int, *body]
 	idCounter   *solidity.Raw[*big.Int]
 }
 
 func New(sctx *solidity.Context) *Service {
 	return &Service{
-		delegations: solidity.NewMapping[*big.Int, *Delegation](sctx, slotDelegations),
+		delegations: solidity.NewMapping[*big.Int, *body](sctx, slotDelegations),
 		idCounter:   solidity.NewRaw[*big.Int](sctx, slotDelegationsCounter),
 	}
 }
 
 // GetDelegation retrieves the delegation for a validator.
 func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
-	d, err := s.delegations.Get(delegationID)
+	b, err := s.delegations.Get(delegationID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get delegation")
 	}
+	if b == nil {
+		return nil, nil
+	}
 
-	return d, nil
+	return &Delegation{b}, nil
 }
 
 func (s *Service) Add(
@@ -56,13 +59,15 @@ func (s *Service) Add(
 
 	delegationID := new(big.Int).Set(id)
 	delegation := &Delegation{
-		Validation:     validator,
-		Multiplier:     multiplier,
-		Stake:          stake,
-		FirstIteration: firstIteration,
+		&body{
+			Validation:     validator,
+			Multiplier:     multiplier,
+			Stake:          stake,
+			FirstIteration: firstIteration,
+		},
 	}
 
-	if err := s.delegations.Insert(delegationID, delegation); err != nil {
+	if err := s.delegations.Insert(delegationID, delegation.body); err != nil {
 		return nil, errors.Wrap(err, "failed to set delegation")
 	}
 
@@ -70,17 +75,17 @@ func (s *Service) Add(
 }
 
 func (s *Service) SignalExit(delegation *Delegation, delegationID *big.Int, valCurrentIteration uint32) error {
-	delegation.LastIteration = &valCurrentIteration
+	delegation.body.LastIteration = &valCurrentIteration
 
-	return s.delegations.Update(delegationID, delegation)
+	return s.delegations.Update(delegationID, delegation.body)
 }
 
 func (s *Service) Withdraw(del *Delegation, delegationID *big.Int) (uint64, error) {
 	// ensure the pointers are copied, not referenced
-	withdrawableStake := del.Stake
+	withdrawableStake := del.Stake()
 
-	del.Stake = 0
-	if err := s.delegations.Update(delegationID, del); err != nil {
+	del.body.Stake = 0
+	if err := s.delegations.Update(delegationID, del.body); err != nil {
 		return 0, err
 	}
 

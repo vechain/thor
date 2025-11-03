@@ -37,12 +37,12 @@ func TestMultipleDelegations(t *testing.T) {
 	for i, delegationID := range delegationIDs {
 		delegation := staker.GetDelegation(delegationID)
 		assert.NotNil(t, delegation, "delegation %d should exist", i)
-		assert.Equal(t, validator, delegation.Validation, "delegation %d should point to correct validator", i)
+		assert.Equal(t, validator, delegation.Validation(), "delegation %d should point to correct validator", i)
 
 		expectedAmount := uint64(1000 + i*100)
 		expectedMultiplier := uint8(100 + i*10)
-		assert.Equal(t, expectedAmount, delegation.Stake, "delegation %d stake should be correct", i)
-		assert.Equal(t, expectedMultiplier, delegation.Multiplier, "delegation %d multiplier should be correct", i)
+		assert.Equal(t, expectedAmount, delegation.Stake(), "delegation %d stake should be correct", i)
+		assert.Equal(t, expectedMultiplier, delegation.Multiplier(), "delegation %d multiplier should be correct", i)
 	}
 
 	staker.Housekeep(thor.MediumStakingPeriod())
@@ -77,8 +77,8 @@ func TestMultipleDelegationsSignalingExit(t *testing.T) {
 	// Verify all delegations are signaled for exit
 	for i, delegationID := range delegationIDs {
 		delegation := staker.GetDelegation(delegationID)
-		assert.NotNil(t, delegation.LastIteration, "delegation %d should be signaled for exit", i)
-		assert.Equal(t, uint64(1000+i*100), delegation.Stake, "delegation %d should retain stake", i)
+		assert.NotNil(t, delegation.LastIteration(), "delegation %d should be signaled for exit", i)
+		assert.Equal(t, uint64(1000+i*100), delegation.Stake(), "delegation %d should retain stake", i)
 	}
 }
 
@@ -156,13 +156,13 @@ func TestHousekeepAndOperations(t *testing.T) {
 	del3 := staker.GetDelegation(delegation3)
 
 	// Delegation1 should be signaled for exit
-	assert.NotNil(t, del1.LastIteration, "delegation1 should be signaled for exit")
+	assert.NotNil(t, del1.LastIteration(), "delegation1 should be signaled for exit")
 
 	// Delegation2 should remain active
-	assert.Nil(t, del2.LastIteration, "delegation2 should remain active")
+	assert.Nil(t, del2.LastIteration(), "delegation2 should remain active")
 
 	// Delegation3 should be active
-	assert.Nil(t, del3.LastIteration, "delegation3 should be active")
+	assert.Nil(t, del3.LastIteration(), "delegation3 should be active")
 }
 
 func TestStakeOperations(t *testing.T) {
@@ -200,13 +200,13 @@ func TestStakeOperations(t *testing.T) {
 	assert.Greater(t, valFinal.LockedVET(), val.LockedVET(), "validator should have net stake increase")
 
 	// Delegation1 should be signaled for exit
-	assert.NotNil(t, del1.LastIteration, "delegation1 should be signaled for exit")
+	assert.NotNil(t, del1.LastIteration(), "delegation1 should be signaled for exit")
 
 	// Delegation1 should be withdrawn
-	assert.Equal(t, uint64(0), del1.Stake, "delegation1 should be withdrawn")
+	assert.Equal(t, uint64(0), del1.Stake(), "delegation1 should be withdrawn")
 
 	// Delegation2 should be signaled for exit
-	assert.Nil(t, del2.LastIteration, "delegation2 should be active")
+	assert.Nil(t, del2.LastIteration(), "delegation2 should be active")
 }
 
 func TestValidatorExits(t *testing.T) {
@@ -441,15 +441,15 @@ func TestSequentialComplexScenario(t *testing.T) {
 	del1v3Final := staker.GetDelegation(del1v3)
 
 	// Validator1 delegations
-	assert.Nil(t, del1v1Final.LastIteration, "del1v1 should not be signaled for exit")
-	assert.NotNil(t, del2v1Final.LastIteration, "del2v1 should be signaled for exit")
+	assert.Nil(t, del1v1Final.LastIteration(), "del1v1 should not be signaled for exit")
+	assert.NotNil(t, del2v1Final.LastIteration(), "del2v1 should be signaled for exit")
 
 	// Validator2 delegations
-	assert.NotNil(t, del1v2Final.LastIteration, "del1v2 should be signaled for exit")
-	assert.Equal(t, uint64(0), del1v2Final.Stake, "del1v2 should be withdrawn")
-	assert.Nil(t, del2v2Final.LastIteration, "del2v2 should not be signaled for exit")
+	assert.NotNil(t, del1v2Final.LastIteration(), "del1v2 should be signaled for exit")
+	assert.Equal(t, uint64(0), del1v2Final.Stake(), "del1v2 should be withdrawn")
+	assert.Nil(t, del2v2Final.LastIteration(), "del2v2 should not be signaled for exit")
 
 	// Validator3 delegations
-	assert.Nil(t, del1v3Final.LastIteration, "del1v3 should not be signaled for exit")
-	assert.Equal(t, uint64(3000), del1v3Final.Stake, "del1v3 should retain stake")
+	assert.Nil(t, del1v3Final.LastIteration(), "del1v3 should not be signaled for exit")
+	assert.Equal(t, uint64(3000), del1v3Final.Stake(), "del1v3 should retain stake")
 }

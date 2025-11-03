@@ -12,6 +12,34 @@ import (
 )
 
 type Delegation struct {
+	body *body
+}
+
+func (d *Delegation) Validation() thor.Address {
+	return d.body.Validation
+}
+
+func (d *Delegation) Stake() uint64 {
+	return d.body.Stake
+}
+
+func (d *Delegation) Multiplier() uint8 {
+	return d.body.Multiplier
+}
+
+func (d *Delegation) LastIteration() *uint32 {
+	if d.body.LastIteration == nil {
+		return nil
+	}
+	li := *d.body.LastIteration
+	return &li
+}
+
+func (d *Delegation) FirstIteration() uint32 {
+	return d.body.FirstIteration
+}
+
+type body struct {
 	Validation     thor.Address // the validator to which the delegator is delegating
 	Stake          uint64       // the amount of VET delegated(in VET, not wei)
 	Multiplier     uint8
@@ -22,7 +50,7 @@ type Delegation struct {
 // WeightedStake returns the weight of the delegator, which is calculated as:
 // weight = stake * multiplier / 100
 func (d *Delegation) WeightedStake() *stakes.WeightedStake {
-	return stakes.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
+	return stakes.NewWeightedStakeWithMultiplier(d.Stake(), d.Multiplier())
 }
 
 type validator interface {
@@ -39,7 +67,7 @@ func (d *Delegation) Started(val validator, currentBlock uint32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return currentStakingPeriod >= d.FirstIteration, nil
+	return currentStakingPeriod >= d.FirstIteration(), nil
 }
 
 // Ended returns whether the delegation has ended
@@ -61,10 +89,10 @@ func (d *Delegation) Ended(val validator, currentBlock uint32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if d.LastIteration == nil {
+	if d.LastIteration() == nil {
 		return false, nil
 	}
-	return *d.LastIteration < currentStakingPeriod, nil
+	return *d.LastIteration() < currentStakingPeriod, nil
 }
 
 // IsLocked returns whether the delegation is locked
@@ -73,7 +101,7 @@ func (d *Delegation) Ended(val validator, currentBlock uint32) (bool, error) {
 // - AND the delegation has not ended
 // - AND the delegation has stake
 func (d *Delegation) IsLocked(val validator, currentBlock uint32) (bool, error) {
-	if d.Stake == 0 {
+	if d.Stake() == 0 {
 		return false, nil
 	}
 	started, err := d.Started(val, currentBlock)

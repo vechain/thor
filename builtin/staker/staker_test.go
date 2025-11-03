@@ -246,8 +246,8 @@ func TestDelegation_SignalExit(t *testing.T) {
 	assert.Equal(t, uint64(0), withdrawable)
 
 	del2 := staker.GetDelegation(id)
-	assert.NotNil(t, del2.LastIteration)
-	assert.Equal(t, uint32(1), *del2.LastIteration)
+	assert.NotNil(t, del2.LastIteration())
+	assert.Equal(t, uint32(1), *del2.LastIteration())
 
 	staker.SignalDelegationExitErrors(id, 10, "delegation is already signaled exit")
 }

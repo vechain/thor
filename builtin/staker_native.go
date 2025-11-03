@@ -379,8 +379,8 @@ func init() {
 			}
 
 			lastPeriod := uint32(math.MaxUint32)
-			if delegation.LastIteration != nil {
-				lastPeriod = *delegation.LastIteration
+			if delegation.LastIteration() != nil {
+				lastPeriod = *delegation.LastIteration()
 			}
 			isLocked, err := delegation.IsLocked(validation, env.BlockContext().Number)
 			if err != nil {
@@ -388,11 +388,11 @@ func init() {
 			}
 
 			return []any{
-				delegation.Validation,
-				staker.ToWei(delegation.Stake),
-				delegation.Multiplier,
+				delegation.Validation(),
+				staker.ToWei(delegation.Stake()),
+				delegation.Multiplier(),
 				isLocked,
-				delegation.FirstIteration,
+				delegation.FirstIteration(),
 				lastPeriod,
 			}, nil
 		}},
