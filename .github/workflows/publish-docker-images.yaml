@@ -244,17 +244,28 @@ jobs:
       - name: Create and push manifest list
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
-          IMAGE: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
+          IMAGES: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
         shell: bash
         run: |
+          set -euo pipefail
           AMD64_DIGEST=$(cat digests/digest-linux_amd64.txt)
           ARM64_DIGEST=$(cat digests/digest-linux_arm64.txt)
-          TAG_ARGS=""
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            TAG_ARGS="$TAG_ARGS -t $tag"
-          done <<< "$TAGS"
-          docker buildx imagetools create \
-            $TAG_ARGS \
-            "$IMAGE@${AMD64_DIGEST}" \
-            "$IMAGE@${ARM64_DIGEST}"
+
+          while IFS= read -r image; do
+            [ -z "$image" ] && continue
+
+            # Build -t args only for tags that belong to this image
+            TAG_ARGS=""
+            while IFS= read -r tag; do
+              [ -z "$tag" ] && continue
+              if [[ "$tag" == "${image}:"* ]]; then
+                TAG_ARGS="$TAG_ARGS -t $tag"
+              fi
+            done <<< "$TAGS"
+
+            # Create multi-arch manifest for this image
+            docker buildx imagetools create \
+              $TAG_ARGS \
+              "${image}@${AMD64_DIGEST}" \
+              "${image}@${ARM64_DIGEST}"
+          done <<< "$IMAGES"
