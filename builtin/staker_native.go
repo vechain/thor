@@ -76,13 +76,13 @@ func init() {
 				}, nil
 			}
 			exitBlock := uint32(math.MaxUint32)
-			if validator.ExitBlock != nil {
-				exitBlock = *validator.ExitBlock
+			if validator.ExitBlock() != nil {
+				exitBlock = *validator.ExitBlock()
 			}
 
 			offlineBlock := uint32(math.MaxUint32)
-			if validator.OfflineBlock != nil {
-				offlineBlock = *validator.OfflineBlock
+			if validator.OfflineBlock() != nil {
+				offlineBlock = *validator.OfflineBlock()
 			}
 
 			completeIterations, err := validator.CompletedIterations(env.BlockContext().Number)
@@ -90,14 +90,14 @@ func init() {
 				return nil, err
 			}
 			return []any{
-				validator.Endorser,
-				staker.ToWei(validator.LockedVET),
-				staker.ToWei(validator.Weight),
-				staker.ToWei(validator.QueuedVET),
-				validator.Status,
+				validator.Endorser(),
+				staker.ToWei(validator.LockedVET()),
+				staker.ToWei(validator.Weight()),
+				staker.ToWei(validator.QueuedVET()),
+				validator.Status(),
 				offlineBlock,
-				validator.Period,
-				validator.StartBlock,
+				validator.Period(),
+				validator.StartBlock(),
 				exitBlock,
 				completeIterations,
 			}, nil

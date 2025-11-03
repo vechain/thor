@@ -657,42 +657,42 @@ func assertValidation(t *testing.T, test *StakerTest, addr thor.Address) *Valida
 }
 
 func (va *ValidationAssertions) Status(expected validation.Status) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.Status, "validator %s status mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.Status(), "validator %s status mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) Weight(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.Weight, "validator %s weight mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.Weight(), "validator %s weight mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) LockedVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.LockedVET, "validator %s locked VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.LockedVET(), "validator %s locked VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) QueuedVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.QueuedVET, "validator %s pending locked VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.QueuedVET(), "validator %s pending locked VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) CooldownVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.CooldownVET, "validator %s cooldown VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.CooldownVET(), "validator %s cooldown VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) WithdrawableVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.WithdrawableVET, "validator %s withdrawable VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.WithdrawableVET(), "validator %s withdrawable VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) Period(expected uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.Period, "validator %s period mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.Period(), "validator %s period mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) PendingUnlockVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.PendingUnlockVET, "validator %s next period decrease mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.PendingUnlockVET(), "validator %s next period decrease mismatch", va.addr.String())
 	return va
 }
 
@@ -703,20 +703,20 @@ func (va *ValidationAssertions) IsEmpty(expected bool) *ValidationAssertions {
 
 func (va *ValidationAssertions) Beneficiary(expected thor.Address) *ValidationAssertions {
 	if expected.IsZero() {
-		assert.Nil(va.t, va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+		assert.Nil(va.t, va.validator.Beneficiary(), "validator %s beneficiary mismatch", va.addr.String())
 	} else {
-		assert.Equal(va.t, expected, *va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+		assert.Equal(va.t, expected, *va.validator.Beneficiary(), "validator %s beneficiary mismatch", va.addr.String())
 	}
 	return va
 }
 
 func (va *ValidationAssertions) OfflineBlock(expected *uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.OfflineBlock, "validator %s offline block mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.OfflineBlock(), "validator %s offline block mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) ExitBlock(expected *uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.ExitBlock, "validator %s exit block mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.ExitBlock(), "validator %s exit block mismatch", va.addr.String())
 	return va
 }
 

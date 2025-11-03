@@ -69,7 +69,7 @@ func (l *listStats) GetSize() (uint64, error) {
 }
 
 func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation, error) {
-	if !entry.IsLinked() {
+	if !entry.body.IsLinked() {
 		// if entry is not linked, check if it is the last element in the list
 		head, err := l.head.Get()
 		if err != nil {
@@ -92,14 +92,14 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 		// last element, fallback to default behavior, will reset head and tail to nil
 	}
 
-	if entry.Prev == nil {
+	if entry.body.Prev == nil {
 		// entry is the head, update head to next
 		// headKey is touched previously since entry is linked
-		if err := l.head.Update(entry.Next); err != nil {
+		if err := l.head.Update(entry.body.Next); err != nil {
 			return nil, err
 		}
 	} else {
-		prevEntry, err := l.storage.getValidation(*entry.Prev)
+		prevEntry, err := l.storage.getValidation(*entry.body.Prev)
 		if err != nil {
 			return nil, err
 		}
@@ -107,20 +107,20 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 			return nil, errors.New("prev entry is empty")
 		}
 
-		prevEntry.SetNext(entry.Next)
-		if err := l.storage.updateValidation(*entry.Prev, prevEntry); err != nil {
+		prevEntry.body.SetNext(entry.body.Next)
+		if err := l.storage.updateValidation(*entry.body.Prev, prevEntry); err != nil {
 			return nil, err
 		}
 	}
 
-	if entry.Next == nil {
+	if entry.body.Next == nil {
 		// entry is the tail, update tail to prev
 		// tailKey is touched previously since entry is linked
-		if err := l.tail.Update(entry.Prev); err != nil {
+		if err := l.tail.Update(entry.body.Prev); err != nil {
 			return nil, err
 		}
 	} else {
-		nextEntry, err := l.storage.getValidation(*entry.Next)
+		nextEntry, err := l.storage.getValidation(*entry.body.Next)
 		if err != nil {
 			return nil, err
 		}
@@ -128,15 +128,15 @@ func (l *listStats) Remove(address thor.Address, entry *Validation) (*Validation
 			return nil, errors.New("next entry is empty")
 		}
 
-		nextEntry.SetPrev(entry.Prev)
-		if err := l.storage.updateValidation(*entry.Next, nextEntry); err != nil {
+		nextEntry.body.SetPrev(entry.body.Prev)
+		if err := l.storage.updateValidation(*entry.body.Next, nextEntry); err != nil {
 			return nil, err
 		}
 	}
 
 	// clear the entry pointers
-	entry.SetPrev(nil)
-	entry.SetNext(nil)
+	entry.body.SetPrev(nil)
+	entry.body.SetNext(nil)
 
 	// update list size
 	if err := l.subSize(); err != nil {
@@ -157,7 +157,7 @@ func (l *listStats) Add(address thor.Address, newEntry *Validation) error {
 	}
 
 	// set the new entry's prev to the tail
-	newEntry.SetPrev(tail)
+	newEntry.body.SetPrev(tail)
 	// add new queued to the tail
 	if err := l.tail.Upsert(&address); err != nil {
 		return err
@@ -179,8 +179,8 @@ func (l *listStats) Add(address thor.Address, newEntry *Validation) error {
 		}
 
 		// update link list pointers
-		newEntry.SetPrev(tail)
-		tailEntry.SetNext(&address)
+		newEntry.body.SetPrev(tail)
+		tailEntry.body.SetNext(&address)
 
 		if err := l.storage.updateValidation(*tail, tailEntry); err != nil {
 			return err
@@ -215,7 +215,7 @@ func (l *listStats) Iterate(callback func(thor.Address, *Validation) error) erro
 			return err
 		}
 
-		current = entry.Next
+		current = entry.body.Next
 	}
 
 	return nil

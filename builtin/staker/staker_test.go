@@ -177,9 +177,9 @@ func TestValidation_DecreaseStake_QueuedSuccess(t *testing.T) {
 	assert.Equal(t, uint64(0), withdrawable)
 
 	v := staker.GetValidation(id)
-	assert.Equal(t, uint64(0), v.QueuedVET)
-	assert.Equal(t, MinStakeVET+100, v.LockedVET)
-	assert.Equal(t, uint64(0), v.WithdrawableVET)
+	assert.Equal(t, uint64(0), v.QueuedVET())
+	assert.Equal(t, MinStakeVET+100, v.LockedVET())
+	assert.Equal(t, uint64(0), v.WithdrawableVET())
 }
 
 func TestValidation_WithdrawStake_InvalidEndorser(t *testing.T) {
@@ -288,10 +288,10 @@ func Test_AddDelegation_WhileValidatorExiting(t *testing.T) {
 	first, val := staker.FirstActive()
 
 	staker.AddDelegation(first, 10_000, 150, 10)
-	staker.SignalExit(first, val.Endorser, 20)
+	staker.SignalExit(first, val.Endorser(), 20)
 
 	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
-	staker.Housekeep(val.Period)
+	staker.Housekeep(val.Period())
 }
 
 // Add a check to avoid delegations to be added to exitting validators
@@ -302,17 +302,17 @@ func Test_Increase_WhileValidatorExiting(t *testing.T) {
 	first, val := staker.FirstActive()
 
 	// add before validator signals exit, should be okay
-	staker.IncreaseStake(first, val.Endorser, 10_000)
-	staker.SignalExit(first, val.Endorser, 20)
+	staker.IncreaseStake(first, val.Endorser(), 10_000)
+	staker.SignalExit(first, val.Endorser(), 20)
 
 	// add after validator signals exit, should fail
-	staker.IncreaseStakeErrors(first, val.Endorser, 10_000, "validator has signaled exit, cannot increase stake")
+	staker.IncreaseStakeErrors(first, val.Endorser(), 10_000, "validator has signaled exit, cannot increase stake")
 
 	// housekeep should clean up the queued delegation
-	staker.Housekeep(val.Period)
+	staker.Housekeep(val.Period())
 
 	// housekeep should clean up the queued delegation
-	staker.Housekeep(val.Period + val.Period)
+	staker.Housekeep(val.Period() + val.Period())
 }
 
 func Test_WithdrawDelegation_before_SignalExit(t *testing.T) {
@@ -322,11 +322,11 @@ func Test_WithdrawDelegation_before_SignalExit(t *testing.T) {
 	delID := staker.AddDelegation(first, 10_000, 150, 10)
 
 	staker.WithdrawDelegation(delID, 10_000, 15)
-	staker.SignalExit(first, val.Endorser, 20)
+	staker.SignalExit(first, val.Endorser(), 20)
 
 	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
 
-	staker.Housekeep(val.Period)
+	staker.Housekeep(val.Period())
 }
 
 func Test_WithdrawDelegation_after_SignalExit(t *testing.T) {
@@ -335,10 +335,10 @@ func Test_WithdrawDelegation_after_SignalExit(t *testing.T) {
 	first, val := staker.FirstActive()
 
 	delID := staker.AddDelegation(first, 10_000, 150, 10)
-	staker.SignalExit(first, val.Endorser, 20)
+	staker.SignalExit(first, val.Endorser(), 20)
 
 	staker.WithdrawDelegation(delID, 10_000, 15)
 	staker.AddDelegationErrors(first, 10_000, 150, 10, "cannot add delegation to exiting validator")
 
-	staker.Housekeep(val.Period)
+	staker.Housekeep(val.Period())
 }

@@ -22,36 +22,39 @@ var (
 )
 
 type Storage struct {
-	validations *solidity.Mapping[thor.Address, *Validation]
+	validations *solidity.Mapping[thor.Address, *body]
 	rewards     *solidity.Mapping[thor.Bytes32, *big.Int]
 	exits       *solidity.Mapping[thor.Bytes32, thor.Address]
 }
 
 func NewStorage(sctx *solidity.Context) *Storage {
 	return &Storage{
-		validations: solidity.NewMapping[thor.Address, *Validation](sctx, slotValidations),
+		validations: solidity.NewMapping[thor.Address, *body](sctx, slotValidations),
 		rewards:     solidity.NewMapping[thor.Bytes32, *big.Int](sctx, slotRewards),
 		exits:       solidity.NewMapping[thor.Bytes32, thor.Address](sctx, slotExitEpochs),
 	}
 }
 
 func (s *Storage) getValidation(validator thor.Address) (*Validation, error) {
-	v, err := s.validations.Get(validator)
+	b, err := s.validations.Get(validator)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator")
 	}
-	return v, nil
+	if b == nil {
+		return nil, nil
+	}
+	return &Validation{body: b}, nil
 }
 
 func (s *Storage) updateValidation(validator thor.Address, entry *Validation) error {
-	if err := s.validations.Update(validator, entry); err != nil {
+	if err := s.validations.Update(validator, entry.body); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil
 }
 
 func (s *Storage) upsertValidation(validator thor.Address, entry *Validation) error {
-	if err := s.validations.Upsert(validator, entry); err != nil {
+	if err := s.validations.Upsert(validator, entry.body); err != nil {
 		return errors.Wrap(err, "failed to set validator")
 	}
 	return nil

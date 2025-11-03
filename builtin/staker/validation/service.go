@@ -127,10 +127,10 @@ func (s *Service) LeaderGroup() ([]Leader, error) {
 	if err := s.repo.iterateActive(func(validator thor.Address, entry *Validation) error {
 		group = append(group, Leader{
 			Address:     validator,
-			Endorser:    entry.Endorser,
-			Beneficiary: entry.Beneficiary,
+			Endorser:    entry.Endorser(),
+			Beneficiary: entry.Beneficiary(),
 			Active:      entry.IsOnline(),
-			Weight:      entry.Weight,
+			Weight:      entry.Weight(),
 		})
 
 		return nil
@@ -147,16 +147,18 @@ func (s *Service) Add(
 	stake uint64,
 ) error {
 	entry := &Validation{
-		Endorser:         endorser,
-		Period:           period,
-		CompletedPeriods: 0,
-		Status:           StatusQueued,
-		LockedVET:        0,
-		QueuedVET:        stake,
-		CooldownVET:      0,
-		PendingUnlockVET: 0,
-		WithdrawableVET:  0,
-		Weight:           0,
+		body: &body{
+			Endorser:         endorser,
+			Period:           period,
+			CompletedPeriods: 0,
+			Status:           StatusQueued,
+			LockedVET:        0,
+			QueuedVET:        stake,
+			CooldownVET:      0,
+			PendingUnlockVET: 0,
+			WithdrawableVET:  0,
+			Weight:           0,
+		},
 	}
 
 	return s.repo.addValidation(validator, entry)
@@ -177,24 +179,24 @@ func (s *Service) SignalExit(validator thor.Address, currentBlock uint32, minBlo
 	if err != nil {
 		return err
 	}
-	validation.ExitBlock = &exitBlock
+	validation.body.ExitBlock = &exitBlock
 	// validator is going to exit after current iteration
-	validation.CompletedPeriods = current
+	validation.body.CompletedPeriods = current
 
 	return s.repo.updateValidation(validator, validation)
 }
 
 func (s *Service) IncreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
-	validation.QueuedVET += amount
+	validation.body.QueuedVET += amount
 
 	return s.repo.updateValidation(validator, validation)
 }
 
 func (s *Service) SetBeneficiary(validator thor.Address, validation *Validation, beneficiary thor.Address) error {
 	if beneficiary.IsZero() {
-		validation.Beneficiary = nil
+		validation.body.Beneficiary = nil
 	} else {
-		validation.Beneficiary = &beneficiary
+		validation.body.Beneficiary = &beneficiary
 	}
 	if err := s.repo.updateValidation(validator, validation); err != nil {
 		return errors.Wrap(err, "failed to set beneficiary")
@@ -203,13 +205,13 @@ func (s *Service) SetBeneficiary(validator thor.Address, validation *Validation,
 }
 
 func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
-	if validation.Status == StatusActive {
-		validation.PendingUnlockVET += amount
+	if validation.Status() == StatusActive {
+		validation.body.PendingUnlockVET += amount
 	}
 
-	if validation.Status == StatusQueued {
-		validation.QueuedVET -= amount
-		validation.WithdrawableVET += amount
+	if validation.Status() == StatusQueued {
+		validation.body.QueuedVET -= amount
+		validation.body.WithdrawableVET += amount
 	}
 
 	return s.repo.updateValidation(validator, validation)
@@ -228,7 +230,7 @@ func (s *Service) UpdateGroup(currentBlock uint32) ([]thor.Address, error) {
 	group := make([]thor.Address, 0)
 	err := s.repo.iterateRenewalList(func(validator thor.Address, val *Validation) error {
 		// here we only handle renewals, not evictions or exits
-		if val.IsPeriodEnd(currentBlock) && val.ExitBlock == nil {
+		if val.IsPeriodEnd(currentBlock) && val.ExitBlock() == nil {
 			group = append(group, validator)
 		}
 		return nil
@@ -244,14 +246,14 @@ func (s *Service) WithdrawStake(
 	currentBlock uint32,
 ) (uint64, uint64, uint64, error) {
 	// if the validator is queued make sure to exit it
-	if validation.Status == StatusQueued {
-		withdrawableVET := validation.WithdrawableVET
-		queuedVET := validation.QueuedVET
+	if validation.Status() == StatusQueued {
+		withdrawableVET := validation.WithdrawableVET()
+		queuedVET := validation.QueuedVET()
 
 		// reset queued and withdrawable
-		validation.QueuedVET = 0
-		validation.WithdrawableVET = 0
-		validation.Status = StatusExit
+		validation.body.QueuedVET = 0
+		validation.body.WithdrawableVET = 0
+		validation.body.Status = StatusExit
 		if err := s.repo.removeQueued(validator, validation); err != nil {
 			return 0, 0, 0, err
 		}
@@ -260,17 +262,17 @@ func (s *Service) WithdrawStake(
 	}
 
 	cooldownVET := uint64(0)
-	withdrawableVET := validation.WithdrawableVET
-	queuedVET := validation.QueuedVET
+	withdrawableVET := validation.WithdrawableVET()
+	queuedVET := validation.QueuedVET()
 
 	// reset queued and withdrawable
-	validation.QueuedVET = 0
-	validation.WithdrawableVET = 0
+	validation.body.QueuedVET = 0
+	validation.body.WithdrawableVET = 0
 
 	// validator has exited and waited for the cooldown period
 	if validation.CooldownEnded(currentBlock) {
-		cooldownVET = validation.CooldownVET
-		validation.CooldownVET = 0
+		cooldownVET = validation.CooldownVET()
+		validation.body.CooldownVET = 0
 	}
 
 	if err := s.repo.updateValidation(validator, validation); err != nil {
@@ -373,30 +375,30 @@ func (s *Service) ActivateValidator(
 ) (*globalstats.Renewal, error) {
 	// Update validator values
 	// ensure a queued validator does not have locked vet
-	if validation.LockedVET > 0 {
+	if validation.LockedVET() > 0 {
 		return nil, errors.New("cannot activate validator with already locked vet")
 	}
 
-	queuedDecrease := validation.QueuedVET
+	queuedDecrease := validation.QueuedVET()
 
-	// QueuedVET is now locked
-	validation.LockedVET = validation.QueuedVET
-	// Reset QueuedVET - already locked-in
-	validation.QueuedVET = 0
+	// QueuedVET() is now locked
+	validation.body.LockedVET = validation.QueuedVET()
+	// Reset QueuedVET() - already locked-in
+	validation.body.QueuedVET = 0
 
 	mul := Multiplier
 	if aggRenew.LockedIncrease.VET > aggRenew.LockedDecrease.VET {
 		// if validator has delegations, multiplier is 200%
 		mul = MultiplierWithDelegations
 	}
-	lockedIncrease := stakes.NewWeightedStakeWithMultiplier(validation.LockedVET, mul)
+	lockedIncrease := stakes.NewWeightedStakeWithMultiplier(validation.LockedVET(), mul)
 
 	// attach all delegation's weight
-	validation.Weight = lockedIncrease.Weight + aggRenew.LockedIncrease.Weight - aggRenew.LockedDecrease.Weight
+	validation.body.Weight = lockedIncrease.Weight + aggRenew.LockedIncrease.Weight - aggRenew.LockedDecrease.Weight
 
 	// Update validator status
-	validation.Status = StatusActive
-	validation.StartBlock = currentBlock
+	validation.body.Status = StatusActive
+	validation.body.StartBlock = currentBlock
 
 	// Add to the leader group list and update the validation
 	if err := s.repo.addActive(validator, validation); err != nil {
@@ -420,9 +422,9 @@ func (s *Service) UpdateOfflineBlock(validator thor.Address, block uint32, onlin
 		return err
 	}
 	if online {
-		validation.OfflineBlock = nil
+		validation.body.OfflineBlock = nil
 	} else {
-		validation.OfflineBlock = &block
+		validation.body.OfflineBlock = &block
 	}
 
 	return s.repo.updateValidation(validator, validation)

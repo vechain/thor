@@ -13,6 +13,19 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+type testValidator struct {
+	status    validation.Status
+	iteration uint32
+}
+
+func (s *testValidator) Status() validation.Status {
+	return s.status
+}
+
+func (s *testValidator) CurrentIteration(_ uint32) (uint32, error) {
+	return s.iteration, nil
+}
+
 func TestDelegation(t *testing.T) {
 	del := Delegation{
 		Validation:     thor.Address{},
@@ -25,28 +38,13 @@ func TestDelegation(t *testing.T) {
 	wStake := del.WeightedStake()
 	assert.Equal(t, uint64(0), wStake.VET)
 	assert.Equal(t, uint64(0), wStake.Weight)
-	offlineBlock := uint32(0)
 
-	val := validation.Validation{
-		Endorser:         thor.Address{},
-		Period:           2,
-		CompletedPeriods: 0,
-		Status:           0,
-		OfflineBlock:     &offlineBlock,
-		StartBlock:       0,
-		ExitBlock:        nil,
-		LockedVET:        0,
-		PendingUnlockVET: 0,
-		QueuedVET:        0,
-		CooldownVET:      0,
-		WithdrawableVET:  0,
-		Weight:           0,
-	}
+	val := &testValidator{}
 
-	started, err := del.Started(&val, 10)
+	started, err := del.Started(val, 10)
 	assert.NoError(t, err)
 	assert.False(t, started)
-	ended, err := del.Ended(&val, 10)
+	ended, err := del.Ended(val, 10)
 	assert.NoError(t, err)
 	assert.False(t, ended)
 
@@ -62,39 +60,39 @@ func TestDelegation(t *testing.T) {
 	assert.Equal(t, uint64(1000), wStake.VET)
 	assert.Equal(t, uint64(2000), wStake.Weight)
 
-	val.Status = validation.StatusQueued
-	started, err = del.Started(&val, 10)
+	val.status = validation.StatusQueued
+	started, err = del.Started(val, 10)
 	assert.NoError(t, err)
 	assert.False(t, started)
-	ended, err = del.Ended(&val, 10)
+	ended, err = del.Ended(val, 10)
 	assert.NoError(t, err)
 	assert.False(t, ended)
 
-	val.Status = validation.StatusActive
+	val.status = validation.StatusActive
 	del.FirstIteration = 4
-	started, err = del.Started(&val, 4)
+	started, err = del.Started(val, 4)
 	assert.NoError(t, err)
 	assert.False(t, started)
-	ended, err = del.Ended(&val, 4)
+	ended, err = del.Ended(val, 4)
 	assert.NoError(t, err)
 	assert.False(t, ended)
 
-	val.Period = 1
-	started, err = del.Started(&val, 4)
+	val.iteration = 4
+	started, err = del.Started(val, 4)
 	assert.NoError(t, err)
 	assert.True(t, started)
 
-	val.Status = validation.StatusExit
-	val.CompletedPeriods = 4
-	ended, err = del.Ended(&val, 6)
+	val.status = validation.StatusExit
+	val.iteration = 5
+	ended, err = del.Ended(val, 6)
 	assert.NoError(t, err)
 	assert.True(t, ended)
 
-	val.Status = validation.StatusActive
+	val.status = validation.StatusActive
 	lastIter := uint32(5)
 	del.LastIteration = &lastIter
-	val.Period = 2
-	ended, err = del.Ended(&val, 5)
+	val.iteration = 2
+	ended, err = del.Ended(val, 5)
 	assert.NoError(t, err)
 	assert.False(t, ended)
 }
@@ -108,20 +106,8 @@ func TestDelegation_IsLocked(t *testing.T) {
 		FirstIteration: 0,
 	}
 
-	val := validation.Validation{
-		Endorser:         thor.Address{},
-		Period:           1,
-		CompletedPeriods: 0,
-		Status:           validation.StatusActive,
-		OfflineBlock:     nil,
-		StartBlock:       0,
-		ExitBlock:        nil,
-		LockedVET:        0,
-		PendingUnlockVET: 0,
-		QueuedVET:        0,
-		CooldownVET:      0,
-		WithdrawableVET:  0,
-		Weight:           0,
+	val := testValidator{
+		status: validation.StatusActive,
 	}
 
 	isLocked, err := del.IsLocked(&val, 1)
@@ -137,7 +123,7 @@ func TestDelegation_IsLocked(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, isLocked)
 
-	val.Status = validation.StatusExit
+	val.status = validation.StatusExit
 	isLocked, err = del.IsLocked(&val, 2)
 	assert.NoError(t, err)
 	assert.False(t, isLocked)
