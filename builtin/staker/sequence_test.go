@@ -783,12 +783,12 @@ func assertDelegation(t *testing.T, staker *Staker, delegationID *big.Int) *Dele
 }
 
 func (da *DelegationAssertions) Validation(expected thor.Address) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Validation, "delegation %s validation ID mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.Validation(), "delegation %s validation ID mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) Stake(expected uint64) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Stake, "delegation %s stake mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.Stake(), "delegation %s stake mismatch", da.delegationID.String())
 	return da
 }
 
@@ -798,17 +798,17 @@ func (da *DelegationAssertions) Weight(expected uint64) *DelegationAssertions {
 }
 
 func (da *DelegationAssertions) Multiplier(expected uint8) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Multiplier, "delegation %s multiplier mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.Multiplier(), "delegation %s multiplier mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) FirstIteration(expected uint32) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.FirstIteration, "delegation %s first iteration mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.FirstIteration(), "delegation %s first iteration mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) LastIteration(expected *uint32) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.LastIteration, "delegation %s last iteration mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.LastIteration(), "delegation %s last iteration mismatch", da.delegationID.String())
 	return da
 }
 

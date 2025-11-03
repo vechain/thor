@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/staker/delegation"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -39,128 +38,6 @@ func newDelegationStaker(t *testing.T) (*StakerTest, []*testValidators) {
 
 func delegationStake() uint64 {
 	return 10_000 // 10_000 VET
-}
-
-type validator struct {
-	status    validation.Status
-	iteration uint32
-}
-
-func (s *validator) Status() validation.Status {
-	return s.status
-}
-
-func (s *validator) CurrentIteration(_ uint32) (uint32, error) {
-	return s.iteration, nil
-}
-
-func Test_IsLocked(t *testing.T) {
-	t.Run("Completed Staking Periods", func(t *testing.T) {
-		last := uint32(2)
-		d := &delegation.Delegation{
-			FirstIteration: 2,
-			LastIteration:  &last,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validator{
-			status:    validation.StatusActive,
-			iteration: 5,
-		}
-
-		stared, err := d.Started(v, 10)
-		assert.NoError(t, err)
-		assert.True(t, stared, "should not be locked when complete iterations is equal to last iteration")
-		ended, err := d.Ended(v, 15)
-		assert.NoError(t, err)
-		assert.True(t, ended, "should be locked when first is less than current and last is equal to current")
-	})
-
-	t.Run("Incomplete Staking Periods", func(t *testing.T) {
-		last := uint32(5)
-		d := &delegation.Delegation{
-			FirstIteration: 2,
-			LastIteration:  &last,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validator{
-			status:    validation.StatusActive,
-			iteration: 5,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.True(t, started, "should be started when complete iterations is greater than first iteration")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when first is less than current and last is greater than current")
-	})
-
-	t.Run("Delegation Not Started", func(t *testing.T) {
-		last := uint32(6)
-		d := &delegation.Delegation{
-			FirstIteration: 5,
-			LastIteration:  &last,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validator{
-			status:    validation.StatusActive,
-			iteration: 4,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.False(t, started, "should not be started when complete iterations is less than first iteration")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when first is greater than current and last is greater than current")
-	})
-	t.Run("Staker is Queued", func(t *testing.T) {
-		d := &delegation.Delegation{
-			FirstIteration: 1,
-			LastIteration:  nil,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validator{
-			status:    validation.StatusQueued,
-			iteration: 5,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.False(t, started, "should not be started when validation status is queued")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when validation status is queued")
-	})
-
-	t.Run("exit block not defined", func(t *testing.T) {
-		d := &delegation.Delegation{
-			FirstIteration: 1,
-			LastIteration:  nil,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validator{
-			status:    validation.StatusActive,
-			iteration: 5,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.True(t, started, "should be started when first iteration is less than current")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when last iteration is nil and first equals current")
-	})
 }
 
 func Test_AddDelegator(t *testing.T) {
@@ -557,8 +434,8 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	_, validator = staker.FirstActive()
 	delegation = staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), delegation.Stake)
-	assert.Nil(t, delegation.LastIteration)
+	assert.Equal(t, uint64(0), delegation.Stake())
+	assert.Nil(t, delegation.LastIteration())
 
 	isLocked, err := delegation.IsLocked(validator, 20)
 	assert.NoError(t, err)

@@ -155,7 +155,7 @@ func TestCascadingExits(t *testing.T) {
 	// Step 8: Verify delegations on remaining validators are still active
 	for _, i := range remainingValidators {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		started, err := del.Started(val, thor.MediumStakingPeriod()*2+1)
 		require.NoError(t, err)
 		assert.True(t, started, "delegation on validator %d should still be active", i+1)
@@ -164,7 +164,7 @@ func TestCascadingExits(t *testing.T) {
 	// Step 9: Verify delegations on exit validators are ended
 	for _, i := range exitValidators {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		ended, err := del.Ended(val, thor.MediumStakingPeriod()*2+1)
 		require.NoError(t, err)
 		assert.True(t, ended, "delegation on validator %d should be ended", i+1)
@@ -288,7 +288,7 @@ func TestLeaderGroupRotation(t *testing.T) {
 
 	// Step 11: Verify delegation on validator 1 is ended
 	del1 := staker.GetDelegation(delegations[0])
-	val1 = staker.GetValidation(del1.Validation)
+	val1 = staker.GetValidation(del1.Validation())
 	started, err := del1.Started(val1, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.False(t, started, "delegation on validator 1 shouldn't be started")
@@ -299,7 +299,7 @@ func TestLeaderGroupRotation(t *testing.T) {
 	// Step 12: Verify delegations on remaining validators are still active
 	for i := 1; i < 3; i++ {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		started, err := del.Started(val, thor.MediumStakingPeriod()*2+1)
 		require.NoError(t, err)
 		assert.True(t, started, "delegation on validator %d should still be active", i+1)
@@ -351,7 +351,7 @@ func TestValidatorEviction(t *testing.T) {
 
 	// Step 8: Verify delegation on evicted validator is ended
 	del1 := staker.GetDelegation(delegations[0])
-	val1 = staker.GetValidation(del1.Validation)
+	val1 = staker.GetValidation(del1.Validation())
 	started, err := del1.Started(val1, evictionBlock+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on evicted validator should be started")
@@ -362,7 +362,7 @@ func TestValidatorEviction(t *testing.T) {
 	// Step 9: Verify delegations on remaining validators are still active
 	for i := 1; i < 3; i++ {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		started, err := del.Started(val, evictionBlock+1)
 		require.NoError(t, err)
 		assert.True(t, started, "delegation on validator %d should still be active", i+1)
@@ -433,26 +433,26 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 
 	// Step 10: Verify delegations on exit validators are ended
 	del1 := staker.GetDelegation(delegations[0])
-	val1 = staker.GetValidation(del1.Validation)
+	val1 = staker.GetValidation(del1.Validation())
 	ended, err := del1.Ended(val1, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, ended, "delegation on validator 1 should be ended")
 
 	del3 := staker.GetDelegation(delegations[2])
-	val3 = staker.GetValidation(del3.Validation)
+	val3 = staker.GetValidation(del3.Validation())
 	ended, err = del3.Ended(val3, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, ended, "delegation on validator 3 should be ended")
 
 	// Step 11: Verify delegations on remaining validators are still active
 	del2 := staker.GetDelegation(delegations[1])
-	val2 = staker.GetValidation(del2.Validation)
+	val2 = staker.GetValidation(del2.Validation())
 	started, err := del2.Started(val2, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 2 should still be active")
 
 	del4 := staker.GetDelegation(delegations[3])
-	val4 = staker.GetValidation(del4.Validation)
+	val4 = staker.GetValidation(del4.Validation())
 	started, err = del4.Started(val4, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 4 should still be active")
@@ -460,7 +460,7 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 	staker.Housekeep(thor.MediumStakingPeriod() * 3)
 	// Step 12: Verify new delegations are active
 	del5 := staker.GetDelegation(delegation5)
-	val5 = staker.GetValidation(del5.Validation)
+	val5 = staker.GetValidation(del5.Validation())
 	started, err = del5.Started(val5, thor.MediumStakingPeriod()*3+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 5 should be active")
@@ -468,7 +468,7 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 	staker.Housekeep(thor.MediumStakingPeriod() * 4)
 	require.NoError(t, err)
 	del6 := staker.GetDelegation(delegation6)
-	val6 = staker.GetValidation(del6.Validation)
+	val6 = staker.GetValidation(del6.Validation())
 	started, err = del6.Started(val6, thor.MediumStakingPeriod()*4+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 6 should be active")
