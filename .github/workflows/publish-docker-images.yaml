@@ -203,6 +203,7 @@ jobs:
     needs: [build-and-push-image]
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-22.04
+    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
