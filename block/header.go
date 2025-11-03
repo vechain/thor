@@ -285,7 +285,7 @@ func (h *Header) String() string {
 	ParentID:       %v
 	Timestamp:      %v
 	Signer:         %v
-	Beneficiary():    %v
+	Beneficiary:    %v
 	GasLimit:       %v
 	GasUsed:        %v
 	BaseFee:		%v

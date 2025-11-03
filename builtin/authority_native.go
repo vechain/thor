@@ -121,7 +121,7 @@ func init() {
 				panic(err)
 			}
 
-			// Use staker Transition Period() logic
+			// Use staker Transition Period logic
 			// to ensure that transitioning validators are marked as endorsed
 			env.UseGas(thor.GetBalanceGas)
 			isEndorsed, err := Staker.NativeMetered(env.State(), env.UseGas).TransitionPeriodBalanceCheck(

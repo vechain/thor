@@ -348,7 +348,7 @@ func TestScheduler_ScoreComparison_DifferentWeights(t *testing.T) {
 
 	t.Log("=== Priority Score Comparison with Real Network Weights ===")
 	for i, entry := range sched.sequence {
-		t.Logf("Validator %d: Weight()=%d VET, Priority Score=%.10f",
+		t.Logf("Validator %d: Weight=%d VET, Priority Score=%.10f",
 			i+1, entry.weight, entry.score)
 	}
 
@@ -387,14 +387,14 @@ func TestScheduler_ScoreComparison_DifferentWeights(t *testing.T) {
 	}
 
 	// Analyze the relationship between weights and scores
-	t.Log("\n📈 Weight() vs Score Relationship Analysis:")
+	t.Log("\n📈 Weight vs Score Relationship Analysis:")
 	for i, entry := range sched.sequence {
 		if i > 0 {
 			prevWeight := sched.sequence[i-1].weight
 			prevScore := sched.sequence[i-1].score
 			weightRatio := float64(entry.weight) / float64(prevWeight)
 			scoreRatio := entry.score / prevScore
-			t.Logf("  Weight() ratio: %.2fx (%.0f → %.0f), Score ratio: %.6f (%.10f → %.10f)",
+			t.Logf("  Weight ratio: %.2fx (%.0f → %.0f), Score ratio: %.6f (%.10f → %.10f)",
 				weightRatio, float64(prevWeight), float64(entry.weight), scoreRatio, prevScore, entry.score)
 		}
 	}

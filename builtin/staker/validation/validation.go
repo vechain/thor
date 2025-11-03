@@ -125,6 +125,17 @@ func (v *Validation) Weight() uint64 {
 	return v.body.Weight
 }
 
+func (v *Validation) ShouldEvict(currentBlock uint32) bool {
+	if v.OfflineBlock() == nil {
+		return false
+	}
+	if v.ExitBlock() != nil {
+		return false
+	}
+	evictionBlock := *v.OfflineBlock() + thor.ValidatorEvictionThreshold()
+	return currentBlock >= evictionBlock
+}
+
 type Totals struct {
 	TotalLockedStake  uint64 // total locked stake in validation (current period), validation's stake + all delegators stake
 	TotalLockedWeight uint64 // total locked weight in validation (current period), validation's weight + all delegators weight
@@ -249,11 +260,11 @@ func (v *Validation) CompletedIterations(currentBlock uint32) (uint32, error) {
 }
 
 // renew moves the stakes and weights around as follows:
-// 1. Move QueuedVET() => Locked
-// 2. Decrease LockedVET() by PendingUnlockVET()
-// 3. Increase WithdrawableVET() by PendingUnlockVET()
-// 4. Set QueuedVET() to 0
-// 5. Set PendingUnlockVET() to 0
+// 1. Move QueuedVET => Locked
+// 2. Decrease LockedVET by PendingUnlockVET
+// 3. Increase WithdrawableVET by PendingUnlockVET
+// 4. Set QueuedVET to 0
+// 5. Set PendingUnlockVET to 0
 func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error) {
 	queuedDecrease := v.QueuedVET()
 
