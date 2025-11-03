@@ -298,9 +298,9 @@ func TestDelegationStakeAggregation(t *testing.T) {
 	valBefore := staker.GetValidation(validator)
 
 	// Add multiple delegations with different multipliers
-	delegation1 := staker.AddDelegation(validator, 1000, 150, 10) // Weight(): 1000 * 150 = 150,000
-	delegation2 := staker.AddDelegation(validator, 2000, 200, 10) // Weight(): 2000 * 200 = 400,000
-	delegation3 := staker.AddDelegation(validator, 500, 100, 10)  // Weight(): 500 * 100 = 50,000
+	delegation1 := staker.AddDelegation(validator, 1000, 150, 10) // Weight: 1000 * 150 = 150,000
+	delegation2 := staker.AddDelegation(validator, 2000, 200, 10) // Weight: 2000 * 200 = 400,000
+	delegation3 := staker.AddDelegation(validator, 500, 100, 10)  // Weight: 500 * 100 = 50,000
 
 	// Verify individual delegation weights
 	del1 := staker.GetDelegation(delegation1)

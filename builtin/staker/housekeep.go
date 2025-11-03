@@ -100,7 +100,7 @@ func (s *Staker) computeEpochTransition(currentBlock uint32) (*EpochTransition, 
 
 func (s *Staker) evictionCallback(currentBlock uint32, evictions *[]thor.Address) func(thor.Address, *validation.Validation) error {
 	return func(validator thor.Address, entry *validation.Validation) error {
-		if entry.OfflineBlock() != nil && currentBlock > *entry.OfflineBlock()+thor.ValidatorEvictionThreshold() && entry.ExitBlock() == nil {
+		if entry.ShouldEvict(currentBlock) {
 			*evictions = append(*evictions, validator)
 			return nil
 		}

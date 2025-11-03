@@ -16,9 +16,9 @@ import (
 type Aggregation struct {
 	// All locked vet and weight for a validations delegations.
 	Locked *stakes.WeightedStake
-	// Pending delegated vet and weight, does NOT contribute to current TVL, it will increase the LockedVET() in the next period and reset to 0
+	// Pending delegated vet and weight, does NOT contribute to current TVL, it will increase the LockedVET in the next period and reset to 0
 	Pending *stakes.WeightedStake
-	// Exiting delegated vet ,does NOT contribute to current TVL, it will decrease the LockedVET() in the next period and reset to 0
+	// Exiting delegated vet ,does NOT contribute to current TVL, it will decrease the LockedVET in the next period and reset to 0
 	Exiting *stakes.WeightedStake
 }
 
@@ -50,8 +50,8 @@ func (a *Aggregation) NextPeriodTVL() (uint64, error) {
 // renew transitions delegations to the next staking period.
 // Pending delegations become locked, exiting delegations become withdrawable.
 // 1. Move Pending => Locked
-// 2. Remove ExitingVET from LockedVET()
-// 3. Move ExitingVET to WithdrawableVET()
+// 2. Remove ExitingVET from LockedVET
+// 3. Move ExitingVET to WithdrawableVET
 // return a delta object
 func (a *Aggregation) renew() (*globalstats.Renewal, error) {
 	lockedIncrease := a.Pending.Clone()
@@ -64,7 +64,7 @@ func (a *Aggregation) renew() (*globalstats.Renewal, error) {
 	}
 	a.Pending = &stakes.WeightedStake{}
 
-	// Remove ExitingVET from LockedVET()
+	// Remove ExitingVET from LockedVET
 	if err := a.Locked.Sub(a.Exiting); err != nil {
 		return nil, err
 	}

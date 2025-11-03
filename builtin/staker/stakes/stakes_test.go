@@ -66,7 +66,7 @@ func TestWeightedStake_Sub(t *testing.T) {
 	err := a.Sub(b)
 	assert.ErrorContains(t, err, "VET subtract underflow occurred")
 
-	// Weight() underflow
+	// Weight underflow
 	a = NewWeightedStake(2, 1)
 	b = NewWeightedStake(1, 2)
 	err = a.Sub(b)

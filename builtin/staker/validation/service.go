@@ -381,9 +381,9 @@ func (s *Service) ActivateValidator(
 
 	queuedDecrease := validation.QueuedVET()
 
-	// QueuedVET() is now locked
+	// QueuedVET is now locked
 	validation.body.LockedVET = validation.QueuedVET()
-	// Reset QueuedVET() - already locked-in
+	// Reset QueuedVET - already locked-in
 	validation.body.QueuedVET = 0
 
 	mul := Multiplier
