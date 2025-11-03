@@ -467,7 +467,7 @@ func TestJustifierPos(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					// Weight, stake multiplied by default multiplier
+					// Weight(), stake multiplied by default multiplier
 					vs.AddBlock(datagen.RandAddress(), true, validatorStake*2)
 				}
 
@@ -502,7 +502,7 @@ func TestJustifierPos(t *testing.T) {
 				}
 
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					// Weight, stake multiplied by default multiplier
+					// Weight(), stake multiplied by default multiplier
 					vs.AddBlock(datagen.RandAddress(), false, validatorStake*2)
 				}
 
@@ -534,7 +534,7 @@ func TestJustifierPos(t *testing.T) {
 				// Since 350 > 333.33, committed would be true, hence the - 1 so it is false
 				// In PoA we do 2/3 of MaxBlockProposers that rounded is 7, 7 > 7 is false hence committed would be false
 				for range MaxBlockProposers*2/3 - 1 {
-					// Weight, stake multiplied by default multiplier
+					// Weight(), stake multiplied by default multiplier
 					vs.AddBlock(datagen.RandAddress(), true, validatorStake)
 				}
 

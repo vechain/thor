@@ -20,7 +20,7 @@ type ForkConfig struct {
 	ETH_IST   uint32
 	VIP214    uint32
 	FINALITY  uint32
-	HAYABUSA  uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
+	HAYABUSA  uint32 // Start of the Hayabusa Transition Period() - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
 	GALACTICA uint32
 }
 

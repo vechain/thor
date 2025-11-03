@@ -12,7 +12,7 @@
 //   - Validates both successful execution and expected gas costs
 //   - Provides detailed breakdowns for gas usage analysis
 //
-// Current Status:
+// Current Status():
 //   - Covers basic read operations (no arguments)
 package builtin_test
 

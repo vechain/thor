@@ -272,22 +272,22 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 		return err
 	}
 
-	if val.Endorser != endorser {
+	if val.Endorser() != endorser {
 		return NewReverts("endorser required")
 	}
-	if val.Status != validation.StatusActive {
+	if val.Status() != validation.StatusActive {
 		return NewReverts("can't signal exit while not active")
 	}
 
-	if val.ExitBlock != nil {
-		return NewReverts(fmt.Sprintf("exit block already set to %d", *val.ExitBlock))
+	if val.ExitBlock() != nil {
+		return NewReverts(fmt.Sprintf("exit block already set to %d", *val.ExitBlock()))
 	}
 
 	current, err := val.CurrentIteration(currentBlock)
 	if err != nil {
 		return err
 	}
-	minBlock := val.StartBlock + val.Period*current
+	minBlock := val.StartBlock() + val.Period()*current
 	if err := s.validationService.SignalExit(validator, currentBlock, minBlock, exitMaxTry); err != nil {
 		if errors.Is(err, validation.ErrMaxTryReached) {
 			return NewReverts(validation.ErrMaxTryReached.Error())
@@ -300,7 +300,7 @@ func (s *Staker) SignalExit(validator thor.Address, endorser thor.Address, curre
 }
 
 // IncreaseStake increases the stake of a queued or active validator
-// if a validator is active, the QueuedVET is increase, but the weight stays the same
+// if a validator is active, the QueuedVET() is increase, but the weight stays the same
 // the weight will be recalculated at the end of the staking period, by the housekeep function
 func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, amount uint64) error {
 	logger.Debug("increasing stake", "endorser", endorser, "validator", validator, "amount", amount)
@@ -310,16 +310,16 @@ func (s *Staker) IncreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
-	if val.Endorser != endorser {
+	if val.Endorser() != endorser {
 		return NewReverts("endorser required")
 	}
-	if val.Status == validation.StatusExit {
+	if val.Status() == validation.StatusExit {
 		return NewReverts("validator exited")
 	}
-	if val.Status != validation.StatusActive {
+	if val.Status() != validation.StatusActive {
 		return NewReverts("can't increase stake while validator not active")
 	}
-	if val.ExitBlock != nil {
+	if val.ExitBlock() != nil {
 		return NewReverts("validator has signaled exit, cannot increase stake")
 	}
 
@@ -361,20 +361,20 @@ func (s *Staker) DecreaseStake(validator thor.Address, endorser thor.Address, am
 		return err
 	}
 
-	if val.Endorser != endorser {
+	if val.Endorser() != endorser {
 		return NewReverts("endorser required")
 	}
-	if val.Status == validation.StatusExit {
+	if val.Status() == validation.StatusExit {
 		return NewReverts("validator exited")
 	}
-	if val.Status != validation.StatusActive {
+	if val.Status() != validation.StatusActive {
 		return NewReverts("can't decrease stake while validator not active")
 	}
-	if val.ExitBlock != nil {
+	if val.ExitBlock() != nil {
 		return NewReverts("validator has signaled exit, cannot decrease stake")
 	}
 
-	nextPeriodVET := val.LockedVET - val.PendingUnlockVET
+	nextPeriodVET := val.LockedVET() - val.PendingUnlockVET()
 	if amount > nextPeriodVET {
 		return NewReverts("not enough locked stake")
 	}
@@ -408,11 +408,11 @@ func (s *Staker) WithdrawStake(validator thor.Address, endorser thor.Address, cu
 		return 0, err
 	}
 
-	if val.Endorser != endorser {
+	if val.Endorser() != endorser {
 		return 0, NewReverts("endorser required")
 	}
 
-	isQueued := val.Status == validation.StatusQueued
+	isQueued := val.Status() == validation.StatusQueued
 
 	withdrawableVET, queuedVET, cooldownVET, err := s.validationService.WithdrawStake(validator, val, currentBlock)
 	if err != nil {
@@ -484,10 +484,10 @@ func (s *Staker) SetBeneficiary(validator, endorser, beneficiary thor.Address) e
 		return err
 	}
 
-	if val.Endorser != endorser {
+	if val.Endorser() != endorser {
 		return NewReverts("endorser required")
 	}
-	if val.Status == validation.StatusExit || val.ExitBlock != nil {
+	if val.Status() == validation.StatusExit || val.ExitBlock() != nil {
 		return NewReverts("validator has exited or signaled exit, cannot set beneficiary")
 	}
 
@@ -520,12 +520,12 @@ func (s *Staker) AddDelegation(
 		return nil, err
 	}
 
-	if val.Status != validation.StatusQueued && val.Status != validation.StatusActive {
+	if val.Status() != validation.StatusQueued && val.Status() != validation.StatusActive {
 		return nil, NewReverts("validation is not queued or active")
 	}
 
 	// delegations cannot be added to a validator that has signaled to exit
-	if val.ExitBlock != nil {
+	if val.ExitBlock() != nil {
 		return nil, NewReverts("cannot add delegation to exiting validator")
 	}
 
@@ -555,7 +555,7 @@ func (s *Staker) AddDelegation(
 		return nil, err
 	}
 
-	if val.Status == validation.StatusActive {
+	if val.Status() == validation.StatusActive {
 		if err = s.validationService.AddToRenewalList(validator); err != nil {
 			return nil, err
 		}
@@ -624,7 +624,7 @@ func (s *Staker) SignalDelegationExit(delegationID *big.Int, currentBlock uint32
 		return err
 	}
 
-	if val.Status == validation.StatusActive {
+	if val.Status() == validation.StatusActive {
 		if err = s.validationService.AddToRenewalList(del.Validation); err != nil {
 			return err
 		}
@@ -679,7 +679,7 @@ func (s *Staker) WithdrawDelegation(
 
 	// start and finish values are sanitized: !started and finished is impossible
 	// delegation is still queued
-	if !started && val.Status != validation.StatusExit {
+	if !started && val.Status() != validation.StatusExit {
 		weightedStake := stakes.NewWeightedStakeWithMultiplier(withdrawableStake, del.Multiplier)
 		if err = s.aggregationService.SubPendingVet(del.Validation, weightedStake); err != nil {
 			return 0, err

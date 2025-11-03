@@ -25,9 +25,14 @@ func (d *Delegation) WeightedStake() *stakes.WeightedStake {
 	return stakes.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
 }
 
+type validator interface {
+	Status() validation.Status
+	CurrentIteration(currentBlock uint32) (uint32, error)
+}
+
 // Started returns whether the delegation became locked
-func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if val.Status == validation.StatusQueued || val.Status == validation.StatusUnknown {
+func (d *Delegation) Started(val validator, currentBlock uint32) (bool, error) {
+	if val.Status() == validation.StatusQueued || val.Status() == validation.StatusUnknown {
 		return false, nil // Delegation cannot start if the validation is not active
 	}
 	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
@@ -41,15 +46,15 @@ func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (b
 // It returns true if:
 // - the delegation's exit iteration is less than the current staking period
 // - OR if the validation is in exit status and the delegation has started
-func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if val.Status == validation.StatusQueued {
+func (d *Delegation) Ended(val validator, currentBlock uint32) (bool, error) {
+	if val.Status() == validation.StatusQueued {
 		return false, nil // Delegation cannot end if the validation is not active
 	}
 	started, err := d.Started(val, currentBlock)
 	if err != nil {
 		return false, err
 	}
-	if val.Status == validation.StatusExit && started {
+	if val.Status() == validation.StatusExit && started {
 		return true, nil // Delegation is ended if the validation is in exit status
 	}
 	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
@@ -67,7 +72,7 @@ func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) (boo
 // - the delegation has started
 // - AND the delegation has not ended
 // - AND the delegation has stake
-func (d *Delegation) IsLocked(val *validation.Validation, currentBlock uint32) (bool, error) {
+func (d *Delegation) IsLocked(val validator, currentBlock uint32) (bool, error) {
 	if d.Stake == 0 {
 		return false, nil
 	}

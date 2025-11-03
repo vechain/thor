@@ -223,7 +223,7 @@ func TestDelegationValidatorExit(t *testing.T) {
 	staker.Housekeep(thor.MediumStakingPeriod())
 
 	// Signal validator exit
-	staker.SignalExit(validator, val.Endorser, thor.MediumStakingPeriod()+20)
+	staker.SignalExit(validator, val.Endorser(), thor.MediumStakingPeriod()+20)
 
 	// Verify delegations are still accessible
 	del1 := staker.GetDelegation(delegation1)
@@ -267,10 +267,10 @@ func TestDelegationValidatorReplacement(t *testing.T) {
 	delegation2 := staker.AddDelegation(validator1, 2000, 200, 10)
 
 	// Signal exit for first validator
-	staker.SignalExit(validator1, val1.Endorser, 20)
+	staker.SignalExit(validator1, val1.Endorser(), 20)
 
 	// Housekeep to complete validator exit
-	staker.Housekeep(val1.Period)
+	staker.Housekeep(val1.Period())
 
 	// Verify delegations still exist but validator is no longer active
 	del1 := staker.GetDelegation(delegation1)
@@ -298,9 +298,9 @@ func TestDelegationStakeAggregation(t *testing.T) {
 	valBefore := staker.GetValidation(validator)
 
 	// Add multiple delegations with different multipliers
-	delegation1 := staker.AddDelegation(validator, 1000, 150, 10) // Weight: 1000 * 150 = 150,000
-	delegation2 := staker.AddDelegation(validator, 2000, 200, 10) // Weight: 2000 * 200 = 400,000
-	delegation3 := staker.AddDelegation(validator, 500, 100, 10)  // Weight: 500 * 100 = 50,000
+	delegation1 := staker.AddDelegation(validator, 1000, 150, 10) // Weight(): 1000 * 150 = 150,000
+	delegation2 := staker.AddDelegation(validator, 2000, 200, 10) // Weight(): 2000 * 200 = 400,000
+	delegation3 := staker.AddDelegation(validator, 500, 100, 10)  // Weight(): 500 * 100 = 50,000
 
 	// Verify individual delegation weights
 	del1 := staker.GetDelegation(delegation1)
@@ -322,9 +322,9 @@ func TestDelegationStakeAggregation(t *testing.T) {
 	assert.NotNil(t, val, "validation should exist")
 
 	// The total locked weight should include validator's own stake plus all delegations
-	expectedTotalWeight := valBefore.LockedVET*2 + 1500 + 4000 + 500
-	assert.Equal(t, valBefore.LockedVET, val.LockedVET, "total locked stake should include all delegations")
-	assert.Equal(t, expectedTotalWeight, val.Weight, "total locked weight should include all delegations")
+	expectedTotalWeight := valBefore.LockedVET()*2 + 1500 + 4000 + 500
+	assert.Equal(t, valBefore.LockedVET(), val.LockedVET(), "total locked stake should include all delegations")
+	assert.Equal(t, expectedTotalWeight, val.Weight(), "total locked weight should include all delegations")
 }
 
 // TestDelegationEdgeCases tests edge cases for multiple delegations
@@ -384,7 +384,7 @@ func TestDelegationComplexScenario(t *testing.T) {
 	staker.Housekeep(thor.MediumStakingPeriod())
 
 	// Signal exit for validator1
-	staker.SignalExit(validator1, val1.Endorser, thor.MediumStakingPeriod()+20)
+	staker.SignalExit(validator1, val1.Endorser(), thor.MediumStakingPeriod()+20)
 
 	// Signal exit for some delegations
 	staker.SignalDelegationExit(del2v1, thor.MediumStakingPeriod()+20) // Exit from validator1

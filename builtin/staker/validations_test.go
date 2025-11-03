@@ -288,26 +288,26 @@ func TestStaker_IncreaseQueued(t *testing.T) {
 	staker.AddValidation(addr, addr, uint32(360)*24*15, stake)
 
 	validator := staker.GetValidation(addr)
-	assert.Equal(t, validation.StatusQueued, validator.Status)
-	assert.Equal(t, stake, validator.QueuedVET)
-	assert.Equal(t, uint64(0), validator.Weight)
+	assert.Equal(t, validation.StatusQueued, validator.Status())
+	assert.Equal(t, stake, validator.QueuedVET())
+	assert.Equal(t, uint64(0), validator.Weight())
 
-	staker.Housekeep(validator.Period)
+	staker.Housekeep(validator.Period())
 
 	// increase stake queued
 	expectedStake := 1000 + stake
 	staker.IncreaseStake(addr, addr, 1000)
 	validator = staker.GetValidation(addr)
-	newAmount := validator.QueuedVET + validator.LockedVET
+	newAmount := validator.QueuedVET() + validator.LockedVET()
 	assert.Equal(t, newAmount, expectedStake)
 
-	staker.Housekeep(validator.Period)
+	staker.Housekeep(validator.Period())
 
 	validator = staker.GetValidation(addr)
 	assert.False(t, validator == nil)
-	assert.Equal(t, validator.Status, validation.StatusActive)
-	assert.Equal(t, validator.LockedVET, expectedStake)
-	assert.Equal(t, expectedStake, validator.Weight)
+	assert.Equal(t, validator.Status(), validation.StatusActive)
+	assert.Equal(t, validator.LockedVET(), expectedStake)
+	assert.Equal(t, expectedStake, validator.Weight())
 }
 
 func TestStaker_IncreaseActive(t *testing.T) {
@@ -1084,14 +1084,14 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	staker.AddValidation(acc, acc, period, initialStake)
 
 	validator := staker.GetValidation(acc)
-	assert.Equal(t, validation.StatusQueued, validator.Status)
+	assert.Equal(t, validation.StatusQueued, validator.Status())
 
 	// 1st STAKING PERIOD
 	staker.Housekeep(period)
 
 	validator = staker.GetValidation(acc)
-	assert.Equal(t, validation.StatusActive, validator.Status)
-	assert.Equal(t, initialStake, validator.LockedVET)
+	assert.Equal(t, validation.StatusActive, validator.Status())
+	assert.Equal(t, initialStake, validator.LockedVET())
 
 	// Now that validator is active, we can increase/decrease stake
 	increases += thousand
@@ -1100,17 +1100,17 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	staker.DecreaseStake(acc, acc, fiveHundred)
 
 	validator = staker.GetValidation(acc)
-	// LockedVET stays the same, increases go to QueuedVET
-	assert.Equal(t, initialStake, validator.LockedVET)
-	assert.Equal(t, thousand, validator.QueuedVET)
-	assert.Equal(t, fiveHundred, validator.PendingUnlockVET)
+	// LockedVET() stays the same, increases go to QueuedVET()
+	assert.Equal(t, initialStake, validator.LockedVET())
+	assert.Equal(t, thousand, validator.QueuedVET())
+	assert.Equal(t, fiveHundred, validator.PendingUnlockVET())
 
 	// There should be some withdrawable amount available
 	staker.WithdrawStake(acc, acc, period+1, 1000)
 	withdrawnTotal += 1000
 
 	validator = staker.GetValidation(acc)
-	assert.Equal(t, initialStake, validator.LockedVET)
+	assert.Equal(t, initialStake, validator.LockedVET())
 
 	// 2nd decrease
 	staker.DecreaseStake(acc, acc, thousand)
@@ -1120,7 +1120,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	// 2nd STAKING PERIOD - this will process the increases and decreases
 	staker.Housekeep(period * 2)
 	validator = staker.GetValidation(acc)
-	assert.Equal(t, validation.StatusActive, validator.Status)
+	assert.Equal(t, validation.StatusActive, validator.Status())
 
 	// Check what's withdrawable after housekeep
 	staker.WithdrawStake(acc, acc, period*2+thor.CooldownPeriod(), 1500)
@@ -1132,7 +1132,7 @@ func TestStaker_MultipleUpdates_CorrectWithdraw(t *testing.T) {
 	staker.Housekeep(period * 3)
 
 	validator = staker.GetValidation(acc)
-	assert.Equal(t, validation.StatusExit, validator.Status)
+	assert.Equal(t, validation.StatusExit, validator.Status())
 
 	// Withdraw the final amount
 	expectedWithdraw := initialStake - withdrawnTotal + increases
@@ -1152,7 +1152,7 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)
 	staker.AddDelegation(validator.ID, dStake.VET, 255, 10)
 
-	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
+	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET(), validation.Multiplier)
 
 	staker.AssertTotals(validator.ID, &validation.Totals{
 		TotalQueuedStake:  dStake.VET,
@@ -1162,17 +1162,17 @@ func Test_GetValidatorTotals_ValidatorExiting(t *testing.T) {
 		NextPeriodWeight:  vStake.Weight + dStake.Weight + vStake.Weight,
 	})
 
-	vStake.Weight += validators[0].LockedVET
+	vStake.Weight += validators[0].LockedVET()
 	staker.
 		AssertGlobalWithdrawable(0).
-		Housekeep(validator.Period).
+		Housekeep(validator.Period()).
 		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
 			TotalLockedWeight: vStake.Weight + dStake.Weight,
 			NextPeriodWeight:  vStake.Weight + dStake.Weight,
 		}).
-		SignalExit(validator.ID, validator.Endorser, 10).
+		SignalExit(validator.ID, validator.Endorser(), 10).
 		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
@@ -1187,7 +1187,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 
 	validator := validators[0]
 
-	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET, validation.Multiplier)
+	vStake := stakes.NewWeightedStakeWithMultiplier(validators[0].LockedVET(), validation.Multiplier)
 	dStake := stakes.NewWeightedStakeWithMultiplier(MinStakeVET, 255)
 
 	delegationID := staker.AddDelegation(validator.ID, dStake.VET, 255, 10)
@@ -1199,10 +1199,10 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 		NextPeriodWeight:  vStake.Weight + dStake.Weight + vStake.VET,
 	})
 
-	vStake.Weight += validators[0].LockedVET
+	vStake.Weight += validators[0].LockedVET()
 	staker.
 		AssertGlobalWithdrawable(0).
-		Housekeep(validator.Period).
+		Housekeep(validator.Period()).
 		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
@@ -1210,7 +1210,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			TotalQueuedStake:  0,
 			NextPeriodWeight:  vStake.Weight + dStake.Weight,
 		}).
-		SignalDelegationExit(delegationID, validator.Period+1).
+		SignalDelegationExit(delegationID, validator.Period()+1).
 		AssertGlobalWithdrawable(0).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  vStake.VET + dStake.VET,
@@ -1219,7 +1219,7 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			TotalExitingStake: dStake.VET,
 			NextPeriodWeight:  vStake.Weight - vStake.VET,
 		}).
-		SignalExit(validator.ID, validator.Endorser, validator.Period+1).
+		SignalExit(validator.ID, validator.Endorser(), validator.Period()+1).
 		AssertGlobalWithdrawable(0).
 		AssertGlobalCooldown(0).
 		AssertTotals(validator.ID, &validation.Totals{
@@ -1228,9 +1228,9 @@ func Test_GetValidatorTotals_DelegatorExiting_ThenValidator(t *testing.T) {
 			TotalExitingStake: vStake.VET + dStake.VET,
 			NextPeriodWeight:  vStake.Weight + dStake.Weight - vStake.Weight - dStake.Weight,
 		}).
-		Housekeep(validator.Period*2).
+		Housekeep(validator.Period()*2).
 		AssertGlobalWithdrawable(dStake.VET).
-		AssertGlobalCooldown(validator.LockedVET).
+		AssertGlobalCooldown(validator.LockedVET()).
 		AssertTotals(validator.ID, &validation.Totals{
 			TotalLockedStake:  0,
 			TotalLockedWeight: 0,
@@ -1291,20 +1291,20 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 
 	// Verify validator is active with expected initial state
 	val := staker.GetValidation(acc)
-	assert.Equal(t, validation.StatusActive, val.Status)
-	assert.Equal(t, MinStakeVET, val.LockedVET)
-	assert.Equal(t, uint64(0), val.QueuedVET)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(0), val.WithdrawableVET)
+	assert.Equal(t, validation.StatusActive, val.Status())
+	assert.Equal(t, MinStakeVET, val.LockedVET())
+	assert.Equal(t, uint64(0), val.QueuedVET())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
+	assert.Equal(t, uint64(0), val.WithdrawableVET())
 
 	// Now operations should work on active validator
 	staker.IncreaseStake(acc, acc, MinStakeVET)
 
 	// Check validator state after operations
 	val = staker.GetValidation(acc)
-	assert.Equal(t, MinStakeVET, val.LockedVET)
-	assert.Equal(t, MinStakeVET, val.QueuedVET)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
+	assert.Equal(t, MinStakeVET, val.LockedVET())
+	assert.Equal(t, MinStakeVET, val.QueuedVET())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
 
 	staker.DecreaseStakeErrors(acc, acc, MinStakeVET, "next period stake is lower than minimum stake")
 
@@ -1316,7 +1316,7 @@ func Test_Validator_IncreaseDecrease_Combinations(t *testing.T) {
 
 	// After housekeep, check final state
 	validator := staker.GetValidation(acc)
-	assert.True(t, validator.LockedVET >= MinStakeVET, "locked VET should be at least minimum stake")
+	assert.True(t, validator.LockedVET() >= MinStakeVET, "locked VET should be at least minimum stake")
 }
 
 func TestStaker_AddValidation_CannotAddValidationWithSameMaster(t *testing.T) {
@@ -1400,13 +1400,13 @@ func TestStaker_TestWeights(t *testing.T) {
 	validator, val := staker.FirstActive()
 
 	v1Totals := &validation.Totals{
-		TotalLockedStake:  val.LockedVET,
-		TotalLockedWeight: val.Weight,
-		NextPeriodWeight:  val.Weight,
+		TotalLockedStake:  val.LockedVET(),
+		TotalLockedWeight: val.Weight(),
+		NextPeriodWeight:  val.Weight(),
 	}
 
 	staker.
-		AssertLockedVET(val.LockedVET, val.Weight).
+		AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(0).
 		AssertTotals(validator, v1Totals)
 
@@ -1422,7 +1422,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	}
 
 	staker.
-		AssertLockedVET(val.LockedVET, val.Weight).
+		AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(stake).
 		AssertTotals(validator, v1Totals).
 		AssertTotals(validator2, v2Totals)
@@ -1431,9 +1431,9 @@ func TestStaker_TestWeights(t *testing.T) {
 	dStake := stakes.NewWeightedStakeWithMultiplier(1, 255)
 	delegationID := staker.AddDelegation(validator, dStake.VET, 255, 10)
 	v1Totals.TotalQueuedStake = dStake.VET
-	v1Totals.NextPeriodWeight += dStake.Weight + val.LockedVET
+	v1Totals.NextPeriodWeight += dStake.Weight + val.LockedVET()
 
-	staker.AssertLockedVET(val.LockedVET, val.Weight).
+	staker.AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(stake+dStake.VET).
 		AssertTotals(validator, v1Totals).
 		AssertTotals(validator2, v2Totals)
@@ -1443,7 +1443,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	v1Totals.TotalQueuedStake += dStake.VET
 	v1Totals.NextPeriodWeight += dStake.Weight
 
-	staker.AssertLockedVET(val.LockedVET, val.Weight).
+	staker.AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(stake+dStake.VET*2).
 		AssertTotals(validator, v1Totals).
 		AssertTotals(validator2, v2Totals)
@@ -1453,7 +1453,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	v2Totals.TotalQueuedStake += dStake.VET
 	v2Totals.NextPeriodWeight += dStake.Weight + stake
 
-	staker.AssertLockedVET(val.LockedVET, val.Weight).
+	staker.AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(stake+dStake.VET*3).
 		AssertTotals(validator, v1Totals).
 		AssertTotals(validator2, v2Totals)
@@ -1463,7 +1463,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	v2Totals.TotalQueuedStake += dStake.VET
 	v2Totals.NextPeriodWeight += dStake.Weight
 
-	staker.AssertLockedVET(val.LockedVET, val.Weight).
+	staker.AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(stake+dStake.VET*4).
 		AssertTotals(validator, v1Totals).
 		AssertTotals(validator2, v2Totals)
@@ -1473,9 +1473,9 @@ func TestStaker_TestWeights(t *testing.T) {
 	staker.Housekeep(stakingPeriod)
 
 	v1Totals = &validation.Totals{
-		TotalLockedStake:  val.LockedVET + dStake.VET*2,
-		TotalLockedWeight: val.LockedVET*2 + dStake.Weight*2,
-		NextPeriodWeight:  val.LockedVET*2 + dStake.Weight*2,
+		TotalLockedStake:  val.LockedVET() + dStake.VET*2,
+		TotalLockedWeight: val.LockedVET()*2 + dStake.Weight*2,
+		NextPeriodWeight:  val.LockedVET()*2 + dStake.Weight*2,
 	}
 
 	staker.AssertLockedVET(v1Totals.TotalLockedStake, v1Totals.TotalLockedWeight).
@@ -1500,7 +1500,7 @@ func TestStaker_TestWeights(t *testing.T) {
 	stakeIncrease := uint64(1000)
 	staker.
 		WithdrawDelegation(delegationID4, dStake.VET, 10).
-		IncreaseStake(validator, val.Endorser, stakeIncrease).
+		IncreaseStake(validator, val.Endorser(), stakeIncrease).
 		AssertGlobalWithdrawable(0).
 		Housekeep(stakingPeriod * 3).
 		AssertGlobalWithdrawable(0)
@@ -1536,7 +1536,7 @@ func TestStaker_TestWeights(t *testing.T) {
 
 	// exit second active, multiplier should change to 1
 	staker.SignalDelegationExit(delegationID2, stakingPeriod*4)
-	v1Totals.NextPeriodWeight = val.LockedVET + stakeIncrease
+	v1Totals.NextPeriodWeight = val.LockedVET() + stakeIncrease
 	v1Totals.TotalExitingStake = dStake.VET
 
 	staker.AssertLockedVET(v1Totals.TotalLockedStake, v1Totals.TotalLockedWeight).
@@ -1549,9 +1549,9 @@ func TestStaker_TestWeights(t *testing.T) {
 		AssertGlobalWithdrawable(dStake.VET * 2)
 
 	v1Totals = &validation.Totals{
-		TotalLockedStake:  val.LockedVET + stakeIncrease,
-		TotalLockedWeight: val.LockedVET + stakeIncrease,
-		NextPeriodWeight:  val.LockedVET + stakeIncrease,
+		TotalLockedStake:  val.LockedVET() + stakeIncrease,
+		TotalLockedWeight: val.LockedVET() + stakeIncrease,
+		NextPeriodWeight:  val.LockedVET() + stakeIncrease,
 	}
 
 	staker.AssertLockedVET(v1Totals.TotalLockedStake, v1Totals.TotalLockedWeight).
@@ -1564,7 +1564,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 	staker := newTest(t).SetMBP(1).Fill(1).Transition(0)
 
 	validator, val := staker.FirstActive()
-	baseStake := val.LockedVET
+	baseStake := val.LockedVET()
 
 	totals := &validation.Totals{
 		TotalLockedStake:  baseStake,
@@ -1580,7 +1580,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 
 	// one active validator without delegations, increase stake, multiplier should be 0, increase stake should be queued
 	stakeIncrease := uint64(1500)
-	staker.IncreaseStake(validator, val.Endorser, stakeIncrease)
+	staker.IncreaseStake(validator, val.Endorser(), stakeIncrease)
 	totals.NextPeriodWeight += stakeIncrease
 	totals.TotalQueuedStake += stakeIncrease
 
@@ -1602,7 +1602,7 @@ func TestStaker_TestWeights_IncreaseStake(t *testing.T) {
 
 	// decreasing stake shouldn't affect multipliers
 	stakeDecrease := uint64(500)
-	staker.DecreaseStake(validator, val.Endorser, stakeDecrease)
+	staker.DecreaseStake(validator, val.Endorser(), stakeDecrease)
 	totals.TotalExitingStake += stakeDecrease
 	totals.NextPeriodWeight -= stakeDecrease * 2
 
@@ -1629,7 +1629,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	staker := newTest(t).SetMBP(1).Fill(1).Transition(0)
 
 	validator, val := staker.FirstActive()
-	vStake := val.LockedVET
+	vStake := val.LockedVET()
 
 	staker.
 		AssertLockedVET(vStake, vStake).
@@ -1644,7 +1644,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 
 	// one active validator without delegations, increase stake, multiplier should be 0, decrease stake should be queued
 	stakeDecrease := uint64(1500)
-	staker.DecreaseStake(validator, val.Endorser, stakeDecrease)
+	staker.DecreaseStake(validator, val.Endorser(), stakeDecrease)
 
 	staker.
 		AssertLockedVET(vStake, vStake).
@@ -1662,7 +1662,7 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	delegationID1 := staker.AddDelegation(validator, MinStakeVET, 200, 10)
 
 	staker.
-		AssertLockedVET(val.LockedVET, val.Weight).
+		AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(dStake).
 		AssertTotals(validator, &validation.Totals{
 			TotalLockedStake:  vStake,
@@ -1675,9 +1675,9 @@ func TestStaker_TestWeights_DecreaseStake(t *testing.T) {
 	// decreasing stake shouldn't affect multipliers
 	additionalDecrease := uint64(500)
 	stakeDecrease += additionalDecrease
-	staker.DecreaseStake(validator, val.Endorser, additionalDecrease)
+	staker.DecreaseStake(validator, val.Endorser(), additionalDecrease)
 	staker.
-		AssertLockedVET(val.LockedVET, val.Weight).
+		AssertLockedVET(val.LockedVET(), val.Weight()).
 		AssertQueuedVET(dStake).
 		AssertTotals(validator, &validation.Totals{
 			TotalLockedStake:  vStake,
@@ -1777,7 +1777,7 @@ func TestStaker_OfflineValidator(t *testing.T) {
 	// validator should exit here
 	staker.AssertGlobalWithdrawable(0).
 		Housekeep(expectedExitBlock).
-		AssertGlobalCooldown(val1.LockedVET).
+		AssertGlobalCooldown(val1.LockedVET()).
 		AssertGlobalWithdrawable(0)
 
 	staker.AssertValidation(validator1).
@@ -1945,10 +1945,10 @@ func TestValidation_WithdrawBeforeAfterCooldown(t *testing.T) {
 	staker := newTest(t).SetMBP(2).Fill(2).Transition(0)
 
 	first, val := staker.FirstActive()
-	stake := val.LockedVET
+	stake := val.LockedVET()
 
 	staker.AssertGlobalWithdrawable(0).
-		SignalExit(first, val.Endorser, 1).
+		SignalExit(first, val.Endorser(), 1).
 		Housekeep(thor.MediumStakingPeriod())
 
 	staker.AssertValidation(first).
@@ -1958,7 +1958,7 @@ func TestValidation_WithdrawBeforeAfterCooldown(t *testing.T) {
 
 	staker.AssertGlobalCooldown(stake).
 		AssertGlobalWithdrawable(0).
-		WithdrawStake(first, val.Endorser, thor.MediumStakingPeriod()+thor.CooldownPeriod(), stake).
+		WithdrawStake(first, val.Endorser(), thor.MediumStakingPeriod()+thor.CooldownPeriod(), stake).
 		AssertGlobalWithdrawable(0).
 		AssertGlobalCooldown(0)
 }

@@ -33,6 +33,10 @@ const (
 var ErrMaxTryReached = errors.New("max try reached")
 
 type Validation struct {
+	body *body
+}
+
+type body struct {
 	Endorser         thor.Address  // the address providing the stake
 	Beneficiary      *thor.Address `rlp:"nil"` // the address receiving the rewards, if not set then endorser is rewarded
 	Period           uint32        // the staking period of the validation
@@ -53,6 +57,74 @@ type Validation struct {
 	LinkedListEntry
 }
 
+func (v *Validation) Endorser() thor.Address {
+	return v.body.Endorser
+}
+
+func (v *Validation) Beneficiary() *thor.Address {
+	if v.body.Beneficiary == nil {
+		return nil
+	}
+	beneficiary := *v.body.Beneficiary
+	return &beneficiary
+}
+
+func (v *Validation) Period() uint32 {
+	return v.body.Period
+}
+
+func (v *Validation) CompletedPeriods() uint32 {
+	return v.body.CompletedPeriods
+}
+
+func (v *Validation) Status() Status {
+	return v.body.Status
+}
+
+func (v *Validation) StartBlock() uint32 {
+	return v.body.StartBlock
+}
+
+func (v *Validation) ExitBlock() *uint32 {
+	if v.body.ExitBlock == nil {
+		return nil
+	}
+	exitBlock := *v.body.ExitBlock
+	return &exitBlock
+}
+
+func (v *Validation) OfflineBlock() *uint32 {
+	if v.body.OfflineBlock == nil {
+		return nil
+	}
+	offlineBlock := *v.body.OfflineBlock
+	return &offlineBlock
+}
+
+func (v *Validation) LockedVET() uint64 {
+	return v.body.LockedVET
+}
+
+func (v *Validation) PendingUnlockVET() uint64 {
+	return v.body.PendingUnlockVET
+}
+
+func (v *Validation) QueuedVET() uint64 {
+	return v.body.QueuedVET
+}
+
+func (v *Validation) CooldownVET() uint64 {
+	return v.body.CooldownVET
+}
+
+func (v *Validation) WithdrawableVET() uint64 {
+	return v.body.WithdrawableVET
+}
+
+func (v *Validation) Weight() uint64 {
+	return v.body.Weight
+}
+
 type Totals struct {
 	TotalLockedStake  uint64 // total locked stake in validation (current period), validation's stake + all delegators stake
 	TotalLockedWeight uint64 // total locked weight in validation (current period), validation's weight + all delegators weight
@@ -65,11 +137,11 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 	var exitingVET uint64
 	var exiting bool
 	// If the validation is due to exit, then all locked VET is considered exiting.
-	if v.Status == StatusActive && v.ExitBlock != nil {
-		exitingVET = v.LockedVET + agg.Locked.VET
+	if v.Status() == StatusActive && v.ExitBlock() != nil {
+		exitingVET = v.LockedVET() + agg.Locked.VET
 		exiting = true
 	} else {
-		exitingVET = v.PendingUnlockVET + agg.Exiting.VET
+		exitingVET = v.PendingUnlockVET() + agg.Exiting.VET
 		exiting = false
 	}
 
@@ -100,71 +172,71 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
-		TotalLockedStake:  v.LockedVET + agg.Locked.VET,
-		TotalLockedWeight: v.Weight,
-		TotalQueuedStake:  v.QueuedVET + agg.Pending.VET,
+		TotalLockedStake:  v.LockedVET() + agg.Locked.VET,
+		TotalLockedWeight: v.Weight(),
+		TotalQueuedStake:  v.QueuedVET() + agg.Pending.VET,
 		TotalExitingStake: exitingVET,
 		NextPeriodWeight:  nextPeriodWeight,
 	}, nil
 }
 
 func (v *Validation) IsOnline() bool {
-	return v.OfflineBlock == nil
+	return v.OfflineBlock() == nil
 }
 
 // IsPeriodEnd returns whether the provided block is the last block of the current staking period.
 func (v *Validation) IsPeriodEnd(current uint32) bool {
-	diff := current - v.StartBlock
-	return diff%v.Period == 0
+	diff := current - v.StartBlock()
+	return diff%v.Period() == 0
 }
 
 // NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
 func (v *Validation) NextPeriodTVL() (uint64, error) {
-	nextPeriodLocked := v.LockedVET + v.QueuedVET
-	if v.PendingUnlockVET > nextPeriodLocked {
+	nextPeriodLocked := v.LockedVET() + v.QueuedVET()
+	if v.PendingUnlockVET() > nextPeriodLocked {
 		return 0, errors.New("insufficient locked and queued VET to subtract")
 	}
-	return nextPeriodLocked - v.PendingUnlockVET, nil
+	return nextPeriodLocked - v.PendingUnlockVET(), nil
 }
 
 func (v *Validation) CurrentIteration(currentBlock uint32) (uint32, error) {
 	// Unknown, Queued return 0
-	if v.Status == StatusUnknown || v.Status == StatusQueued {
+	if v.Status() == StatusUnknown || v.Status() == StatusQueued {
 		return 0, nil
 	}
 
 	// Exited, from active or queued
-	if v.Status == StatusExit {
-		return v.CompletedPeriods, nil
+	if v.Status() == StatusExit {
+		return v.CompletedPeriods(), nil
 	}
 
 	// Active(signaled exit)
 	// Once signaled exit, complete iterations is set to the current
 	// iteration of the time that exit is signaled
-	if v.CompletedPeriods > 0 {
-		return v.CompletedPeriods, nil
+	if v.CompletedPeriods() > 0 {
+		return v.CompletedPeriods(), nil
 	}
 
 	// Active
-	if currentBlock < v.StartBlock {
+	if currentBlock < v.StartBlock() {
 		return 0, errors.New("current block cannot be less than start block")
 	}
-	if v.Period == 0 {
+	if v.Period() == 0 {
 		return 0, errors.New("period cannot be zero")
 	}
-	elapsedBlocks := currentBlock - v.StartBlock
-	completedPeriods := elapsedBlocks / v.Period
+	elapsedBlocks := currentBlock - v.StartBlock()
+	completedPeriods := elapsedBlocks / v.Period()
 	return completedPeriods + 1, nil
 }
 
 func (v *Validation) CompletedIterations(currentBlock uint32) (uint32, error) {
 	// Unknown, Queued return 0
-	if v.Status == StatusUnknown || v.Status == StatusQueued {
+	if v.Status() == StatusUnknown || v.Status() == StatusQueued {
 		return 0, nil
 	}
 
-	if v.Status == StatusExit {
-		return v.CompletedPeriods, nil
+	if v.Status() == StatusExit {
+		return v.CompletedPeriods(), nil
 	}
 
 	// Active
@@ -177,26 +249,26 @@ func (v *Validation) CompletedIterations(currentBlock uint32) (uint32, error) {
 }
 
 // renew moves the stakes and weights around as follows:
-// 1. Move QueuedVET => Locked
-// 2. Decrease LockedVET by PendingUnlockVET
-// 3. Increase WithdrawableVET by PendingUnlockVET
-// 4. Set QueuedVET to 0
-// 5. Set PendingUnlockVET to 0
+// 1. Move QueuedVET() => Locked
+// 2. Decrease LockedVET() by PendingUnlockVET()
+// 3. Increase WithdrawableVET() by PendingUnlockVET()
+// 4. Set QueuedVET() to 0
+// 5. Set PendingUnlockVET() to 0
 func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error) {
-	queuedDecrease := v.QueuedVET
+	queuedDecrease := v.QueuedVET()
 
 	var prev, after struct {
 		valWeight  uint64
 		multiplier uint8
 	}
-	prev.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier()).Weight
+	prev.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET(), v.multiplier()).Weight
 
-	lockedIncrease := stakes.NewWeightedStake(v.QueuedVET, 0)
-	lockedDecrease := stakes.NewWeightedStake(v.PendingUnlockVET, 0)
+	lockedIncrease := stakes.NewWeightedStake(v.QueuedVET(), 0)
+	lockedDecrease := stakes.NewWeightedStake(v.PendingUnlockVET(), 0)
 
-	v.LockedVET += v.QueuedVET
+	v.body.LockedVET += v.QueuedVET()
 	var underflow bool
-	v.LockedVET, underflow = math.SafeSub(v.LockedVET, v.PendingUnlockVET)
+	v.body.LockedVET, underflow = math.SafeSub(v.LockedVET(), v.PendingUnlockVET())
 	if underflow {
 		return nil, errors.New("pending unlock VET exceeds total locked VET")
 	}
@@ -206,7 +278,7 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 	if delegationWeight > 0 {
 		after.multiplier = MultiplierWithDelegations
 	}
-	after.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET, after.multiplier).Weight
+	after.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET(), after.multiplier).Weight
 	// calculate the locked stake change based on the validator's weight
 	if prev.valWeight < after.valWeight {
 		lockedIncrease.Weight = after.valWeight - prev.valWeight
@@ -214,10 +286,10 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 		lockedDecrease.Weight = prev.valWeight - after.valWeight
 	}
 
-	v.WithdrawableVET += v.PendingUnlockVET
-	v.Weight = after.valWeight + delegationWeight
-	v.QueuedVET = 0
-	v.PendingUnlockVET = 0
+	v.body.WithdrawableVET += v.PendingUnlockVET()
+	v.body.Weight = after.valWeight + delegationWeight
+	v.body.QueuedVET = 0
+	v.body.PendingUnlockVET = 0
 
 	return &globalstats.Renewal{
 		LockedIncrease: lockedIncrease,
@@ -227,21 +299,21 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 }
 
 func (v *Validation) exit() *globalstats.Exit {
-	ExitedTVL := stakes.NewWeightedStakeWithMultiplier(v.LockedVET, v.multiplier()) // use the acting multiplier for locked stake
-	QueuedDecrease := v.QueuedVET                                                   // queued weight is always initial weight
+	ExitedTVL := stakes.NewWeightedStakeWithMultiplier(v.LockedVET(), v.multiplier()) // use the acting multiplier for locked stake
+	QueuedDecrease := v.QueuedVET()                                                   // queued weight is always initial weight
 
-	v.Status = StatusExit
+	v.body.Status = StatusExit
 	// move locked to cooldown
-	v.CooldownVET = v.LockedVET
-	v.LockedVET = 0
-	v.PendingUnlockVET = 0
-	v.Weight = 0
+	v.body.CooldownVET = v.LockedVET()
+	v.body.LockedVET = 0
+	v.body.PendingUnlockVET = 0
+	v.body.Weight = 0
 
 	// unlock pending stake
-	if v.QueuedVET > 0 {
+	if v.QueuedVET() > 0 {
 		// pending never contributes to weight as it's not active
-		v.WithdrawableVET += v.QueuedVET
-		v.QueuedVET = 0
+		v.body.WithdrawableVET += v.QueuedVET()
+		v.body.QueuedVET = 0
 	}
 
 	// We only return the change in the validation's TVL and weight
@@ -253,25 +325,25 @@ func (v *Validation) exit() *globalstats.Exit {
 
 // CooldownEnded returns true if validator has exited and the cooldown period has ended.
 func (v *Validation) CooldownEnded(currentBlock uint32) bool {
-	return v.ExitBlock != nil && *v.ExitBlock+thor.CooldownPeriod() <= currentBlock
+	return v.ExitBlock() != nil && *v.ExitBlock()+thor.CooldownPeriod() <= currentBlock
 }
 
 // CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
 func (v *Validation) CalculateWithdrawableVET(currentBlock uint32) uint64 {
-	withdrawAmount := v.WithdrawableVET
+	withdrawAmount := v.WithdrawableVET()
 
 	if v.CooldownEnded(currentBlock) {
-		withdrawAmount += v.CooldownVET
+		withdrawAmount += v.CooldownVET()
 	}
 
-	withdrawAmount += v.QueuedVET
+	withdrawAmount += v.QueuedVET()
 	return withdrawAmount
 }
 
 // multiplier returns the acting multiplier for the validation of the current staking period
 func (v *Validation) multiplier() uint8 {
 	// no delegation and multiplier is 1
-	if v.Weight == v.LockedVET {
+	if v.Weight() == v.LockedVET() {
 		return Multiplier
 	}
 	return MultiplierWithDelegations

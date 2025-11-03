@@ -571,7 +571,7 @@ func printStartupMessage1(
 			} else {
 				return fmt.Sprintf(`
     Master       [ %v ]
-    Beneficiary  [ %v ]`,
+    Beneficiary()  [ %v ]`,
 					master.Address().Hex(),
 					func() string {
 						if master.Beneficiary == nil {
