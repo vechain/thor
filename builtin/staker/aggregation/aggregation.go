@@ -14,6 +14,28 @@ import (
 
 // Aggregation represents the total amount of VET locked for a given validation's delegations.
 type Aggregation struct {
+	body *body
+}
+
+// Locked returns a copy of the locked delegation stake.
+// Modifications to the returned stake do not affect the aggregation.
+func (a *Aggregation) Locked() *stakes.WeightedStake {
+	return a.body.Locked.Clone()
+}
+
+// Pending returns a copy of the pending delegation stake.
+// Modifications to the returned stake do not affect the aggregation.
+func (a *Aggregation) Pending() *stakes.WeightedStake {
+	return a.body.Pending.Clone()
+}
+
+// Exiting returns a copy of the exiting delegation stake.
+// Modifications to the returned stake do not affect the aggregation.
+func (a *Aggregation) Exiting() *stakes.WeightedStake {
+	return a.body.Exiting.Clone()
+}
+
+type body struct {
 	// All locked vet and weight for a validations delegations.
 	Locked *stakes.WeightedStake
 	// Pending delegated vet and weight, does NOT contribute to current TVL, it will increase the LockedVET in the next period and reset to 0
@@ -25,50 +47,52 @@ type Aggregation struct {
 // newAggregation creates a new zero-initialized aggregation for a validator.
 func newAggregation() *Aggregation {
 	return &Aggregation{
-		Locked:  &stakes.WeightedStake{},
-		Pending: &stakes.WeightedStake{},
-		Exiting: &stakes.WeightedStake{},
+		body: &body{
+			Locked:  &stakes.WeightedStake{},
+			Pending: &stakes.WeightedStake{},
+			Exiting: &stakes.WeightedStake{},
+		},
 	}
 }
 
 func (a *Aggregation) IsEmpty() bool {
 	// aggregation subfields are expected to never be nil
-	return a.Locked.VET == 0 && a.Exiting.VET == 0 && a.Pending.VET == 0
+	return a.body.Locked.VET == 0 && a.body.Exiting.VET == 0 && a.body.Pending.VET == 0
 }
 
 // NextPeriodTVL is the total value locked (TVL) for the next period.
 // It is the sum of the currently recurring VET, plus any pending recurring and one-time VET.
 func (a *Aggregation) NextPeriodTVL() (uint64, error) {
-	nextPeriodLocked := a.Locked.VET + a.Pending.VET
-	if a.Exiting.VET > nextPeriodLocked {
+	nextPeriodLocked := a.body.Locked.VET + a.body.Pending.VET
+	if a.body.Exiting.VET > nextPeriodLocked {
 		return 0, errors.New("insufficient locked and pending VET to subtract")
 	}
 
-	return nextPeriodLocked - a.Exiting.VET, nil
+	return nextPeriodLocked - a.body.Exiting.VET, nil
 }
 
 // renew transitions delegations to the next staking period.
-// Pending delegations become locked, exiting delegations become withdrawable.
-// 1. Move Pending => Locked
+// Pending() delegations become locked, exiting delegations become withdrawable.
+// 1. Move Pending() => Locked()
 // 2. Remove ExitingVET from LockedVET
 // 3. Move ExitingVET to WithdrawableVET
 // return a delta object
 func (a *Aggregation) renew() (*globalstats.Renewal, error) {
-	lockedIncrease := a.Pending.Clone()
-	lockedDecrease := a.Exiting.Clone()
-	queuedDecrease := a.Pending.VET
+	lockedIncrease := a.Pending()
+	lockedDecrease := a.Exiting()
+	queuedDecrease := a.Pending().VET
 
 	// Move Pending => Locked
-	if err := a.Locked.Add(a.Pending); err != nil {
+	if err := a.body.Locked.Add(a.Pending()); err != nil {
 		return nil, err
 	}
-	a.Pending = &stakes.WeightedStake{}
+	a.body.Pending = &stakes.WeightedStake{}
 
 	// Remove ExitingVET from LockedVET
-	if err := a.Locked.Sub(a.Exiting); err != nil {
+	if err := a.body.Locked.Sub(a.Exiting()); err != nil {
 		return nil, err
 	}
-	a.Exiting = &stakes.WeightedStake{}
+	a.body.Exiting = &stakes.WeightedStake{}
 
 	return &globalstats.Renewal{
 		LockedIncrease: lockedIncrease,
@@ -82,14 +106,14 @@ func (a *Aggregation) renew() (*globalstats.Renewal, error) {
 func (a *Aggregation) exit() *globalstats.Exit {
 	// Return these values to modify contract totals
 	exit := globalstats.Exit{
-		ExitedTVL:      a.Locked.Clone(),
-		QueuedDecrease: a.Pending.VET,
+		ExitedTVL:      a.Locked().Clone(),
+		QueuedDecrease: a.Pending().VET,
 	}
 
 	// Reset the aggregation
-	a.Exiting = &stakes.WeightedStake{}
-	a.Locked = &stakes.WeightedStake{}
-	a.Pending = &stakes.WeightedStake{}
+	a.body.Exiting = &stakes.WeightedStake{}
+	a.body.Locked = &stakes.WeightedStake{}
+	a.body.Pending = &stakes.WeightedStake{}
 
 	return &exit
 }
