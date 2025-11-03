@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -33,13 +33,35 @@ var baseVal = Validation{
 	},
 }
 
+type testAggregation struct {
+	queued  *stakes.WeightedStake
+	locked  *stakes.WeightedStake
+	exiting *stakes.WeightedStake
+}
+
+func (ta *testAggregation) Locked() *stakes.WeightedStake {
+	return ta.locked
+}
+
+func (ta *testAggregation) Pending() *stakes.WeightedStake {
+	return ta.queued
+}
+
+func (ta *testAggregation) Exiting() *stakes.WeightedStake {
+	return ta.exiting
+}
+
+func (ta *testAggregation) NextPeriodTVL() (uint64, error) {
+	return ta.locked.VET + ta.queued.VET - ta.exiting.VET, nil
+}
+
 func TestValidation_Totals(t *testing.T) {
-	agg := aggregation.Aggregation{
-		Locked:  stakes.NewWeightedStake(500, 1000),
-		Pending: stakes.NewWeightedStake(400, 800),
-		Exiting: stakes.NewWeightedStake(300, 600),
+	agg := &testAggregation{
+		locked:  stakes.NewWeightedStake(500, 1000),
+		queued:  stakes.NewWeightedStake(400, 800),
+		exiting: stakes.NewWeightedStake(300, 600),
 	}
-	totals, err := baseVal.Totals(&agg)
+	totals, err := baseVal.Totals(agg)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
 	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
@@ -50,7 +72,7 @@ func TestValidation_Totals(t *testing.T) {
 	exitBlock := uint32(2)
 	val := baseVal
 	val.body.ExitBlock = &exitBlock
-	totals, err = val.Totals(&agg)
+	totals, err = val.Totals(agg)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
 	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)

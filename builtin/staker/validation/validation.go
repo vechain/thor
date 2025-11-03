@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
@@ -144,15 +143,22 @@ type Totals struct {
 	NextPeriodWeight  uint64 // total weight which will be effective (next period), validations weight + all delegators weight
 }
 
-func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
+type aggregation interface {
+	Locked() *stakes.WeightedStake
+	Pending() *stakes.WeightedStake
+	Exiting() *stakes.WeightedStake
+	NextPeriodTVL() (uint64, error)
+}
+
+func (v *Validation) Totals(agg aggregation) (*Totals, error) {
 	var exitingVET uint64
 	var exiting bool
 	// If the validation is due to exit, then all locked VET is considered exiting.
 	if v.Status() == StatusActive && v.ExitBlock() != nil {
-		exitingVET = v.LockedVET() + agg.Locked.VET
+		exitingVET = v.LockedVET() + agg.Locked().VET
 		exiting = true
 	} else {
-		exitingVET = v.PendingUnlockVET() + agg.Exiting.VET
+		exitingVET = v.PendingUnlockVET() + agg.Exiting().VET
 		exiting = false
 	}
 
@@ -173,14 +179,14 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 			return nil, err
 		}
 		nextPeriodWeight = stakes.NewWeightedStakeWithMultiplier(valNextPeriodTVL, multiplier).Weight +
-			agg.Locked.Weight + agg.Pending.Weight - agg.Exiting.Weight
+			agg.Locked().Weight + agg.Pending().Weight - agg.Exiting().Weight
 	}
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
-		TotalLockedStake:  v.LockedVET() + agg.Locked.VET,
+		TotalLockedStake:  v.LockedVET() + agg.Locked().VET,
 		TotalLockedWeight: v.Weight(),
-		TotalQueuedStake:  v.QueuedVET() + agg.Pending.VET,
+		TotalQueuedStake:  v.QueuedVET() + agg.Pending().VET,
 		TotalExitingStake: exitingVET,
 		NextPeriodWeight:  nextPeriodWeight,
 	}, nil
