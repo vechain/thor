@@ -560,6 +560,7 @@ var (
 )
 
 // #nosec G602
+// false alert from gosec as input length is checked in L565
 func (c *blake2F) Run(input []byte) ([]byte, error) {
 	// Make sure the input is valid (correct length and final flag)
 	if len(input) != blake2FInputLength {
