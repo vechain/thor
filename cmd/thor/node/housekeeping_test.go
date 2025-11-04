@@ -7,7 +7,6 @@ package node
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -161,6 +160,16 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 		assertFunc func(t *testing.T, values map[string]any)
 	}{
 		{
+			name: "nil block processing",
+			setupBlock: func(node *mockableNode) *block.Block {
+				return nil
+			},
+			assertFunc: func(t *testing.T, values map[string]any) {
+				logs := values["logs"].(string)
+				assert.Contains(t, logs, "Received nil block event", "Logs should indicate nil block event was received")
+			},
+		},
+		{
 			name: "successful trunk block processing",
 			setupBlock: func(node *mockableNode) *block.Block {
 				// Create a block that should be processed successfully
@@ -286,48 +295,8 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 			testBlock := tt.setupBlock(node)
 			newBlockEvent := &comm.NewBlockEvent{Block: testBlock}
 
-			// Start housekeeping in a goroutine
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
+			node.handleNewBlock(newBlockEvent)
 
-			var processedBlock bool
-			var processedMu sync.Mutex
-			done := make(chan bool, 1)
-
-			go func() {
-				defer func() { done <- true }()
-
-				// Monitor for processing
-				go func() {
-					select {
-					case node.newBlockCh <- newBlockEvent:
-						processedMu.Lock()
-						processedBlock = true
-						processedMu.Unlock()
-					case <-ctx.Done():
-					}
-				}()
-
-				// Run housekeeping briefly
-				select {
-				case <-ctx.Done():
-				default:
-					node.houseKeeping(ctx)
-				}
-			}()
-
-			// Wait for processing
-			<-done
-
-			// Allow some time for processing
-			time.Sleep(200 * time.Millisecond)
-
-			// Verify expectations using mutex
-			processedMu.Lock()
-			processedValue := processedBlock
-			processedMu.Unlock()
-
-			assert.True(t, processedValue, "Block should have been sent to processing channel")
 			if tt.assertFunc != nil {
 				tt.assertFunc(t, map[string]any{
 					"node": node,
@@ -347,55 +316,25 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 	defer node.connectivityTicker.Stop()
 	defer node.clockSyncTicker.Stop()
 
-	// Start housekeeping in a goroutine
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
-	var processedBlock bool
-	var processedMu sync.Mutex
-	done := make(chan bool, 1)
-
 	normalBlock := createTestBlock(node.repo.BestBlockSummary().Header.ID())
-	newBlockEvent := &comm.NewBlockEvent{Block: normalBlock}
 
 	futureBlock := createTestBlock(normalBlock.Header().ID())
-	node.futureBlocksCache.Set(futureBlock.Header().ID(), futureBlock)
+	futureBlockID := futureBlock.Header().ID()
 
-	assert.True(t, node.futureBlocksCache.Contains(futureBlock.Header().ID()), "Future blocks cache should contain the future block before processing")
-
-	// Stop the original ticker and create a faster one before starting housekeeping
 	node.futureTicker.Stop()
-	node.futureTicker = time.NewTicker(10 * time.Millisecond)
 
-	go func() {
-		defer func() { done <- true }()
+	normalBlockEvent := &comm.NewBlockEvent{Block: normalBlock}
+	node.handleNewBlock(normalBlockEvent)
 
-		// Monitor for processing
-		go func() {
-			select {
-			case node.newBlockCh <- newBlockEvent:
-				processedMu.Lock()
-				processedBlock = true
-				processedMu.Unlock()
-			case <-ctx.Done():
-			}
-		}()
+	node.futureBlocksCache.Set(futureBlockID, futureBlock)
 
-		// Run housekeeping briefly
-		select {
-		case <-ctx.Done():
-		default:
-			node.houseKeeping(ctx)
-		}
-	}()
+	assert.True(t, node.futureBlocksCache.Contains(futureBlockID), "Future blocks cache should contain the future block before processing")
 
-	// Wait for processing
-	<-done
+	node.handleFutureBlocks()
 
-	assert.True(t, processedBlock, "Block should have been sent to processing channel")
-	assert.False(t, node.futureBlocksCache.Contains(futureBlock.Header().ID()), "Future blocks cache should not contain the future block after processing")
+	assert.False(t, node.futureBlocksCache.Contains(futureBlockID), "Future blocks cache should not contain the future block after processing")
 	assert.Contains(t, buf.String(), "future block consumed", "Logs should indicate future block was consumed")
-	assert.Contains(t, buf.String(), futureBlock.Header().ID().String(), "Logs should contain the future block ID")
+	assert.Contains(t, buf.String(), futureBlockID.String(), "Logs should contain the future block ID")
 	assert.Contains(t, buf.String(), "imported blocks", "Logs should indicate blocks were imported")
 }
 
@@ -478,5 +417,5 @@ func TestNode_HouseKeeping_ClockSyncTicker(t *testing.T) {
 	// The test should complete without hanging, demonstrating that
 	// clock sync ticker events are being handled
 	assert.True(t, true, "Clock sync ticker handling completed successfully")
-	assert.Contains(t, buf.String(), "received clock sync tick>>", "Logs should indicate clock sync tick was received")
+	assert.Contains(t, buf.String(), "received clock sync tick", "Logs should indicate clock sync tick was received")
 }

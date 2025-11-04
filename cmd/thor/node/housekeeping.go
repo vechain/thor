@@ -12,6 +12,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
+	comm2 "github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus"
 )
 
@@ -27,57 +28,78 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			logger.Debug("received context done signal")
 			return
 		case newBlock := <-n.newBlockCh:
-			logger.Debug("received new block signal")
-			var stats blockStats
-			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
-				if consensus.IsFutureBlock(err) ||
-					((err == errParentMissing || err == errBlockTemporaryUnprocessable) && n.futureBlocksCache.Contains(newBlock.Header().ParentID())) {
-					logger.Debug("future block added", "id", newBlock.Header().ID())
-					n.futureBlocksCache.Set(newBlock.Header().ID(), newBlock.Block)
-				}
-			} else if isTrunk {
-				n.comm.BroadcastBlock(newBlock.Block)
-				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Header())...)
-			}
+			n.handleNewBlock(newBlock)
 		case <-n.futureTicker.C:
-			// process future blocks
-			logger.Debug("received future block signal")
-			var blocks []*block.Block
-			n.futureBlocksCache.ForEach(func(ent *cache.Entry) bool {
-				blocks = append(blocks, ent.Value.(*block.Block))
-				return true
-			})
-			sort.Slice(blocks, func(i, j int) bool {
-				return blocks[i].Header().Number() < blocks[j].Header().Number()
-			})
-			var stats blockStats
-			for i, block := range blocks {
-				if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
-					logger.Debug("future block consumed", "id", block.Header().ID())
-					n.futureBlocksCache.Remove(block.Header().ID())
-					if isTrunk {
-						n.comm.BroadcastBlock(block)
-					}
-				}
-
-				if stats.processed > 0 && i == len(blocks)-1 {
-					logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
-				}
-			}
+			n.handleFutureBlocks()
 		case <-n.connectivityTicker.C:
-			logger.Debug("received connectivity tick")
-			if n.comm.PeerCount() == 0 {
-				noPeerTimes++
-				if noPeerTimes > 30 {
-					noPeerTimes = 0
-					go checkClockOffset()
-				}
-			} else {
-				noPeerTimes = 0
-			}
+			n.handleCconnectivityTicker(&noPeerTimes)
 		case <-n.clockSyncTicker.C:
-			logger.Debug("received clock sync tick>>")
-			go checkClockOffset()
+			n.handleClockSyncTick()
 		}
 	}
+}
+
+func (n *Node) handleNewBlock(newBlockEvent *comm2.NewBlockEvent) {
+	logger.Debug("received new block")
+	if newBlockEvent == nil || newBlockEvent.Block == nil {
+		logger.Debug("Received nil block event")
+		return
+	}
+
+	var stats blockStats
+	newBlock := newBlockEvent.Block
+	if isTrunk, err := n.processBlock(newBlock, &stats); err != nil {
+		if consensus.IsFutureBlock(err) ||
+			((err == errParentMissing || err == errBlockTemporaryUnprocessable) && n.futureBlocksCache.Contains(newBlock.Header().ParentID())) {
+			logger.Debug("future block added", "id", newBlock.Header().ID())
+			n.futureBlocksCache.Set(newBlock.Header().ID(), newBlock)
+		}
+	} else if isTrunk {
+		n.comm.BroadcastBlock(newBlock)
+		logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Header())...)
+	}
+}
+
+func (n *Node) handleFutureBlocks() {
+	logger.Debug("received future block signal")
+	var blocks []*block.Block
+	n.futureBlocksCache.ForEach(func(ent *cache.Entry) bool {
+		blocks = append(blocks, ent.Value.(*block.Block))
+		return true
+	})
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].Header().Number() < blocks[j].Header().Number()
+	})
+	var stats blockStats
+	for i, block := range blocks {
+		if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
+			logger.Debug("future block consumed", "id", block.Header().ID())
+			n.futureBlocksCache.Remove(block.Header().ID())
+			if isTrunk {
+				n.comm.BroadcastBlock(block)
+			}
+		}
+
+		if stats.processed > 0 && i == len(blocks)-1 {
+			logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+		}
+	}
+}
+
+func (n *Node) handleCconnectivityTicker(noPeerTimes *int) {
+	logger.Debug("received connectivity tick")
+	if n.comm.PeerCount() == 0 {
+		*noPeerTimes++
+		if *noPeerTimes > 30 {
+			*noPeerTimes = 0
+			go checkClockOffset()
+		}
+	} else {
+		*noPeerTimes = 0
+	}
+}
+
+func (n *Node) handleClockSyncTick() {
+	logger.Debug("received clock sync tick")
+	go checkClockOffset()
 }
