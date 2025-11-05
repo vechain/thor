@@ -133,16 +133,13 @@ func setupTestNodeForHousekeeping(t *testing.T) (*mockableNode, *mockCommunicato
 
 	// Create original node
 	originalNode := &Node{
-		cons:               mockCons,
-		repo:               chain.Repo(),
-		comm:               mockComm,
-		forkConfig:         &thor.NoFork,
-		bft:                mockBFT,
-		newBlockCh:         make(chan *comm.NewBlockEvent, 1),
-		futureTicker:       time.NewTicker(100 * time.Millisecond),
-		connectivityTicker: time.NewTicker(100 * time.Millisecond),
-		clockSyncTicker:    time.NewTicker(100 * time.Millisecond),
-		options:            nodeOptions,
+		cons:       mockCons,
+		repo:       chain.Repo(),
+		comm:       mockComm,
+		forkConfig: &thor.NoFork,
+		bft:        mockBFT,
+		newBlockCh: make(chan *comm.NewBlockEvent, 1),
+		options:    nodeOptions,
 	}
 
 	originalNode.futureBlocksCache = cache.NewRandCache(32)
@@ -280,9 +277,6 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 			defer restore()
 
 			node, mockComm := setupTestNodeForHousekeeping(t)
-			defer node.futureTicker.Stop()
-			defer node.connectivityTicker.Stop()
-			defer node.clockSyncTicker.Stop()
 
 			// Reset mock state
 			mockComm.broadcastCalled = false
@@ -312,16 +306,11 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 	defer restore()
 
 	node, _ := setupTestNodeForHousekeeping(t)
-	defer node.futureTicker.Stop()
-	defer node.connectivityTicker.Stop()
-	defer node.clockSyncTicker.Stop()
 
 	normalBlock := createTestBlock(node.repo.BestBlockSummary().Header.ID())
 
 	futureBlock := createTestBlock(normalBlock.Header().ID())
 	futureBlockID := futureBlock.Header().ID()
-
-	node.futureTicker.Stop()
 
 	normalBlockEvent := &comm.NewBlockEvent{Block: normalBlock}
 	node.handleNewBlock(normalBlockEvent)
@@ -343,50 +332,19 @@ func TestNode_HouseKeeping_ConnectivityTicker(t *testing.T) {
 	defer restore()
 
 	node, mockComm := setupTestNodeForHousekeeping(t)
-	defer node.futureTicker.Stop()
-	defer node.connectivityTicker.Stop()
-	defer node.clockSyncTicker.Stop()
 
-	// Create a very short ticker for testing
-	node.connectivityTicker = time.NewTicker(5 * time.Millisecond)
+	mockComm.peerCount = 5
+	var noPeerTimes1 int
+	node.handleCconnectivityTicker(&noPeerTimes1)
+	assert.Contains(t, buf.String(), "have peers connected", "Logs should indicate peers are connected")
+	assert.Equal(t, 0, noPeerTimes1, "noPeerTimes should remain 0 when peers are connected")
 
-	tests := []struct {
-		name      string
-		peerCount int
-	}{
-		{
-			name:      "with peers connected",
-			peerCount: 5,
-		},
-		{
-			name:      "no peers connected",
-			peerCount: 0,
-		},
-	}
+	var noPeerTimes2 int
+	mockComm.peerCount = 0
+	node.handleCconnectivityTicker(&noPeerTimes2)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Setup peer count
-			mockComm.peerCount = tt.peerCount
-
-			// Start housekeeping
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-			defer cancel()
-
-			done := make(chan bool)
-			go func() {
-				defer func() { done <- true }()
-				node.houseKeeping(ctx)
-			}()
-
-			// Wait for completion
-			<-done
-
-			// The test verifies that connectivity ticker doesn't cause hangs
-			assert.True(t, true, "Connectivity ticker handling completed successfully")
-			assert.Contains(t, buf.String(), "received connectivity tick", "Logs should indicate connectivity tick was received")
-		})
-	}
+	assert.Equal(t, 1, noPeerTimes2, "noPeerTimes should reset to 0 after reaching threshold and checking clock offset")
+	assert.Contains(t, buf.String(), "no peers connected", "Logs should indicate no peers are connected")
 }
 
 func TestNode_HouseKeeping_ClockSyncTicker(t *testing.T) {
@@ -394,28 +352,8 @@ func TestNode_HouseKeeping_ClockSyncTicker(t *testing.T) {
 	defer restore()
 
 	node, _ := setupTestNodeForHousekeeping(t)
-	defer node.futureTicker.Stop()
-	defer node.connectivityTicker.Stop()
-	defer node.clockSyncTicker.Stop()
 
-	// Create a very short ticker for testing
-	node.clockSyncTicker = time.NewTicker(10 * time.Millisecond)
+	node.handleClockSyncTick()
 
-	// Start housekeeping
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	done := make(chan bool)
-	go func() {
-		defer func() { done <- true }()
-		node.houseKeeping(ctx)
-	}()
-
-	// Wait for completion
-	<-done
-
-	// The test should complete without hanging, demonstrating that
-	// clock sync ticker events are being handled
-	assert.True(t, true, "Clock sync ticker handling completed successfully")
 	assert.Contains(t, buf.String(), "received clock sync tick", "Logs should indicate clock sync tick was received")
 }

@@ -61,20 +61,17 @@ type Node struct {
 	forkConfig  *thor.ForkConfig
 	options     Options
 
-	logDBFailed        bool
-	initialSynced      bool // true if the initial synchronization process is done
-	bandwidth          bandwidth.Bandwidth
-	maxBlockNum        uint32
-	processLock        sync.Mutex
-	logWorker          *worker
-	scope              event.SubscriptionScope
-	newBlockCh         chan *comm2.NewBlockEvent
-	txCh               chan *txpool.TxEvent
-	futureTicker       *time.Ticker
-	connectivityTicker *time.Ticker
-	clockSyncTicker    *time.Ticker
-	futureBlocksCache  *cache.RandCache
-	txStash            *txStash
+	logDBFailed       bool
+	initialSynced     bool // true if the initial synchronization process is done
+	bandwidth         bandwidth.Bandwidth
+	maxBlockNum       uint32
+	processLock       sync.Mutex
+	logWorker         *worker
+	scope             event.SubscriptionScope
+	newBlockCh        chan *comm2.NewBlockEvent
+	txCh              chan *txpool.TxEvent
+	futureBlocksCache *cache.RandCache
+	txStash           *txStash
 }
 
 func New(
@@ -117,19 +114,12 @@ func New(
 	n.txCh = make(chan *txpool.TxEvent)
 	n.scope.Track(n.txPool.SubscribeTxEvent(n.txCh))
 
-	n.futureTicker = time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
-	n.connectivityTicker = time.NewTicker(time.Second)
-	n.clockSyncTicker = time.NewTicker(10 * time.Minute)
-
 	return n
 }
 
 func (n *Node) Run(ctx context.Context) error {
 	defer n.logWorker.Close()
 	defer n.scope.Close()
-	defer n.futureTicker.Stop()
-	defer n.connectivityTicker.Stop()
-	defer n.clockSyncTicker.Stop()
 
 	maxBlockNum, err := n.repo.GetMaxBlockNum()
 	if err != nil {

@@ -9,18 +9,29 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	comm2 "github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func (n *Node) houseKeeping(ctx context.Context) {
 	logger.Debug("enter house keeping")
-	defer logger.Debug("leave house keeping")
 
 	var noPeerTimes int
+	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
+	connectivityTicker := time.NewTicker(time.Second)
+	clockSyncTicker := time.NewTicker(10 * time.Minute)
+
+	defer func() {
+		futureTicker.Stop()
+		connectivityTicker.Stop()
+		clockSyncTicker.Stop()
+		logger.Debug("leave house keeping")
+	}()
 
 	for {
 		select {
@@ -29,11 +40,11 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			return
 		case newBlock := <-n.newBlockCh:
 			n.handleNewBlock(newBlock)
-		case <-n.futureTicker.C:
+		case <-futureTicker.C:
 			n.handleFutureBlocks()
-		case <-n.connectivityTicker.C:
+		case <-connectivityTicker.C:
 			n.handleCconnectivityTicker(&noPeerTimes)
-		case <-n.clockSyncTicker.C:
+		case <-clockSyncTicker.C:
 			n.handleClockSyncTick()
 		}
 	}
@@ -89,12 +100,14 @@ func (n *Node) handleFutureBlocks() {
 func (n *Node) handleCconnectivityTicker(noPeerTimes *int) {
 	logger.Debug("received connectivity tick")
 	if n.comm.PeerCount() == 0 {
+		logger.Debug("no peers connected")
 		*noPeerTimes++
 		if *noPeerTimes > 30 {
 			*noPeerTimes = 0
 			go checkClockOffset()
 		}
 	} else {
+		logger.Debug("have peers connected")
 		*noPeerTimes = 0
 	}
 }
