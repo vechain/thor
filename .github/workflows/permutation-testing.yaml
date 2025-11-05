@@ -1,0 +1,79 @@
+name: Permutation Testing
+
+on:
+  schedule:
+    # Run every Tuesday at 20:00 UTC
+    - cron: '0 20 * * 2'
+  workflow_dispatch: # Allow manual triggering
+
+concurrency:
+  group: 'permutation-testing'
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  permutation-test:
+    name: Run Permutation Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 240 # 4 hours
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+
+      - name: Run Permutation Tests
+        env:
+          RUN_PERMUTATIONS: "1"
+        run: go test -v -timeout=4h ./builtin/staker -run TestRandomPermutationManager
+
+  notify-slack:
+    name: Notify Slack on Failure
+    needs: permutation-test
+    if: always() && needs.permutation-test.result != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": ":alert: Permutation Testing Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":alert: *Permutation Testing Failed*\n\nThe weekly permutation tests have failed. Please check the logs for details."
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ needs.permutation-test.result == 'failure' && ':x: Failed' || needs.permutation-test.result == 'cancelled' && ':warning: Cancelled' || ':question: Unknown' }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Workflow:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
+                    }
+                  ]
+                }
+              ]
+            }

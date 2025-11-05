@@ -110,3 +110,105 @@ func TestStakerABI(t *testing.T) {
 		})
 	}
 }
+
+func TestConstructorWithParameters(t *testing.T) {
+	abiJSON := []byte(`[
+		{
+			"inputs": [
+				{"name": "_value", "type": "uint256"},
+				{"name": "_owner", "type": "address"},
+				{"name": "_name", "type": "string"}
+			],
+			"payable": false,
+			"stateMutability": "nonpayable",
+			"type": "constructor"
+		}
+	]`)
+
+	abi, err := New(abiJSON)
+	assert.Nil(t, err)
+
+	constructor := abi.Constructor()
+	assert.NotNil(t, constructor)
+	assert.Equal(t, "", constructor.Name())
+	assert.Equal(t, false, constructor.Const())
+
+	// Test encoding constructor with parameters
+	value := big.NewInt(12345)
+	owner := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	name := "TestContract"
+
+	input, err := constructor.EncodeInput(value, owner, name)
+	assert.Nil(t, err)
+
+	// Constructor input should NOT include MethodID (4 bytes)
+	// It should only contain the encoded parameters
+	assert.NotNil(t, input)
+
+	// The encoded data should start directly with the parameters
+	// For a constructor with parameters, the data should be > 0 bytes
+	assert.Greater(t, len(input), 0)
+
+	// Verify the MethodID is empty (constructor case)
+	methodID := constructor.ID()
+	assert.True(t, methodID.IsEmpty(), "Constructor should have empty MethodID")
+
+	// Verify that constructor data does NOT start with MethodID
+	// The constructor data should be pure ABI encoding without 4-byte selector
+	// Expected structure for constructor(uint256 _value, address _owner, string _name):
+	// - bytes 0-31:   uint256 value (12345 right-padded in 32 bytes)
+	// - bytes 32-63:  address owner (20 bytes, left-padded to 32 bytes)
+	// - bytes 64-95:  offset to string data (96 in decimal = 0x60)
+	// - bytes 96-127: string length
+	// - bytes 128+:   string data
+
+	// The total length should be 160 bytes (5 * 32)
+	assert.Equal(t, 160, len(input), "Constructor data should be 160 bytes")
+
+	// Verify first 32 bytes contain the uint256 value (12345)
+	decodedValue := new(big.Int).SetBytes(input[:32])
+	assert.Equal(t, value, decodedValue, "First 32 bytes should contain value 12345")
+
+	// Decode input
+	var decoded struct {
+		Value *big.Int
+		Owner common.Address
+		Name  string
+	}
+	err = constructor.DecodeInput(input, &decoded)
+	assert.Nil(t, err)
+	assert.Equal(t, value, decoded.Value)
+	assert.Equal(t, owner, decoded.Owner)
+	assert.Equal(t, name, decoded.Name)
+}
+
+func TestConstructorWithoutParameters(t *testing.T) {
+	abiJSON := []byte(`[
+		{
+			"inputs": [],
+			"payable": false,
+			"stateMutability": "nonpayable",
+			"type": "constructor"
+		}
+	]`)
+
+	abi, err := New(abiJSON)
+	assert.Nil(t, err)
+
+	constructor := abi.Constructor()
+	assert.NotNil(t, constructor)
+	assert.Equal(t, "", constructor.Name())
+
+	// Test encoding constructor without parameters
+	input, err := constructor.EncodeInput()
+	assert.Nil(t, err)
+
+	// Constructor without parameters should return empty data (0 bytes)
+	assert.Len(t, input, 0, "Constructor without parameters should return 0 bytes")
+
+	// Decode input
+	var decoded struct{}
+	err = constructor.DecodeInput(input, &decoded)
+	assert.Nil(t, err)
+	assert.Equal(t, decoded, struct{}{}) // empty struct
+}
