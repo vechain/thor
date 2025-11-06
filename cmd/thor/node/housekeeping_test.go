@@ -157,16 +157,6 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 		assertFunc func(t *testing.T, values map[string]any)
 	}{
 		{
-			name: "nil block processing",
-			setupBlock: func(node *mockableNode) *block.Block {
-				return nil
-			},
-			assertFunc: func(t *testing.T, values map[string]any) {
-				logs := values["logs"].(string)
-				assert.Contains(t, logs, "Received nil block event", "Logs should indicate nil block event was received")
-			},
-		},
-		{
 			name: "successful trunk block processing",
 			setupBlock: func(node *mockableNode) *block.Block {
 				// Create a block that should be processed successfully
@@ -328,15 +318,11 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 }
 
 func TestNode_HouseKeeping_ConnectivityTicker(t *testing.T) {
-	buf, restore := captureLogs()
-	defer restore()
-
 	node, mockComm := setupTestNodeForHousekeeping(t)
 
 	mockComm.peerCount = 5
 	var noPeerTimes1 int
 	node.handleCconnectivityTicker(&noPeerTimes1)
-	assert.Contains(t, buf.String(), "have peers connected", "Logs should indicate peers are connected")
 	assert.Equal(t, 0, noPeerTimes1, "noPeerTimes should remain 0 when peers are connected")
 
 	var noPeerTimes2 int
@@ -344,16 +330,4 @@ func TestNode_HouseKeeping_ConnectivityTicker(t *testing.T) {
 	node.handleCconnectivityTicker(&noPeerTimes2)
 
 	assert.Equal(t, 1, noPeerTimes2, "noPeerTimes should reset to 0 after reaching threshold and checking clock offset")
-	assert.Contains(t, buf.String(), "no peers connected", "Logs should indicate no peers are connected")
-}
-
-func TestNode_HouseKeeping_ClockSyncTicker(t *testing.T) {
-	buf, restore := captureLogs()
-	defer restore()
-
-	node, _ := setupTestNodeForHousekeeping(t)
-
-	node.handleClockSyncTick()
-
-	assert.Contains(t, buf.String(), "received clock sync tick", "Logs should indicate clock sync tick was received")
 }

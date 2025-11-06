@@ -160,10 +160,7 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 
 	var blk *block.Block
 	for blk = range stream {
-		if blk == nil {
-			logger.Debug("received nil from stream")
-			continue
-		}
+		// the blk is validated in block package already
 		if _, err := n.processBlock(blk, &stats); err != nil {
 			return err
 		}

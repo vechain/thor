@@ -52,12 +52,9 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 func (n *Node) handleNewBlock(newBlockEvent *comm2.NewBlockEvent) {
 	logger.Debug("received new block")
-	if newBlockEvent == nil || newBlockEvent.Block == nil {
-		logger.Debug("Received nil block event")
-		return
-	}
 
 	var stats blockStats
+	// the newBlockEvent.Block is validated in comm package already
 	newBlock := newBlockEvent.Block
 	if isTrunk, err := n.processBlock(newBlock, &stats); err != nil {
 		if consensus.IsFutureBlock(err) ||
@@ -98,21 +95,17 @@ func (n *Node) handleFutureBlocks() {
 }
 
 func (n *Node) handleCconnectivityTicker(noPeerTimes *int) {
-	logger.Debug("received connectivity tick")
 	if n.comm.PeerCount() == 0 {
-		logger.Debug("no peers connected")
 		*noPeerTimes++
 		if *noPeerTimes > 30 {
 			*noPeerTimes = 0
 			go checkClockOffset()
 		}
 	} else {
-		logger.Debug("have peers connected")
 		*noPeerTimes = 0
 	}
 }
 
 func (n *Node) handleClockSyncTick() {
-	logger.Debug("received clock sync tick")
 	go checkClockOffset()
 }
