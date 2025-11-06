@@ -39,7 +39,7 @@ jobs:
       - name: Validate API Version
         run: |
           thor_version=$(cat cmd/thor/VERSION)
-          api_version=$(grep -o 'version: [0-9.]*' api/doc/thor.yaml | awk '{print $2}')
+          api_version=$(grep -o 'version: [0-9][0-9.]*' api/doc/thor.yaml | awk '{print $2}')
           if [ "$thor_version" != "$api_version" ]; then
             echo "API spec version ($api_version) does not match Thor version ($thor_version)"
             exit 1
