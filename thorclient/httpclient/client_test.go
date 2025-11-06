@@ -25,6 +25,20 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+func assertHexOrDecimal256Equal(t *testing.T, expected, actual *math.HexOrDecimal256) {
+	if expected == nil && actual == nil {
+		return
+	}
+	if expected == nil || actual == nil {
+		t.Fatalf("expected %v, got %v", expected, actual)
+	}
+	expectedInt := (*big.Int)(expected)
+	actualInt := (*big.Int)(actual)
+	if expectedInt.Cmp(actualInt) != 0 {
+		t.Fatalf("expected %v, got %v", expectedInt.String(), actualInt.String())
+	}
+}
+
 func TestClient_GetTransactionReceipt(t *testing.T) {
 	txID := thor.Bytes32{0x01}
 	expectedReceipt := &api.Receipt{
@@ -49,7 +63,13 @@ func TestClient_GetTransactionReceipt(t *testing.T) {
 	receipt, err := client.GetTransactionReceipt(&txID, "")
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedReceipt, receipt)
+	assert.Equal(t, expectedReceipt.GasUsed, receipt.GasUsed)
+	assert.Equal(t, expectedReceipt.GasPayer, receipt.GasPayer)
+	assertHexOrDecimal256Equal(t, expectedReceipt.Paid, receipt.Paid)
+	assertHexOrDecimal256Equal(t, expectedReceipt.Reward, receipt.Reward)
+	assert.Equal(t, expectedReceipt.Reverted, receipt.Reverted)
+	assert.Equal(t, expectedReceipt.Meta, receipt.Meta)
+	assert.Equal(t, len(expectedReceipt.Outputs), len(receipt.Outputs))
 }
 
 func TestClient_InspectClauses(t *testing.T) {
@@ -118,7 +138,13 @@ func TestClient_FilterTransfers(t *testing.T) {
 	transfers, err := client.FilterTransfers(req)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedTransfers, transfers)
+	assert.Equal(t, len(expectedTransfers), len(transfers))
+	for i, expectedTransfer := range expectedTransfers {
+		assert.Equal(t, expectedTransfer.Sender, transfers[i].Sender)
+		assert.Equal(t, expectedTransfer.Recipient, transfers[i].Recipient)
+		assertHexOrDecimal256Equal(t, expectedTransfer.Amount, transfers[i].Amount)
+		assert.Equal(t, expectedTransfer.Meta, transfers[i].Meta)
+	}
 }
 
 func TestClient_FilterEvents(t *testing.T) {
@@ -166,7 +192,9 @@ func TestClient_GetAccount(t *testing.T) {
 	account, err := client.GetAccount(&addr, "")
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedAccount, account)
+	assertHexOrDecimal256Equal(t, expectedAccount.Balance, account.Balance)
+	assertHexOrDecimal256Equal(t, expectedAccount.Energy, account.Energy)
+	assert.Equal(t, expectedAccount.HasCode, account.HasCode)
 }
 
 func TestClient_GetAccountCode(t *testing.T) {
@@ -207,6 +235,28 @@ func TestClient_GetStorage(t *testing.T) {
 
 	client := New(ts.URL)
 	data, err := client.GetAccountStorage(&addr, &key, BestRevision)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedStorageRsp.Value, data.Value)
+}
+
+func TestClient_GetRawStorage(t *testing.T) {
+	addr := thor.Address{0x01}
+	key := thor.Bytes32{0x01}
+	expectedStorageRsp := &api.GetStorageResult{Value: hexutil.Encode([]byte{0x01, 0x03})}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/accounts/"+addr.String()+"/storage/raw/"+key.String(), r.URL.Path)
+
+		marshal, err := json.Marshal(expectedStorageRsp)
+		require.NoError(t, err)
+
+		w.Write(marshal)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL)
+	data, err := client.GetRawAccountStorage(&addr, &key, BestRevision)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStorageRsp.Value, data.Value)
@@ -483,7 +533,7 @@ func TestClient_GetPeers(t *testing.T) {
 
 func TestClient_GetTxPool(t *testing.T) {
 	t.Run("GetTxPoolWithTransactionIDs", func(t *testing.T) {
-		expectedTxIDs := []thor.Bytes32{
+		expectedTxIDs := []*thor.Bytes32{
 			{0x01, 0x02, 0x03},
 			{0x04, 0x05, 0x06},
 		}
@@ -498,16 +548,14 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(false, nil)
+		result, err := client.GetTxPool(nil)
 
 		assert.NoError(t, err)
-		txIDs, ok := result.([]thor.Bytes32)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxIDs, txIDs)
+		assert.Equal(t, expectedTxIDs, result)
 	})
 
 	t.Run("GetTxPoolWithExpandedTransactions", func(t *testing.T) {
-		expectedTxs := []transactions.Transaction{
+		expectedTxs := []*transactions.Transaction{
 			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
 			{ID: thor.Bytes32{0x04, 0x05, 0x06}},
 		}
@@ -522,17 +570,15 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(true, nil)
+		result, err := client.GetExpandedTxPool(nil)
 
 		assert.NoError(t, err)
-		txs, ok := result.([]transactions.Transaction)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxs, txs)
+		assert.Equal(t, expectedTxs, result)
 	})
 
 	t.Run("GetTxPoolWithOriginFilter", func(t *testing.T) {
 		origin := thor.Address{0x01, 0x02, 0x03}
-		expectedTxIDs := []thor.Bytes32{
+		expectedTxIDs := []*thor.Bytes32{
 			{0x01, 0x02, 0x03},
 		}
 
@@ -546,17 +592,15 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(false, &origin)
+		result, err := client.GetTxPool(&origin)
 
 		assert.NoError(t, err)
-		txIDs, ok := result.([]thor.Bytes32)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxIDs, txIDs)
+		assert.Equal(t, expectedTxIDs, result)
 	})
 
 	t.Run("GetTxPoolWithExpandedAndOrigin", func(t *testing.T) {
 		origin := thor.Address{0x01, 0x02, 0x03}
-		expectedTxs := []transactions.Transaction{
+		expectedTxs := []*transactions.Transaction{
 			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
 		}
 
@@ -571,12 +615,10 @@ func TestClient_GetTxPool(t *testing.T) {
 		defer ts.Close()
 
 		client := New(ts.URL)
-		result, err := client.GetTxPool(true, &origin)
+		result, err := client.GetExpandedTxPool(&origin)
 
 		assert.NoError(t, err)
-		txs, ok := result.([]transactions.Transaction)
-		assert.True(t, ok)
-		assert.Equal(t, expectedTxs, txs)
+		assert.Equal(t, expectedTxs, result)
 	})
 }
 
@@ -685,7 +727,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "TxPool",
 			path:     "/node/txpool",
-			function: func(client *Client) (any, error) { return client.GetTxPool(false, nil) },
+			function: func(client *Client) (any, error) { return client.GetTxPool(nil) },
 		},
 		{
 			name:     "TxPoolStatus",

@@ -17,11 +17,7 @@ jobs:
         go-version: [1.24.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
-          - go-version: 1.21.x
-            os: ubuntu-latest
-          - go-version: 1.22.x
-            os: ubuntu-latest
-          - go-version: 1.23.x
+          - go-version: 1.25.x
             os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
@@ -82,11 +78,11 @@ jobs:
         with:
           go-version: 1.24.x
 
-      - name: Download dependencies
-        run: go mod download
+      - name: Make all
+        run: make thor
 
       - name: Start Solo
-        run: nohup go run ./cmd/thor ${{matrix.args}} > thor-solo.log 2>&1 &
+        run: bin/thor ${{matrix.args}} > thor-solo.log 2>&1 &
 
       - name: Wait for block 1
         run: |

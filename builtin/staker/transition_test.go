@@ -11,23 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/trie"
 )
 
 func TestTransition(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, trie.Root{})
-
-	param := params.New(thor.BytesToAddress([]byte("params")), st)
-
-	assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
-	stakerAddr := thor.BytesToAddress([]byte("stkr"))
-	staker := &testStaker{Staker: New(stakerAddr, st, param, nil), state: st, addr: stakerAddr}
+	staker := newTest(t).SetMBP(2)
 
 	isExecuted, err := staker.transition(thor.EpochLength())
 	assert.NoError(t, err)
@@ -35,16 +24,14 @@ func TestTransition(t *testing.T) {
 
 	node1 := datagen.RandAddress()
 	stake := RandomStake()
-	err = staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
-	assert.NoError(t, err)
+	staker.AddValidation(node1, node1, uint32(360)*24*15, stake)
 
 	isExecuted, err = staker.transition(thor.EpochLength())
 	assert.NoError(t, err)
 	assert.False(t, isExecuted)
 
 	node2 := datagen.RandAddress()
-	err = staker.AddValidation(node2, node2, uint32(360)*24*15, stake)
-	assert.NoError(t, err)
+	staker.AddValidation(node2, node2, uint32(360)*24*15, stake)
 
 	staker.params.Set(thor.KeyMaxBlockProposers, big.NewInt(0))
 
@@ -61,6 +48,9 @@ func TestTransition(t *testing.T) {
 	isExecuted, err = staker.transition(thor.EpochLength())
 	assert.NoError(t, err)
 	assert.False(t, isExecuted)
+
+	st := staker.State()
+	stakerAddr := staker.Address()
 
 	activeCountSlot := thor.BytesToBytes32([]byte(("validations-active-group-size")))
 	st.SetRawStorage(stakerAddr, activeCountSlot, rlp.RawValue{0xFF})
@@ -93,25 +83,10 @@ func TestTransitionWithPreExistingVET(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup like other tests
-			db := muxdb.NewMem()
-			st := state.New(db, trie.Root{})
-			param := params.New(thor.BytesToAddress([]byte("params")), st)
-			assert.NoError(t, param.Set(thor.KeyMaxBlockProposers, big.NewInt(2)))
-
-			stakerAddr := thor.BytesToAddress([]byte("stkr"))
-			staker := &testStaker{Staker: New(stakerAddr, st, param, nil), state: st, addr: stakerAddr}
-
-			// Add validators
-			node1 := datagen.RandAddress()
-			node2 := datagen.RandAddress()
-			stake := RandomStake()
-
-			assert.NoError(t, staker.AddValidation(node1, node1, uint32(360)*24*15, stake))
-			assert.NoError(t, staker.AddValidation(node2, node2, uint32(360)*24*15, stake))
+			staker := newTest(t).SetMBP(2).Fill(2).Transition(0)
 
 			// Modify balance
-			currentBalance, err := staker.state.GetBalance(staker.addr)
+			currentBalance, err := staker.state.GetBalance(staker.Address())
 			assert.NoError(t, err)
 
 			changeAmount := ToWei(1000000) // 1M VET
@@ -124,7 +99,7 @@ func TestTransitionWithPreExistingVET(t *testing.T) {
 					newBalance = big.NewInt(0)
 				}
 			}
-			assert.NoError(t, staker.state.SetBalance(staker.addr, newBalance))
+			assert.NoError(t, staker.state.SetBalance(staker.Address(), newBalance))
 
 			// Test ContractBalanceCheck
 			err = staker.ContractBalanceCheck(0)
@@ -153,55 +128,55 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 	tests := []struct {
 		name         string
 		currentBlock uint32
-		preTestHook  func(staker *testStaker)
+		preTestHook  func(staker *StakerTest)
 		ok           bool
 	}{
 		{
 			name:         "before hayabusa, validator has greater than funds",
 			currentBlock: 5,
-			preTestHook: func(staker *testStaker) {
-				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(2000)))
+			preTestHook: func(staker *StakerTest) {
+				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(2000)))
 			},
 			ok: true,
 		},
 		{
 			name:         "before hayabusa, validator funds are too low",
 			currentBlock: 5,
-			preTestHook: func(staker *testStaker) {
-				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(500)))
+			preTestHook: func(staker *StakerTest) {
+				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(500)))
 			},
 			ok: false,
 		},
 		{
 			name:         "before hayabusa, validator has exactly enough funds",
 			currentBlock: 5,
-			preTestHook: func(staker *testStaker) {
-				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(1000)))
+			preTestHook: func(staker *StakerTest) {
+				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(1000)))
 			},
 			ok: true,
 		},
 		{
 			name:         "during transition period, validator has not staked, has enough funds",
 			currentBlock: 15,
-			preTestHook: func(staker *testStaker) {
-				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(2000)))
+			preTestHook: func(staker *StakerTest) {
+				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(2000)))
 			},
 			ok: true,
 		},
 		{
 			name:         "during transition period, validator has not staked, has insufficient funds",
 			currentBlock: 15,
-			preTestHook: func(staker *testStaker) {
-				assert.NoError(t, staker.state.SetBalance(endorser, big.NewInt(500)))
+			preTestHook: func(staker *StakerTest) {
+				assert.NoError(t, staker.State().SetBalance(endorser, big.NewInt(500)))
 			},
 			ok: false,
 		},
 		{
 			name:         "during transition period, validator has staked",
 			currentBlock: 15,
-			preTestHook: func(staker *testStaker) {
+			preTestHook: func(staker *StakerTest) {
 				stake := big.NewInt(0).Div(MinStake, bigE18).Uint64()
-				assert.NoError(t, staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), stake))
+				staker.AddValidation(master, endorser, thor.MediumStakingPeriod(), stake)
 			},
 			ok: true,
 		},
@@ -209,9 +184,9 @@ func TestStaker_TransitionPeriodBalanceCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			staker, _ := newStaker(t, 1, 1, false)
-			tt.preTestHook(staker)
-			balanceCheck := staker.TransitionPeriodBalanceCheck(fc, tt.currentBlock, endorsement)
+			test := newTest(t).SetMBP(1).Fill(1).Transition(0)
+			tt.preTestHook(test)
+			balanceCheck := test.TransitionPeriodBalanceCheck(fc, tt.currentBlock, endorsement)
 			ok, err := balanceCheck(master, endorser)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.ok, ok)
