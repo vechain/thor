@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Try to download e2e artifact
         id: download-artifact
@@ -57,10 +57,6 @@ jobs:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
     name: Run Smoke Tests
     steps:
-      - name: Set up git credentials
-        run: |
-          git config --global url."https://${{ secrets.DRAUPNIR_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
       - name: Set draupnir repo reference
         id: set-ref
         run: |
@@ -80,18 +76,20 @@ jobs:
             fi
           fi
 
-          # Verify if branch exists
-          if ! git ls-remote --heads https://github.com/vechain/draupnir.git $REF; then
-            echo "Branch does not exist, using default commit"
-            echo "ref=$DEFAULT_COMMIT" >> "$GITHUB_OUTPUT"
-          else
+          # Verify if branch exists using GitHub API instead of git ls-remote
+          if curl -s -H "Authorization: token ${{ secrets.DRAUPNIR_TOKEN }}" \
+          "https://api.github.com/repos/vechain/draupnir/branches/$REF" >/dev/null 2>&1; then
+            echo "Branch $REF exists"
             echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "Branch $REF does not exist, using default commit"
+            echo "ref=$DEFAULT_COMMIT" >> "$GITHUB_OUTPUT"
           fi
 
           echo "DRAUPNIR REF: $(<$GITHUB_OUTPUT)"
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: vechain/draupnir
           token: ${{ secrets.DRAUPNIR_TOKEN }}
@@ -112,6 +110,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
+          cache: false
 
       - name: Start Thor Node
         run: |

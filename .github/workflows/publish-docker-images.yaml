@@ -56,7 +56,7 @@ jobs:
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ----------------------------
       # Set up Buildx for multi-arch builds
@@ -188,7 +188,7 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -348,7 +348,7 @@ jobs:
     if: ${{ github.ref_name == 'master' }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Recompute metadata so scan can reference same tags
       - name: Extract metadata (tags)

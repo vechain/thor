@@ -16,7 +16,7 @@ jobs:
       gosec-status: ${{ steps.gosec-run.outcome }}
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0
