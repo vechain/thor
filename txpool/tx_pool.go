@@ -254,7 +254,6 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	} else {
 		err = p.addWhenNotSynced(newTx, txObj)
 	}
-
 	if err != nil {
 		return err
 	}
