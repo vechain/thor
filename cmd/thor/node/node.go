@@ -64,6 +64,12 @@ type PackerEngine interface {
 	SetTargetGasLimit(gl uint64)
 }
 
+type SyncConfig struct {
+	initialSynced  bool // true if the initial synchronization process is done
+	completingSync bool
+	syncCompleteCh chan struct{}
+}
+
 type Node struct {
 	packer      PackerEngine
 	cons        ConsensusEngine
@@ -76,14 +82,14 @@ type Node struct {
 	txStashPath string
 	comm        *comm.Communicator
 	forkConfig  *thor.ForkConfig
+	syncConfig  SyncConfig
 	options     Options
 
-	logDBFailed   bool
-	initialSynced bool // true if the initial synchronization process is done
-	bandwidth     bandwidth.Bandwidth
-	maxBlockNum   uint32
-	processLock   sync.Mutex
-	logWorker     *worker
+	logDBFailed bool
+	bandwidth   bandwidth.Bandwidth
+	maxBlockNum uint32
+	processLock sync.Mutex
+	logWorker   *worker
 }
 
 func New(
@@ -113,6 +119,9 @@ func New(
 		comm:        comm,
 		forkConfig:  forkConfig,
 		options:     options,
+		syncConfig: SyncConfig{
+			syncCompleteCh: make(chan struct{}),
+		},
 	}
 }
 
@@ -129,7 +138,9 @@ func (n *Node) Run(ctx context.Context) error {
 	n.maxBlockNum = maxBlockNum
 
 	var goes co.Goes
-	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
+	goes.Go(func() {
+		n.comm.Sync(ctx, n.handleBlockStream)
+	})
 	goes.Go(func() { n.houseKeeping(ctx) })
 	goes.Go(func() { n.txStashLoop(ctx) })
 	goes.Go(func() { n.packerLoop(ctx) })

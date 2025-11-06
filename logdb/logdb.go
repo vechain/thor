@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
+	refIDQuery     = "(SELECT id FROM ref WHERE data=?)"
+	journalModeWal = "wal"
 )
 
 type LogDB struct {
@@ -35,7 +36,7 @@ type LogDB struct {
 
 // New create or open log db at given path.
 func New(path string) (logDB *LogDB, err error) {
-	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
+	db, err := sql.Open("sqlite3", path+"?cache=shared")
 	if err != nil {
 		return nil, err
 	}
@@ -59,8 +60,19 @@ func New(path string) (logDB *LogDB, err error) {
 		return nil, err
 	}
 
-	if _, err := wconn2.ExecContext(context.Background(), "pragma synchronous=off"); err != nil {
+	mode, err := getJournalMode(db)
+	if err != nil {
 		return nil, err
+	}
+
+	if mode != journalModeWal {
+		if _, err := wconn2.ExecContext(context.Background(), "PRAGMA journal_mode=MEMORY"); err != nil {
+			return nil, err
+		}
+
+		if _, err := wconn2.ExecContext(context.Background(), "PRAGMA synchronous=OFF"); err != nil {
+			return nil, err
+		}
 	}
 
 	driverVer, _, _ := sqlite3.Version()
@@ -72,6 +84,12 @@ func New(path string) (logDB *LogDB, err error) {
 		wconnSyncOff:  wconn2,
 		stmtCache:     newStmtCache(db),
 	}, nil
+}
+
+func getJournalMode(db *sql.DB) (string, error) {
+	var mode string
+	err := db.QueryRow("PRAGMA journal_mode").Scan(&mode)
+	return mode, err
 }
 
 // NewMem create a log db in ram.
@@ -700,4 +718,43 @@ func (w *Writer) exec(query string, args ...any) (err error) {
 	}
 	w.uncommittedCount++
 	return nil
+}
+
+func (w *Writer) ExecuteJournalWalModeSwitch() error {
+	_, err := w.conn.ExecContext(context.Background(), `
+        PRAGMA journal_mode=WAL;
+        PRAGMA synchronous=NORMAL;
+        PRAGMA cache_size=10000;
+        PRAGMA temp_store=memory;
+        PRAGMA mmap_size=268435456;
+        PRAGMA wal_autocheckpoint=100;
+    `)
+	return err
+}
+
+func (w *Writer) CreateIndexes() error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS event_i0 ON event(address)`,
+		`CREATE INDEX IF NOT EXISTS event_i1 ON event(topic0, address)`,
+		`CREATE INDEX IF NOT EXISTS event_i2 ON event(topic1, topic0, address) WHERE topic1 IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS event_i3 ON event(topic2, topic0, address) WHERE topic2 IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS event_i4 ON event(topic3, topic0, address) WHERE topic3 IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS transfer_i0 ON transfer(txOrigin)`,
+		`CREATE INDEX IF NOT EXISTS transfer_i1 ON transfer(sender)`,
+		`CREATE INDEX IF NOT EXISTS transfer_i2 ON transfer(recipient)`,
+	}
+
+	tx, err := w.conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // This will clean up if we exit early
+
+	for _, query := range indexes {
+		if _, err := tx.ExecContext(context.Background(), query); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
