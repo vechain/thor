@@ -6,30 +6,18 @@
 package solidity
 
 import (
-	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
-	"github.com/vechain/thor/v2/vm"
-	"github.com/vechain/thor/v2/xenv"
 )
-
-func newXenv() *xenv.Environment {
-	contract := &vm.Contract{
-		Gas: math.MaxUint64,
-	}
-	return xenv.New(nil, nil, nil, nil, nil, nil, nil, contract, 0)
-}
 
 type TestStruct struct {
 	Field1 uint64
@@ -45,19 +33,31 @@ type BigStruct struct {
 	C thor.Bytes32
 }
 
+type gasCharger struct {
+	usedGas uint64
+}
+
+func (gc *gasCharger) Charge(gas uint64) {
+	gc.usedGas += gas
+}
+
+func (gc *gasCharger) TotalGas() uint64 {
+	return gc.usedGas
+}
+
 // newTestContext returns a fresh Context with in-memory DB and unlimited gas.
-func newTestContext() *Context {
+func newTestContext() (*Context, *gasCharger) {
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
-	charger := gascharger.New(newXenv())
-	return &Context{address: thor.Address{1}, state: st, charger: charger}
+	charger := &gasCharger{}
+	return &Context{address: thor.Address{1}, state: st, charger: charger.Charge}, charger
 }
 
 // SetupMapping returns a new Mapping and its associated Charger.
-func SetupMapping[V comparable]() (*gascharger.Charger, *Mapping[thor.Bytes32, V]) {
-	ctx := newTestContext()
+func SetupMapping[V comparable]() (*gasCharger, *Mapping[thor.Bytes32, V]) {
+	ctx, charger := newTestContext()
 	mapping := NewMapping[thor.Bytes32, V](ctx, thor.Bytes32{1})
-	return ctx.charger, mapping
+	return charger, mapping
 }
 
 // newRandomStruct generates a random TestStruct pointer.
@@ -93,8 +93,7 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 		require.NoError(t, mapping.Insert(key, value))
 
 		// reset charger to measure only load
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 
 		got, err := mapping.Get(key)
 		require.NoError(t, err)
@@ -104,8 +103,7 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 
 	t.Run("set zero pointer clears storage and returns nil", func(t *testing.T) {
 		// reset charger
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 		require.NoError(t, mapping.Update(key, nil))
 		assert.Equal(t, uint64(0), charger.TotalGas(), "expected no gas for clearing slot")
 
@@ -115,8 +113,7 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 	})
 
 	t.Run("get empty key charges no gas and returns nil", func(t *testing.T) {
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
@@ -128,8 +125,7 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 		// pre-populate
 		require.NoError(t, mapping.Insert(key, value))
 		// reset charger
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 
 		require.NoError(t, mapping.Update(key, newRandomStruct()))
 		assert.Equal(t, 2*thor.SstoreResetGas, charger.TotalGas(), "wrong gas for reset struct")
@@ -139,8 +135,7 @@ func TestMapping_SetGet_StructPointer(t *testing.T) {
 		// pre-populate
 		require.NoError(t, mapping.Insert(key, value))
 		// reset charger
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 
 		require.NoError(t, mapping.Insert(key, newRandomStruct()))
 		assert.Equal(t, 2*thor.SstoreSetGas, charger.TotalGas(), "wrong gas for overwrite struct")
@@ -158,8 +153,7 @@ func TestMapping_SetGet_AddressValue(t *testing.T) {
 	})
 
 	t.Run("get address returns default zero when none set and no gas", func(t *testing.T) {
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
@@ -168,8 +162,7 @@ func TestMapping_SetGet_AddressValue(t *testing.T) {
 	})
 
 	t.Run("clear address by setting zero-value and no gas", func(t *testing.T) {
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 		require.NoError(t, mapping.Update(key, thor.Address{}))
 		assert.Equal(t, uint64(0), charger.TotalGas())
 	})
@@ -186,8 +179,7 @@ func TestMapping_SetGet_AddressPointer(t *testing.T) {
 	})
 
 	t.Run("get pointer returns nil when not set and no gas", func(t *testing.T) {
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
@@ -215,8 +207,7 @@ func TestMapping_SetGet_Uint64Value(t *testing.T) {
 	})
 
 	t.Run("get default zero returns zero and no gas", func(t *testing.T) {
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 		got, err := mapping.Get(datagen.RandomHash())
 		require.NoError(t, err)
 		assert.Equal(t, uint64(0), got)
@@ -244,8 +235,7 @@ func TestMapping_MultiSlotValue(t *testing.T) {
 
 	t.Run("get big struct charges correct SloadGas and returns value", func(t *testing.T) {
 		require.NoError(t, mapping.Insert(key, value))
-		charger = gascharger.New(newXenv())
-		mapping.context.charger = charger
+		charger.usedGas = 0
 
 		got, err := mapping.Get(key)
 		require.NoError(t, err)
