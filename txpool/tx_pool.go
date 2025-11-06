@@ -235,8 +235,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return nil
 	}
 
-	if err := p.checkOriginAndDelegatorBlocked(newTx); err != nil {
-		return err
+	if p.isBlocked(newTx) {
+		return nil
 	}
 
 	if err := p.validateTxBasics(newTx); err != nil {
@@ -264,21 +264,21 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	return nil
 }
 
-// checkOriginAndDelegatorBlocked checks if the transaction origin or delegator is blocked.
-func (p *TxPool) checkOriginAndDelegatorBlocked(newTx *tx.Transaction) error {
+// isBlocked checks if the transaction origin or delegator is blocked.
+func (p *TxPool) isBlocked(newTx *tx.Transaction) bool {
 	origin, _ := newTx.Origin()
 	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
 		// tx origin blocked
-		return nil
+		return true
 	}
 
 	delegator, _ := newTx.Delegator()
 	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
 		// tx delegator blocked
-		return nil
+		return true
 	}
 
-	return nil
+	return false
 }
 
 // checkTxPriority checks if the new tx has higher priority than the bottom 10% of existing executable txs.
