@@ -37,13 +37,17 @@ func NewOnDemandTxPool(engine *Core) *OnDemandTxPool {
 	}
 }
 
-var _ TxPool = (*OnDemandTxPool)(nil)
+var _ txpool.Pool = (*OnDemandTxPool)(nil)
 
 func (o *OnDemandTxPool) Get(txID thor.Bytes32) *tx.Transaction {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	return o.txsByID[txID]
+}
+
+func (o *OnDemandTxPool) Add(newTx *tx.Transaction) error {
+	return o.AddLocal(newTx)
 }
 
 func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {
@@ -130,4 +134,12 @@ func (o *OnDemandTxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 
 	delete(o.txsByID, txID)
 	return true
+}
+
+func (o *OnDemandTxPool) Close() {}
+
+func (o *OnDemandTxPool) Fill(txs tx.Transactions) {}
+
+func (o *OnDemandTxPool) StrictlyAdd(newTx *tx.Transaction) error {
+	return o.Add(newTx)
 }

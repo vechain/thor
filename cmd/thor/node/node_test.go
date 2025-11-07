@@ -15,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -240,4 +242,156 @@ func TestNode_HandleBlockStream_SendNormalBlock(t *testing.T) {
 	case <-time.After(400 * time.Millisecond):
 		t.Fatal("Timeout waiting for handler to complete")
 	}
+}
+
+func setupTestNodeForTxstashLoop(db *leveldb.DB) (*Node, *txStash) {
+	// Create original node
+	originalNode := &Node{
+		txCh: make(chan *txpool.TxEvent, 1),
+	}
+	return originalNode, newTxStash(db, 100)
+}
+
+func TestNode_TxStashLoop_ExecutableTx_Processing(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	node, stash := setupTestNodeForTxstashLoop(db)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done := make(chan bool, 1)
+
+	txEvent := txpool.TxEvent{
+		Tx:         newTx(tx.TypeLegacy),
+		Executable: &[]bool{true}[0],
+	}
+
+	go func() {
+		defer func() { done <- true }()
+
+		// Monitor for processing
+		go func() {
+			select {
+			case node.txCh <- &txEvent:
+			case <-ctx.Done():
+			}
+		}()
+
+		// Run txStashLoop briefly
+		select {
+		case <-ctx.Done():
+		default:
+			node.txStashLoop(ctx, stash)
+		}
+	}()
+
+	// Allow some time for processing
+	time.Sleep(200 * time.Millisecond)
+
+	// Signal completion before reading logs
+	cancel()
+	<-done
+
+	assert.True(t, len(stash.LoadAll()) == 0, "TxStash should be empty")
+}
+
+func TestNode_TxStashLoop_UnexecutableTx_Processing(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	node, stash := setupTestNodeForTxstashLoop(db)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done := make(chan bool, 1)
+
+	txEvent := txpool.TxEvent{
+		Tx:         newTx(tx.TypeLegacy),
+		Executable: &[]bool{false}[0],
+	}
+
+	go func() {
+		defer func() { done <- true }()
+
+		// Monitor for processing
+		go func() {
+			select {
+			case node.txCh <- &txEvent:
+			case <-ctx.Done():
+			}
+		}()
+
+		// Run txStashLoop briefly
+		select {
+		case <-ctx.Done():
+		default:
+			node.txStashLoop(ctx, stash)
+		}
+	}()
+
+	// Allow some time for processing
+	time.Sleep(200 * time.Millisecond)
+
+	// Signal completion before reading logs
+	cancel()
+	<-done
+
+	assert.True(t, len(stash.LoadAll()) == 1, "TxStash should contain 1 item")
+}
+
+func TestNode_TxStashLoop_StashErrorHandling(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	node, stash := setupTestNodeForTxstashLoop(db)
+
+	buf, restore := captureLogs()
+	defer restore()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done := make(chan bool, 1)
+
+	txEvent := txpool.TxEvent{
+		Tx:         newTx(tx.TypeLegacy),
+		Executable: &[]bool{false}[0],
+	}
+
+	// Close DB to force error on Save
+	db.Close()
+
+	go func() {
+		defer func() { done <- true }()
+
+		// Monitor for processing
+		go func() {
+			select {
+			case node.txCh <- &txEvent:
+			case <-ctx.Done():
+			}
+		}()
+
+		// Run txStashLoop briefly
+		select {
+		case <-ctx.Done():
+		default:
+			node.txStashLoop(ctx, stash)
+		}
+	}()
+
+	// Allow some time for processing
+	time.Sleep(200 * time.Millisecond)
+
+	// Signal completion before reading logs
+	cancel()
+	<-done
+
+	assert.Contains(t, buf.String(), "leveldb: closed", "Log should contain stash error")
 }

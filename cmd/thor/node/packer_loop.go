@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
@@ -180,7 +181,7 @@ func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error)
 	return nil
 }
 
-func cleanupTransactions(txsToRemove []*tx.Transaction, txPool TxPoolEngine) {
+func cleanupTransactions(txsToRemove []*tx.Transaction, txPool txpool.Pool) {
 	for _, tx := range txsToRemove {
 		txPool.Remove(tx.Hash(), tx.ID())
 	}

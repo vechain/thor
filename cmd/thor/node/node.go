@@ -11,18 +11,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/beevik/ntp"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
+	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
-	comm2 "github.com/vechain/thor/v2/comm"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -48,16 +48,16 @@ type Options struct {
 }
 
 type Node struct {
-	packer      PackerEngine
-	cons        ConsensusEngine
+	packer      Packer
+	cons        Consensus
 	master      *Master
-	repo        RepositoryEngine
-	bft         BFTEngine
+	repo        *chain.Repository
+	bft         bft.Committer
 	stater      *state.Stater
 	logDB       *logdb.LogDB
-	txPool      TxPoolEngine
+	txPool      txpool.Pool
 	txStashPath string
-	comm        CommunicatorEngine
+	comm        Communicator
 	forkConfig  *thor.ForkConfig
 	options     Options
 
@@ -68,27 +68,26 @@ type Node struct {
 	processLock       sync.Mutex
 	logWorker         *worker
 	scope             event.SubscriptionScope
-	newBlockCh        chan *comm2.NewBlockEvent
+	newBlockCh        chan *comm.NewBlockEvent
 	txCh              chan *txpool.TxEvent
 	futureBlocksCache *cache.RandCache
-	txStash           *txStash
 }
 
 func New(
 	master *Master,
-	repo RepositoryEngine,
-	bft BFTEngine,
+	repo *chain.Repository,
+	bft bft.Committer,
 	stater *state.Stater,
 	logDB *logdb.LogDB,
-	txPool TxPoolEngine,
+	txPool txpool.Pool,
 	txStashPath string,
-	comm CommunicatorEngine,
+	communicator Communicator,
 	forkConfig *thor.ForkConfig,
 	options Options,
-	consensusEngine ConsensusEngine,
-	packerEngine PackerEngine,
+	consensusEngine Consensus,
+	packerEngine Packer,
 ) *Node {
-	n := &Node{
+	return &Node{
 		packer:      packerEngine,
 		cons:        consensusEngine,
 		master:      master,
@@ -98,28 +97,25 @@ func New(
 		logDB:       logDB,
 		txPool:      txPool,
 		txStashPath: txStashPath,
-		comm:        comm,
+		comm:        communicator,
 		forkConfig:  forkConfig,
 		options:     options,
+
+		logWorker:         newWorker(),
+		futureBlocksCache: cache.NewRandCache(32),
+		scope:             event.SubscriptionScope{},
 	}
-
-	// initialize members
-	n.logWorker = newWorker()
-	n.futureBlocksCache = cache.NewRandCache(32)
-	n.scope = event.SubscriptionScope{}
-
-	n.newBlockCh = make(chan *comm2.NewBlockEvent)
-	n.scope.Track(n.comm.SubscribeBlock(n.newBlockCh))
-
-	n.txCh = make(chan *txpool.TxEvent)
-	n.scope.Track(n.txPool.SubscribeTxEvent(n.txCh))
-
-	return n
 }
 
 func (n *Node) Run(ctx context.Context) error {
 	defer n.logWorker.Close()
 	defer n.scope.Close()
+
+	n.newBlockCh = make(chan *comm.NewBlockEvent)
+	n.scope.Track(n.comm.SubscribeBlock(n.newBlockCh))
+
+	n.txCh = make(chan *txpool.TxEvent)
+	n.scope.Track(n.txPool.SubscribeTxEvent(n.txCh))
 
 	maxBlockNum, err := n.repo.GetMaxBlockNum()
 	if err != nil {
@@ -129,17 +125,15 @@ func (n *Node) Run(ctx context.Context) error {
 
 	db, err := leveldb.OpenFile(n.txStashPath, nil)
 	if err != nil {
-		logger.Error("create tx stash", "err", err)
 		return err
 	}
 	defer db.Close()
-
-	n.txStash = newTxStash(db, 1000)
+	txStash := newTxStash(db, 1000)
 
 	var goes co.Goes
 	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
 	goes.Go(func() { n.houseKeeping(ctx) })
-	goes.Go(func() { n.txStashLoop(ctx) })
+	goes.Go(func() { n.txStashLoop(ctx, txStash) })
 	goes.Go(func() { n.packerLoop(ctx) })
 
 	goes.Wait()
@@ -160,7 +154,10 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 
 	var blk *block.Block
 	for blk = range stream {
-		// the blk is validated in block package already
+		// block stream will have nil for throttling, just skip it
+		if blk == nil {
+			continue
+		}
 		if _, err := n.processBlock(blk, &stats); err != nil {
 			return err
 		}
@@ -182,13 +179,33 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 	return nil
 }
 
-func checkClockOffset() {
-	resp, err := ntp.Query("pool.ntp.org")
-	if err != nil {
-		logger.Debug("failed to access NTP", "err", err)
-		return
+func (n *Node) txStashLoop(ctx context.Context, stash *txStash) {
+	logger.Debug("enter tx stash loop")
+	defer logger.Debug("leave tx stash loop")
+
+	{
+		txs := stash.LoadAll()
+		if len(txs) > 0 {
+			n.txPool.Fill(txs)
+		}
+		logger.Debug("loaded txs from stash", "count", len(txs))
 	}
-	if resp.ClockOffset > time.Duration(thor.BlockInterval())*time.Second/2 {
-		logger.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case txEv := <-n.txCh:
+			// skip executables
+			if txEv.Executable != nil && *txEv.Executable {
+				continue
+			}
+			// only stash non-executable txs
+			if err := stash.Save(txEv.Tx); err != nil {
+				logger.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
+			} else {
+				logger.Trace("stashed tx", "id", txEv.Tx.ID())
+			}
+		}
 	}
 }

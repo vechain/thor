@@ -11,9 +11,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/beevik/ntp"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
-	comm2 "github.com/vechain/thor/v2/comm"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -21,40 +23,36 @@ import (
 func (n *Node) houseKeeping(ctx context.Context) {
 	logger.Debug("enter house keeping")
 
-	var noPeerTimes int
+	connectivity := new(ConnectivityState)
 	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
 	connectivityTicker := time.NewTicker(time.Second)
 	clockSyncTicker := time.NewTicker(10 * time.Minute)
 
 	defer func() {
+		logger.Debug("leave house keeping")
 		futureTicker.Stop()
 		connectivityTicker.Stop()
 		clockSyncTicker.Stop()
-		logger.Debug("leave house keeping")
 	}()
 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("received context done signal")
 			return
 		case newBlock := <-n.newBlockCh:
 			n.handleNewBlock(newBlock)
 		case <-futureTicker.C:
 			n.handleFutureBlocks()
 		case <-connectivityTicker.C:
-			n.handleCconnectivityTicker(&noPeerTimes)
+			connectivity.Check(n.comm.PeerCount())
 		case <-clockSyncTicker.C:
-			n.handleClockSyncTick()
+			go checkClockOffset()
 		}
 	}
 }
 
-func (n *Node) handleNewBlock(newBlockEvent *comm2.NewBlockEvent) {
-	logger.Debug("received new block")
-
+func (n *Node) handleNewBlock(newBlockEvent *comm.NewBlockEvent) {
 	var stats blockStats
-	// the newBlockEvent.Block is validated in comm package already
 	newBlock := newBlockEvent.Block
 	if isTrunk, err := n.processBlock(newBlock, &stats); err != nil {
 		if consensus.IsFutureBlock(err) ||
@@ -69,7 +67,6 @@ func (n *Node) handleNewBlock(newBlockEvent *comm2.NewBlockEvent) {
 }
 
 func (n *Node) handleFutureBlocks() {
-	logger.Debug("received future block signal")
 	var blocks []*block.Block
 	n.futureBlocksCache.ForEach(func(ent *cache.Entry) bool {
 		blocks = append(blocks, ent.Value.(*block.Block))
@@ -94,18 +91,27 @@ func (n *Node) handleFutureBlocks() {
 	}
 }
 
-func (n *Node) handleCconnectivityTicker(noPeerTimes *int) {
-	if n.comm.PeerCount() == 0 {
-		*noPeerTimes++
-		if *noPeerTimes > 30 {
-			*noPeerTimes = 0
+type ConnectivityState uint
+
+func (c *ConnectivityState) Check(peers int) {
+	if peers == 0 {
+		*c++
+		if *c > 30 {
+			*c = 0
 			go checkClockOffset()
 		}
 	} else {
-		*noPeerTimes = 0
+		*c = 0
 	}
 }
 
-func (n *Node) handleClockSyncTick() {
-	go checkClockOffset()
+func checkClockOffset() {
+	resp, err := ntp.Query("pool.ntp.org")
+	if err != nil {
+		logger.Debug("failed to access NTP", "err", err)
+		return
+	}
+	if resp.ClockOffset > time.Duration(thor.BlockInterval())*time.Second/2 {
+		logger.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
+	}
 }

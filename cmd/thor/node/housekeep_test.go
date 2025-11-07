@@ -79,6 +79,14 @@ func (m *mockBFT) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
+func (m *mockBFT) Finalized() thor.Bytes32 {
+	return thor.Bytes32{}
+}
+
+func (m *mockBFT) Justified() (thor.Bytes32, error) {
+	return thor.Bytes32{}, nil
+}
+
 type mockConsensus struct {
 	stager *state.Stage
 }
@@ -318,16 +326,11 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 }
 
 func TestNode_HouseKeeping_ConnectivityTicker(t *testing.T) {
-	node, mockComm := setupTestNodeForHousekeeping(t)
+	cs := new(ConnectivityState)
 
-	mockComm.peerCount = 5
-	var noPeerTimes1 int
-	node.handleCconnectivityTicker(&noPeerTimes1)
-	assert.Equal(t, 0, noPeerTimes1, "noPeerTimes should remain 0 when peers are connected")
+	cs.Check(5)
+	assert.Equal(t, ConnectivityState(0), *cs, "cs should be 0 when peers are connected")
 
-	var noPeerTimes2 int
-	mockComm.peerCount = 0
-	node.handleCconnectivityTicker(&noPeerTimes2)
-
-	assert.Equal(t, 1, noPeerTimes2, "noPeerTimes should reset to 0 after reaching threshold and checking clock offset")
+	cs.Check(0)
+	assert.Equal(t, ConnectivityState(1), *cs, "cs should be 1 after reaching threshold and checking clock offset")
 }
