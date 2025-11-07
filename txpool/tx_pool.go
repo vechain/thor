@@ -336,9 +336,13 @@ func (p *TxPool) addWhenSynced(
 	}
 
 	// Check pool limits and priority for remote transactions
-	if !localSubmitted && p.all.Len() >= p.options.Limit*12/10 {
-		if !p.checkTxPriority(txObj, executable) {
+	if !localSubmitted {
+		if p.all.Len() >= p.options.Limit*15/10 {
 			return txRejectedError{"pool is full"}
+		} else if p.all.Len() >= p.options.Limit*12/10 {
+			if !p.checkTxPriority(txObj, executable) {
+				return txRejectedError{"pool is full"}
+			}
 		}
 	}
 

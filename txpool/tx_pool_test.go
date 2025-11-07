@@ -1751,13 +1751,13 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	pool := newPoolWithParams(10, 1000, "", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
 	defer pool.Close()
 
-	for i := range int64(150) {
+	for i := range int64(15) {
 		trx := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(pool.repo.ChainTag()).
 			Gas(21000).
 			Nonce(datagen.RandUint64()).
 			MaxFeePerGas(big.NewInt(1e13)).
-			MaxPriorityFeePerGas(big.NewInt(i)).
+			MaxPriorityFeePerGas(big.NewInt(i + 1)).
 			Expiration(1000).
 			Build()
 
@@ -1780,6 +1780,6 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 
 	txs := pool.Dump()
 	for _, tx := range txs {
-		assert.Greater(t, tx.MaxPriorityFeePerGas().Int64(), int64(135))
+		assert.Greater(t, tx.MaxPriorityFeePerGas().Int64(), int64(5))
 	}
 }
