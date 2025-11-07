@@ -184,6 +184,7 @@ type Server struct {
 	peerFeed      event.Feed
 	log           log.Logger
 	nodedb        *enode.DB
+	dialingNodes  *nodeMap
 }
 
 type peerOpFunc func(map[tempdiscv5.NodeID]*Peer)
@@ -434,7 +435,28 @@ func (s *Server) KnownNodes() Nodes {
 
 // Start starts running the server.
 // Servers can not be re-used after stopping.
-func (srv *Server) Start() (err error) {
+func (srv *Server) Start(protocols []*Protocol, topic tempdiscv5.Topic) (err error) {
+	for _, proto := range protocols {
+		cpy := *proto
+		run := cpy.Run
+		cpy.Run = func(peer *Peer, rw MsgReadWriter) (err error) {
+			log.Trace("peer connected")
+			metricConnectedPeers().Add(1)
+
+			//startTime := mclock.Now()
+			defer func() {
+				log.Debug("peer disconnected", "reason", err)
+				//if node := srv.dialingNodes.Remove(peer.ID()); node != nil {
+				//	// we assume that good peer has longer connection duration.
+				//	//s.knownNodes.Set(peer.ID(), node, float64(mclock.Now()-startTime))
+				//}
+				metricConnectedPeers().Add(-1)
+			}()
+			return run(peer, rw)
+		}
+		srv.Protocols = append(srv.Protocols, cpy)
+	}
+
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 	if srv.running {
@@ -448,7 +470,6 @@ func (srv *Server) Start() (err error) {
 	srv.log.Info("Starting P2P networking")
 
 	// static fields
-	fmt.Println("Private key", srv.PrivateKey)
 	if srv.PrivateKey == nil {
 		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
 	}
@@ -545,7 +566,18 @@ func (srv *Server) Start() (err error) {
 	}
 
 	dynPeers := srv.maxDialedConns()
-	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.TempDiscV5, dynPeers, srv.NetRestrict)
+	combinedBootnodes := append([]*tempdiscv5.Node{}, srv.BootstrapNodes...)
+	for _, node := range srv.BootstrapNodesV5 {
+		nodeTemp := tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID()), node.IP(), uint16(node.UDP()), uint16(node.TCP()), time.Now())
+		combinedBootnodes = append(combinedBootnodes, nodeTemp)
+
+	}
+	var wrappedDiscv5 *DiscV5DiscoveryTableWrapper
+	if srv.DiscV5 != nil {
+		wrappedDiscv5 = &DiscV5DiscoveryTableWrapper{inner: srv.DiscV5}
+	}
+
+	dialer := newDialState(srv.StaticNodes, combinedBootnodes, srv.TempDiscV5, wrappedDiscv5, dynPeers, srv.NetRestrict)
 
 	// handshake
 	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: tempdiscv5.PubkeyID(&srv.PrivateKey.PublicKey)}
@@ -642,6 +674,9 @@ func (srv *Server) run(dialstate dialer) {
 			queuedTasks = append(queuedTasks, startTasks(nt)...)
 		}
 	}
+	const fastDialDur = 500 * time.Millisecond
+	const nonFastDialDur = 2 * time.Second
+	const stableDialDur = 10 * time.Second
 
 running:
 	for {
@@ -723,6 +758,7 @@ running:
 					p.events = &srv.peerFeed
 				}
 				name := truncateName(c.name)
+				fmt.Println("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				srv.log.Debug("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				go srv.runPeer(p)
 				peers[c.id] = p
@@ -802,7 +838,7 @@ func (srv *Server) maxInboundConns() int {
 }
 
 func (srv *Server) maxDialedConns() int {
-	if srv.NoDiscovery || srv.NoDial {
+	if (srv.NoDiscovery && !srv.DiscoveryV5) || srv.NoDial {
 		return 0
 	}
 	r := srv.DialRatio
@@ -862,6 +898,7 @@ func (srv *Server) listenLoop() {
 		}
 
 		//fd = newMeteredConn(fd, true)
+		fmt.Println("Accepted connection", fd.RemoteAddr())
 		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
@@ -1048,3 +1085,42 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 	}
 	return infos
 }
+
+type DiscV5DiscoveryTableWrapper struct {
+	inner *discv5.UDPv5
+}
+
+func (d *DiscV5DiscoveryTableWrapper) Self() *tempdiscv5.Node {
+	self := d.inner.Self()
+	node := tempdiscv5.NewNode(tempdiscv5.NodeID(self.ID()), self.IP(), uint16(self.UDP()), uint16(self.TCP()), time.Now())
+	return node
+}
+func (d *DiscV5DiscoveryTableWrapper) Close() {
+	d.inner.Close()
+}
+func (d *DiscV5DiscoveryTableWrapper) Resolve(target tempdiscv5.NodeID) *tempdiscv5.Node {
+	node := d.inner.ResolveNodeId(enode.ID(target))
+	return tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID()), node.IP(), uint16(node.UDP()), uint16(node.TCP()), time.Now())
+}
+func (d *DiscV5DiscoveryTableWrapper) Lookup(target tempdiscv5.NodeID) []*tempdiscv5.Node {
+	nodes := d.inner.Lookup(enode.ID(target))
+	nodesTemp := make([]*tempdiscv5.Node, len(nodes))
+	for index, node := range nodes {
+		nodesTemp[index] = tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID()), node.IP(), uint16(node.UDP()), uint16(node.TCP()), time.Now())
+	}
+	return nodesTemp
+}
+func (d *DiscV5DiscoveryTableWrapper) ReadRandomNodes(nodes []*tempdiscv5.Node) int {
+	iterator := d.inner.RandomNodes()
+	i := 0
+	for ; i < len(nodes); i++ {
+		if !iterator.Next() {
+			break
+		}
+		node := iterator.Node()
+		nodes[i] = tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID()), node.IP(), uint16(node.UDP()), uint16(node.TCP()), time.Now())
+	}
+	return i
+}
+
+//ReadRandomNodes([]*tempdiscv5.Node) int

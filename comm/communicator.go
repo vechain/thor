@@ -169,6 +169,8 @@ func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		c.runPeer(peer)
 	})
 
+	fmt.Println("Serving a peer")
+
 	var txsToSync txsToSync
 
 	return peer.Serve(func(msg *p2p.Msg, w func(any)) error {

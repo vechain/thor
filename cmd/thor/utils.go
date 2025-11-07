@@ -35,6 +35,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/p2psrv/discv5/enode"
 	"github.com/vechain/thor/v2/p2psrv/nat"
 	"github.com/vechain/thor/v2/p2psrv/tempdiscv5"
 	"gopkg.in/urfave/cli.v1"
@@ -521,8 +522,10 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 		log.Warn("failed to load peers cache", "err", err)
 	}
 
-	//node, _ := enode.New()
-	//discv5bootstrap := []*enode.Node{node}
+	discv5Bootstrap := []*enode.Node{}
+	for _, bootnode := range bootnodePeers {
+		discv5Bootstrap = append(discv5Bootstrap, enode.MustParseV4(bootnode.String()))
+	}
 	return p2p.New(
 		comm.New(repo, txPool),
 		key,
@@ -535,7 +538,7 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 		allowedPeers,
 		cachedPeers,
 		bootnodePeers,
-		nil,
+		discv5Bootstrap,
 		true,
 	), nil
 }

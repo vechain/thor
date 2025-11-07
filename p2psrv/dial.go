@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"time"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/v2/p2psrv/netutil"
@@ -71,6 +73,7 @@ func (t TCPDialer) Dial(dest *tempdiscv5.Node) (net.Conn, error) {
 type dialstate struct {
 	maxDynDials int
 	ntab        discoverTable
+	ntabv5      discoverTable
 	netrestrict *netutil.Netlist
 
 	lookupRunning bool
@@ -127,10 +130,11 @@ type waitExpireTask struct {
 	time.Duration
 }
 
-func newDialState(static []*tempdiscv5.Node, bootnodes []*tempdiscv5.Node, ntab discoverTable, maxdyn int, netrestrict *netutil.Netlist) *dialstate {
+func newDialState(static []*tempdiscv5.Node, bootnodes []*tempdiscv5.Node, ntab discoverTable, ntabv5 discoverTable, maxdyn int, netrestrict *netutil.Netlist) *dialstate {
 	s := &dialstate{
 		maxDynDials: maxdyn,
 		ntab:        ntab,
+		ntabv5:      ntabv5,
 		netrestrict: netrestrict,
 		static:      make(map[tempdiscv5.NodeID]*dialTask),
 		dialing:     make(map[tempdiscv5.NodeID]connFlag),
@@ -219,10 +223,22 @@ func (s *dialstate) newTasks(nRunning int, peers map[tempdiscv5.NodeID]*Peer, no
 	// dynamic dials.
 	randomCandidates := needDynDials / 2
 	if randomCandidates > 0 {
-		n := s.ntab.ReadRandomNodes(s.randomNodes)
-		for i := 0; i < randomCandidates && i < n; i++ {
-			if addDial(dynDialedConn, s.randomNodes[i]) {
-				needDynDials--
+		var n int
+		if !reflect.ValueOf(s.ntab).IsNil() {
+			n = s.ntab.ReadRandomNodes(s.randomNodes)
+			for i := 0; i < randomCandidates && i < n; i++ {
+				if addDial(dynDialedConn, s.randomNodes[i]) {
+					needDynDials--
+				}
+			}
+		}
+		if n < randomCandidates && s.ntabv5 != nil {
+			offset := n
+			n := s.ntabv5.ReadRandomNodes(s.randomNodes[offset:])
+			for i := offset; i < randomCandidates && i < offset+n; i++ {
+				if addDial(dynDialedConn, s.randomNodes[i]) {
+					needDynDials--
+				}
 			}
 		}
 	}
@@ -267,7 +283,9 @@ func (s *dialstate) checkDial(n *tempdiscv5.Node, peers map[tempdiscv5.NodeID]*P
 		return errAlreadyDialing
 	case peers[n.ID] != nil:
 		return errAlreadyConnected
-	case s.ntab != nil && n.ID == s.ntab.Self().ID:
+	case !reflect.ValueOf(s.ntab).IsNil() && n.ID == s.ntab.Self().ID:
+		return errSelf
+	case !reflect.ValueOf(s.ntabv5).IsNil() && n.ID == s.ntabv5.Self().ID:
 		return errSelf
 	case s.netrestrict != nil && !s.netrestrict.Contains(n.IP):
 		return errNotWhitelisted
@@ -351,6 +369,7 @@ func (t *dialTask) dial(srv *Server, dest *tempdiscv5.Node) error {
 		return &dialError{err}
 	}
 	//mfd := newMeteredConn(fd, false)
+	fmt.Println("Dialing connection", dest)
 	return srv.SetupConn(fd, t.flags, dest)
 }
 
@@ -369,7 +388,23 @@ func (t *discoverTask) Do(srv *Server) {
 	srv.lastLookup = time.Now()
 	var target tempdiscv5.NodeID
 	rand.Read(target[:])
-	t.results = srv.ntab.Lookup(target)
+
+	if srv.ntab != nil {
+		t.results = srv.ntab.Lookup(target)
+	}
+
+	if srv.DiscoveryV5 {
+		discv5Results := srv.nodedb.QuerySeeds(srv.MaxPeers, time.Second*10)
+		// branchless min(leftToFill, len(discv5Results))
+		leftToFill := srv.MaxPeers - len(t.results)
+		cmp := leftToFill < len(discv5Results)
+		cmpInt := int(*(*byte)(unsafe.Pointer(&cmp)))
+		for i := 0; i < (cmpInt*leftToFill)+((1-cmpInt)*len(discv5Results)); i++ {
+			v5Node := discv5Results[i]
+			node := tempdiscv5.NewNode(tempdiscv5.NodeID(v5Node.ID()), v5Node.IP(), uint16(v5Node.UDP()), uint16(v5Node.TCP()), time.Now())
+			t.results = append(t.results, node)
+		}
+	}
 }
 
 func (t *discoverTask) String() string {

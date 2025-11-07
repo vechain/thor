@@ -468,7 +468,9 @@ seek:
 			id[0] = 0
 			continue seek // iterator exhausted
 		}
-		if now.Sub(db.LastPongReceived(n.ID(), n.IPAddr())) > maxAge {
+		lastAdded := db.LastPongReceived(n.ID(), n.IPAddr())
+		//node := tempdiscv5.NewNode(tempdiscv5.NodeID(n.ID()), n.IP(), uint16(n.UDP()), uint16(n.TCP()), lastAdded)
+		if now.Sub(lastAdded) > maxAge {
 			continue seek
 		}
 		for i := range nodes {

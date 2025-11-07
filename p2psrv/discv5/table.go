@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	//"github.com/ethereum/go-ethereum/metrics"
@@ -45,7 +44,7 @@ const (
 
 	// We keep buckets for the upper 1/15 of distances because
 	// it's very unlikely we'll ever encounter a node that's closer.
-	hashBits          = len(common.Hash{}) * 8
+	hashBits          = len(enode.ID{}) * 8
 	nBuckets          = hashBits / 15       // Number of buckets
 	bucketMinDistance = hashBits - nBuckets // Log distance of closest bucket
 

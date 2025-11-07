@@ -61,12 +61,13 @@ func New(
 		NAT:                 nat,
 		BootstrapNodesV5:    bootstrapNodesV5,
 		DiscoveryV5:         discoveryV5,
+		NoDiscovery:         true,
 	}
 
 	// allowed peers flag will only allow p2psrv to connect to the designated peers
 	if len(allowedPeers) > 0 {
 		opts.NoDiscovery = true // disable discovery
-		opts.DiscoveryV5 = false
+		opts.DiscoveryV5 = discoveryV5
 		opts.BootstrapNodes = nil
 		opts.BootstrapNodesV5 = nil
 		opts.TrustedNodes = allowedPeers
@@ -94,7 +95,7 @@ func New(
 
 func (p *P2P) Start() error {
 	log.Info("starting P2P networking")
-	if err := p.p2pSrv.Start(); err != nil { //p.comm.Protocols(), p.comm.DiscTopic()); err != nil {
+	if err := p.p2pSrv.Start(p.comm.Protocols(), p.comm.DiscTopic()); err != nil { //p.comm.Protocols(), p.comm.DiscTopic()); err != nil {
 		return errors.Wrap(err, "start P2P server")
 	}
 	p.comm.Start()
