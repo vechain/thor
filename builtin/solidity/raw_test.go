@@ -11,12 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestRaw_NewRaw(t *testing.T) {
-	ctx := newTestContext()
+	ctx, _ := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-position"))
 
 	raw := NewRaw[uint64](ctx, pos)
@@ -26,7 +25,7 @@ func TestRaw_NewRaw(t *testing.T) {
 }
 
 func TestRaw_Get_EmptyStorage(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-get-empty"))
 	raw := NewRaw[uint64](ctx, pos)
 
@@ -34,11 +33,11 @@ func TestRaw_Get_EmptyStorage(t *testing.T) {
 	value, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, uint64(0), value)
-	assert.Equal(t, thor.SloadGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SloadGas, charger.TotalGas())
 }
 
 func TestRaw_Get_ExistingValue(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-get-existing"))
 	raw := NewRaw[uint64](ctx, pos)
 
@@ -48,17 +47,17 @@ func TestRaw_Get_ExistingValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reset charger to measure only get operation
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 
 	// Test getting existing value
 	value, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, expectedValue, value)
-	assert.Equal(t, thor.SloadGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SloadGas, charger.TotalGas())
 }
 
 func TestRaw_Insert_NewValue(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-insert"))
 	raw := NewRaw[uint64](ctx, pos)
 
@@ -66,17 +65,17 @@ func TestRaw_Insert_NewValue(t *testing.T) {
 	value := uint64(54321)
 	err := raw.Insert(value)
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreSetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreSetGas, charger.TotalGas())
 
 	// Verify the value was stored
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 }
 
 func TestRaw_Update_ExistingValue(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-update"))
 	raw := NewRaw[uint64](ctx, pos)
 
@@ -86,23 +85,23 @@ func TestRaw_Update_ExistingValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reset charger
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 
 	// Test updating existing value
 	newValue := uint64(200)
 	err = raw.Update(newValue)
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreResetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreResetGas, charger.TotalGas())
 
 	// Verify the value was updated
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, newValue, retrieved)
 }
 
 func TestRaw_Upsert_NewValue(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-upsert-new"))
 	raw := NewRaw[uint64](ctx, pos)
 
@@ -110,17 +109,17 @@ func TestRaw_Upsert_NewValue(t *testing.T) {
 	value := uint64(999)
 	err := raw.Upsert(value)
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreSetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreSetGas, charger.TotalGas())
 
 	// Verify the value was stored
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 }
 
 func TestRaw_Upsert_ExistingValue(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-upsert-existing"))
 	raw := NewRaw[uint64](ctx, pos)
 
@@ -130,23 +129,23 @@ func TestRaw_Upsert_ExistingValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reset charger
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 
 	// Test upserting existing value (should use Update)
 	newValue := uint64(600)
 	err = raw.Upsert(newValue)
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreResetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreResetGas, charger.TotalGas())
 
 	// Verify the value was updated
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, newValue, retrieved)
 }
 
 func TestRaw_ZeroValue(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-zero-value"))
 	raw := NewRaw[uint64](ctx, pos)
 
@@ -155,22 +154,22 @@ func TestRaw_ZeroValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reset charger
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 
 	// Test setting zero value (should clear storage)
 	err = raw.Update(uint64(0))
 	require.NoError(t, err)
-	assert.Equal(t, uint64(0), ctx.charger.TotalGas())
+	assert.Equal(t, uint64(0), charger.TotalGas())
 
 	// Verify storage was cleared
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, uint64(0), retrieved)
 }
 
 func TestRaw_ComplexType(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-complex"))
 
 	type TestStruct struct {
@@ -190,17 +189,17 @@ func TestRaw_ComplexType(t *testing.T) {
 
 	err := raw.Insert(value)
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreSetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreSetGas, charger.TotalGas())
 
 	// Verify the struct was stored correctly
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 }
 
 func TestRaw_StringType(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-string"))
 	raw := NewRaw[string](ctx, pos)
 
@@ -208,17 +207,17 @@ func TestRaw_StringType(t *testing.T) {
 	value := "hello world"
 	err := raw.Insert(value)
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreSetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreSetGas, charger.TotalGas())
 
 	// Verify the string was stored correctly
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 }
 
 func TestRaw_AddressType(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-address"))
 	raw := NewRaw[thor.Address](ctx, pos)
 
@@ -226,37 +225,37 @@ func TestRaw_AddressType(t *testing.T) {
 	value := thor.Address{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0}
 	err := raw.Insert(value)
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreSetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreSetGas, charger.TotalGas())
 
 	// Verify the address was stored correctly
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	retrieved, err := raw.Get()
 	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 }
 
 func TestRaw_GasCharging(t *testing.T) {
-	ctx := newTestContext()
+	ctx, charger := newTestContext()
 	pos := thor.BytesToBytes32([]byte("test-gas"))
 	raw := NewRaw[uint64](ctx, pos)
 
 	// Test gas charging for different operations
-	initialGas := ctx.charger.TotalGas()
+	initialGas := charger.TotalGas()
 
 	// Insert should charge SstoreSetGas
 	err := raw.Insert(uint64(100))
 	require.NoError(t, err)
-	assert.Equal(t, initialGas+thor.SstoreSetGas, ctx.charger.TotalGas())
+	assert.Equal(t, initialGas+thor.SstoreSetGas, charger.TotalGas())
 
 	// Get should charge SloadGas
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	_, err = raw.Get()
 	require.NoError(t, err)
-	assert.Equal(t, thor.SloadGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SloadGas, charger.TotalGas())
 
 	// Update should charge SstoreResetGas
-	ctx.charger = gascharger.New(newXenv())
+	charger.usedGas = 0
 	err = raw.Update(uint64(200))
 	require.NoError(t, err)
-	assert.Equal(t, thor.SstoreResetGas, ctx.charger.TotalGas())
+	assert.Equal(t, thor.SstoreResetGas, charger.TotalGas())
 }

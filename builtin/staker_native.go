@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -25,9 +24,7 @@ func init() {
 		run  func(env *xenv.Environment) ([]any, error)
 	}{
 		{"native_totalStake", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-
-			staked, weight, err := Staker.NativeMetered(env.State(), charger).LockedStake()
+			staked, weight, err := Staker.NativeMetered(env.State(), env.UseGas).LockedStake()
 			if err != nil {
 				return nil, err
 			}
@@ -37,9 +34,7 @@ func init() {
 			}, nil
 		}},
 		{"native_queuedStake", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-
-			staked, err := Staker.NativeMetered(env.State(), charger).QueuedStake()
+			staked, err := Staker.NativeMetered(env.State(), env.UseGas).QueuedStake()
 			if err != nil {
 				return nil, err
 			}
@@ -52,9 +47,7 @@ func init() {
 				Validator common.Address
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			validator, err := Staker.NativeMetered(env.State(), charger).GetValidation(thor.Address(args.Validator))
+			validator, err := Staker.NativeMetered(env.State(), env.UseGas).GetValidation(thor.Address(args.Validator))
 			if err != nil {
 				return nil, err
 			}
@@ -107,18 +100,14 @@ func init() {
 				Validator common.Address
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			amount, err := Staker.NativeMetered(env.State(), charger).GetWithdrawable(thor.Address(args.Validator), env.BlockContext().Number)
+			amount, err := Staker.NativeMetered(env.State(), env.UseGas).GetWithdrawable(thor.Address(args.Validator), env.BlockContext().Number)
 			if err != nil {
 				return nil, err
 			}
 			return []any{staker.ToWei(amount)}, nil
 		}},
 		{"native_firstActive", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-
-			first, err := Staker.NativeMetered(env.State(), charger).FirstActive()
+			first, err := Staker.NativeMetered(env.State(), env.UseGas).FirstActive()
 			if err != nil {
 				return nil, err
 			}
@@ -126,9 +115,7 @@ func init() {
 			return []any{first}, nil
 		}},
 		{"native_firstQueued", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-
-			first, err := Staker.NativeMetered(env.State(), charger).FirstQueued()
+			first, err := Staker.NativeMetered(env.State(), env.UseGas).FirstQueued()
 			if err != nil {
 				return nil, err
 			}
@@ -140,9 +127,7 @@ func init() {
 				Prev common.Address
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			next, err := Staker.NativeMetered(env.State(), charger).Next(thor.Address(args.Prev))
+			next, err := Staker.NativeMetered(env.State(), env.UseGas).Next(thor.Address(args.Prev))
 			if err != nil {
 				return nil, err
 			}
@@ -155,9 +140,7 @@ func init() {
 				Endorser  common.Address
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
-
-			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawStake(
+			stake, err := Staker.NativeMetered(env.State(), env.UseGas).WithdrawStake(
 				thor.Address(args.Validator),
 				thor.Address(args.Endorser),
 				env.BlockContext().Number,
@@ -178,9 +161,8 @@ func init() {
 			env.ParseArgs(&args)
 			val := thor.Address(args.Validator)
 			end := thor.Address(args.Endorser)
-			charger := gascharger.New(env)
 
-			isPoSActive, err := Staker.NativeMetered(env.State(), charger).IsPoSActive()
+			isPoSActive, err := Staker.NativeMetered(env.State(), env.UseGas).IsPoSActive()
 			if err != nil {
 				return nil, err
 			}
@@ -203,7 +185,7 @@ func init() {
 				return nil, staker.NewReverts(err.Error())
 			}
 
-			err = Staker.NativeMetered(env.State(), charger).
+			err = Staker.NativeMetered(env.State(), env.UseGas).
 				AddValidation(
 					val,
 					end,
@@ -222,9 +204,8 @@ func init() {
 				Endorser  common.Address
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := Staker.NativeMetered(env.State(), env.UseGas).
 				SignalExit(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -242,14 +223,13 @@ func init() {
 				Amount    *big.Int
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
 			stake, err := staker.ToVET(args.Amount) // convert from wei to VET
 			if err != nil {
 				return nil, staker.NewReverts(err.Error())
 			}
 
-			err = Staker.NativeMetered(env.State(), charger).
+			err = Staker.NativeMetered(env.State(), env.UseGas).
 				IncreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -268,9 +248,8 @@ func init() {
 				Beneficiary common.Address
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).
+			err := Staker.NativeMetered(env.State(), env.UseGas).
 				SetBeneficiary(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -288,14 +267,13 @@ func init() {
 				Amount    *big.Int
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
 			stake, err := staker.ToVET(args.Amount) // convert from wei to VET
 			if err != nil {
 				return nil, staker.NewReverts(err.Error())
 			}
 
-			err = Staker.NativeMetered(env.State(), charger).
+			err = Staker.NativeMetered(env.State(), env.UseGas).
 				DecreaseStake(
 					thor.Address(args.Validator),
 					thor.Address(args.Endorser),
@@ -313,14 +291,13 @@ func init() {
 				Multiplier uint8
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
 			stake, err := staker.ToVET(args.Stake) // convert from wei to VET,
 			if err != nil {
 				return nil, staker.NewReverts(err.Error())
 			}
 
-			delegationID, err := Staker.NativeMetered(env.State(), charger).
+			delegationID, err := Staker.NativeMetered(env.State(), env.UseGas).
 				AddDelegation(
 					thor.Address(args.Validator),
 					stake,
@@ -337,9 +314,8 @@ func init() {
 				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
-			stake, err := Staker.NativeMetered(env.State(), charger).WithdrawDelegation(args.DelegationID, env.BlockContext().Number)
+			stake, err := Staker.NativeMetered(env.State(), env.UseGas).WithdrawDelegation(args.DelegationID, env.BlockContext().Number)
 			if err != nil {
 				return nil, err
 			}
@@ -351,9 +327,8 @@ func init() {
 				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
-			err := Staker.NativeMetered(env.State(), charger).SignalDelegationExit(args.DelegationID, env.BlockContext().Number)
+			err := Staker.NativeMetered(env.State(), env.UseGas).SignalDelegationExit(args.DelegationID, env.BlockContext().Number)
 			if err != nil {
 				return nil, err
 			}
@@ -365,9 +340,8 @@ func init() {
 				DelegationID *big.Int
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
-			delegation, validation, err := Staker.NativeMetered(env.State(), charger).GetDelegation(args.DelegationID)
+			delegation, validation, err := Staker.NativeMetered(env.State(), env.UseGas).GetDelegation(args.DelegationID)
 			if err != nil {
 				return nil, err
 			}
@@ -402,18 +376,15 @@ func init() {
 				StakingPeriod uint32
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
-			reward, err := Staker.NativeMetered(env.State(), charger).GetDelegatorRewards(thor.Address(args.Validator), args.StakingPeriod)
+			reward, err := Staker.NativeMetered(env.State(), env.UseGas).GetDelegatorRewards(thor.Address(args.Validator), args.StakingPeriod)
 			if err != nil {
 				return nil, err
 			}
 			return []any{reward}, nil
 		}},
 		{"native_getDelegatorContract", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-
-			charger.Charge(thor.SloadGas)
+			env.UseGas(thor.SloadGas)
 			raw, err := Params.Native(env.State()).Get(thor.KeyDelegatorContractAddress)
 			if err != nil {
 				return nil, err
@@ -426,9 +397,8 @@ func init() {
 				Validator common.Address
 			}
 			env.ParseArgs(&args)
-			charger := gascharger.New(env)
 
-			totals, err := Staker.NativeMetered(env.State(), charger).GetValidationTotals(thor.Address(args.Validator))
+			totals, err := Staker.NativeMetered(env.State(), env.UseGas).GetValidationTotals(thor.Address(args.Validator))
 			if err != nil {
 				return nil, err
 			}
@@ -450,19 +420,15 @@ func init() {
 			}, nil
 		}},
 		{"native_getValidationsNum", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-
-			leaderGroupSize, queuedGroupSize, err := Staker.NativeMetered(env.State(), charger).GetValidationsNum()
+			leaderGroupSize, queuedGroupSize, err := Staker.NativeMetered(env.State(), env.UseGas).GetValidationsNum()
 			if err != nil {
 				return nil, err
 			}
 			return []any{leaderGroupSize, queuedGroupSize}, nil
 		}},
 		{"native_issuance", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-
-			staker := Staker.NativeMetered(env.State(), charger)
-			charger.Charge(thor.SloadGas)
+			env.UseGas(thor.SloadGas)
+			staker := Staker.NativeMetered(env.State(), env.UseGas)
 			issuance, err := Energy.Native(env.State(), env.BlockContext().Time).CalculateRewards(staker)
 			if err != nil {
 				return nil, err
@@ -470,9 +436,7 @@ func init() {
 			return []any{issuance}, nil
 		}},
 		{"native_getControlSwitches", func(env *xenv.Environment) ([]any, error) {
-			charger := gascharger.New(env)
-			charger.Charge(thor.SloadGas)
-
+			env.UseGas(thor.SloadGas)
 			switches, err := Params.Native(env.State()).Get(thor.KeyStakerSwitches)
 			if err != nil {
 				return nil, err

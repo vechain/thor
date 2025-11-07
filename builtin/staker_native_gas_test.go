@@ -26,7 +26,6 @@ import (
 
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/state"
@@ -249,24 +248,10 @@ func TestStakerNativeGasCosts(t *testing.T) {
 				hook(t, setup)
 			}
 
-			// Capture the charger using test hook
-			var capturedCharger *gascharger.Charger
-			gascharger.SetTestHook(func(charger *gascharger.Charger) {
-				capturedCharger = charger
-			})
-			defer gascharger.ClearTestHook()
-
 			// Execute the native function
+			startGas := setup.contract.Gas
 			result := executeNativeFunction(t, setup, tc.function, tc.args)
-
-			// Validate we captured the charger
-			require.NotNil(t, capturedCharger, "Should have captured charger for %s", tc.function)
-			gasUsed := capturedCharger.TotalGas()
-
-			// Validate gas usage with descriptive error message
-			assert.Equal(t, tc.expectedGas, gasUsed,
-				"Gas usage mismatch for %s (%s):\nExpected: %d\nActual: %d\nBreakdown: %s",
-				tc.function, tc.description, tc.expectedGas, gasUsed, capturedCharger.Breakdown())
+			gasUsed := startGas - setup.contract.Gas
 
 			// Validate function executed successfully (no revert)
 			require.NotNil(t, result, "Function %s should return result", tc.function)
