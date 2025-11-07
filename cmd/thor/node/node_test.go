@@ -313,7 +313,7 @@ func TestNode_TxStashLoop_ExecutableTx_Processing(t *testing.T) {
 
 	// Wait for the txStashLoop to set up the subscription and get the channel
 	var txChan chan *txpool.TxEvent
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(10 * time.Millisecond)
 		if txChan = pool.getTxChannel(); txChan != nil {
 			break
@@ -371,7 +371,7 @@ func TestNode_TxStashLoop_UnexecutableTx_Processing(t *testing.T) {
 
 	// Wait for the txStashLoop to set up the subscription and get the channel
 	var txChan chan *txpool.TxEvent
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(10 * time.Millisecond)
 		if txChan = pool.getTxChannel(); txChan != nil {
 			break
@@ -430,7 +430,7 @@ func TestNode_TxStashLoop_StashErrorHandling(t *testing.T) {
 	}()
 
 	var txChan chan *txpool.TxEvent
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(10 * time.Millisecond)
 		if txChan = pool.getTxChannel(); txChan != nil {
 			break
