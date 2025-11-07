@@ -8,6 +8,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +33,11 @@ import (
 )
 
 // Mock implementations for testing
-type mockTxPool struct{}
+type mockTxPool struct {
+	txpoolChan chan *txpool.TxEvent
+	txFeed     event.Feed
+	mu         sync.Mutex
+}
 
 func (m *mockTxPool) Fill(txs tx.Transactions) {
 }
@@ -42,7 +47,16 @@ func (m *mockTxPool) Add(newTx *tx.Transaction) error {
 }
 
 func (m *mockTxPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
-	return &mockSubscription{}
+	m.mu.Lock()
+	m.txpoolChan = ch
+	m.mu.Unlock()
+	return m.txFeed.Subscribe(ch)
+}
+
+func (m *mockTxPool) getTxChannel() chan *txpool.TxEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.txpoolChan
 }
 
 func (m *mockTxPool) Executables() tx.Transactions {
@@ -244,12 +258,35 @@ func TestNode_HandleBlockStream_SendNormalBlock(t *testing.T) {
 	}
 }
 
-func setupTestNodeForTxstashLoop(db *leveldb.DB) (*Node, *txStash) {
-	// Create original node
-	originalNode := &Node{
-		txCh: make(chan *txpool.TxEvent, 1),
+func setupTestNodeForTxstashLoop(db *leveldb.DB) (*Node, *txStash, *mockTxPool) {
+	txpool := &mockTxPool{}
+	originalNode := &Node{txPool: txpool}
+	return originalNode, newTxStash(db, 100), txpool
+}
+
+func TestNode_TxStashLoop_FillTxPool(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	node, stash, _ := setupTestNodeForTxstashLoop(db)
+
+	txs := tx.Transactions{
+		newTx(tx.TypeLegacy),
+		newTx(tx.TypeLegacy),
 	}
-	return originalNode, newTxStash(db, 100)
+
+	for _, tx := range txs {
+		err := stash.Save(tx)
+		assert.NoError(t, err, "Failed to save transaction to stash")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	// Start the txStashLoop in a goroutine
+	node.txStashLoop(ctx, stash)
+	assert.Equal(t, len(txs), len(stash.LoadAll()), "All transactions should remain in stash after fill attempt")
 }
 
 func TestNode_TxStashLoop_ExecutableTx_Processing(t *testing.T) {
@@ -257,45 +294,57 @@ func TestNode_TxStashLoop_ExecutableTx_Processing(t *testing.T) {
 	assert.NoError(t, err)
 	defer db.Close()
 
-	node, stash := setupTestNodeForTxstashLoop(db)
+	node, stash, pool := setupTestNodeForTxstashLoop(db)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	done := make(chan bool, 1)
-
 	txEvent := txpool.TxEvent{
 		Tx:         newTx(tx.TypeLegacy),
-		Executable: &[]bool{true}[0],
+		Executable: &[]bool{true}[0], // Transaction is executable
+	}
+
+	// Start the txStashLoop in a goroutine
+	done := make(chan bool, 1)
+	go func() {
+		defer func() { done <- true }()
+		node.txStashLoop(ctx, stash)
+	}()
+
+	// Wait for the txStashLoop to set up the subscription and get the channel
+	var txChan chan *txpool.TxEvent
+	for i := 0; i < 10; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if txChan = pool.getTxChannel(); txChan != nil {
+			break
+		}
+	}
+
+	if txChan == nil {
+		t.Fatal("Timeout waiting for tx channel to be established")
 	}
 
 	go func() {
-		defer func() { done <- true }()
-
-		// Monitor for processing
-		go func() {
-			select {
-			case node.txCh <- &txEvent:
-			case <-ctx.Done():
-			}
-		}()
-
-		// Run txStashLoop briefly
 		select {
+		case txChan <- &txEvent:
+			// Successfully sent
 		case <-ctx.Done():
-		default:
-			node.txStashLoop(ctx, stash)
+			// Context cancelled
 		}
 	}()
 
-	// Allow some time for processing
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	// Signal completion before reading logs
 	cancel()
-	<-done
 
-	assert.True(t, len(stash.LoadAll()) == 0, "TxStash should be empty")
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timeout waiting for txStashLoop to complete")
+	}
+
+	stashedTxs := stash.LoadAll()
+	assert.Equal(t, 0, len(stashedTxs), "Executable transactions should not be stashed")
 }
 
 func TestNode_TxStashLoop_UnexecutableTx_Processing(t *testing.T) {
@@ -303,95 +352,124 @@ func TestNode_TxStashLoop_UnexecutableTx_Processing(t *testing.T) {
 	assert.NoError(t, err)
 	defer db.Close()
 
-	node, stash := setupTestNodeForTxstashLoop(db)
+	node, stash, pool := setupTestNodeForTxstashLoop(db)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	done := make(chan bool, 1)
-
 	txEvent := txpool.TxEvent{
 		Tx:         newTx(tx.TypeLegacy),
-		Executable: &[]bool{false}[0],
+		Executable: &[]bool{false}[0], // Transaction is not executable
+	}
+
+	// Start the txStashLoop in a goroutine
+	done := make(chan bool, 1)
+	go func() {
+		defer func() { done <- true }()
+		node.txStashLoop(ctx, stash)
+	}()
+
+	// Wait for the txStashLoop to set up the subscription and get the channel
+	var txChan chan *txpool.TxEvent
+	for i := 0; i < 10; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if txChan = pool.getTxChannel(); txChan != nil {
+			break
+		}
+	}
+
+	if txChan == nil {
+		t.Fatal("Timeout waiting for tx channel to be established")
 	}
 
 	go func() {
-		defer func() { done <- true }()
-
-		// Monitor for processing
-		go func() {
-			select {
-			case node.txCh <- &txEvent:
-			case <-ctx.Done():
-			}
-		}()
-
-		// Run txStashLoop briefly
 		select {
+		case txChan <- &txEvent:
+			// Successfully sent
 		case <-ctx.Done():
-		default:
-			node.txStashLoop(ctx, stash)
+			// Context cancelled
 		}
 	}()
 
-	// Allow some time for processing
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	// Signal completion before reading logs
 	cancel()
-	<-done
 
-	assert.True(t, len(stash.LoadAll()) == 1, "TxStash should contain 1 item")
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timeout waiting for txStashLoop to complete")
+	}
+
+	stashedTxs := stash.LoadAll()
+	assert.Equal(t, 1, len(stashedTxs), "Unexecutable transactions should be stashed")
+	assert.Equal(t, txEvent.Tx.ID(), stashedTxs[0].ID(), "Stashed transaction should match the unexecutable transaction sent")
 }
 
 func TestNode_TxStashLoop_StashErrorHandling(t *testing.T) {
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	assert.NoError(t, err)
-	defer db.Close()
-
-	node, stash := setupTestNodeForTxstashLoop(db)
 
 	buf, restore := captureLogs()
 	defer restore()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+	node, stash, pool := setupTestNodeForTxstashLoop(db)
 
-	done := make(chan bool, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
 	txEvent := txpool.TxEvent{
 		Tx:         newTx(tx.TypeLegacy),
-		Executable: &[]bool{false}[0],
+		Executable: &[]bool{false}[0], // Transaction is not executable
 	}
 
-	// Close DB to force error on Save
-	db.Close()
-
+	done := make(chan bool, 1)
 	go func() {
 		defer func() { done <- true }()
-
-		// Monitor for processing
-		go func() {
-			select {
-			case node.txCh <- &txEvent:
-			case <-ctx.Done():
-			}
-		}()
-
-		// Run txStashLoop briefly
-		select {
-		case <-ctx.Done():
-		default:
-			node.txStashLoop(ctx, stash)
-		}
+		node.txStashLoop(ctx, stash)
 	}()
 
-	// Allow some time for processing
-	time.Sleep(200 * time.Millisecond)
+	var txChan chan *txpool.TxEvent
+	for i := 0; i < 10; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if txChan = pool.getTxChannel(); txChan != nil {
+			break
+		}
+	}
 
-	// Signal completion before reading logs
+	if txChan == nil {
+		t.Fatal("Timeout waiting for tx channel to be established")
+	}
+
+	select {
+	case txChan <- &txEvent:
+		// Successfully sent
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Timeout sending first transaction event")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Close DB to force error on subsequent operations
+	db.Close()
+
+	select {
+	case txChan <- &txEvent:
+		// Successfully sent
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Timeout sending second transaction event")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
 	cancel()
-	<-done
 
-	assert.Contains(t, buf.String(), "leveldb: closed", "Log should contain stash error")
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Timeout waiting for txStashLoop to complete")
+	}
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "leveldb: closed", "Log should contain stash error")
 }

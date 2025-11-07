@@ -146,7 +146,6 @@ func setupTestNodeForHousekeeping(t *testing.T) (*mockableNode, *mockCommunicato
 		comm:       mockComm,
 		forkConfig: &thor.NoFork,
 		bft:        mockBFT,
-		newBlockCh: make(chan *comm.NewBlockEvent, 1),
 		options:    nodeOptions,
 	}
 

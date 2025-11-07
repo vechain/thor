@@ -13,6 +13,7 @@ import (
 
 	"github.com/beevik/ntp"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
@@ -24,6 +25,11 @@ import (
 func (n *Node) houseKeeping(ctx context.Context) {
 	logger.Debug("enter house keeping")
 
+	var scope event.SubscriptionScope
+
+	newBlockCh := make(chan *comm.NewBlockEvent)
+	scope.Track(n.comm.SubscribeBlock(newBlockCh))
+
 	connectivity := new(ConnectivityState)
 	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
 	connectivityTicker := time.NewTicker(time.Second)
@@ -31,6 +37,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 	defer func() {
 		logger.Debug("leave house keeping")
+		scope.Close()
 		futureTicker.Stop()
 		connectivityTicker.Stop()
 		clockSyncTicker.Stop()
@@ -40,7 +47,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case newBlock := <-n.newBlockCh:
+		case newBlock := <-newBlockCh:
 			n.handleNewBlock(newBlock)
 		case <-futureTicker.C:
 			n.handleFutureBlocks()

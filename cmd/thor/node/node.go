@@ -22,7 +22,6 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -67,9 +66,6 @@ type Node struct {
 	maxBlockNum       uint32
 	processLock       sync.Mutex
 	logWorker         *worker
-	scope             event.SubscriptionScope
-	newBlockCh        chan *comm.NewBlockEvent
-	txCh              chan *txpool.TxEvent
 	futureBlocksCache *cache.RandCache
 }
 
@@ -103,19 +99,11 @@ func New(
 
 		logWorker:         newWorker(),
 		futureBlocksCache: cache.NewRandCache(32),
-		scope:             event.SubscriptionScope{},
 	}
 }
 
 func (n *Node) Run(ctx context.Context) error {
 	defer n.logWorker.Close()
-	defer n.scope.Close()
-
-	n.newBlockCh = make(chan *comm.NewBlockEvent)
-	n.scope.Track(n.comm.SubscribeBlock(n.newBlockCh))
-
-	n.txCh = make(chan *txpool.TxEvent)
-	n.scope.Track(n.txPool.SubscribeTxEvent(n.txCh))
 
 	maxBlockNum, err := n.repo.GetMaxBlockNum()
 	if err != nil {
@@ -191,11 +179,16 @@ func (n *Node) txStashLoop(ctx context.Context, stash *txStash) {
 		logger.Debug("loaded txs from stash", "count", len(txs))
 	}
 
+	var scope event.SubscriptionScope
+	defer scope.Close()
+	txCh := make(chan *txpool.TxEvent)
+	scope.Track(n.txPool.SubscribeTxEvent(txCh))
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case txEv := <-n.txCh:
+		case txEv := <-txCh:
 			// skip executables
 			if txEv.Executable != nil && *txEv.Executable {
 				continue
