@@ -57,20 +57,22 @@ func TestService_SetGetValidation_RoundTrip(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v1"))
 	ed := thor.BytesToAddress([]byte("e1"))
 	val := &Validation{
-		Endorser:         ed,
-		Period:           2,
-		CompletedPeriods: 0,
-		Status:           StatusQueued,
+		body: &body{
+			Endorser:         ed,
+			Period:           2,
+			CompletedPeriods: 0,
+			Status:           StatusQueued,
+		},
 	}
 
 	assert.NoError(t, svc.repo.addValidation(id, val))
 
 	got, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, val.Endorser, got.Endorser)
-	assert.Equal(t, uint32(2), got.Period)
-	assert.Equal(t, StatusQueued, got.Status)
-	assert.Nil(t, got.OfflineBlock)
+	assert.Equal(t, val.Endorser(), got.Endorser())
+	assert.Equal(t, uint32(2), got.Period())
+	assert.Equal(t, StatusQueued, got.Status())
+	assert.Nil(t, got.OfflineBlock())
 }
 
 func TestService_GetValidation_Error(t *testing.T) {
@@ -100,19 +102,21 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 	idv := thor.BytesToAddress([]byte("v3"))
 	id := idv
 	val := &Validation{
-		Endorser:         id,
-		Period:           2,
-		Status:           StatusQueued,
-		QueuedVET:        uint64(100),
-		LockedVET:        uint64(0),
-		PendingUnlockVET: uint64(0),
-		WithdrawableVET:  uint64(0),
-		Weight:           uint64(0),
-		CompletedPeriods: 0,
+		body: &body{
+			Endorser:         id,
+			Period:           2,
+			Status:           StatusQueued,
+			QueuedVET:        uint64(100),
+			LockedVET:        uint64(0),
+			PendingUnlockVET: uint64(0),
+			WithdrawableVET:  uint64(0),
+			Weight:           uint64(0),
+			CompletedPeriods: 0,
+		},
 	}
 	assert.NoError(t, svc.repo.addValidation(id, val))
 
-	renew, err := (&Validation{QueuedVET: uint64(100), LockedVET: uint64(0), Weight: uint64(0)}).renew(uint64(0))
+	renew, err := (&Validation{body: &body{QueuedVET: uint64(100), LockedVET: uint64(0), Weight: uint64(0)}}).renew(uint64(0))
 	assert.NoError(t, err)
 
 	val, err = svc.GetValidation(id)
@@ -124,26 +128,26 @@ func TestService_ActivateAndExit_Flow(t *testing.T) {
 
 	after, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, StatusActive, after.Status)
-	assert.Equal(t, uint64(100), after.LockedVET)
-	assert.Equal(t, uint64(0), after.QueuedVET)
+	assert.Equal(t, StatusActive, after.Status())
+	assert.Equal(t, uint64(100), after.LockedVET())
+	assert.Equal(t, uint64(0), after.QueuedVET())
 
 	_, err = svc.ExitValidator(id)
 	assert.NoError(t, err)
 
 	v2, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, v2.Status)
-	assert.Equal(t, uint64(0), v2.LockedVET)
+	assert.Equal(t, StatusExit, v2.Status())
+	assert.Equal(t, uint64(0), v2.LockedVET())
 }
 
 func TestService_LeaderGroup_ReturnsActiveOnly(t *testing.T) {
 	svc, _, _ := newSvc()
 
 	q := thor.BytesToAddress([]byte("q"))
-	assert.NoError(t, svc.repo.addValidation(q, &Validation{Status: StatusQueued}))
+	assert.NoError(t, svc.repo.addValidation(q, &Validation{&body{Status: StatusQueued}}))
 	a := thor.BytesToAddress([]byte("a"))
-	assert.NoError(t, svc.repo.addValidation(a, &Validation{Status: StatusActive}))
+	assert.NoError(t, svc.repo.addValidation(a, &Validation{&body{Status: StatusActive}}))
 
 	val, err := svc.GetValidation(a)
 	assert.NoError(t, err)
@@ -225,8 +229,12 @@ func TestService_SignalExit_SetsExitBlockAndPersists(t *testing.T) {
 	end := id
 
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
-		Endorser: end, Status: StatusActive,
-		StartBlock: 100, Period: 10,
+		&body{
+			Endorser:   end,
+			Status:     StatusActive,
+			StartBlock: 100,
+			Period:     10,
+		},
 	}))
 
 	val, err := svc.GetExistingValidation(id)
@@ -234,13 +242,13 @@ func TestService_SignalExit_SetsExitBlockAndPersists(t *testing.T) {
 
 	current, err := val.CurrentIteration(120)
 	assert.NoError(t, err)
-	err = svc.SignalExit(id, 120, val.StartBlock+val.Period*current, 20)
+	err = svc.SignalExit(id, 120, val.StartBlock()+val.Period()*current, 20)
 	assert.NoError(t, err)
 
 	after, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	if assert.NotNil(t, after.ExitBlock) {
-		assert.Equal(t, uint32(130), *after.ExitBlock)
+	if assert.NotNil(t, after.ExitBlock()) {
+		assert.Equal(t, uint32(130), *after.ExitBlock())
 	}
 }
 
@@ -251,17 +259,19 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 
 	endorser := val
 	validation := &Validation{
-		Endorser:         endorser,
-		Status:           StatusActive,
-		StartBlock:       100,
-		Period:           10,
-		CompletedPeriods: 0,
+		&body{
+			Endorser:         endorser,
+			Status:           StatusActive,
+			StartBlock:       100,
+			Period:           10,
+			CompletedPeriods: 0,
+		},
 	}
 
 	assert.NoError(t, svc.repo.addValidation(val, validation))
 	current, err := validation.CurrentIteration(110)
 	assert.NoError(t, err)
-	minBlock := validation.StartBlock + validation.Period*current
+	minBlock := validation.StartBlock() + validation.Period()*current
 
 	for idx := range 20 {
 		blockNum := minBlock + uint32(idx*int(thor.EpochLength()))
@@ -276,14 +286,14 @@ func TestService_SignalExit_ExitBlockLimitReached(t *testing.T) {
 
 	current, err = valA.CurrentIteration(110)
 	assert.NoError(t, err)
-	err = svc.SignalExit(val, 110, valA.StartBlock+valA.Period*current, 20)
+	err = svc.SignalExit(val, 110, valA.StartBlock()+valA.Period()*current, 20)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "max try reached")
 
 	updatedVal, err := svc.GetValidation(val)
 	assert.NoError(t, err)
-	assert.Nil(t, updatedVal.ExitBlock)
+	assert.Nil(t, updatedVal.ExitBlock())
 }
 
 func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
@@ -294,8 +304,13 @@ func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
 	end := id
 
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
-		Endorser: end, Status: StatusActive,
-		StartBlock: 10, Period: 5, CompletedPeriods: 0,
+		&body{
+			Endorser:         end,
+			Status:           StatusActive,
+			StartBlock:       10,
+			Period:           5,
+			CompletedPeriods: 0,
+		},
 	}))
 
 	poisonExitSlot(st, contract, 15)
@@ -305,7 +320,7 @@ func TestService_SignalExit_SetExitBlock_Error(t *testing.T) {
 
 	current, err := val.CurrentIteration(14)
 	assert.NoError(t, err)
-	err = svc.SignalExit(id, 14, val.StartBlock+val.Period*current, 20)
+	err = svc.SignalExit(id, 14, val.StartBlock()+val.Period()*current, 20)
 	assert.Error(t, err)
 }
 
@@ -315,7 +330,11 @@ func TestService_IncreaseStake_SuccessQueued(t *testing.T) {
 	id := idv
 	endorser := id
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
-		Endorser: endorser, Status: StatusQueued, QueuedVET: uint64(7),
+		&body{
+			Endorser:  endorser,
+			Status:    StatusQueued,
+			QueuedVET: uint64(7),
+		},
 	}))
 
 	val, err := svc.GetExistingValidation(id)
@@ -325,7 +344,7 @@ func TestService_IncreaseStake_SuccessQueued(t *testing.T) {
 
 	v, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(10), v.QueuedVET)
+	assert.Equal(t, uint64(10), v.QueuedVET())
 }
 
 func TestService_IncreaseStake_SuccessActiveNoExit(t *testing.T) {
@@ -334,7 +353,11 @@ func TestService_IncreaseStake_SuccessActiveNoExit(t *testing.T) {
 	id := idv
 	endorser := id
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
-		Endorser: endorser, Status: StatusActive, QueuedVET: uint64(0),
+		&body{
+			Endorser:  endorser,
+			Status:    StatusActive,
+			QueuedVET: uint64(0),
+		},
 	}))
 
 	val, err := svc.GetExistingValidation(id)
@@ -344,7 +367,7 @@ func TestService_IncreaseStake_SuccessActiveNoExit(t *testing.T) {
 
 	v, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(4), v.QueuedVET)
+	assert.Equal(t, uint64(4), v.QueuedVET())
 }
 
 func TestService_WithdrawStake_QueuedToExit(t *testing.T) {
@@ -357,7 +380,7 @@ func TestService_WithdrawStake_QueuedToExit(t *testing.T) {
 
 	val, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, StatusQueued, val.Status)
+	assert.Equal(t, StatusQueued, val.Status())
 
 	val, err = svc.GetExistingValidation(id)
 	assert.NoError(t, err)
@@ -369,9 +392,9 @@ func TestService_WithdrawStake_QueuedToExit(t *testing.T) {
 
 	v2, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, StatusExit, v2.Status)
-	assert.Equal(t, uint64(0), v2.QueuedVET)
-	assert.Equal(t, uint64(0), v2.WithdrawableVET)
+	assert.Equal(t, StatusExit, v2.Status())
+	assert.Equal(t, uint64(0), v2.QueuedVET())
+	assert.Equal(t, uint64(0), v2.WithdrawableVET())
 }
 
 func TestService_WithdrawStake_ClearCooldownWhenMatured(t *testing.T) {
@@ -382,8 +405,13 @@ func TestService_WithdrawStake_ClearCooldownWhenMatured(t *testing.T) {
 	endorser := id
 	eb := uint32(10)
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
-		Endorser: endorser, Status: StatusExit,
-		ExitBlock: &eb, CooldownVET: uint64(40), WithdrawableVET: uint64(5),
+		&body{
+			Endorser:        endorser,
+			Status:          StatusExit,
+			ExitBlock:       &eb,
+			CooldownVET:     uint64(40),
+			WithdrawableVET: uint64(5),
+		},
 	}))
 
 	thor.SetConfig(thor.Config{
@@ -400,8 +428,8 @@ func TestService_WithdrawStake_ClearCooldownWhenMatured(t *testing.T) {
 
 	v2, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), v2.CooldownVET)
-	assert.Equal(t, uint64(0), v2.WithdrawableVET)
+	assert.Equal(t, uint64(0), v2.CooldownVET())
+	assert.Equal(t, uint64(0), v2.WithdrawableVET())
 }
 
 func TestService_GetDelegatorRewards_Positive(t *testing.T) {
@@ -410,9 +438,12 @@ func TestService_GetDelegatorRewards_Positive(t *testing.T) {
 	idv := thor.BytesToAddress([]byte("v"))
 	id := idv
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
-		Endorser: id, Status: StatusActive,
-		StartBlock: 50,
-		Period:     50,
+		&body{
+			Endorser:   id,
+			Status:     StatusActive,
+			Period:     50,
+			StartBlock: 50,
+		},
 	}))
 
 	assert.NoError(t, svc.IncreaseDelegatorsReward(id, big.NewInt(100), 100))
@@ -434,8 +465,12 @@ func TestService_WithdrawStake_ActiveClearsQueuedAndWithdrawable(t *testing.T) {
 	id := idv
 	endorser := id
 	assert.NoError(t, svc.repo.addValidation(id, &Validation{
-		Endorser: endorser, Status: StatusActive,
-		QueuedVET: uint64(12), WithdrawableVET: uint64(3),
+		&body{
+			Endorser:        endorser,
+			Status:          StatusActive,
+			QueuedVET:       uint64(12),
+			WithdrawableVET: uint64(3),
+		},
 	}))
 
 	val, err := svc.GetExistingValidation(id)
@@ -448,9 +483,9 @@ func TestService_WithdrawStake_ActiveClearsQueuedAndWithdrawable(t *testing.T) {
 
 	v2, err := svc.GetValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, StatusActive, v2.Status)
-	assert.Equal(t, uint64(0), v2.QueuedVET)
-	assert.Equal(t, uint64(0), v2.WithdrawableVET)
+	assert.Equal(t, StatusActive, v2.Status())
+	assert.Equal(t, uint64(0), v2.QueuedVET())
+	assert.Equal(t, uint64(0), v2.WithdrawableVET())
 }
 
 func TestService_GetDelegatorRewards_Error(t *testing.T) {
@@ -595,20 +630,20 @@ func TestService_GetQueuedAndLeaderGroups(t *testing.T) {
 
 	val, err = svc.GetLeaderGroupHead()
 	assert.NoError(t, err)
-	assert.Equal(t, a1, val.Endorser)
-	assert.Nil(t, val.Beneficiary)
-	assert.Equal(t, uint64(1), val.LockedVET)
-	assert.Equal(t, uint64(1), val.Weight)
-	assert.Equal(t, thor.LowStakingPeriod(), val.Period)
-	assert.Equal(t, uint32(0), val.CompletedPeriods)
-	assert.Equal(t, StatusActive, val.Status)
-	assert.Equal(t, uint32(1), val.StartBlock)
-	assert.Nil(t, val.ExitBlock)
-	assert.Nil(t, val.OfflineBlock)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(0), val.QueuedVET)
-	assert.Equal(t, uint64(0), val.CooldownVET)
-	assert.Equal(t, uint64(0), val.WithdrawableVET)
+	assert.Equal(t, a1, val.Endorser())
+	assert.Nil(t, val.Beneficiary())
+	assert.Equal(t, uint64(1), val.LockedVET())
+	assert.Equal(t, uint64(1), val.Weight())
+	assert.Equal(t, thor.LowStakingPeriod(), val.Period())
+	assert.Equal(t, uint32(0), val.CompletedPeriods())
+	assert.Equal(t, StatusActive, val.Status())
+	assert.Equal(t, uint32(1), val.StartBlock())
+	assert.Nil(t, val.ExitBlock())
+	assert.Nil(t, val.OfflineBlock())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
+	assert.Equal(t, uint64(0), val.QueuedVET())
+	assert.Equal(t, uint64(0), val.CooldownVET())
+	assert.Equal(t, uint64(0), val.WithdrawableVET())
 }
 
 func TestService_Add_Error(t *testing.T) {
@@ -638,7 +673,7 @@ func TestService_Evict(t *testing.T) {
 	val, err := svc.GetValidation(id1)
 	assert.NoError(t, err)
 	expectedExitBlock := uint32(5) + thor.EpochLength()
-	assert.Equal(t, &expectedExitBlock, val.ExitBlock)
+	assert.Equal(t, &expectedExitBlock, val.ExitBlock())
 
 	poisonExitSlot(st, addr, 7+thor.EpochLength())
 	assert.Error(t, svc.SignalExit(id1, 7, 7+thor.EpochLength(), int(thor.InitialMaxBlockProposers)))
@@ -655,17 +690,17 @@ func TestService_SetBeneficiary(t *testing.T) {
 
 	val, err := svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Nil(t, val.Beneficiary)
+	assert.Nil(t, val.Beneficiary())
 
 	assert.NoError(t, svc.SetBeneficiary(id1, val, id1))
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, id1, *val.Beneficiary)
+	assert.Equal(t, id1, *val.Beneficiary())
 
 	assert.NoError(t, svc.SetBeneficiary(id1, val, thor.Address{}))
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Nil(t, val.Beneficiary)
+	assert.Nil(t, val.Beneficiary())
 }
 
 func TestService_UpdateOfflineBlock(t *testing.T) {
@@ -677,20 +712,20 @@ func TestService_UpdateOfflineBlock(t *testing.T) {
 
 	val, err := svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Nil(t, val.OfflineBlock)
+	assert.Nil(t, val.OfflineBlock())
 
 	assert.NoError(t, svc.UpdateOfflineBlock(id1, 2, false))
 
 	expectedOfflineBlk := uint32(2)
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, &expectedOfflineBlk, val.OfflineBlock)
+	assert.Equal(t, &expectedOfflineBlk, val.OfflineBlock())
 
 	assert.NoError(t, svc.UpdateOfflineBlock(id1, 2, true))
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Nil(t, val.OfflineBlock)
+	assert.Nil(t, val.OfflineBlock())
 }
 
 func TestService_Renew(t *testing.T) {
@@ -710,12 +745,12 @@ func TestService_Renew(t *testing.T) {
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), val.LockedVET)
-	assert.Equal(t, uint64(0), val.Weight)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(350), val.QueuedVET)
-	assert.Equal(t, uint64(0), val.CooldownVET)
-	assert.Equal(t, uint64(300), val.WithdrawableVET)
+	assert.Equal(t, uint64(0), val.LockedVET())
+	assert.Equal(t, uint64(0), val.Weight())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
+	assert.Equal(t, uint64(350), val.QueuedVET())
+	assert.Equal(t, uint64(0), val.CooldownVET())
+	assert.Equal(t, uint64(300), val.WithdrawableVET())
 
 	delta, err := svc.Renew(id1, uint64(1500))
 
@@ -726,12 +761,12 @@ func TestService_Renew(t *testing.T) {
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(350), val.LockedVET)
-	assert.Equal(t, uint64(2200), val.Weight)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(0), val.QueuedVET)
-	assert.Equal(t, uint64(0), val.CooldownVET)
-	assert.Equal(t, uint64(300), val.WithdrawableVET)
+	assert.Equal(t, uint64(350), val.LockedVET())
+	assert.Equal(t, uint64(2200), val.Weight())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
+	assert.Equal(t, uint64(0), val.QueuedVET())
+	assert.Equal(t, uint64(0), val.CooldownVET())
+	assert.Equal(t, uint64(300), val.WithdrawableVET())
 
 	err = svc.IncreaseStake(id1, val, uint64(400))
 	assert.NoError(t, err)
@@ -740,12 +775,12 @@ func TestService_Renew(t *testing.T) {
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(350), val.LockedVET)
-	assert.Equal(t, uint64(2200), val.Weight)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(200), val.QueuedVET)
-	assert.Equal(t, uint64(0), val.CooldownVET)
-	assert.Equal(t, uint64(500), val.WithdrawableVET)
+	assert.Equal(t, uint64(350), val.LockedVET())
+	assert.Equal(t, uint64(2200), val.Weight())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
+	assert.Equal(t, uint64(200), val.QueuedVET())
+	assert.Equal(t, uint64(0), val.CooldownVET())
+	assert.Equal(t, uint64(500), val.WithdrawableVET())
 
 	delta, err = svc.Renew(id1, uint64(1500))
 	assert.NoError(t, err)
@@ -755,12 +790,12 @@ func TestService_Renew(t *testing.T) {
 
 	val, err = svc.GetValidation(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(550), val.LockedVET)
-	assert.Equal(t, uint64(550*2+1500), val.Weight)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(0), val.QueuedVET)
-	assert.Equal(t, uint64(0), val.CooldownVET)
-	assert.Equal(t, uint64(500), val.WithdrawableVET)
+	assert.Equal(t, uint64(550), val.LockedVET())
+	assert.Equal(t, uint64(550*2+1500), val.Weight())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
+	assert.Equal(t, uint64(0), val.QueuedVET())
+	assert.Equal(t, uint64(0), val.CooldownVET())
+	assert.Equal(t, uint64(500), val.WithdrawableVET())
 }
 
 func TestMakeRewardKey(t *testing.T) {

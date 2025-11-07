@@ -31,21 +31,23 @@ func TestRepository_Validation_RoundTrip(t *testing.T) {
 	id := thor.BytesToAddress([]byte("v1"))
 	e1 := thor.BytesToAddress([]byte("e1"))
 	entry := &Validation{
-		Endorser:         e1,
-		Period:           15,
-		CompletedPeriods: 2,
-		Status:           StatusQueued,
+		body: &body{
+			Endorser:         e1,
+			Period:           15,
+			CompletedPeriods: 2,
+			Status:           StatusQueued,
+		},
 	}
 
 	assert.NoError(t, repo.addValidation(id, entry))
 
 	got, err := repo.getValidation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, entry.Endorser, got.Endorser)
-	assert.Equal(t, uint32(15), got.Period)
-	assert.Equal(t, uint32(2), got.CompletedPeriods)
-	assert.Equal(t, StatusQueued, got.Status)
-	assert.True(t, got.OfflineBlock == nil)
+	assert.Equal(t, entry.Endorser(), got.Endorser())
+	assert.Equal(t, uint32(15), got.Period())
+	assert.Equal(t, uint32(2), got.CompletedPeriods())
+	assert.Equal(t, StatusQueued, got.Status())
+	assert.True(t, got.OfflineBlock() == nil)
 }
 
 func TestRepository_Validation_GetError(t *testing.T) {

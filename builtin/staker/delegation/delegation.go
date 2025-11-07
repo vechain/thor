@@ -12,6 +12,34 @@ import (
 )
 
 type Delegation struct {
+	body *body
+}
+
+func (d *Delegation) Validation() thor.Address {
+	return d.body.Validation
+}
+
+func (d *Delegation) Stake() uint64 {
+	return d.body.Stake
+}
+
+func (d *Delegation) Multiplier() uint8 {
+	return d.body.Multiplier
+}
+
+func (d *Delegation) LastIteration() *uint32 {
+	if d.body.LastIteration == nil {
+		return nil
+	}
+	li := *d.body.LastIteration
+	return &li
+}
+
+func (d *Delegation) FirstIteration() uint32 {
+	return d.body.FirstIteration
+}
+
+type body struct {
 	Validation     thor.Address // the validator to which the delegator is delegating
 	Stake          uint64       // the amount of VET delegated(in VET, not wei)
 	Multiplier     uint8
@@ -22,44 +50,49 @@ type Delegation struct {
 // WeightedStake returns the weight of the delegator, which is calculated as:
 // weight = stake * multiplier / 100
 func (d *Delegation) WeightedStake() *stakes.WeightedStake {
-	return stakes.NewWeightedStakeWithMultiplier(d.Stake, d.Multiplier)
+	return stakes.NewWeightedStakeWithMultiplier(d.Stake(), d.Multiplier())
+}
+
+type validator interface {
+	Status() validation.Status
+	CurrentIteration(currentBlock uint32) (uint32, error)
 }
 
 // Started returns whether the delegation became locked
-func (d *Delegation) Started(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if val.Status == validation.StatusQueued || val.Status == validation.StatusUnknown {
+func (d *Delegation) Started(val validator, currentBlock uint32) (bool, error) {
+	if val.Status() == validation.StatusQueued || val.Status() == validation.StatusUnknown {
 		return false, nil // Delegation cannot start if the validation is not active
 	}
 	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
 	if err != nil {
 		return false, err
 	}
-	return currentStakingPeriod >= d.FirstIteration, nil
+	return currentStakingPeriod >= d.FirstIteration(), nil
 }
 
 // Ended returns whether the delegation has ended
 // It returns true if:
 // - the delegation's exit iteration is less than the current staking period
 // - OR if the validation is in exit status and the delegation has started
-func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if val.Status == validation.StatusQueued {
+func (d *Delegation) Ended(val validator, currentBlock uint32) (bool, error) {
+	if val.Status() == validation.StatusQueued {
 		return false, nil // Delegation cannot end if the validation is not active
 	}
 	started, err := d.Started(val, currentBlock)
 	if err != nil {
 		return false, err
 	}
-	if val.Status == validation.StatusExit && started {
+	if val.Status() == validation.StatusExit && started {
 		return true, nil // Delegation is ended if the validation is in exit status
 	}
 	currentStakingPeriod, err := val.CurrentIteration(currentBlock)
 	if err != nil {
 		return false, err
 	}
-	if d.LastIteration == nil {
+	if d.LastIteration() == nil {
 		return false, nil
 	}
-	return *d.LastIteration < currentStakingPeriod, nil
+	return *d.LastIteration() < currentStakingPeriod, nil
 }
 
 // IsLocked returns whether the delegation is locked
@@ -67,8 +100,8 @@ func (d *Delegation) Ended(val *validation.Validation, currentBlock uint32) (boo
 // - the delegation has started
 // - AND the delegation has not ended
 // - AND the delegation has stake
-func (d *Delegation) IsLocked(val *validation.Validation, currentBlock uint32) (bool, error) {
-	if d.Stake == 0 {
+func (d *Delegation) IsLocked(val validator, currentBlock uint32) (bool, error) {
+	if d.Stake() == 0 {
 		return false, nil
 	}
 	started, err := d.Started(val, currentBlock)

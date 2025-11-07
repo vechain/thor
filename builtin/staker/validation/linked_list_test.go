@@ -32,7 +32,7 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 	id1 := datagen.RandAddress()
 	id2 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Endorser: id1, Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{body: &body{Endorser: id1, Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
@@ -48,10 +48,10 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, val == nil)
 
-	assert.Nil(t, val.Prev)
-	assert.Nil(t, val.Next)
+	assert.Nil(t, val.body.Prev)
+	assert.Nil(t, val.body.Next)
 
-	if err := repo.addValidation(id2, &Validation{Endorser: id2, Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Endorser: id2, Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -71,9 +71,9 @@ func Test_LinkedList_HeadAndTail(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, val == nil)
 
-	assert.NotNil(t, val.Prev)
-	assert.Nil(t, val.Next)
-	assert.Equal(t, id1, *val.Prev)
+	assert.NotNil(t, val.body.Prev)
+	assert.Nil(t, val.body.Next)
+	assert.Equal(t, id1, *val.body.Prev)
 
 	val, err = repo.getValidation(id2)
 	assert.NoError(t, err)
@@ -132,11 +132,11 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	id2 := datagen.RandAddress()
 	id3 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	assert.Equal(t, id1, head)
 
 	// Try to remove non-existent id
-	if err := repo.removeQueued(id3, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.removeQueued(id3, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("expected no error when removing non-existent id, got: %v", err)
 	}
 
@@ -160,10 +160,10 @@ func Test_LinkedList_Remove_NonExistent(t *testing.T) {
 	assert.Truef(t, nextPtr.IsZero(), "expected next[id2] to be cleared")
 	prevPtr, err := repo.getValidation(id1)
 	assert.NoError(t, err)
-	assert.Nil(t, prevPtr.Prev, "expected prev[id1] to be cleared")
+	assert.Nil(t, prevPtr.body.Prev, "expected prev[id1] to be cleared")
 
 	// Try to remove non-existent id
-	if err := repo.removeQueued(id3, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.removeQueued(id3, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("expected no error when removing non-existent id, got: %v", err)
 	}
 
@@ -200,15 +200,15 @@ func Test_LinkedList_Remove_NegativeTests(t *testing.T) {
 	id1 := thor.Address{}
 	id2 := thor.Address{}
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
-	assert.Nil(t, repo.removeQueued(thor.Address{}, &Validation{Status: StatusQueued}))
+	assert.Nil(t, repo.removeQueued(thor.Address{}, &Validation{&body{Status: StatusQueued}}))
 }
 
 func Test_LinkedList_Remove(t *testing.T) {
@@ -222,11 +222,11 @@ func Test_LinkedList_Remove(t *testing.T) {
 	id1 := datagen.RandAddress()
 	id2 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -278,7 +278,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 	id3 := datagen.RandAddress()
 
 	// Add addresses to the linked list
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 		t.Fatalf("failed to activate id1: %v", err)
 	}
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -302,7 +302,7 @@ func Test_LinkedList_Iter(t *testing.T) {
 		t.Fatalf("failed to activate id2: %v", err)
 	}
 
-	if err := repo.addValidation(id3, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id3, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id3: %v", err)
 	}
 
@@ -381,11 +381,11 @@ func Test_LinkedList_Pop(t *testing.T) {
 	id1 := datagen.RandAddress()
 	id2 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -427,7 +427,7 @@ func Test_LinkedList_Len(t *testing.T) {
 	id1 := datagen.RandAddress()
 	id2 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
@@ -435,7 +435,7 @@ func Test_LinkedList_Len(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), len)
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -476,15 +476,15 @@ func Test_LinkedList_Next(t *testing.T) {
 	id2 := datagen.RandAddress()
 	id3 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
-	if err := repo.addValidation(id3, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id3, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id3: %v", err)
 	}
 
@@ -514,8 +514,8 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	id1 := datagen.RandAddress()
 	id2 := datagen.RandAddress()
 
-	assert.NoError(t, repo.addValidation(id1, &Validation{Status: StatusQueued}))
-	assert.NoError(t, repo.addValidation(id2, &Validation{Status: StatusQueued}))
+	assert.NoError(t, repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}))
+	assert.NoError(t, repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}))
 
 	// head should be id1
 	head, err := repo.firstQueued()
@@ -555,8 +555,8 @@ func Test_LinkedList_Grow_Empty_Grow(t *testing.T) {
 	id3 := datagen.RandAddress()
 	id4 := datagen.RandAddress()
 
-	assert.NoError(t, repo.addValidation(id3, &Validation{Status: StatusQueued}))
-	assert.NoError(t, repo.addValidation(id4, &Validation{Status: StatusQueued}))
+	assert.NoError(t, repo.addValidation(id3, &Validation{&body{Status: StatusQueued}}))
+	assert.NoError(t, repo.addValidation(id4, &Validation{&body{Status: StatusQueued}}))
 
 	// head should reset to id3
 	head, err = repo.firstQueued()
@@ -587,7 +587,7 @@ func Test_LinkedList_Remove_UnlinkedSingleElement(t *testing.T) {
 
 	// Add a single validation
 	id1 := datagen.RandAddress()
-	validation := &Validation{Endorser: id1, Status: StatusQueued}
+	validation := &Validation{&body{Endorser: id1, Status: StatusQueued}}
 	if err := repo.addValidation(id1, validation); err != nil {
 		t.Fatalf("failed to add validation: %v", err)
 	}
@@ -604,8 +604,8 @@ func Test_LinkedList_Remove_UnlinkedSingleElement(t *testing.T) {
 	val, err := repo.getValidation(id1)
 	assert.NoError(t, err)
 	assert.NotNil(t, val)
-	assert.Nil(t, val.Prev) // Should already be nil for single element
-	assert.Nil(t, val.Next) // Should already be nil for single element
+	assert.Nil(t, val.body.Prev) // Should already be nil for single element
+	assert.Nil(t, val.body.Next) // Should already be nil for single element
 
 	// This tests the critical code path in Remove() lines 76-114
 	// where !entry.IsLinked() and it's checking head == tail == address
@@ -635,7 +635,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 	id2 := datagen.RandAddress()
 	id3 := datagen.RandAddress()
 
-	if err := repo.addValidation(id1, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id1, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
@@ -647,7 +647,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 		t.Fatalf("failed to add id1: %v", err)
 	}
 
-	if err := repo.addValidation(id2, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id2, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
@@ -659,7 +659,7 @@ func Test_LinkedList_Iter_NegativeCases(t *testing.T) {
 		t.Fatalf("failed to add id2: %v", err)
 	}
 
-	if err := repo.addValidation(id3, &Validation{Status: StatusQueued}); err != nil {
+	if err := repo.addValidation(id3, &Validation{&body{Status: StatusQueued}}); err != nil {
 		t.Fatalf("failed to add id3: %v", err)
 	}
 

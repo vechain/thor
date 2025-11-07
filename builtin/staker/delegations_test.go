@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/staker/delegation"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -39,115 +38,6 @@ func newDelegationStaker(t *testing.T) (*StakerTest, []*testValidators) {
 
 func delegationStake() uint64 {
 	return 10_000 // 10_000 VET
-}
-
-func Test_IsLocked(t *testing.T) {
-	t.Run("Completed Staking Periods", func(t *testing.T) {
-		last := uint32(2)
-		d := &delegation.Delegation{
-			FirstIteration: 2,
-			LastIteration:  &last,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validation.Validation{
-			Status: validation.StatusActive,
-			Period: 5,
-		}
-
-		stared, err := d.Started(v, 10)
-		assert.NoError(t, err)
-		assert.True(t, stared, "should not be locked when complete iterations is equal to last iteration")
-		ended, err := d.Ended(v, 15)
-		assert.NoError(t, err)
-		assert.True(t, ended, "should be locked when first is less than current and last is equal to current")
-	})
-
-	t.Run("Incomplete Staking Periods", func(t *testing.T) {
-		last := uint32(5)
-		d := &delegation.Delegation{
-			FirstIteration: 2,
-			LastIteration:  &last,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validation.Validation{
-			Status: validation.StatusActive,
-			Period: 5,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.True(t, started, "should be started when complete iterations is greater than first iteration")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when first is less than current and last is greater than current")
-	})
-
-	t.Run("Delegation Not Started", func(t *testing.T) {
-		last := uint32(6)
-		d := &delegation.Delegation{
-			FirstIteration: 5,
-			LastIteration:  &last,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validation.Validation{
-			Status: validation.StatusActive,
-			Period: 5,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.False(t, started, "should not be started when complete iterations is less than first iteration")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when first is greater than current and last is greater than current")
-	})
-	t.Run("Staker is Queued", func(t *testing.T) {
-		d := &delegation.Delegation{
-			FirstIteration: 1,
-			LastIteration:  nil,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validation.Validation{
-			Status: validation.StatusQueued,
-			Period: 5,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.False(t, started, "should not be started when validation status is queued")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when validation status is queued")
-	})
-
-	t.Run("exit block not defined", func(t *testing.T) {
-		d := &delegation.Delegation{
-			FirstIteration: 1,
-			LastIteration:  nil,
-			Stake:          uint64(1),
-			Multiplier:     255,
-		}
-
-		v := &validation.Validation{
-			Status: validation.StatusActive,
-			Period: 5,
-		}
-
-		started, err := d.Started(v, 15)
-		assert.NoError(t, err)
-		assert.True(t, started, "should be started when first iteration is less than current")
-		ended, err := d.Ended(v, 20)
-		assert.NoError(t, err)
-		assert.False(t, ended, "should not be locked when last iteration is nil and first equals current")
-	})
 }
 
 func Test_AddDelegator(t *testing.T) {
@@ -228,16 +118,16 @@ func Test_Delegator_DisableAutoRenew_PendingLocked(t *testing.T) {
 
 	// Then the delegation can't signal an exit until it has started
 	staker.SignalDelegationExitErrors(id, 20, "delegation has not started yet")
-	staker.Housekeep(validator.Period)
-	staker.SignalDelegationExit(id, validator.Period)
+	staker.Housekeep(validator.Period())
+	staker.SignalDelegationExit(id, validator.Period())
 	staker.AssertAggregation(validator.ID).LockedVET(stake).ExitingVET(stake)
 
 	// When the staking period is completed
-	staker.Housekeep(validator.Period)
+	staker.Housekeep(validator.Period())
 	staker.AssertAggregation(validator.ID).LockedVET(0).ExitingVET(0)
 
 	// And the delegation should be withdrawable
-	staker.WithdrawDelegation(id, stake, validator.Period*2)
+	staker.WithdrawDelegation(id, stake, validator.Period()*2)
 }
 
 func Test_QueuedDelegator_Withdraw_NonAutoRenew(t *testing.T) {
@@ -291,7 +181,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	staker.AssertAggregation(validator.ID).LockedVET(0).PendingVET(stake)
 
 	// And the first staking period has occurred
-	staker.Housekeep(validator.Period)
+	staker.Housekeep(validator.Period())
 	staker.AssertAggregation(validator.ID).LockedVET(stake).PendingVET(0)
 
 	// When the delegation disables auto renew
@@ -301,7 +191,7 @@ func Test_Delegator_DisableAutoRenew_InAStakingPeriod(t *testing.T) {
 	staker.AssertAggregation(validator.ID).LockedVET(stake).ExitingVET(stake).PendingVET(0)
 
 	// And the funds should be withdrawable after the next iteration
-	staker.Housekeep(2 * validator.Period)
+	staker.Housekeep(2 * validator.Period())
 	staker.AssertAggregation(validator.ID).LockedVET(0).ExitingVET(0).PendingVET(0)
 }
 
@@ -315,14 +205,14 @@ func Test_Delegator_AutoRenew_ValidatorExits(t *testing.T) {
 	id := staker.AddDelegation(validator.ID, stake, 255, 10)
 
 	// And the first staking period has occurred
-	staker.Housekeep(validator.Period)
+	staker.Housekeep(validator.Period())
 	staker.AssertAggregation(validator.ID).LockedVET(stake).PendingVET(0)
 
 	// When the validator signals an exit
-	staker.SignalExit(validator.ID, validator.Endorser, validator.Period*1)
+	staker.SignalExit(validator.ID, validator.Endorser(), validator.Period()*1)
 
 	// And the next staking period is over
-	staker.Housekeep(validator.Period * 2)
+	staker.Housekeep(validator.Period() * 2)
 	staker.AssertAggregation(validator.ID).LockedVET(0).ExitingVET(0).PendingVET(0)
 
 	// Then the funds should be withdrawable
@@ -371,7 +261,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	staker, validations := newDelegationStaker(t)
 	totalStaked := uint64(0)
 	for _, validation := range validations {
-		totalStaked += validation.LockedVET
+		totalStaked += validation.LockedVET()
 	}
 
 	validatorStake := uint64(25000000)
@@ -389,7 +279,7 @@ func Test_Delegator_Queued_Weight(t *testing.T) {
 	staker.AddValidation(node, endorser, uint32(360)*24*15, validatorStake)
 
 	validator := staker.GetValidation(node)
-	assert.Equal(t, validation.StatusQueued, validator.Status)
+	assert.Equal(t, validation.StatusQueued, validator.Status())
 
 	staker.AddDelegation(node, stake, 255, 10)
 
@@ -443,7 +333,7 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	staker, validators := newDelegationStaker(t)
 
 	validator := validators[0]
-	maxStake := MaxStakeVET - validator.LockedVET
+	maxStake := MaxStakeVET - validator.LockedVET()
 
 	// Add a delegation with auto renew enabled
 	delegationID := staker.AddDelegation(validator.ID, maxStake, 255, 10)
@@ -457,7 +347,7 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 	assert.False(t, started)
 
 	// Delegation should become active
-	staker.Housekeep(validator.Period)
+	staker.Housekeep(validator.Period())
 	delegation1 = staker.GetDelegation(delegationID)
 	validation = staker.GetValidation(validator.ID)
 	started, err = delegation1.Started(validation, 129600)
@@ -480,8 +370,8 @@ func Test_Delegations_EnableAutoRenew_MatchStakeReached(t *testing.T) {
 func TestStaker_DelegationExitingVET(t *testing.T) {
 	staker := newTest(t).SetMBP(1).Fill(1).Transition(0)
 	_, validator := staker.FirstActive()
-	initialVET := validator.LockedVET
-	initialWeight := validator.Weight
+	initialVET := validator.LockedVET()
+	initialWeight := validator.Weight()
 
 	firstActive, _ := staker.FirstActive()
 	staker.AssertLockedVET(initialVET, initialWeight).AssertQueuedVET(0)
@@ -506,7 +396,7 @@ func TestStaker_DelegationExitingVET(t *testing.T) {
 	assert.True(t, started)
 
 	staker.SignalDelegationExit(delegationID, 129600)
-	staker.SignalExit(firstActive, validator.Endorser, 129600)
+	staker.SignalExit(firstActive, validator.Endorser(), 129600)
 
 	staker.Housekeep(thor.MediumStakingPeriod() * 2)
 
@@ -524,10 +414,10 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	staker := newTest(t).SetMBP(1).Fill(1).Transition(0)
 	_, validator := staker.FirstActive()
 
-	staker.AssertLockedVET(validator.LockedVET, validator.Weight).AssertQueuedVET(0)
+	staker.AssertLockedVET(validator.LockedVET(), validator.Weight()).AssertQueuedVET(0)
 
 	firstActive, validator := staker.FirstActive()
-	assert.Equal(t, validator.LockedVET, validator.Weight)
+	assert.Equal(t, validator.LockedVET(), validator.Weight())
 
 	delStake := uint64(1000)
 	delegationID := staker.AddDelegation(firstActive, delStake, 200, 10)
@@ -537,15 +427,15 @@ func TestStaker_DelegationWithdrawPending(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, started)
 
-	staker.AssertLockedVET(validator.LockedVET, validator.Weight).AssertQueuedVET(delStake)
+	staker.AssertLockedVET(validator.LockedVET(), validator.Weight()).AssertQueuedVET(delStake)
 	staker.WithdrawDelegation(delegationID, delStake, 10)
 	staker.Housekeep(thor.MediumStakingPeriod())
 
 	_, validator = staker.FirstActive()
 	delegation = staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), delegation.Stake)
-	assert.Nil(t, delegation.LastIteration)
+	assert.Equal(t, uint64(0), delegation.Stake())
+	assert.Nil(t, delegation.LastIteration())
 
 	isLocked, err := delegation.IsLocked(validator, 20)
 	assert.NoError(t, err)
@@ -561,10 +451,10 @@ func TestStaker_WithdrawPendingDelegation_AfterValidatorExit(t *testing.T) {
 	id := staker.AddDelegation(firstActive, 1000, 200, 5)
 
 	// signal an exit
-	staker.SignalExit(firstActive, val.Endorser, 10)
+	staker.SignalExit(firstActive, val.Endorser(), 10)
 
 	// remove the validator
-	staker.Housekeep(val.Period)
+	staker.Housekeep(val.Period())
 
 	// ensure the delegator can still withdraw their funds
 	staker.WithdrawDelegation(id, 1000, 10)
