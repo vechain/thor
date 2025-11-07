@@ -13,6 +13,7 @@ import (
 
 	"github.com/beevik/ntp"
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/comm"
