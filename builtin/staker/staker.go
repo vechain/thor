@@ -18,7 +18,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/builtin/gascharger"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/aggregation"
@@ -67,7 +66,7 @@ func New(
 	addr thor.Address,
 	state *state.State,
 	params *params.Params,
-	charger *gascharger.Charger,
+	charger solidity.UseGasFunc,
 ) *Staker {
 	sctx := solidity.NewContext(addr, state, charger)
 
