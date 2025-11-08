@@ -8,12 +8,9 @@ package node
 import (
 	"context"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
-	"github.com/beevik/ntp"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
@@ -25,14 +22,10 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/comm"
-	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -53,52 +46,42 @@ type Options struct {
 	MinTxPriorityFee uint64
 }
 
-// ConsensusEngine defines the interface for consensus processing
-type ConsensusEngine interface {
-	Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error)
-}
-
-// PackerEngine defines the interface for packing blocks
-type PackerEngine interface {
-	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, posActive bool, err error)
-	SetTargetGasLimit(gl uint64)
-}
-
 type Node struct {
-	packer      PackerEngine
-	cons        ConsensusEngine
+	packer      Packer
+	cons        Consensus
 	master      *Master
 	repo        *chain.Repository
-	bft         *bft.Engine
+	bft         bft.Committer
 	stater      *state.Stater
 	logDB       *logdb.LogDB
-	txPool      *txpool.TxPool
+	txPool      txpool.Pool
 	txStashPath string
-	comm        *comm.Communicator
+	comm        Communicator
 	forkConfig  *thor.ForkConfig
 	options     Options
 
-	logDBFailed   bool
-	initialSynced bool // true if the initial synchronization process is done
-	bandwidth     bandwidth.Bandwidth
-	maxBlockNum   uint32
-	processLock   sync.Mutex
-	logWorker     *worker
+	logDBFailed       bool
+	initialSynced     bool // true if the initial synchronization process is done
+	bandwidth         bandwidth.Bandwidth
+	maxBlockNum       uint32
+	processLock       sync.Mutex
+	logWorker         *worker
+	futureBlocksCache *cache.RandCache
 }
 
 func New(
 	master *Master,
 	repo *chain.Repository,
-	bft *bft.Engine,
+	bft bft.Committer,
 	stater *state.Stater,
 	logDB *logdb.LogDB,
-	txPool *txpool.TxPool,
+	txPool txpool.Pool,
 	txStashPath string,
-	comm *comm.Communicator,
+	communicator Communicator,
 	forkConfig *thor.ForkConfig,
 	options Options,
-	consensusEngine ConsensusEngine,
-	packerEngine PackerEngine,
+	consensusEngine Consensus,
+	packerEngine Packer,
 ) *Node {
 	return &Node{
 		packer:      packerEngine,
@@ -110,17 +93,17 @@ func New(
 		logDB:       logDB,
 		txPool:      txPool,
 		txStashPath: txStashPath,
-		comm:        comm,
+		comm:        communicator,
 		forkConfig:  forkConfig,
 		options:     options,
+
+		logWorker:         newWorker(),
+		futureBlocksCache: cache.NewRandCache(32),
 	}
 }
 
 func (n *Node) Run(ctx context.Context) error {
-	logWorker := newWorker()
-	defer logWorker.Close()
-
-	n.logWorker = logWorker
+	defer n.logWorker.Close()
 
 	maxBlockNum, err := n.repo.GetMaxBlockNum()
 	if err != nil {
@@ -128,10 +111,17 @@ func (n *Node) Run(ctx context.Context) error {
 	}
 	n.maxBlockNum = maxBlockNum
 
+	db, err := leveldb.OpenFile(n.txStashPath, nil)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	txStash := newTxStash(db, 1000)
+
 	var goes co.Goes
 	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
 	goes.Go(func() { n.houseKeeping(ctx) })
-	goes.Go(func() { n.txStashLoop(ctx) })
+	goes.Go(func() { n.txStashLoop(ctx, txStash) })
 	goes.Go(func() { n.packerLoop(ctx) })
 
 	goes.Wait()
@@ -152,6 +142,7 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 
 	var blk *block.Block
 	for blk = range stream {
+		// block stream will have nil for throttling, just skip it
 		if blk == nil {
 			continue
 		}
@@ -176,109 +167,23 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 	return nil
 }
 
-func (n *Node) houseKeeping(ctx context.Context) {
-	logger.Debug("enter house keeping")
-	defer logger.Debug("leave house keeping")
-
-	var scope event.SubscriptionScope
-	defer scope.Close()
-
-	newBlockCh := make(chan *comm.NewBlockEvent)
-	scope.Track(n.comm.SubscribeBlock(newBlockCh))
-
-	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval()) * time.Second)
-	defer futureTicker.Stop()
-
-	connectivityTicker := time.NewTicker(time.Second)
-	defer connectivityTicker.Stop()
-
-	clockSyncTicker := time.NewTicker(10 * time.Minute)
-	defer clockSyncTicker.Stop()
-
-	var noPeerTimes int
-
-	futureBlocks := cache.NewRandCache(32)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case newBlock := <-newBlockCh:
-			var stats blockStats
-			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
-				if consensus.IsFutureBlock(err) ||
-					((err == errParentMissing || err == errBlockTemporaryUnprocessable) && futureBlocks.Contains(newBlock.Header().ParentID())) {
-					logger.Debug("future block added", "id", newBlock.Header().ID())
-					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
-				}
-			} else if isTrunk {
-				n.comm.BroadcastBlock(newBlock.Block)
-				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Header())...)
-			}
-		case <-futureTicker.C:
-			// process future blocks
-			var blocks []*block.Block
-			futureBlocks.ForEach(func(ent *cache.Entry) bool {
-				blocks = append(blocks, ent.Value.(*block.Block))
-				return true
-			})
-			sort.Slice(blocks, func(i, j int) bool {
-				return blocks[i].Header().Number() < blocks[j].Header().Number()
-			})
-			var stats blockStats
-			for i, block := range blocks {
-				if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
-					logger.Debug("future block consumed", "id", block.Header().ID())
-					futureBlocks.Remove(block.Header().ID())
-					if isTrunk {
-						n.comm.BroadcastBlock(block)
-					}
-				}
-
-				if stats.processed > 0 && i == len(blocks)-1 {
-					logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
-				}
-			}
-		case <-connectivityTicker.C:
-			if n.comm.PeerCount() == 0 {
-				noPeerTimes++
-				if noPeerTimes > 30 {
-					noPeerTimes = 0
-					go checkClockOffset()
-				}
-			} else {
-				noPeerTimes = 0
-			}
-		case <-clockSyncTicker.C:
-			go checkClockOffset()
-		}
-	}
-}
-
-func (n *Node) txStashLoop(ctx context.Context) {
+func (n *Node) txStashLoop(ctx context.Context, stash *txStash) {
 	logger.Debug("enter tx stash loop")
 	defer logger.Debug("leave tx stash loop")
 
-	db, err := leveldb.OpenFile(n.txStashPath, nil)
-	if err != nil {
-		logger.Error("create tx stash", "err", err)
-		return
-	}
-	defer db.Close()
-
-	stash := newTxStash(db, 1000)
-
 	{
 		txs := stash.LoadAll()
-		n.txPool.Fill(txs)
+		if len(txs) > 0 {
+			n.txPool.Fill(txs)
+		}
 		logger.Debug("loaded txs from stash", "count", len(txs))
 	}
 
 	var scope event.SubscriptionScope
 	defer scope.Close()
-
 	txCh := make(chan *txpool.TxEvent)
 	scope.Track(n.txPool.SubscribeTxEvent(txCh))
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -295,16 +200,5 @@ func (n *Node) txStashLoop(ctx context.Context) {
 				logger.Trace("stashed tx", "id", txEv.Tx.ID())
 			}
 		}
-	}
-}
-
-func checkClockOffset() {
-	resp, err := ntp.Query("pool.ntp.org")
-	if err != nil {
-		logger.Debug("failed to access NTP", "err", err)
-		return
-	}
-	if resp.ClockOffset > time.Duration(thor.BlockInterval())*time.Second/2 {
-		logger.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
 	}
 }

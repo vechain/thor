@@ -28,6 +28,8 @@ type instantMintPool struct {
 	txFeed event.Feed
 }
 
+var _ txpool.Pool = (*instantMintPool)(nil)
+
 func (m *instantMintPool) Get(txID thor.Bytes32) *tx.Transaction {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -38,6 +40,10 @@ func (m *instantMintPool) Get(txID thor.Bytes32) *tx.Transaction {
 		}
 	}
 	return nil
+}
+
+func (m *instantMintPool) Add(newTx *tx.Transaction) error {
+	return m.AddLocal(newTx)
 }
 
 func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
@@ -56,6 +62,10 @@ func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
 	return m.chain.MintBlock(m.validator, trx)
 }
 
+func (m *instantMintPool) StrictlyAdd(newTx *tx.Transaction) error {
+	return m.Add(newTx)
+}
+
 func (m *instantMintPool) Dump() tx.Transactions {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -72,4 +82,14 @@ func (m *instantMintPool) Len() int {
 
 func (m *instantMintPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
 	return m.scope.Track(m.txFeed.Subscribe(ch))
+}
+
+func (m *instantMintPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool { return true }
+
+func (m *instantMintPool) Close() {}
+
+func (m *instantMintPool) Fill(txs tx.Transactions) {}
+
+func (m *instantMintPool) Executables() tx.Transactions {
+	return m.txs
 }
