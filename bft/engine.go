@@ -29,6 +29,10 @@ var finalizedKey = []byte("finalized")
 type Committer interface {
 	Finalized() thor.Bytes32
 	Justified() (thor.Bytes32, error)
+	Accepts(parentID thor.Bytes32) (bool, error)
+	Select(header *block.Header) (bool, error)
+	CommitBlock(header *block.Header, isPacking bool) error
+	ShouldVote(parentID thor.Bytes32) (bool, error)
 }
 
 type justified struct {
@@ -488,4 +492,20 @@ func (e *mockedEngine) Justified() (thor.Bytes32, error) {
 func NewMockedEngine(genesisID thor.Bytes32) Committer {
 	me := mockedEngine(genesisID)
 	return &me
+}
+
+func (e *mockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
+	return true, nil
+}
+
+func (e *mockedEngine) Select(header *block.Header) (bool, error) {
+	return true, nil
+}
+
+func (e *mockedEngine) CommitBlock(header *block.Header, isPacking bool) error {
+	return nil
+}
+
+func (e *mockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
+	return true, nil
 }
