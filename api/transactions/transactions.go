@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
@@ -17,24 +16,15 @@ import (
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
-type Pool interface {
-	Get(txID thor.Bytes32) *tx.Transaction
-	AddLocal(tx *tx.Transaction) error
-	Dump() tx.Transactions
-	Len() int
-	SubscribeTxEvent(chan *txpool.TxEvent) event.Subscription
-}
-
 type Transactions struct {
 	repo *chain.Repository
-	pool Pool
+	pool txpool.Pool
 }
 
-func New(repo *chain.Repository, pool Pool) *Transactions {
+func New(repo *chain.Repository, pool txpool.Pool) *Transactions {
 	return &Transactions{
 		repo,
 		pool,

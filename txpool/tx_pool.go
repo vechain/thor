@@ -49,6 +49,21 @@ type TxEvent struct {
 	Executable *bool
 }
 
+// Pool defines the interface for the transaction pool
+type Pool interface {
+	Get(txID thor.Bytes32) *tx.Transaction
+	Add(newTx *tx.Transaction) error
+	AddLocal(tx *tx.Transaction) error
+	StrictlyAdd(newTx *tx.Transaction) error
+	Remove(txHash thor.Bytes32, txID thor.Bytes32) bool
+	Dump() tx.Transactions
+	Len() int
+	SubscribeTxEvent(chan *TxEvent) event.Subscription
+	Executables() tx.Transactions
+	Fill(txs tx.Transactions)
+	Close()
+}
+
 // TxPool maintains unprocessed transactions.
 type TxPool struct {
 	options      Options
