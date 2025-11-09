@@ -181,7 +181,7 @@ func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error)
 	return nil
 }
 
-func cleanupTransactions(txsToRemove []*tx.Transaction, txPool *txpool.TxPool) {
+func cleanupTransactions(txsToRemove []*tx.Transaction, txPool txpool.Pool) {
 	for _, tx := range txsToRemove {
 		txPool.Remove(tx.Hash(), tx.ID())
 	}

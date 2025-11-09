@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
@@ -23,6 +22,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 var (
@@ -48,7 +48,7 @@ type Solo struct {
 }
 
 type TxPool interface {
-	transactions.Pool
+	txpool.Pool
 	// Executables returns the transactions that can be executed
 	Executables() tx.Transactions
 	// Remove removes a transaction from the pool
