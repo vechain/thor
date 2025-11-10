@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/bft"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -109,7 +111,8 @@ func TestNewPruner(t *testing.T) {
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
-	pr := New(db, repo)
+	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
+	pr := New(db, repo, bftMockedEngine)
 	pr.Stop()
 }
 
@@ -147,6 +150,20 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 	return db, close, nil
 }
 
+type testCommitter struct {
+	repo *chain.Repository
+}
+
+func (tc *testCommitter) Finalized() thor.Bytes32 {
+	best := tc.repo.BestBlockSummary()
+	return best.Header.ID()
+}
+
+func (tc *testCommitter) Justified() (thor.Bytes32, error) {
+	best := tc.repo.BestBlockSummary()
+	return best.Header.ID(), nil
+}
+
 func TestWaitUntil(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
@@ -155,18 +172,23 @@ func TestWaitUntil(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()
 
+	testCommiter := &testCommitter{repo: repo}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	pruner := &Pruner{
-		repo:   repo,
-		db:     db,
-		ctx:    ctx,
-		cancel: cancel,
+		repo:     repo,
+		db:       db,
+		ctx:      ctx,
+		commiter: testCommiter,
+		cancel:   cancel,
 	}
 
 	parentID := b0.Header().ID()
 	var parentScore uint64 = 0
-	for range 6 {
-		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[0].PrivateKey)
+
+	// Add a reasonable number of blocks (e.g., 1000) instead of 100000
+	for i := uint32(0); i < 1000; i++ {
+		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[i%uint32(len(devAccounts))].PrivateKey)
 		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
 		assert.Nil(t, err)
 
@@ -174,50 +196,35 @@ func TestWaitUntil(t *testing.T) {
 		parentScore = blk.Header().TotalScore()
 	}
 
-	parentID, err := fastForwardTo(block.Number(parentID), 100000-1, db)
+	// Verify best block is at 1000
+	best := repo.BestBlockSummary()
+	assert.Equal(t, uint32(1000), best.Header.Number())
+
+	// Test with target that's less than finalized - should succeed immediately
+	target := uint32(500)
+	chain, err := pruner.awaitUntilSteady(target)
 	assert.Nil(t, err)
+	assert.True(t, block.Number(chain.HeadID()) >= target)
 
-	parentScore = (100000 - 1) * 2
-	for range 3 {
-		signer := devAccounts[0].PrivateKey
-		score := parentScore + 1
-		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
-		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
-		assert.Nil(t, err)
-
-		parentID = blk.Header().ID()
-		parentScore = blk.Header().TotalScore()
+	// Test cancellation scenario
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	pruner2 := &Pruner{
+		repo:     repo,
+		db:       db,
+		ctx:      ctx2,
+		commiter: testCommiter,
+		cancel:   cancel2,
 	}
 
 	go func() {
-		cancel()
+		time.Sleep(100 * time.Millisecond)
+		cancel2()
 	}()
 
-	// not enough signer, will wait for 1 sec
-	// backoff will increase for more waiting
-	// cancel here and restart a new test case
-	_, err = pruner.awaitUntilSteady(100000)
+	// Target beyond current best - should be cancelled
+	_, err = pruner2.awaitUntilSteady(2000)
 	assert.NotNil(t, err)
-
-	for i := range 3 {
-		signer := devAccounts[i%2].PrivateKey
-		score := parentScore + 2
-		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
-
-		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
-		assert.Nil(t, err)
-		parentID = blk.Header().ID()
-		parentScore = blk.Header().TotalScore()
-	}
-
-	ctx, cancel = context.WithCancel(context.Background())
-	pruner.ctx = ctx
-	pruner.cancel = cancel
-
-	chain, err := pruner.awaitUntilSteady(100000)
-	assert.Nil(t, err)
-
-	assert.True(t, block.Number(chain.HeadID()) >= 10000)
+	assert.Equal(t, context.Canceled, err)
 }
 
 func TestPrune(t *testing.T) {
