@@ -16,7 +16,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -180,11 +179,6 @@ func (c *Chain) GenesisBlock() *block.Block {
 // It wraps the transactions with receipts and passes them to MintTransactionsWithReceiptFunc.
 func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx.Transaction) error {
 	return c.MintBlock(account, transactions...)
-}
-
-// Contract creates a new contract instance with the provided address and ABI.
-func (c *Chain) Contract(addr thor.Address, abi *abi.ABI, acc genesis.DevAccount) *Contract {
-	return NewContract(c, acc, addr, abi)
 }
 
 // MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
