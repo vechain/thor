@@ -164,6 +164,26 @@ func (tc *testCommitter) Justified() (thor.Bytes32, error) {
 	return best.Header.ID(), nil
 }
 
+func (tc *testCommitter) Accepts(parentID thor.Bytes32) (bool, error) {
+	// For testing, accept all blocks (they're all on the same chain)
+	return true, nil
+}
+
+func (tc *testCommitter) Select(header *block.Header) (bool, error) {
+	// For testing, always select the new block
+	return true, nil
+}
+
+func (tc *testCommitter) CommitBlock(header *block.Header, isPacking bool) error {
+	// For testing, no-op
+	return nil
+}
+
+func (tc *testCommitter) ShouldVote(parentID thor.Bytes32) (bool, error) {
+	// For testing, don't vote
+	return false, nil
+}
+
 func TestWaitUntil(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
