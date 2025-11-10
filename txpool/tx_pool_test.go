@@ -1748,7 +1748,10 @@ func TestValidateTxBasics(t *testing.T) {
 }
 
 func TestTxPool_Local_IncreasingPriority(t *testing.T) {
-	pool := newPoolWithParams(10, 1000, "", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
+	// Use a pool limit of 100 to prevent background housekeeping from triggering
+	// automatic wash while we're adding transactions. We'll manually trigger wash
+	// after reducing the limit to test priority-based eviction.
+	pool := newPoolWithParams(100, 1000, "", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
 	defer pool.Close()
 
 	for i := range int64(15) {
@@ -1762,16 +1765,18 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 			Build()
 
 		trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
-
 		err := pool.Add(trx)
 		assert.Nil(t, err)
 
 		txObj := pool.all.GetByID(trx.ID())
 		assert.NotNil(t, txObj)
-
 		assert.Equal(t, int64(pool.Len()), i+1)
 	}
 
+	// Reduce the limit to 10 and manually call wash to test priority ordering.
+	// The wash method should keep the 10 highest priority transactions (6-15)
+	// and evict the 5 lowest priority ones (1-5).
+	pool.options.Limit = 10
 	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	pool.executables.Store(executables)
