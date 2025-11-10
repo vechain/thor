@@ -240,7 +240,8 @@ func (p *Pruner) awaitUntilSteady(target uint32) (*chain.Chain, error) {
 				}
 			}
 
-			return finalizedChain, nil
+			targetChain := p.repo.NewChain(targetID)
+			return targetChain, nil
 		}
 
 		// Wait for finality to advance
