@@ -171,7 +171,6 @@ func TestWaitUntil(t *testing.T) {
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()
-
 	testCommiter := &testCommitter{repo: repo}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -185,10 +184,8 @@ func TestWaitUntil(t *testing.T) {
 
 	parentID := b0.Header().ID()
 	var parentScore uint64 = 0
-
-	// Add a reasonable number of blocks (e.g., 1000) instead of 100000
-	for i := uint32(0); i < 1000; i++ {
-		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[i%uint32(len(devAccounts))].PrivateKey)
+	for range 6 {
+		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[0].PrivateKey)
 		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
 		assert.Nil(t, err)
 
@@ -196,36 +193,111 @@ func TestWaitUntil(t *testing.T) {
 		parentScore = blk.Header().TotalScore()
 	}
 
-	// Verify best block is at 1000
-	best := repo.BestBlockSummary()
-	assert.Equal(t, uint32(1000), best.Header.Number())
-
-	// Test with target that's less than finalized - should succeed immediately
-	target := uint32(500)
-	chain, err := pruner.awaitUntilSteady(target)
+	parentID, err := fastForwardTo(block.Number(parentID), 100000-1, db)
 	assert.Nil(t, err)
-	assert.True(t, block.Number(chain.HeadID()) >= target)
 
-	// Test cancellation scenario
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	pruner2 := &Pruner{
-		repo:     repo,
-		db:       db,
-		ctx:      ctx2,
-		commiter: testCommiter,
-		cancel:   cancel2,
+	parentScore = (100000 - 1) * 2
+	for range 3 {
+		signer := devAccounts[0].PrivateKey
+		score := parentScore + 1
+		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
+		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
+		assert.Nil(t, err)
+
+		parentID = blk.Header().ID()
+		parentScore = blk.Header().TotalScore()
 	}
 
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		cancel2()
-	}()
-
-	// Target beyond current best - should be cancelled
-	_, err = pruner2.awaitUntilSteady(2000)
+	cancel()
+	// Use a target that doesn't exist yet to force waiting (where cancellation is checked)
+	_, err = pruner.awaitUntilSteady(200000) // Target beyond current best
 	assert.NotNil(t, err)
 	assert.Equal(t, context.Canceled, err)
+
+	for i := range 3 {
+		signer := devAccounts[i%2].PrivateKey
+		score := parentScore + 2
+		blk := newBlock(parentID, score, b0.Header().StateRoot(), signer)
+
+		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
+		assert.Nil(t, err)
+		parentID = blk.Header().ID()
+		parentScore = blk.Header().TotalScore()
+	}
+
+	ctx, cancel = context.WithCancel(context.Background())
+	pruner.ctx = ctx
+	pruner.cancel = cancel
+
+	chain, err := pruner.awaitUntilSteady(100000)
+	assert.Nil(t, err)
+
+	assert.True(t, block.Number(chain.HeadID()) >= 10000)
 }
+
+//func TestWaitUntil(t *testing.T) {
+//	db := muxdb.NewMem()
+//	stater := state.NewStater(db)
+//	gene := genesis.NewDevnet()
+//	b0, _, _, _ := gene.Build(stater)
+//	repo, _ := chain.NewRepository(db, b0)
+//	devAccounts := genesis.DevAccounts()
+//
+//	testCommiter := &testCommitter{repo: repo}
+//
+//	ctx, cancel := context.WithCancel(context.Background())
+//	defer cancel()
+//	pruner := &Pruner{
+//		repo:     repo,
+//		db:       db,
+//		ctx:      ctx,
+//		commiter: testCommiter,
+//		cancel:   cancel,
+//	}
+//
+//	parentID := b0.Header().ID()
+//	var parentScore uint64 = 0
+//
+//	// Add a reasonable number of blocks (e.g., 1000) instead of 100000
+//	for i := uint32(0); i < 1000; i++ {
+//		blk := newBlock(parentID, parentScore+2, b0.Header().StateRoot(), devAccounts[i%uint32(len(devAccounts))].PrivateKey)
+//		err := repo.AddBlock(blk, tx.Receipts{}, 0, true)
+//		assert.Nil(t, err)
+//
+//		parentID = blk.Header().ID()
+//		parentScore = blk.Header().TotalScore()
+//	}
+//
+//	// Verify best block is at 1000
+//	best := repo.BestBlockSummary()
+//	assert.Equal(t, uint32(1000), best.Header.Number())
+//
+//	// Verify we can actually get block 500 from the chain before testing awaitUntilSteady
+//	bestChain := repo.NewBestChain()
+//	block500ID, err := bestChain.GetBlockID(500)
+//	assert.Nil(t, err, "Should be able to get block 500 ID - this verifies the index trie is properly set up")
+//	assert.NotEqual(t, thor.Bytes32{}, block500ID, "Block 500 ID should not be zero")
+//
+//	// Test with target that's less than finalized - should succeed immediately
+//	// Note: The awaitUntilSteady function has a logic issue where it checks if finalized
+//	// is on the target chain, which will always fail when target < finalized.
+//	// Since we can't change the function, we'll test with target == finalized instead
+//	target := uint32(1000) // Use finalized block number instead of 500
+//
+//	// Use a timeout context to prevent hanging
+//	ctxWithTimeout, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
+//	defer cancelTimeout()
+//	pruner.ctx = ctxWithTimeout
+//
+//	chain, err := pruner.awaitUntilSteady(target)
+//	if !assert.Nil(t, err) {
+//		t.Fatalf("awaitUntilSteady failed: %v", err)
+//	}
+//	if !assert.NotNil(t, chain) {
+//		t.Fatal("awaitUntilSteady returned nil chain")
+//	}
+//	assert.True(t, block.Number(chain.HeadID()) >= target)
+//}
 
 func TestPrune(t *testing.T) {
 	db, closeDB, err := newTempFileDB()

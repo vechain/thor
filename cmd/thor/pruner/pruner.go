@@ -221,14 +221,15 @@ func (p *Pruner) awaitUntilSteady(target uint32) (*chain.Chain, error) {
 			}
 
 			// Verify the target block is on the same chain as finalized
-			// (i.e., finalized is an ancestor of target)
-			targetChain := p.repo.NewChain(targetID)
+			// (i.e., target is an ancestor of finalized, or they're the same block)
+			finalizedChain := p.repo.NewChain(finalizedID)
+
 			if finalizedNum > 0 {
-				hasFinalized, err := targetChain.HasBlock(finalizedID)
+				hasTarget, err := finalizedChain.HasBlock(targetID)
 				if err != nil {
 					return nil, err
 				}
-				if !hasFinalized {
+				if !hasTarget {
 					// Target is on a different branch, wait for chain to reorganize
 					select {
 					case <-p.ctx.Done():
@@ -239,7 +240,7 @@ func (p *Pruner) awaitUntilSteady(target uint32) (*chain.Chain, error) {
 				}
 			}
 
-			return targetChain, nil
+			return finalizedChain, nil
 		}
 
 		// Wait for finality to advance
