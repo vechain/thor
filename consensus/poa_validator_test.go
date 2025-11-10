@@ -52,7 +52,7 @@ func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
 
 	endorserVetBalance, err := staker.ToVET(endorsorBal)
 	assert.NoError(t, err)
-	assert.Equal(t, expectedEndorserVetBalance, endorserVetBalance)
+	assert.Equal(t, int64(expectedEndorserVetBalance), int64(endorserVetBalance))
 
 	// check the staker contract has the correct stake
 	masterStake, err := getMasterStake(setup.chain, blk.Header)
