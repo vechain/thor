@@ -25,6 +25,7 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 // Node represents a complete test node with chain, API server, and transaction pool capabilities
@@ -47,7 +48,7 @@ type node struct {
 	chain           *testchain.Chain
 	apiServer       *httptest.Server
 	apiServerCloser func()
-	txPool          transactions.Pool
+	txPool          txpool.Pool
 }
 
 // Start starts the node and initializes all necessary components including the API server
