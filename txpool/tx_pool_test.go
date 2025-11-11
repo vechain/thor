@@ -1786,4 +1786,12 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	for _, tx := range executables {
 		assert.Greater(t, tx.MaxPriorityFeePerGas().Int64(), int64(5*multiplier))
 	}
+
+	if t.Failed() {
+		objs := pool.all.ToTxObjects()
+		sortTxObjsByPriorityGasPriceDesc(objs)
+		for _, obj := range objs {
+			t.Logf("priorityGasPrice=%s", obj.priorityGasPrice.String())
+		}
+	}
 }
