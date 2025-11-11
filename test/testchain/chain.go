@@ -150,6 +150,16 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	), nil
 }
 
+func (c *Chain) Close() error {
+	if err := c.logDB.Close(); err != nil {
+		return err
+	}
+	if err := c.db.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Genesis returns the genesis information of the chain, which includes the initial state and configuration.
 func (c *Chain) Genesis() *genesis.Genesis {
 	return c.genesis
