@@ -70,6 +70,7 @@ func New(
 	}
 }
 
+// DefaultForkConfig enables all forks at block 0
 var DefaultForkConfig = thor.ForkConfig{}
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
