@@ -2,8 +2,7 @@ name: Unit Tests
 
 on:
   push:
-    branches:
-      - "*"
+
 jobs:
   unit_tests:
     runs-on: windows-latest
