@@ -1748,23 +1748,29 @@ func TestValidateTxBasics(t *testing.T) {
 }
 
 func TestTxPool_Local_IncreasingPriority(t *testing.T) {
-	// Use a pool limit of 100 to prevent background housekeeping from triggering
-	// automatic wash while we're adding transactions. We'll manually trigger wash
-	// after reducing the limit to test priority-based eviction.
-	pool := newPoolWithParams(100, 1000, "", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{}, 180)
+	assert.Nil(t, err)
+	pool := New(chain.Repo(), chain.Stater(), Options{
+		Limit:           100,
+		LimitPerAccount: 1000,
+		MaxLifetime:     time.Minute * 30,
+	}, chain.GetForkConfig())
 	pool.Close() // turn off the background housekeeping
+	require.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
 
 	// to reduce precision loss when comparing priority fees
-	const multiplier = 100_000
+	const multiplier = 10_000
+	baseFee := chain.Repo().BestBlockSummary().Header.BaseFee()
 
 	for i := range int64(15) {
 		trx := tx.NewBuilder(tx.TypeDynamicFee).
 			ChainTag(pool.repo.ChainTag()).
 			Gas(21000).
 			Nonce(datagen.RandUint64()).
-			MaxFeePerGas(big.NewInt(1e13)).
+			MaxFeePerGas(new(big.Int).Add(baseFee, big.NewInt(i+1))).
 			MaxPriorityFeePerGas(big.NewInt((i + 1) * multiplier)).
 			Expiration(1000).
+			BlockRef(tx.NewBlockRef(0)).
 			Build()
 
 		trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
@@ -1780,18 +1786,10 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	// The wash method should keep the 10 highest priority transactions (6-15)
 	// and evict the 5 lowest priority ones (1-5).
 	pool.options.Limit = 10
-	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.NoError(t, err)
 
 	for _, tx := range executables {
 		assert.Greater(t, tx.MaxPriorityFeePerGas().Int64(), int64(5*multiplier))
-	}
-
-	if t.Failed() {
-		objs := pool.all.ToTxObjects()
-		sortTxObjsByPriorityGasPriceDesc(objs)
-		for _, obj := range objs {
-			t.Logf("priorityGasPrice=%s", obj.priorityGasPrice.String())
-		}
 	}
 }
