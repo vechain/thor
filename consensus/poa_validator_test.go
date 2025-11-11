@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/v2/builtin/authority"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/poa"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -96,7 +96,7 @@ func TestAuthorityCacheHandler_Success(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -155,7 +155,7 @@ func TestAuthorityCacheHandler_NilCandidates(t *testing.T) {
 func TestAuthorityCacheHandler_EmptyCandidates(t *testing.T) {
 	mockForkConfig := &thor.ForkConfig{}
 
-	candidates := poa.NewCandidates([]*authority.Candidate{})
+	candidates := scheduler.NewCandidates([]*authority.Candidate{})
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -187,7 +187,7 @@ func TestAuthorityCacheHandler_WithAuthorityEvents(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -237,7 +237,7 @@ func TestAuthorityCacheHandler_WithStakerEvents(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -284,7 +284,7 @@ func TestAuthorityCacheHandler_WithParamsEvents(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -331,7 +331,7 @@ func TestAuthorityCacheHandler_WithEndorsorTransfers(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -377,7 +377,7 @@ func TestAuthorityCacheHandler_WithAuthoritySetEvent(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -425,7 +425,7 @@ func TestAuthorityCacheHandler_WithMultipleEvents(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -478,7 +478,7 @@ func TestAuthorityCacheHandler_WithNilReceipts(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).
@@ -508,7 +508,7 @@ func TestAuthorityCacheHandler_WithEmptyReceipts(t *testing.T) {
 		},
 	}
 
-	candidates := poa.NewCandidates(candidateList)
+	candidates := scheduler.NewCandidates(candidateList)
 
 	header := new(block.Builder).
 		ParentID(thor.BytesToBytes32([]byte("parent123"))).

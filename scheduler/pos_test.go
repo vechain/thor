@@ -3,11 +3,10 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package pos
+package scheduler
 
 import (
 	"encoding/binary"
-	"math"
 	"math/big"
 	"math/rand/v2"
 	"testing"
@@ -36,10 +35,10 @@ func createParams() ([]Proposer, uint64) {
 
 func TestNewScheduler_Seed(t *testing.T) {
 	validators, _ := createParams()
-	s1, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	s1, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
-	s2, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed2"))
+	s2, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed2"))
 	assert.NoError(t, err)
 
 	time1 := s1.Schedule(20)
@@ -52,7 +51,7 @@ func TestNewScheduler_Seed(t *testing.T) {
 func TestNewScheduler_Schedule_ShouldNotPanic(t *testing.T) {
 	validators, _ := createParams()
 	parentTime := uint64(10)
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
+	sched, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
 	for i := range uint64(1000) {
@@ -63,7 +62,7 @@ func TestNewScheduler_Schedule_ShouldNotPanic(t *testing.T) {
 
 func TestScheduler_IsScheduled(t *testing.T) {
 	validators, _ := createParams()
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
 	assert.True(t, sched.IsScheduled(130, genesis.DevAccounts()[2].Address))
@@ -158,7 +157,7 @@ func TestScheduler_Distribution(t *testing.T) {
 				next := parent + thor.BlockInterval()
 				seed := big.NewInt(int64(i)).Bytes()
 
-				sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parent, seed[:])
+				sched, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, parent, seed[:])
 				assert.NoError(t, err)
 
 				for _, acc := range genesis.DevAccounts() {
@@ -195,7 +194,7 @@ func TestScheduler_Schedule(t *testing.T) {
 	for i := uint64(1); i <= 1000; i++ {
 		expectedNext := parentTime + thor.BlockInterval()*i
 		for _, acc := range genesis.DevAccounts() {
-			sched, err := NewScheduler(acc.Address, validators, 1, parentTime, []byte("seed1"))
+			sched, err := NewPoSScheduler(acc.Address, validators, 1, parentTime, []byte("seed1"))
 			assert.NoError(t, err)
 			newBlockTime := sched.Schedule(20)
 			if newBlockTime == expectedNext {
@@ -212,7 +211,7 @@ func TestScheduler_Updates(t *testing.T) {
 	nowTime := uint64(30)
 
 	validators, _ := createParams()
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
+	sched, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, parentTime, []byte("seed1"))
 	assert.NoError(t, err)
 
 	weights := make(map[thor.Address]uint64)
@@ -254,7 +253,7 @@ func TestScheduler_TotalPlacements(t *testing.T) {
 		weightMap[validator.Address] = validator.Weight
 	}
 
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
 	assert.Equal(t, 9, len(sched.sequence))
@@ -289,7 +288,7 @@ func TestScheduler_AllValidatorsScheduled(t *testing.T) {
 	}
 
 	parent := uint64(10)
-	sched, err := NewScheduler(lowStakeAcc, validators, 1, parent, []byte("seed1"))
+	sched, err := NewPoSScheduler(lowStakeAcc, validators, 1, parent, []byte("seed1"))
 	assert.NoError(t, err)
 
 	lowStakeBlockTime := sched.Schedule(20)
@@ -319,7 +318,7 @@ func TestScheduler_Schedule_TotalScore(t *testing.T) {
 		totalStake += weight
 	}
 
-	sched, err := NewScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(genesis.DevAccounts()[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
 	updates, score := sched.Updates(30, totalStake)
@@ -330,14 +329,6 @@ func TestScheduler_Schedule_TotalScore(t *testing.T) {
 	expectedScore := onlineWeight * thor.MaxPosScore
 	expectedScore = expectedScore / totalStake
 	assert.Equal(t, expectedScore, score, "Score should be equal to the expected score")
-}
-
-func TestU64ToI64(t *testing.T) {
-	assert.Equal(t, int64(math.MaxInt64), uint64ToI64(math.MaxUint64))
-	assert.Equal(t, int64(0), uint64ToI64(1<<63))
-	assert.Equal(t, int64(-1), uint64ToI64(1<<63-1))
-	assert.Equal(t, int64(-22), uint64ToI64(1<<63-22))
-	assert.Equal(t, int64(math.MinInt64), uint64ToI64(0))
 }
 
 func TestScheduler_ScoreComparison_DifferentWeights(t *testing.T) {
@@ -352,7 +343,7 @@ func TestScheduler_ScoreComparison_DifferentWeights(t *testing.T) {
 		{Address: thor.BytesToAddress([]byte("max_stake")), Weight: 600_000_000, Active: true}, // 600M VET (Max)
 	}
 
-	sched, err := NewScheduler(proposers[0].Address, proposers, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(proposers[0].Address, proposers, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 
 	t.Log("=== Priority Score Comparison with Real Network Weights ===")
@@ -412,25 +403,25 @@ func TestScheduler_ScoreComparison_DifferentWeights(t *testing.T) {
 func TestNewScheduler_UnauthorizedProposer(t *testing.T) {
 	validators, _ := createParams()
 	unauthorized := thor.BytesToAddress([]byte("not_in_list"))
-	_, err := NewScheduler(unauthorized, validators, 1, 10, []byte("seed1"))
+	_, err := NewPoSScheduler(unauthorized, validators, 1, 10, []byte("seed1"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unauthorized block proposer")
 }
 
 func TestScheduler(t *testing.T) {
 	validators, _ := createParams()
-	sched, err := NewScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 	T := thor.BlockInterval()
 
 	tests := []struct {
 		name      string
-		action    func(*Scheduler) bool
+		action    func(*PoSScheduler) bool
 		wantValue bool
 	}{
 		{
 			name: "IsTheTime matches IsScheduled",
-			action: func(s *Scheduler) bool {
+			action: func(s *PoSScheduler) bool {
 				blockTime := s.Schedule(20)
 				return s.IsScheduled(blockTime, s.proposer.Address) == s.IsTheTime(blockTime)
 			},
@@ -438,21 +429,21 @@ func TestScheduler(t *testing.T) {
 		},
 		{
 			name: "IsScheduled blockTime == parentBlockTime",
-			action: func(s *Scheduler) bool {
+			action: func(s *PoSScheduler) bool {
 				return s.IsScheduled(10, s.proposer.Address)
 			},
 			wantValue: false,
 		},
 		{
 			name: "IsScheduled blockTime < parentBlockTime",
-			action: func(s *Scheduler) bool {
+			action: func(s *PoSScheduler) bool {
 				return s.IsScheduled(5, s.proposer.Address)
 			},
 			wantValue: false,
 		},
 		{
 			name: "IsScheduled blockTime not aligned",
-			action: func(s *Scheduler) bool {
+			action: func(s *PoSScheduler) bool {
 				return s.IsScheduled(10+T+1, s.proposer.Address)
 			},
 			wantValue: false,
@@ -472,7 +463,7 @@ func TestScheduler_Updates_InactiveProposer(t *testing.T) {
 	inactive := validators[0]
 	inactive.Active = false
 	validators[0] = inactive
-	sched, err := NewScheduler(inactive.Address, validators, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(inactive.Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 	updates, _ := sched.Updates(30, 100)
 	found := false
@@ -486,7 +477,7 @@ func TestScheduler_Updates_InactiveProposer(t *testing.T) {
 
 func TestScheduler_Updates_ZeroTotalWeight(t *testing.T) {
 	validators, _ := createParams()
-	sched, err := NewScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 	updates, score := sched.Updates(30, 0)
 	assert.Equal(t, 0, int(score))
@@ -495,7 +486,7 @@ func TestScheduler_Updates_ZeroTotalWeight(t *testing.T) {
 
 func TestScheduler_Schedule_Panic(t *testing.T) {
 	validators, _ := createParams()
-	sched, err := NewScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
+	sched, err := NewPoSScheduler(validators[0].Address, validators, 1, 10, []byte("seed1"))
 	assert.NoError(t, err)
 	// Set the sequence to empty to force panic
 	sched.sequence = []entry{}

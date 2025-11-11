@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package poa
+package scheduler
 
 import (
 	"bytes"
@@ -14,26 +14,26 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// SchedulerV2 to schedule the time when a proposer to produce a block.
+// PoASchedulerV2 to schedule the time when a proposer to produce a block.
 // V2 is for post VIP-214 stage.
-type SchedulerV2 struct {
+type PoASchedulerV2 struct {
 	proposer        Proposer
 	parentBlockTime uint64
 	shuffled        []thor.Address
 }
 
-var _ Scheduler = (*SchedulerV2)(nil)
+var _ Scheduler = (*PoASchedulerV2)(nil)
 
-// NewSchedulerV2 create a SchedulerV2 object.
+// NewPoASchedulerV2 create a PoASchedulerV2 object.
 // `addr` is the proposer to be scheduled.
 // If `addr` is not listed in `proposers` or not active, an error returned.
-func NewSchedulerV2(
+func NewPoASchedulerV2(
 	addr thor.Address,
 	proposers []Proposer,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
-) (*SchedulerV2, error) {
+) (*PoASchedulerV2, error) {
 	var (
 		listed   = false
 		proposer Proposer
@@ -74,7 +74,7 @@ func NewSchedulerV2(
 		shuffled = append(shuffled, t.addr)
 	}
 
-	return &SchedulerV2{
+	return &PoASchedulerV2{
 		proposer,
 		parentBlockTime,
 		shuffled,
@@ -83,7 +83,7 @@ func NewSchedulerV2(
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
-func (s *SchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
+func (s *PoASchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
 	T := thor.BlockInterval()
 
 	newBlockTime = s.parentBlockTime + T
@@ -105,12 +105,12 @@ func (s *SchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
 }
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
-func (s *SchedulerV2) IsTheTime(newBlockTime uint64) bool {
+func (s *PoASchedulerV2) IsTheTime(newBlockTime uint64) bool {
 	return s.IsScheduled(newBlockTime, s.proposer.Address)
 }
 
 // IsScheduled returns if the schedule(proposer, blockTime) is correct.
-func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool {
+func (s *PoASchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 	if s.parentBlockTime >= blockTime {
 		// invalid block time
 		return false
@@ -127,7 +127,7 @@ func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool 
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
+func (s *PoASchedulerV2) Updates(newBlockTime uint64, _ uint64) (updates []Proposer, score uint64) {
 	T := thor.BlockInterval()
 
 	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {

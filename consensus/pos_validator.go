@@ -12,7 +12,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	stakerContract "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/pos"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -47,21 +47,21 @@ func (c *Consensus) validateStakingProposer(
 	}
 
 	var (
-		proposers   = make([]pos.Proposer, 0, len(leaders))
+		proposers   = make([]scheduler.Proposer, 0, len(leaders))
 		beneficiary *thor.Address
 	)
 	for _, leader := range leaders {
 		if leader.Address == signer && leader.Beneficiary != nil {
 			beneficiary = leader.Beneficiary
 		}
-		proposers = append(proposers, pos.Proposer{
+		proposers = append(proposers, scheduler.Proposer{
 			Address: leader.Address,
 			Active:  leader.Active,
 			Weight:  leader.Weight,
 		})
 	}
 
-	sched, err := pos.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
+	sched, err := scheduler.NewPoSScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("pos - block signer invalid: %v %v", signer, err))
 	}

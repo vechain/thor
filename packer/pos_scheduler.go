@@ -8,7 +8,7 @@ package packer
 import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/pos"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -27,7 +27,7 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 
 	var (
 		beneficiary thor.Address
-		proposers   = make([]pos.Proposer, 0, len(leaderGroup))
+		proposers   = make([]scheduler.Proposer, 0, len(leaderGroup))
 	)
 
 	for _, leader := range leaderGroup {
@@ -41,13 +41,13 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 			}
 		}
 
-		proposers = append(proposers, pos.Proposer{
+		proposers = append(proposers, scheduler.Proposer{
 			Address: leader.Address,
 			Active:  leader.Active,
 			Weight:  leader.Weight,
 		})
 	}
-	sched, err := pos.NewScheduler(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
+	sched, err := scheduler.NewPoSScheduler(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
