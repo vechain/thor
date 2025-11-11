@@ -8,5 +8,5 @@ package scheduler
 type Scheduler interface {
 	Schedule(nowTime uint64) (newBlockTime uint64)
 	IsTheTime(newBlockTime uint64) bool
-	Updates(newBlockTime uint64, totalWeight uint64) (updates []Proposer, score uint64)
+	Updates(newBlockTime uint64) (updates []Proposer, score uint64)
 }

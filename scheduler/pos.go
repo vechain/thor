@@ -27,6 +27,7 @@ type PoSScheduler struct {
 	proposer        Proposer
 	parentBlockTime uint64
 	sequence        []entry
+	totalWeight     uint64
 }
 
 var _ Scheduler = (*PoSScheduler)(nil)
@@ -40,6 +41,7 @@ func NewPoSScheduler(
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
+	totalWeight uint64,
 ) (*PoSScheduler, error) {
 	var (
 		listed   = false
@@ -100,6 +102,7 @@ func NewPoSScheduler(
 		proposer,
 		parentBlockTime,
 		shuffled,
+		totalWeight,
 	}, nil
 }
 
@@ -149,7 +152,7 @@ func (s *PoSScheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *PoSScheduler) Updates(newBlockTime uint64, totalWeight uint64) ([]Proposer, uint64) {
+func (s *PoSScheduler) Updates(newBlockTime uint64) ([]Proposer, uint64) {
 	T := thor.BlockInterval()
 
 	updates := make([]Proposer, 0)
@@ -177,8 +180,8 @@ func (s *PoSScheduler) Updates(newBlockTime uint64, totalWeight uint64) ([]Propo
 		updates = append(updates, Proposer{Address: s.proposer.Address, Active: true})
 	}
 
-	if totalWeight > 0 {
-		score := activeWeight * thor.MaxPosScore / totalWeight
+	if s.totalWeight > 0 {
+		score := activeWeight * thor.MaxPosScore / s.totalWeight
 		return updates, score
 	}
 

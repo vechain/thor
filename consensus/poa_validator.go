@@ -64,7 +64,7 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
-	updates, score := sched.Updates(header.Timestamp(), 0)
+	updates, score := sched.Updates(header.Timestamp())
 	if parent.TotalScore()+score != header.TotalScore() {
 		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}

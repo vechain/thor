@@ -76,7 +76,7 @@ func TestSchedulerV2_Updates(t *testing.T) {
 				parentBlockTime: tt.fields.parentBlockTime,
 				shuffled:        tt.fields.shuffled,
 			}
-			gotUpdates, gotScore := s.Updates(tt.args.newBlockTime, 0)
+			gotUpdates, gotScore := s.Updates(tt.args.newBlockTime)
 			if !reflect.DeepEqual(gotUpdates, tt.wantUpdates) {
 				t.Errorf("SchedulerV2.Updates() gotUpdates = %v, want %v", gotUpdates, tt.wantUpdates)
 			}

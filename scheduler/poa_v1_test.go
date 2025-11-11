@@ -69,7 +69,7 @@ func TestUpdates(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, score := sched.Updates(tt.newBlockTime, 0)
+		_, score := sched.Updates(tt.newBlockTime)
 		assert.Equal(t, tt.want, score)
 	}
 }
@@ -135,7 +135,7 @@ func TestUpdatesV2(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, score := sched.Updates(tt.newBlockTime, 0)
+		_, score := sched.Updates(tt.newBlockTime)
 		assert.Equal(t, tt.want, score)
 	}
 }
@@ -159,7 +159,7 @@ func TestActivateInV2(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, score := sched.Updates(tt.newBlockTime, 0)
+		_, score := sched.Updates(tt.newBlockTime)
 		assert.Equal(t, tt.want, score)
 	}
 }

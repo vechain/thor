@@ -60,20 +60,19 @@ func (c *Consensus) validateStakingProposer(
 			Weight:  leader.Weight,
 		})
 	}
+	_, totalWeight, err := staker.LockedStake()
+	if err != nil {
+		return nil, consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
+	}
 
-	sched, err := scheduler.NewPoSScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
+	sched, err := scheduler.NewPoSScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed, totalWeight)
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("pos - block signer invalid: %v %v", signer, err))
 	}
 	if !sched.IsTheTime(header.Timestamp()) {
 		return nil, consensusError(fmt.Sprintf("pos - block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
-
-	_, totalWeight, err := staker.LockedStake()
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
-	}
-	updates, score := sched.Updates(header.Timestamp(), totalWeight)
+	updates, score := sched.Updates(header.Timestamp())
 	if parent.TotalScore()+score != header.TotalScore() {
 		return nil, consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}

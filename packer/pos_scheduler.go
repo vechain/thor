@@ -47,17 +47,17 @@ func (p *Packer) schedulePOS(parent *chain.BlockSummary, nowTimestamp uint64, st
 			Weight:  leader.Weight,
 		})
 	}
-	sched, err := scheduler.NewPoSScheduler(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
-	if err != nil {
-		return thor.Address{}, 0, 0, err
-	}
-	newBlockTime := sched.Schedule(nowTimestamp)
-
 	_, weight, err := staker.LockedStake()
 	if err != nil {
 		return thor.Address{}, 0, 0, err
 	}
-	updates, score := sched.Updates(newBlockTime, weight)
+
+	sched, err := scheduler.NewPoSScheduler(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed, weight)
+	if err != nil {
+		return thor.Address{}, 0, 0, err
+	}
+	newBlockTime := sched.Schedule(nowTimestamp)
+	updates, score := sched.Updates(newBlockTime)
 
 	for _, u := range updates {
 		if err := staker.SetOnline(u.Address, parent.Header.Number()+1, u.Active); err != nil {

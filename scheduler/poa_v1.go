@@ -99,7 +99,7 @@ func (s *PoASchedulerV1) IsTheTime(newBlockTime uint64) bool {
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *PoASchedulerV1) Updates(newBlockTime uint64, _ uint64) (updates []Proposer, score uint64) {
+func (s *PoASchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 	T := thor.BlockInterval()
 	toDeactivate := make(map[thor.Address]Proposer)
 

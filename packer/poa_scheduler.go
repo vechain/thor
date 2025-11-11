@@ -67,7 +67,7 @@ func (p *Packer) schedulePOA(parent *chain.BlockSummary, nowTimestamp uint64, st
 	}
 
 	newBlockTime := sched.Schedule(nowTimestamp)
-	updates, score := sched.Updates(newBlockTime, 0)
+	updates, score := sched.Updates(newBlockTime)
 
 	for _, u := range updates {
 		if _, err := authority.Update(u.Address, u.Active); err != nil {

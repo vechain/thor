@@ -127,7 +127,7 @@ func (s *PoASchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bo
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *PoASchedulerV2) Updates(newBlockTime uint64, _ uint64) (updates []Proposer, score uint64) {
+func (s *PoASchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 	T := thor.BlockInterval()
 
 	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {
