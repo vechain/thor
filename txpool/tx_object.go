@@ -146,7 +146,7 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 }
 
 func sortTxObjsByPriorityGasPriceDesc(txObjs []*TxObject) {
-	slices.SortStableFunc(txObjs, func(a, b *TxObject) int {
+	slices.SortFunc(txObjs, func(a, b *TxObject) int {
 		if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
 			return cmp
 		}
