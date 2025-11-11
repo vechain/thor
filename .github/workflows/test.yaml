@@ -17,4 +17,4 @@ jobs:
           cache: 'true'
 
       - name: Make all
-        run: go test ./txpool -run ^TestTxPool_Local_IncreasingPriority$
+        run: go test ./txpool/...
