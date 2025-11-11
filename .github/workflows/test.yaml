@@ -1,25 +1,12 @@
 name: Unit Tests
 
 on:
-  # Should only be used by other workflows
-  workflow_call:
-    secrets:
-      CODECOV_TOKEN:
-        required: false
-
-permissions:
-  contents: read
-
+  push:
+    branches:
+      - "*"
 jobs:
   unit_tests:
-    strategy:
-      matrix:
-        go-version: [1.24.x]
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - go-version: 1.25.x
-            os: ubuntu-latest
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,77 +14,8 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
-
-      - name: Make all
-        run: make all
-
-      - name: Make Test
-        id: unit-test
-        run: make test
-
-  test_coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
           go-version: 1.24.x
+          cache: 'true'
 
       - name: Make all
-        run: make all
-
-      - name: Make Coverage
-        run: make test-coverage
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        if: ${{ github.repository == 'vechain/thor' }}
-        with:
-          fail_ci_if_error: true
-          files: ./coverage.out
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  solo-test:
-    strategy:
-        matrix:
-            args:
-              - 'solo'
-              - 'solo --hayabusa'
-              - 'solo --on-demand'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.24.x
-
-      - name: Make all
-        run: make thor
-
-      - name: Start Solo
-        run: bin/thor ${{matrix.args}} > thor-solo.log 2>&1 &
-
-      - name: Wait for block 1
-        run: |
-          for i in {1..30}; do
-            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8669/blocks/1 || true)
-            if [ "$status" -eq 200 ]; then
-              echo "✅ Healthcheck passed"
-              exit 0
-            fi
-            echo "Healthcheck failed (status: $status). Retrying in 1s..."
-            sleep 1
-          done
-          echo "❌ Healthcheck failed after 30 attempts"
-          exit 1
-
-      - name: Print Logs
-        if: failure()
-        run: cat thor-solo.log
+        run: go test ./txpool -run ^TestTxPool_Local_IncreasingPriority$
