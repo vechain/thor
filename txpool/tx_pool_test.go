@@ -1752,7 +1752,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	// automatic wash while we're adding transactions. We'll manually trigger wash
 	// after reducing the limit to test priority-based eviction.
 	pool := newPoolWithParams(100, 1000, "", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
-	defer pool.Close()
+	pool.Close() // turn off the background housekeeping
 
 	for i := range int64(15) {
 		trx := tx.NewBuilder(tx.TypeDynamicFee).
@@ -1781,6 +1781,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, tx := range executables {
+		t.Log(tx.String())
 		assert.Greater(t, tx.MaxPriorityFeePerGas().Int64(), int64(5))
 	}
 }
