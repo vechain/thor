@@ -13,6 +13,8 @@ import (
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/abi"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/staker"
@@ -316,9 +318,14 @@ func (h *hayabusaSetup) mintBlock(txs ...*tx.Transaction) (*chain.BlockSummary, 
 }
 
 func (h *hayabusaSetup) mintMbpBlock(amount int64) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
-	contract := h.chain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
-	tx, err := contract.BuildTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(amount))
-	assert.NoError(h.t, err)
+	tx := createTx(h.t, h.chain, txArgs{
+		abi:    builtin.Params.ABI,
+		method: "set",
+		args:   []any{thor.KeyMaxBlockProposers, big.NewInt(amount)},
+		signer: genesis.DevAccounts()[0],
+		vet:    big.NewInt(0),
+		addr:   &builtin.Params.Address,
+	})
 	return h.mintBlock(tx)
 }
 
@@ -328,12 +335,46 @@ func (h *hayabusaSetup) mintAddValidatorBlock(accs ...genesis.DevAccount) (*chai
 		accs[0] = genesis.DevAccounts()[0]
 	}
 	txs := make([]*tx.Transaction, 0, len(accs))
-	contract := h.chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
 	for _, acc := range accs {
-		contract = contract.Attach(acc)
-		tx, err := contract.BuildTransaction("addValidation", staker.ToWei(minStake), acc.Address, uint32(360)*24*7)
-		assert.NoError(h.t, err)
+		tx := createTx(h.t, h.chain, txArgs{
+			abi:    builtin.Staker.ABI,
+			method: "addValidation",
+			args:   []any{acc.Address, uint32(360) * 24 * 7},
+			signer: acc,
+			vet:    staker.ToWei(minStake),
+			addr:   &builtin.Staker.Address,
+		})
 		txs = append(txs, tx)
 	}
 	return h.mintBlock(txs...)
+}
+
+type txArgs struct {
+	abi    *abi.ABI
+	addr   *thor.Address
+	method string
+	args   []any
+	signer genesis.DevAccount
+	vet    *big.Int
+}
+
+func createTx(t *testing.T, chain *testchain.Chain, args txArgs) *tx.Transaction {
+	method, ok := args.abi.MethodByName(args.method)
+	if !ok {
+		t.Fatalf("method %s not found in ABI", args.method)
+	}
+	data, err := method.EncodeInput(args.args...)
+	if err != nil {
+		t.Fatalf("failed to encode input: %v", err)
+	}
+	clause := tx.NewClause(args.addr).WithData(data).WithValue(args.vet)
+	trx := new(tx.Builder).
+		ChainTag(chain.ChainTag()).
+		Gas(1_000_000).
+		BlockRef(tx.NewBlockRef(0)).
+		Expiration(1000).
+		Clause(clause).
+		Build()
+	trx = tx.MustSign(trx, args.signer.PrivateKey)
+	return trx
 }
