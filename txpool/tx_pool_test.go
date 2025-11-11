@@ -1760,7 +1760,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 			Gas(21000).
 			Nonce(datagen.RandUint64()).
 			MaxFeePerGas(big.NewInt(1e13)).
-			MaxPriorityFeePerGas(big.NewInt(i + 1)).
+			MaxPriorityFeePerGas(big.NewInt((i + 1) * 1000)).
 			Expiration(1000).
 			Build()
 
@@ -1788,6 +1788,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	all := pool.all.ToTxObjects()
 	sortTxObjsByPriorityGasPriceDesc(all)
 	for _, txObj := range all {
+		t.Log(txObj.priorityGasPrice.String())
 		t.Log(txObj.MaxPriorityFeePerGas().String())
 	}
 }
