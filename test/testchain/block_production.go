@@ -1,3 +1,8 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package testchain
 
 import (
@@ -73,6 +78,8 @@ func (c *Chain) AddBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Re
 	return nil
 }
 
+// NextValidator finds the validator with the earliest scheduled packing time and returns their account.
+// You can remove this validator to simulate a validator going offline.
 func (c *Chain) NextValidator() (genesis.DevAccount, bool) {
 	var (
 		when uint64 = math.MaxUint64
