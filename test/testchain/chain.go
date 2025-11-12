@@ -81,12 +81,7 @@ func NewWithFork(forkConfig *thor.ForkConfig, epochLength uint32) (*Chain, error
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
 func NewIntegrationTestChain(config genesis.DevConfig, epochLength uint32) (*Chain, error) {
 	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
-	if config.LaunchTime == 0 {
-		now := uint64(time.Now().Unix())
-		config.LaunchTime = now - now%thor.BlockInterval()
-	}
-
-	gene, err := CreateGenesis(config.ForkConfig, 10, epochLength, epochLength)
+	gene, err := CreateGenesis(config, 10, epochLength, epochLength)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create genesis: %w", err)
 	}

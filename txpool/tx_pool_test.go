@@ -832,12 +832,14 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.Add(tt.tx)
-		if tt.errStr == "" {
-			assert.Nil(t, err)
-		} else {
-			assert.Equal(t, tt.errStr, err.Error())
-		}
+		t.Run(tt.errStr, func(t *testing.T) {
+			err := pool.Add(tt.tx)
+			if tt.errStr == "" {
+				assert.Nil(t, err)
+			} else {
+				assert.Equal(t, tt.errStr, err.Error())
+			}
+		})
 	}
 
 	raw, _ := hex.DecodeString(

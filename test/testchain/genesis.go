@@ -15,7 +15,7 @@ import (
 )
 
 // CreateGenesis create a genesis with the given parameters
-func CreateGenesis(fc *thor.ForkConfig, mbp uint64, epochLength uint32, transitionPeriod uint32) (*genesis.Genesis, error) {
+func CreateGenesis(config genesis.DevConfig, mbp uint64, epochLength uint32, transitionPeriod uint32) (*genesis.Genesis, error) {
 	if mbp > uint64(len(genesis.DevAccounts())) {
 		return nil, fmt.Errorf("max block proposers %d exceeds number of dev accounts %d", mbp, len(genesis.DevAccounts()))
 	}
@@ -41,7 +41,7 @@ func CreateGenesis(fc *thor.ForkConfig, mbp uint64, epochLength uint32, transiti
 		}
 	}
 
-	config := thor.Config{
+	tConfig := thor.Config{
 		BlockInterval:       10,
 		LowStakingPeriod:    12,
 		MediumStakingPeriod: 30,
@@ -51,10 +51,13 @@ func CreateGenesis(fc *thor.ForkConfig, mbp uint64, epochLength uint32, transiti
 		HayabusaTP:          &transitionPeriod,
 	}
 
-	now := uint64(time.Now().Unix())
+	if config.LaunchTime == 0 {
+		now := uint64(time.Now().Unix())
+		config.LaunchTime = now - now%thor.BlockInterval()
+	}
 
 	gen := &genesis.CustomGenesis{
-		LaunchTime: now - now%thor.BlockInterval(),
+		LaunchTime: config.LaunchTime,
 		GasLimit:   40_000_000,
 		ExtraData:  "packer test",
 		Accounts:   accounts,
@@ -63,11 +66,15 @@ func CreateGenesis(fc *thor.ForkConfig, mbp uint64, epochLength uint32, transiti
 			ExecutorAddress:   &genesis.DevAccounts()[0].Address,
 			MaxBlockProposers: &mbp,
 		},
-		ForkConfig: fc,
-		Config:     &config,
+		ForkConfig: config.ForkConfig,
+		Config:     &tConfig,
 	}
 
-	thor.SetConfig(config)
+	if config.KeyBaseGasPrice == nil || config.KeyBaseGasPrice.Sign() == 0 {
+		gen.Params.BaseGasPrice = (*genesis.HexOrDecimal256)(config.KeyBaseGasPrice)
+	}
+
+	thor.SetConfig(tConfig)
 
 	customNet, err := genesis.NewCustomNet(gen)
 	if err != nil {

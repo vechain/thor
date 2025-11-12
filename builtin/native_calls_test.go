@@ -50,7 +50,7 @@ func newChain(t *testing.T, fc *thor.ForkConfig) *testchain.Chain {
 		fc = &thor.SoloFork
 	}
 	epochLength := uint32(2)
-	genesis, err := testchain.CreateGenesis(fc, 1, epochLength, epochLength)
+	genesis, err := testchain.CreateGenesis(genesis.DevConfig{ForkConfig: fc}, 1, epochLength, epochLength)
 	require.NoError(t, err)
 	chain, err := testchain.NewIntegrationTestChainWithGenesis(genesis, fc, epochLength)
 	require.NoError(t, err)

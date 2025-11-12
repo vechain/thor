@@ -234,7 +234,7 @@ func TestConsensus_TransitionPeriodBalanceCheck(t *testing.T) {
 		HAYABUSA: 2,
 	}
 	// forks but never transitions to PoS within the test
-	gene, err := testchain.CreateGenesis(fc, 2, 2, 100000)
+	gene, err := testchain.CreateGenesis(genesis.DevConfig{ForkConfig: fc}, 2, 2, 100000)
 	require.NoError(t, err)
 	chain, err := testchain.NewIntegrationTestChainWithGenesis(gene, fc, 2)
 	require.NoError(t, err)
