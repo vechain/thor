@@ -8,16 +8,8 @@ package testchain
 import (
 	"errors"
 	"fmt"
-	"math"
-	"math/big"
 	"slices"
 	"time"
-
-	"github.com/ethereum/go-ethereum/crypto"
-
-	"github.com/vechain/thor/v2/test/datagen"
-
-	"github.com/vechain/thor/v2/consensus"
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -28,13 +20,10 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/xenv"
 )
 
 // Chain represents the blockchain structure.
@@ -180,186 +169,6 @@ func (c *Chain) GenesisBlock() *block.Block {
 	return c.genesisBlock
 }
 
-// MintClauses creates a transaction with the provided clauses and mints a block containing that transaction.
-func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
-	builder := new(tx.Builder).GasPriceCoef(255).
-		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
-		Expiration(1000).
-		ChainTag(c.Repo().ChainTag()).
-		Gas(10e6).
-		Nonce(datagen.RandUint64())
-
-	for _, clause := range clauses {
-		builder.Clause(clause)
-	}
-
-	tx := builder.Build()
-	signature, err := crypto.Sign(tx.SigningHash().Bytes(), account.PrivateKey)
-	if err != nil {
-		return fmt.Errorf("unable to sign tx: %w", err)
-	}
-	tx = tx.WithSignature(signature)
-
-	return c.MintBlock(tx)
-}
-
-// AddValidators creates an `addValidation` staker transaction for each validator and mints a block containing those transactions.
-func (c *Chain) AddValidators() error {
-	method, ok := builtin.Staker.ABI.MethodByName("addValidation")
-	if !ok {
-		return errors.New("unable to find addValidation method in staker ABI")
-	}
-
-	stakerTxs := make([]*tx.Transaction, len(c.validators))
-	for i, val := range c.validators {
-		callData, err := method.EncodeInput(val.Address, thor.LowStakingPeriod())
-		if err != nil {
-			return fmt.Errorf("unable to encode addValidation input: %w", err)
-		}
-		clause := tx.NewClause(&builtin.Staker.Address).WithData(callData).WithValue(staker.MinStake)
-
-		trx := new(tx.Builder).
-			GasPriceCoef(255).
-			BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
-			Expiration(1000).
-			ChainTag(c.Repo().ChainTag()).
-			Gas(10e6).
-			Nonce(datagen.RandUint64()).
-			Clause(clause).
-			Build()
-
-		trx = tx.MustSign(trx, val.PrivateKey)
-		stakerTxs[i] = trx
-	}
-
-	return c.MintBlock(stakerTxs...)
-}
-
-func (c *Chain) NextValidator() (genesis.DevAccount, bool) {
-	var (
-		when uint64 = math.MaxUint64
-		acc  genesis.DevAccount
-	)
-
-	best := c.repo.BestBlockSummary()
-
-	for i := range len(c.validators) {
-		p := packer.New(c.Repo(), c.Stater(), c.validators[i].Address, nil, c.GetForkConfig(), 0)
-
-		now := best.Header.Timestamp() + thor.BlockInterval()
-
-		flow, _, err := p.Schedule(c.Repo().BestBlockSummary(), now)
-		if err != nil {
-			continue
-		}
-
-		if flow.When() < when {
-			acc = genesis.DevAccounts()[i]
-			when = flow.When()
-		}
-	}
-
-	if when == math.MaxUint64 {
-		return genesis.DevAccount{}, false
-	}
-	return acc, true
-}
-
-// MintBlock finds the validator with the earliest scheduled time, creates a block with the provided transactions, and adds it to the chain.
-func (c *Chain) MintBlock(transactions ...*tx.Transaction) error {
-	validator, found := c.NextValidator()
-	if !found {
-		return errors.New("no validator found")
-	}
-
-	best := c.repo.BestBlockSummary()
-	now := best.Header.Timestamp() + thor.BlockInterval()
-	p := packer.New(c.Repo(), c.Stater(), validator.Address, nil, c.GetForkConfig(), 0)
-	flow, _, err := p.Schedule(c.Repo().BestBlockSummary(), now)
-	if err != nil {
-		return fmt.Errorf("unable to schedule packing: %w", err)
-	}
-
-	// Adopt the provided transactions into the block.
-	for _, trx := range transactions {
-		if err := flow.Adopt(trx); err != nil {
-			return fmt.Errorf("unable to adopt tx into block: %w", err)
-		}
-	}
-
-	// Pack the adopted transactions into a block.
-	newBlk, stage, receipts, err := flow.Pack(validator.PrivateKey, 0, false)
-	if err != nil {
-		return fmt.Errorf("unable to pack tx: %w", err)
-	}
-
-	// run the block through consensus validation
-	if _, _, err := consensus.New(c.repo, c.stater, c.forkConfig).Process(best, newBlk, flow.When(), 0); err != nil {
-		return fmt.Errorf("unable to process block: %w", err)
-	}
-
-	return c.AddBlock(newBlk, stage, receipts)
-}
-
-// AddBlock manually adds a new block to the chain.
-func (c *Chain) AddBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
-	// Commit the new block to the chain's state.
-	if _, err := stage.Commit(); err != nil {
-		return fmt.Errorf("unable to commit tx: %w", err)
-	}
-
-	// Add the block to the repository.
-	if err := c.Repo().AddBlock(newBlk, receipts, 0, true); err != nil {
-		return fmt.Errorf("unable to add tx to repo: %w", err)
-	}
-
-	// Write the new block and receipts to the logdb.
-	w := c.LogDB().NewWriter()
-	if err := w.Write(newBlk, receipts); err != nil {
-		return err
-	}
-	if err := w.Commit(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// ClauseCall executes contract call with clause referenced by the clauseIdx parameter, the rest of tx is passed as is.
-func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clauseIdx int) ([]byte, uint64, error) {
-	ch := c.repo.NewBestChain()
-	summary, err := c.repo.GetBlockSummary(ch.HeadID())
-	if err != nil {
-		return nil, 0, err
-	}
-	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
-	rt := runtime.New(
-		ch,
-		st,
-		&xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address},
-		c.forkConfig,
-	)
-	maxGas := uint64(math.MaxUint32)
-	exec, _ := rt.PrepareClause(trx.Clauses()[clauseIdx],
-		0, maxGas, &xenv.TransactionContext{
-			ID:         trx.ID(),
-			Origin:     account.Address,
-			GasPrice:   &big.Int{},
-			GasPayer:   account.Address,
-			ProvedWork: trx.UnprovedWork(),
-			BlockRef:   trx.BlockRef(),
-			Expiration: trx.Expiration(),
-		})
-
-	out, _, err := exec()
-	if err != nil {
-		return nil, 0, err
-	}
-	if out.VMErr != nil {
-		return nil, 0, out.VMErr
-	}
-	return out.Data, maxGas - out.LeftOverGas, err
-}
-
 func (c *Chain) GetTxReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 	return c.repo.NewBestChain().GetTransactionReceipt(txID)
 }
@@ -426,4 +235,19 @@ func (c *Chain) Database() *muxdb.MuxDB {
 // LogDB returns the current logdb.
 func (c *Chain) LogDB() *logdb.LogDB {
 	return c.logDB
+}
+
+// RemoveValidator removes a validator from the chain's validator set based on the provided address.
+func (c *Chain) RemoveValidator(address thor.Address) {
+	for i, v := range c.validators {
+		if v.Address == address {
+			c.validators = slices.Delete(c.validators, i, i+1)
+			return
+		}
+	}
+}
+
+// AddValidator adds a validator to the chain's validator set.
+func (c *Chain) AddValidator(validator genesis.DevAccount) {
+	c.validators = append(c.validators, validator)
 }
