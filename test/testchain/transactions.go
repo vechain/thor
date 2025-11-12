@@ -62,6 +62,7 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 }
 
 // AddValidators creates an `addValidation` staker transaction for each validator and mints a block containing those transactions.
+// This is useful to transition from PoA to PoS in tests.
 func (c *Chain) AddValidators() error {
 	method, ok := builtin.Staker.ABI.MethodByName("addValidation")
 	if !ok {
