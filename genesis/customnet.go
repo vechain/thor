@@ -32,7 +32,6 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		}
 
 		thor.SetConfig(*gen.Config)
-		thor.LockConfig()
 	}
 
 	launchTime := gen.LaunchTime

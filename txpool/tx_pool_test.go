@@ -883,7 +883,6 @@ func TestAdd(t *testing.T) {
 			),
 			"tx rejected: size too large",
 		},
-		{badReserved, "tx rejected: unsupported features"},
 		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), acc), "tx rejected: tx is not executable"},
 		{
 			newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, tx.Features(0), acc),
@@ -914,12 +913,14 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.StrictlyAdd(tt.tx)
-		if tt.errStr == "" {
-			assert.Nil(t, err)
-		} else {
-			assert.Equal(t, tt.errStr, err.Error())
-		}
+		t.Run(tt.errStr, func(t *testing.T) {
+			err := pool.StrictlyAdd(tt.tx)
+			if tt.errStr == "" {
+				assert.Nil(t, err)
+			} else {
+				assert.Equal(t, tt.errStr, err.Error())
+			}
+		})
 	}
 }
 

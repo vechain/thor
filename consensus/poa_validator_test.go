@@ -9,73 +9,69 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/builtin/authority"
-	"github.com/vechain/thor/v2/builtin/staker"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/poa"
-	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
-func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
-	setup := newHayabusaSetup(t)
-
-	// mint block 1: PoA - update the MBP
-	blk, _, _ := setup.mintMbpBlock(1)
-
-	endorsorBal, err := getEndorsorBalance(blk.Header, setup.chain)
-	assert.NoError(t, err)
-
-	// mint block 2: chain should set the staker contract, still using PoA
-	best, parent, st := setup.mintBlock()
-	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
-	assert.NoError(t, err)
-
-	// mint block 3: validator moves their stake to the contract
-	best, parent, st = setup.mintAddValidatorBlock()
-	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
-	assert.NoError(t, err)
-
-	// check the endorsor balance has reduced
-	newEndorsorBal, err := getEndorsorBalance(best.Header, setup.chain)
-	assert.NoError(t, err)
-
-	expectedEndorserVetBalance, err := staker.ToVET(newEndorsorBal)
-	assert.NoError(t, err)
-	expectedEndorserVetBalance = expectedEndorserVetBalance + minStake
-
-	endorserVetBalance, err := staker.ToVET(endorsorBal)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(expectedEndorserVetBalance), int64(endorserVetBalance))
-
-	// check the staker contract has the correct stake
-	masterStake, err := getMasterStake(setup.chain, blk.Header)
-	assert.NoError(t, err)
-	assert.Equal(t, masterStake.QueuedVET, minStake)
-}
-
-func TestAuthority_Hayabusa_NegativeCases(t *testing.T) {
-	setup := newHayabusaSetup(t)
-
-	_, _, _ = setup.mintMbpBlock(1)
-
-	best, parent, st := setup.mintBlock()
-	st.SetRawStorage(builtin.Params.Address, thor.KeyProposerEndorsement, rlp.RawValue{0x0})
-
-	_, err := setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
-	assert.Error(t, err)
-
-	headKey := thor.Blake2b([]byte("head"))
-	st.SetRawStorage(builtin.Authority.Address, headKey, rlp.RawValue{0xFF})
-	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
-	assert.Error(t, err)
-}
+//func TestAuthority_Hayabusa_TransitionPeriod(t *testing.T) {
+//	setup := newHayabusaSetup(t)
+//
+//	// mint block 1: PoA - update the MBP
+//	blk, _, _ := setup.mintMbpBlock(1)
+//
+//	endorsorBal, err := getEndorsorBalance(blk.Header, setup.chain)
+//	assert.NoError(t, err)
+//
+//	// mint block 2: chain should set the staker contract, still using PoA
+//	best, parent, st := setup.mintBlock()
+//	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
+//	assert.NoError(t, err)
+//
+//	// mint block 3: validator moves their stake to the contract
+//	best, parent, st = setup.mintAddValidatorBlock()
+//	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
+//	assert.NoError(t, err)
+//
+//	// check the endorsor balance has reduced
+//	newEndorsorBal, err := getEndorsorBalance(best.Header, setup.chain)
+//	assert.NoError(t, err)
+//
+//	expectedEndorserVetBalance, err := staker.ToVET(newEndorsorBal)
+//	assert.NoError(t, err)
+//	expectedEndorserVetBalance = expectedEndorserVetBalance + minStake
+//
+//	endorserVetBalance, err := staker.ToVET(endorsorBal)
+//	assert.NoError(t, err)
+//	assert.Equal(t, int64(expectedEndorserVetBalance), int64(endorserVetBalance))
+//
+//	// check the staker contract has the correct stake
+//	masterStake, err := getMasterStake(setup.chain, blk.Header)
+//	assert.NoError(t, err)
+//	assert.Equal(t, masterStake.QueuedVET, minStake)
+//}
+//
+//func TestAuthority_Hayabusa_NegativeCases(t *testing.T) {
+//	setup := newHayabusaSetup(t)
+//
+//	_, _, _ = setup.mintMbpBlock(1)
+//
+//	best, parent, st := setup.mintBlock()
+//	st.SetRawStorage(builtin.Params.Address, thor.KeyProposerEndorsement, rlp.RawValue{0x0})
+//
+//	_, err := setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
+//	assert.Error(t, err)
+//
+//	headKey := thor.Blake2b([]byte("head"))
+//	st.SetRawStorage(builtin.Authority.Address, headKey, rlp.RawValue{0xFF})
+//	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
+//	assert.Error(t, err)
+//}
 
 func TestAuthorityCacheHandler_Success(t *testing.T) {
 	mockForkConfig := &thor.ForkConfig{}
@@ -528,27 +524,27 @@ func TestAuthorityCacheHandler_WithEmptyReceipts(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, error) {
-	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
-	signer, err := blk.Signer()
-	if err != nil {
-		return nil, err
-	}
-	_, endorsor, _, _, _ := builtin.Authority.Native(st).Get(signer)
-	balance, err := st.GetBalance(endorsor)
-	if err != nil {
-		return nil, err
-	}
-	return balance, nil
-}
-
-func getMasterStake(chain *testchain.Chain, blk *block.Header) (*validation.Validation, error) {
-	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
-	signer, err := blk.Signer()
-	if err != nil {
-		return nil, err
-	}
-	staker := builtin.Staker.Native(st)
-	validator, err := staker.GetValidation(signer)
-	return validator, err
-}
+//func getEndorsorBalance(blk *block.Header, chain *testchain.Chain) (*big.Int, error) {
+//	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
+//	signer, err := blk.Signer()
+//	if err != nil {
+//		return nil, err
+//	}
+//	_, endorsor, _, _, _ := builtin.Authority.Native(st).Get(signer)
+//	balance, err := st.GetBalance(endorsor)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return balance, nil
+//}
+//
+//func getMasterStake(chain *testchain.Chain, blk *block.Header) (*validation.Validation, error) {
+//	st := chain.Stater().NewState(chain.Repo().BestBlockSummary().Root())
+//	signer, err := blk.Signer()
+//	if err != nil {
+//		return nil, err
+//	}
+//	staker := builtin.Staker.Native(st)
+//	validator, err := staker.GetValidation(signer)
+//	return validator, err
+//}

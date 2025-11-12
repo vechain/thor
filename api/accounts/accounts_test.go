@@ -308,13 +308,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
 	transactionCall := buildTxWithClauses(tx.TypeLegacy, thorChain.Repo().ChainTag(), claCall)
-	require.NoError(t,
-		thorChain.MintTransactions(
-			genesis.DevAccounts()[0],
-			transaction,
-			transactionCall,
-		),
-	)
+	require.NoError(t, thorChain.MintBlock(transaction, transactionCall))
 
 	router := mux.NewRouter()
 	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.NoFork, thorChain.Engine(), enabledDeprecated).
@@ -650,7 +644,7 @@ func TestGetRawStorage(t *testing.T) {
 	assert.Equal(t, ent.Endorsor, genesis.DevAccounts()[0].Address)
 	assert.True(t, ent.Active)
 	assert.True(t, ent.Prev == nil)
-	assert.True(t, ent.Next == nil)
+	assert.True(t, *ent.Next == genesis.DevAccounts()[1].Address)
 }
 
 func TestRawStorageStaker(t *testing.T) {

@@ -117,7 +117,7 @@ func newTestNode(t *testing.T, useExecutor bool) (testnode.Node, *thorclient.Cli
 		chain.LogDB(),
 		chain.GetForkConfig(),
 	)
-	if err := chain.MintBlock(genesis.DevAccounts()[0]); err != nil {
+	if err := chain.MintBlock(); err != nil {
 		require.NoErrorf(t, err, "failed to mint genesis block")
 	}
 

@@ -13,14 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/test/datagen"
-
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -31,108 +27,48 @@ func TestFlow_Schedule_POS(t *testing.T) {
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	config.BLOCKLIST = math.MaxUint32
 
-	chain, err := testchain.NewWithFork(config, 1)
+	chain, err := testchain.NewWithFork(config, 2)
 	assert.NoError(t, err)
 
 	// mint block 1: using PoA
-	root := chain.Repo().BestBlockSummary().Root()
-	packMbpBlock(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.MintBlock())
+	verifyMechanism(t, chain, true, false)
 
 	// mint block 2: deploy staker contract, still using PoA
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.MintBlock())
+	verifyMechanism(t, chain, true, true)
 
 	// mint block 3: add validator tx
-	root = chain.Repo().BestBlockSummary().Root()
-	packAddValidatorBlock(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.AddValidators())
+	verifyMechanism(t, chain, true, true)
 
 	// mint block 4: should switch to PoS
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.MintBlock())
+	verifyMechanism(t, chain, false, true)
 
 	// mint block 5: full PoS
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, false, root)
+	require.NoError(t, chain.MintBlock())
+	verifyMechanism(t, chain, false, true)
 }
 
-func packNext(t *testing.T, chain *testchain.Chain, interval uint64, txs ...*tx.Transaction) {
-	account := genesis.DevAccounts()[0]
-	p := packer.New(chain.Repo(), chain.Stater(), account.Address, &account.Address, chain.GetForkConfig(), 0)
-	parent := chain.Repo().BestBlockSummary()
-	flow, _, err := p.Schedule(parent, parent.Header.Timestamp()+interval)
-	assert.NoError(t, err)
-
-	for _, trx := range txs {
-		assert.NoError(t, flow.Adopt(trx))
-	}
-
-	blk, stage, receipts, err := flow.Pack(account.PrivateKey, 0, false)
-	assert.NoError(t, err)
-	assert.NoError(t, chain.AddBlock(blk, stage, receipts))
+func verifyMechanism(t *testing.T, chain *testchain.Chain, expectPoA bool, stakerDeployed bool) {
 	best := chain.Repo().BestBlockSummary()
-	assert.Equal(t, best.Header.ID(), blk.Header().ID())
-}
-
-func verifyMechanism(t *testing.T, chain *testchain.Chain, isPoA bool, root trie.Root) {
-	st := chain.Stater().NewState(root)
-
-	auth := builtin.Authority.Native(st)
-	candidates, err := auth.AllCandidates()
-	assert.NoError(t, err)
-
+	st := chain.Stater().NewState(best.Root())
 	staker := builtin.Staker.Native(st)
-	stakers, err := staker.LeaderGroup()
-	assert.NoError(t, err)
-
-	if isPoA {
-		assert.Len(t, candidates, 1)
-		assert.Len(t, stakers, 0)
+	active, err := staker.IsPoSActive()
+	require.NoError(t, err)
+	if expectPoA {
+		require.False(t, active, "expected PoA mechanism")
 	} else {
-		assert.Len(t, stakers, 1)
+		require.True(t, active, "expected PoS mechanism")
 	}
-}
-
-func packMbpBlock(t *testing.T, chain *testchain.Chain, interval uint64) {
-	method, ok := builtin.Params.ABI.MethodByName("set")
-	require.True(t, ok)
-	callData, err := method.EncodeInput(thor.KeyMaxBlockProposers, big.NewInt(1))
+	bytecode, err := st.GetCode(builtin.Staker.Address)
 	require.NoError(t, err)
-	clause := tx.NewClause(&builtin.Params.Address).WithData(callData)
-	trx := tx.NewBuilder(tx.TypeLegacy).
-		ChainTag(chain.Repo().ChainTag()).
-		Expiration(1000).
-		Clause(clause).
-		Nonce(datagen.RandUint64()).
-		Gas(1000000).
-		Build()
-	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
-	packNext(t, chain, interval, trx)
-}
-
-func packAddValidatorBlock(t *testing.T, chain *testchain.Chain, interval uint64) {
-	vet := big.NewInt(25_000_000)
-	vet = vet.Mul(vet, big.NewInt(1e18))
-
-	method, ok := builtin.Staker.ABI.MethodByName("addValidation")
-	require.True(t, ok)
-	callData, err := method.EncodeInput(genesis.DevAccounts()[0].Address, uint32(360)*24*7)
-	require.NoError(t, err)
-	clause := tx.NewClause(&builtin.Staker.Address).WithData(callData).WithValue(vet)
-	trx := tx.NewBuilder(tx.TypeLegacy).
-		ChainTag(chain.Repo().ChainTag()).
-		Expiration(1000).
-		Clause(clause).
-		Nonce(datagen.RandUint64()).
-		Gas(1000000).
-		Build()
-	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
-
-	packNext(t, chain, interval, trx)
+	if stakerDeployed {
+		require.NotEmpty(t, bytecode, "staker contract should be deployed")
+	} else {
+		require.Empty(t, bytecode, "staker contract should not be deployed")
+	}
 }
 
 func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
@@ -152,11 +88,11 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 			hayabusaTP := uint32(1)
 			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
-			chain, err := testchain.NewWithFork(&cfg, 1)
+			chain, err := testchain.NewWithFork(&cfg, 10)
 			assert.NoError(t, err)
 
-			packNext(t, chain, thor.BlockInterval())
-			packNext(t, chain, thor.BlockInterval())
+			require.NoError(t, chain.MintBlock())
+			require.NoError(t, chain.MintBlock())
 
 			best := chain.Repo().BestBlockSummary()
 			st := chain.Stater().NewState(best.Root())
@@ -178,32 +114,28 @@ func TestFlow_Revert(t *testing.T) {
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	config.BLOCKLIST = math.MaxUint32
 
-	chain, err := testchain.NewWithFork(config, 1)
+	chain, err := testchain.NewWithFork(config, 2)
 	assert.NoError(t, err)
 
 	// mint block 1: using PoA
-	root := chain.Repo().BestBlockSummary().Root()
-	packMbpBlock(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.MintBlock())
+	verifyMechanism(t, chain, true, false)
 
 	// mint block 2: deploy staker contract, still using PoA
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.MintBlock())
+	verifyMechanism(t, chain, true, true)
 
 	// mint block 3: add validator tx
-	root = chain.Repo().BestBlockSummary().Root()
-	packAddValidatorBlock(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.AddValidators())
+	verifyMechanism(t, chain, true, true)
 
 	// mint block 4: should switch to PoS
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t, chain, thor.BlockInterval())
-	verifyMechanism(t, chain, true, root)
+	require.NoError(t, chain.MintBlock())
+	verifyMechanism(t, chain, false, true)
 
-	oldStakerBalance, err := chain.Stater().NewState(root).GetBalance(builtin.Staker.Address)
+	oldStakerBalance, err := chain.State().GetBalance(builtin.Staker.Address)
 	assert.NoError(t, err)
-	oldBalance, err := chain.Stater().NewState(root).GetBalance(genesis.DevAccounts()[1].Address)
+	oldBalance, err := chain.State().GetBalance(genesis.DevAccounts()[1].Address)
 	assert.NoError(t, err)
 
 	bestBlock, _ := chain.BestBlock()
@@ -231,19 +163,14 @@ func TestFlow_Revert(t *testing.T) {
 	failingTransaction = tx.MustSign(failingTransaction, genesis.DevAccounts()[0].PrivateKey)
 
 	// mint block 5: full PoS
-	root = chain.Repo().BestBlockSummary().Root()
-	packNext(t,
-		chain,
-		thor.BlockInterval(),
-		failingTransaction,
-	)
-	verifyMechanism(t, chain, false, root)
+	require.NoError(t, chain.MintBlock(failingTransaction))
+	verifyMechanism(t, chain, false, true)
 
-	stakerBalance, err := chain.Stater().NewState(root).GetBalance(builtin.Staker.Address)
+	stakerBalance, err := chain.State().GetBalance(builtin.Staker.Address)
 	assert.NoError(t, err)
 	assert.Equal(t, oldStakerBalance, stakerBalance)
 
-	balance, err := chain.Stater().NewState(root).GetBalance(genesis.DevAccounts()[1].Address)
+	balance, err := chain.State().GetBalance(genesis.DevAccounts()[1].Address)
 	assert.NoError(t, err)
 	assert.Equal(t, oldBalance, balance)
 }

@@ -10,11 +10,14 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"math/rand/v2"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/vechain/thor/v2/test/datagen"
+
+	"github.com/vechain/thor/v2/consensus"
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -46,11 +49,12 @@ type Chain struct {
 	genesisBlock *block.Block
 	logDB        *logdb.LogDB
 	forkConfig   *thor.ForkConfig
+	validators   []genesis.DevAccount
 }
 
 func New(
 	db *muxdb.MuxDB,
-	genesis *genesis.Genesis,
+	gene *genesis.Genesis,
 	engine bft.Committer,
 	repo *chain.Repository,
 	stater *state.Stater,
@@ -60,13 +64,14 @@ func New(
 ) *Chain {
 	return &Chain{
 		db:           db,
-		genesis:      genesis,
+		genesis:      gene,
 		engine:       engine,
 		repo:         repo,
 		stater:       stater,
 		genesisBlock: genesisBlock,
 		logDB:        logDB,
 		forkConfig:   forkConfig,
+		validators:   genesis.DevAccounts(),
 	}
 }
 
@@ -92,8 +97,10 @@ func NewIntegrationTestChain(config genesis.DevConfig, epochLength uint32) (*Cha
 		config.LaunchTime = now - now%thor.BlockInterval()
 	}
 
-	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfig(config)
+	gene, err := CreateGenesis(config.ForkConfig, 10, epochLength, epochLength)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create genesis: %w", err)
+	}
 	return NewIntegrationTestChainWithGenesis(gene, config.ForkConfig, epochLength)
 }
 
@@ -152,6 +159,12 @@ func (c *Chain) Repo() *chain.Repository {
 	return c.repo
 }
 
+// State returns the current state at the best block of the chain.
+func (c *Chain) State() *state.State {
+	bestBlkSummary := c.Repo().BestBlockSummary()
+	return c.Stater().NewState(bestBlkSummary.Root())
+}
+
 // Stater returns the current state manager of the chain, which is responsible for managing the state of accounts and other elements.
 func (c *Chain) Stater() *state.Stater {
 	return c.stater
@@ -167,20 +180,14 @@ func (c *Chain) GenesisBlock() *block.Block {
 	return c.genesisBlock
 }
 
-// MintTransactions creates a block with the provided transactions and adds it to the blockchain.
-// It wraps the transactions with receipts and passes them to MintTransactionsWithReceiptFunc.
-func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx.Transaction) error {
-	return c.MintBlock(account, transactions...)
-}
-
-// MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
+// MintClauses creates a transaction with the provided clauses and mints a block containing that transaction.
 func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
 	builder := new(tx.Builder).GasPriceCoef(255).
 		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
 		Expiration(1000).
 		ChainTag(c.Repo().ChainTag()).
 		Gas(10e6).
-		Nonce(rand.Uint64()) //#nosec G404
+		Nonce(datagen.RandUint64())
 
 	for _, clause := range clauses {
 		builder.Clause(clause)
@@ -193,36 +200,102 @@ func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) er
 	}
 	tx = tx.WithSignature(signature)
 
-	return c.MintBlock(account, tx)
+	return c.MintBlock(tx)
 }
 
-// MintBlock creates and finalizes a new block with the given transactions.
-// It schedules a new block, adopts transactions, packs them into a block, and commits it to the chain.
-func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transaction) error {
-	// Create a new block packer with the current chain state and account information.
-	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig, 0)
+// AddValidators creates an `addValidation` staker transaction for each validator and mints a block containing those transactions.
+func (c *Chain) AddValidators() error {
+	method, ok := builtin.Staker.ABI.MethodByName("addValidation")
+	if !ok {
+		return errors.New("unable to find addValidation method in staker ABI")
+	}
 
-	// Create a new block
-	blkFlow, _, err := blkPacker.Mock(
-		c.Repo().BestBlockSummary(),
-		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval(),
-		c.Repo().BestBlockSummary().Header.GasLimit(),
+	stakerTxs := make([]*tx.Transaction, len(c.validators))
+	for i, val := range c.validators {
+		callData, err := method.EncodeInput(val.Address, thor.LowStakingPeriod())
+		if err != nil {
+			return fmt.Errorf("unable to encode addValidation input: %w", err)
+		}
+		clause := tx.NewClause(&builtin.Staker.Address).WithData(callData).WithValue(staker.MinStake)
+
+		trx := new(tx.Builder).
+			GasPriceCoef(255).
+			BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
+			Expiration(1000).
+			ChainTag(c.Repo().ChainTag()).
+			Gas(10e6).
+			Nonce(datagen.RandUint64()).
+			Clause(clause).
+			Build()
+
+		trx = tx.MustSign(trx, val.PrivateKey)
+		stakerTxs[i] = trx
+	}
+
+	return c.MintBlock(stakerTxs...)
+}
+
+func (c *Chain) NextValidator() (genesis.DevAccount, bool) {
+	var (
+		when uint64 = math.MaxUint64
+		acc  genesis.DevAccount
 	)
+
+	best := c.repo.BestBlockSummary()
+
+	for i := range len(c.validators) {
+		p := packer.New(c.Repo(), c.Stater(), c.validators[i].Address, nil, c.GetForkConfig(), 0)
+
+		now := best.Header.Timestamp() + thor.BlockInterval()
+
+		flow, _, err := p.Schedule(c.Repo().BestBlockSummary(), now)
+		if err != nil {
+			continue
+		}
+
+		if flow.When() < when {
+			acc = genesis.DevAccounts()[i]
+			when = flow.When()
+		}
+	}
+
+	if when == math.MaxUint64 {
+		return genesis.DevAccount{}, false
+	}
+	return acc, true
+}
+
+// MintBlock finds the validator with the earliest scheduled time, creates a block with the provided transactions, and adds it to the chain.
+func (c *Chain) MintBlock(transactions ...*tx.Transaction) error {
+	validator, found := c.NextValidator()
+	if !found {
+		return errors.New("no validator found")
+	}
+
+	best := c.repo.BestBlockSummary()
+	now := best.Header.Timestamp() + thor.BlockInterval()
+	p := packer.New(c.Repo(), c.Stater(), validator.Address, nil, c.GetForkConfig(), 0)
+	flow, _, err := p.Schedule(c.Repo().BestBlockSummary(), now)
 	if err != nil {
-		return fmt.Errorf("unable to mock a new block: %w", err)
+		return fmt.Errorf("unable to schedule packing: %w", err)
 	}
 
 	// Adopt the provided transactions into the block.
 	for _, trx := range transactions {
-		if err = blkFlow.Adopt(trx); err != nil {
+		if err := flow.Adopt(trx); err != nil {
 			return fmt.Errorf("unable to adopt tx into block: %w", err)
 		}
 	}
 
 	// Pack the adopted transactions into a block.
-	newBlk, stage, receipts, err := blkFlow.Pack(account.PrivateKey, 0, false)
+	newBlk, stage, receipts, err := flow.Pack(validator.PrivateKey, 0, false)
 	if err != nil {
 		return fmt.Errorf("unable to pack tx: %w", err)
+	}
+
+	// run the block through consensus validation
+	if _, _, err := consensus.New(c.repo, c.stater, c.forkConfig).Process(best, newBlk, flow.When(), 0); err != nil {
+		return fmt.Errorf("unable to process block: %w", err)
 	}
 
 	return c.AddBlock(newBlk, stage, receipts)
