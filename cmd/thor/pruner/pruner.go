@@ -202,49 +202,14 @@ func (p *Pruner) awaitUntilSteady(target uint32) (*chain.Chain, error) {
 		finalizedID := p.commiter.Finalized()
 		finalizedNum := block.Number(finalizedID)
 
-		// If target is behind or equal to finalized checkpoint, it's safe to prune
 		if target <= finalizedNum {
-			// Get the block ID for the target (or use finalized if target is beyond it)
-			best := p.repo.BestBlockSummary()
-			bestChain := p.repo.NewChain(best.Header.ID())
-
-			// Ensure the target block exists on the best chain
-			targetID, err := bestChain.GetBlockID(target)
+			targetID, err := p.repo.NewChain(finalizedID).GetBlockID(target)
 			if err != nil {
-				// If target doesn't exist yet, wait
-				select {
-				case <-p.ctx.Done():
-					return nil, p.ctx.Err()
-				case <-time.After(time.Second):
-					continue
-				}
+				return nil, err
 			}
-
-			// Verify the target block is on the same chain as finalized
-			// (i.e., target is an ancestor of finalized, or they're the same block)
-			finalizedChain := p.repo.NewChain(finalizedID)
-
-			if finalizedNum > 0 {
-				hasTarget, err := finalizedChain.HasBlock(targetID)
-				if err != nil {
-					return nil, err
-				}
-				if !hasTarget {
-					// Target is on a different branch, wait for chain to reorganize
-					select {
-					case <-p.ctx.Done():
-						return nil, p.ctx.Err()
-					case <-time.After(time.Second):
-						continue
-					}
-				}
-			}
-
-			targetChain := p.repo.NewChain(targetID)
-			return targetChain, nil
+			return p.repo.NewChain(targetID), nil
 		}
 
-		// Wait for finality to advance
 		select {
 		case <-p.ctx.Done():
 			return nil, p.ctx.Err()
