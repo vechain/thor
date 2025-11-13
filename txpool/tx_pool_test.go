@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/test/datagen"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -1742,5 +1744,52 @@ func TestValidateTxBasics(t *testing.T) {
 			err := pool.validateTxBasics(tt.getTx())
 			assert.Equal(t, tt.expectedErr, err)
 		})
+	}
+}
+
+func TestTxPool_Local_IncreasingPriority(t *testing.T) {
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{}, 180)
+	assert.Nil(t, err)
+	pool := New(chain.Repo(), chain.Stater(), Options{
+		Limit:           100,
+		LimitPerAccount: 1000,
+		MaxLifetime:     time.Minute * 30,
+	}, chain.GetForkConfig())
+	pool.Close() // turn off the background housekeeping
+	require.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+
+	// to reduce precision loss when comparing priority fees
+	const multiplier = 10_000
+	baseFee := chain.Repo().BestBlockSummary().Header.BaseFee()
+
+	for i := range int64(15) {
+		trx := tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(pool.repo.ChainTag()).
+			Gas(21000).
+			Nonce(datagen.RandUint64()).
+			MaxFeePerGas(new(big.Int).Add(baseFee, big.NewInt(i+1))).
+			MaxPriorityFeePerGas(big.NewInt((i + 1) * multiplier)).
+			Expiration(1000).
+			BlockRef(tx.NewBlockRef(0)).
+			Build()
+
+		trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
+		err := pool.Add(trx)
+		assert.Nil(t, err)
+
+		txObj := pool.all.GetByID(trx.ID())
+		assert.NotNil(t, txObj)
+		assert.Equal(t, int64(pool.Len()), i+1)
+	}
+
+	// Reduce the limit to 10 and manually call wash to test priority ordering.
+	// The wash method should keep the 10 highest priority transactions (6-15)
+	// and evict the 5 lowest priority ones (1-5).
+	pool.options.Limit = 10
+	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
+	assert.NoError(t, err)
+
+	for _, tx := range executables {
+		assert.Greater(t, tx.MaxPriorityFeePerGas().Int64(), int64(5*multiplier))
 	}
 }
