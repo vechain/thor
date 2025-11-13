@@ -10,7 +10,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/poa"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -23,15 +23,15 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 	}
 
 	authority := builtin.Authority.Native(st)
-	var candidates *poa.Candidates
+	var candidates *scheduler.Candidates
 	if entry, ok := c.validatorsCache.Get(parent.ID()); ok {
-		candidates = entry.(*poa.Candidates).Copy()
+		candidates = entry.(*scheduler.Candidates).Copy()
 	} else {
 		list, err := authority.AllCandidates()
 		if err != nil {
 			return nil, err
 		}
-		candidates = poa.NewCandidates(list)
+		candidates = scheduler.NewCandidates(list)
 	}
 	staker := builtin.Staker.Native(st)
 	endorsement, err := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
@@ -45,16 +45,16 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 		return nil, err
 	}
 
-	var sched poa.Scheduler
+	var sched scheduler.Scheduler
 	if header.Number() < c.forkConfig.VIP214 {
-		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
+		sched, err = scheduler.NewPoASchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
 	} else {
 		var seed []byte
 		seed, err = c.seeder.Generate(header.ParentID())
 		if err != nil {
 			return nil, err
 		}
-		sched, err = poa.NewSchedulerV2(signer, proposers, parent.Number(), parent.Timestamp(), seed)
+		sched, err = scheduler.NewPoASchedulerV2(signer, proposers, parent.Number(), parent.Timestamp(), seed)
 	}
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
@@ -83,7 +83,7 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 }
 
 type poaCacher struct {
-	candidates *poa.Candidates
+	candidates *scheduler.Candidates
 	forkConfig *thor.ForkConfig
 }
 

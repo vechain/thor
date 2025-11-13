@@ -14,8 +14,8 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -30,7 +30,7 @@ type Packer struct {
 	beneficiary      *thor.Address
 	targetGasLimit   uint64
 	forkConfig       *thor.ForkConfig
-	seeder           *poa.Seeder
+	seeder           *scheduler.Seeder
 	minTxPriorityFee *big.Int
 }
 
@@ -51,12 +51,12 @@ func New(
 		beneficiary,
 		0,
 		forkConfig,
-		poa.NewSeeder(repo),
+		scheduler.NewSeeder(repo),
 		new(big.Int).SetUint64(minTxPriorityFee),
 	}
 }
 
-type scheduler func(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error)
+type scheduleFunc func(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error)
 
 // Schedule a packing flow to pack new block upon given parent and clock time.
 func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flow, bool, error) {
@@ -67,7 +67,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		features |= tx.DelegationFeature
 	}
 
-	var sched scheduler
+	var sched scheduleFunc
 	checkpoint := st.NewCheckpoint()
 	dPosStatus, err := builtin.Staker.Native(st).SyncPOS(p.forkConfig, parent.Header.Number()+1)
 	if err != nil {
