@@ -14,7 +14,7 @@ import (
 var (
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "the network to join (main|testnet) or the path/URL to a genesis file",
+		Usage: "the network to join (main|test) or the path/URL to a genesis file",
 	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",
