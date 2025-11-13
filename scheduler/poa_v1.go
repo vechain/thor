@@ -1,9 +1,8 @@
-// Copyright (c) 2018 The VeChainThor developers
+// Copyright (c) 2025 The VeChainThor developers
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-
-package poa
+package scheduler
 
 import (
 	"encoding/binary"
@@ -12,32 +11,25 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// Scheduler defines the interface of schedulers.
-type Scheduler interface {
-	Schedule(nowTime uint64) (newBlockTime uint64)
-	IsTheTime(newBlockTime uint64) bool
-	Updates(newBlockTime uint64) (updates []Proposer, score uint64)
-}
-
-// SchedulerV1 to schedule the time when a proposer to produce a block.
-type SchedulerV1 struct {
+// PoASchedulerV1 to schedule the time when a proposer to produce a block.
+type PoASchedulerV1 struct {
 	proposer          Proposer
 	actives           []Proposer
 	parentBlockNumber uint32
 	parentBlockTime   uint64
 }
 
-var _ Scheduler = (*SchedulerV1)(nil)
+var _ Scheduler = (*PoASchedulerV1)(nil)
 
-// NewSchedulerV1 create a SchedulerV1 object.
+// NewPoASchedulerV1 create a PoASchedulerV1 object.
 // `addr` is the proposer to be scheduled.
 // If `addr` is not listed in `proposers`, an error returned.
-func NewSchedulerV1(
+func NewPoASchedulerV1(
 	addr thor.Address,
 	proposers []Proposer,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
-) (*SchedulerV1, error) {
+) (*PoASchedulerV1, error) {
 	actives := make([]Proposer, 0, len(proposers))
 	listed := false
 	var proposer Proposer
@@ -55,7 +47,7 @@ func NewSchedulerV1(
 		return nil, errors.New("unauthorized block proposer")
 	}
 
-	return &SchedulerV1{
+	return &PoASchedulerV1{
 		proposer,
 		actives,
 		parentBlockNumber,
@@ -63,14 +55,14 @@ func NewSchedulerV1(
 	}, nil
 }
 
-func (s *SchedulerV1) whoseTurn(t uint64) Proposer {
+func (s *PoASchedulerV1) whoseTurn(t uint64) Proposer {
 	index := dprp(s.parentBlockNumber, t) % uint64(len(s.actives))
 	return s.actives[index]
 }
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
-func (s *SchedulerV1) Schedule(nowTime uint64) (newBlockTime uint64) {
+func (s *PoASchedulerV1) Schedule(nowTime uint64) (newBlockTime uint64) {
 	T := thor.BlockInterval()
 
 	newBlockTime = s.parentBlockTime + T
@@ -92,7 +84,7 @@ func (s *SchedulerV1) Schedule(nowTime uint64) (newBlockTime uint64) {
 }
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
-func (s *SchedulerV1) IsTheTime(newBlockTime uint64) bool {
+func (s *PoASchedulerV1) IsTheTime(newBlockTime uint64) bool {
 	if s.parentBlockTime >= newBlockTime {
 		// invalid block time
 		return false
@@ -107,7 +99,7 @@ func (s *SchedulerV1) IsTheTime(newBlockTime uint64) bool {
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *SchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
+func (s *PoASchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 	T := thor.BlockInterval()
 	toDeactivate := make(map[thor.Address]Proposer)
 

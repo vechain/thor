@@ -571,24 +571,47 @@ func TestEnergyNative(t *testing.T) {
 	//---------------------------------------------------------
 
 	// 1: Set MaxBlockProposers to 1
-	params := thorChain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
-	staker := thorChain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
-
 	shouldCollectEnergy := func() {
 		if thorChain.Repo().BestBlockSummary().Header.Number() <= hayabusa {
 			exSupply = exSupply.Add(exSupply, growth)
 		}
 	}
 
-	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1)))
-	shouldCollectEnergy()
-	assert.NoError(t, params.MintTransaction("set", big.NewInt(0), thor.KeyDelegatorContractAddress, big.NewInt(0).SetBytes(acc4.Bytes())))
-	shouldCollectEnergy()
+	paramsTx := TestTxDescription{
+		t:          t,
+		abi:        builtin.Params.ABI,
+		methodName: "set",
+		address:    builtin.Params.Address,
+		acc:        genesis.DevAccounts()[0],
+		args:       []any{thor.KeyMaxBlockProposers, big.NewInt(1)},
+		duplicate:  false,
+	}
+	receipt, _, err := executeTxAndGetReceipt(paramsTx)
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+
+	paramsTx.args = []any{thor.KeyDelegatorContractAddress, big.NewInt(0).SetBytes(acc4.Bytes())}
+	receipt, _, err = executeTxAndGetReceipt(paramsTx)
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
 
 	// 2: Add a validator to the queue
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	assert.NoError(t, staker.MintTransaction("addValidation", minStake, acc1.Address, uint32(360)*24*7))
+	stakerTx := TestTxDescription{
+		t:          t,
+		abi:        builtin.Staker.ABI,
+		methodName: "addValidation",
+		address:    builtin.Staker.Address,
+		acc:        acc1,
+		args:       []any{acc1.Address, uint32(360) * 24 * 7},
+		duplicate:  false,
+		vet:        minStake,
+	}
+	receipt, _, err = executeTxAndGetReceipt(stakerTx)
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
+
 	shouldCollectEnergy()
 
 	validatorMap := make(map[uint64]*big.Int)

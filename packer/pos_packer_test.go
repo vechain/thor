@@ -11,6 +11,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/test/datagen"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
@@ -95,26 +98,41 @@ func verifyMechanism(t *testing.T, chain *testchain.Chain, isPoA bool, root trie
 }
 
 func packMbpBlock(t *testing.T, chain *testchain.Chain, interval uint64) {
-	contract := chain.Contract(builtin.Params.Address, builtin.Params.ABI, genesis.DevAccounts()[0])
-	tx, err := contract.BuildTransaction("set", big.NewInt(0), thor.KeyMaxBlockProposers, big.NewInt(1))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	packNext(t, chain, interval, tx)
+	method, ok := builtin.Params.ABI.MethodByName("set")
+	require.True(t, ok)
+	callData, err := method.EncodeInput(thor.KeyMaxBlockProposers, big.NewInt(1))
+	require.NoError(t, err)
+	clause := tx.NewClause(&builtin.Params.Address).WithData(callData)
+	trx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chain.Repo().ChainTag()).
+		Expiration(1000).
+		Clause(clause).
+		Nonce(datagen.RandUint64()).
+		Gas(1000000).
+		Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+	packNext(t, chain, interval, trx)
 }
 
 func packAddValidatorBlock(t *testing.T, chain *testchain.Chain, interval uint64) {
 	vet := big.NewInt(25_000_000)
 	vet = vet.Mul(vet, big.NewInt(1e18))
 
-	contract := chain.Contract(builtin.Staker.Address, builtin.Staker.ABI, genesis.DevAccounts()[0])
-	tx, err := contract.BuildTransaction("addValidation", vet, genesis.DevAccounts()[0].Address, uint32(360)*24*7)
-	if err != nil {
-		t.Fatal(err)
-	}
+	method, ok := builtin.Staker.ABI.MethodByName("addValidation")
+	require.True(t, ok)
+	callData, err := method.EncodeInput(genesis.DevAccounts()[0].Address, uint32(360)*24*7)
+	require.NoError(t, err)
+	clause := tx.NewClause(&builtin.Staker.Address).WithData(callData).WithValue(vet)
+	trx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chain.Repo().ChainTag()).
+		Expiration(1000).
+		Clause(clause).
+		Nonce(datagen.RandUint64()).
+		Gas(1000000).
+		Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
 
-	packNext(t, chain, interval, tx)
+	packNext(t, chain, interval, trx)
 }
 
 func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
