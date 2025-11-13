@@ -93,12 +93,6 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
 
-	if epochLength != thor.EpochLength() {
-		thor.SetConfig(thor.Config{
-			EpochLength: epochLength,
-		})
-	}
-
 	prm := params.New(thor.BytesToAddress([]byte("params")), st)
 	_ = staker.New(builtin.Staker.Address, st, prm, nil)
 

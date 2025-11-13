@@ -41,16 +41,6 @@ func CreateGenesis(config genesis.DevConfig, mbp uint64, epochLength uint32, tra
 		}
 	}
 
-	tConfig := thor.Config{
-		BlockInterval:       10,
-		LowStakingPeriod:    12,
-		MediumStakingPeriod: 30,
-		HighStakingPeriod:   90,
-		CooldownPeriod:      12,
-		EpochLength:         epochLength,
-		HayabusaTP:          &transitionPeriod,
-	}
-
 	if config.LaunchTime == 0 {
 		now := uint64(time.Now().Unix())
 		config.LaunchTime = now - now%thor.BlockInterval()
@@ -67,14 +57,23 @@ func CreateGenesis(config genesis.DevConfig, mbp uint64, epochLength uint32, tra
 			MaxBlockProposers: &mbp,
 		},
 		ForkConfig: config.ForkConfig,
-		Config:     &tConfig,
+	}
+
+	if thor.HayabusaTP() != transitionPeriod || thor.EpochLength() != epochLength {
+		gen.Config = &thor.Config{
+			LowStakingPeriod:      epochLength,
+			MediumStakingPeriod:   epochLength * 2,
+			HighStakingPeriod:     epochLength * 3,
+			CooldownPeriod:        epochLength,
+			EvictionCheckInterval: epochLength,
+			EpochLength:           epochLength,
+			HayabusaTP:            &transitionPeriod,
+		}
 	}
 
 	if config.KeyBaseGasPrice == nil || config.KeyBaseGasPrice.Sign() == 0 {
 		gen.Params.BaseGasPrice = (*genesis.HexOrDecimal256)(config.KeyBaseGasPrice)
 	}
-
-	thor.SetConfig(tConfig)
 
 	customNet, err := genesis.NewCustomNet(gen)
 	if err != nil {
