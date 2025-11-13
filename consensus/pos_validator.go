@@ -12,7 +12,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	stakerContract "github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/pos"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -47,33 +47,32 @@ func (c *Consensus) validateStakingProposer(
 	}
 
 	var (
-		proposers   = make([]pos.Proposer, 0, len(leaders))
+		proposers   = make([]scheduler.Proposer, 0, len(leaders))
 		beneficiary *thor.Address
 	)
 	for _, leader := range leaders {
 		if leader.Address == signer && leader.Beneficiary != nil {
 			beneficiary = leader.Beneficiary
 		}
-		proposers = append(proposers, pos.Proposer{
+		proposers = append(proposers, scheduler.Proposer{
 			Address: leader.Address,
 			Active:  leader.Active,
 			Weight:  leader.Weight,
 		})
 	}
+	_, totalWeight, err := staker.LockedStake()
+	if err != nil {
+		return nil, consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
+	}
 
-	sched, err := pos.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
+	sched, err := scheduler.NewPoSScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed, totalWeight)
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("pos - block signer invalid: %v %v", signer, err))
 	}
 	if !sched.IsTheTime(header.Timestamp()) {
 		return nil, consensusError(fmt.Sprintf("pos - block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
-
-	_, totalWeight, err := staker.LockedStake()
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("pos - cannot get total weight: %v", err))
-	}
-	updates, score := sched.Updates(header.Timestamp(), totalWeight)
+	updates, score := sched.Updates(header.Timestamp())
 	if parent.TotalScore()+score != header.TotalScore() {
 		return nil, consensusError(fmt.Sprintf("pos - block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
