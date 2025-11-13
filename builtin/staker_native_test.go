@@ -257,8 +257,8 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 	var err error
 	thorChain, err := testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, thorChain.MintBlock())
+	assert.NoError(t, thorChain.MintBlock())
 
 	thorChain.MintClauses(genesis.DevAccounts()[0], []*tx.Clause{
 		tx.NewClause(&delegator).WithValue(big.NewInt(1e18)),

@@ -59,7 +59,7 @@ func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
 		Tx:         trx,
 		Executable: &executable,
 	})
-	return m.chain.MintBlock(m.validator, trx)
+	return m.chain.MintBlock(trx)
 }
 
 func (m *instantMintPool) StrictlyAdd(newTx *tx.Transaction) error {

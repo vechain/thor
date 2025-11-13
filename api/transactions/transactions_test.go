@@ -368,7 +368,7 @@ func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj any, responseStatusCode int) []byte {
 	body, statusCode, err := tclient.RawHTTPClient().RawHTTPPost(url, obj)
 	require.NoError(t, err)
-	assert.Equal(t, responseStatusCode, statusCode, fmt.Sprintf("status code should be %d", responseStatusCode))
+	assert.Equal(t, responseStatusCode, statusCode, fmt.Sprintf("status code should be %d: %s", responseStatusCode, string(body)))
 
 	return body
 }
@@ -396,7 +396,7 @@ func initTransactionServer(t *testing.T) {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx))
+	require.NoError(t, thorChain.MintBlock(legacyTx))
 
 	dynFeeTx = tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(chainTag).
@@ -410,7 +410,7 @@ func initTransactionServer(t *testing.T) {
 		Build()
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
+	require.NoError(t, thorChain.MintBlock(dynFeeTx))
 
 	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forkConfig)
 

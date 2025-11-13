@@ -128,8 +128,8 @@ func TestEnergy_Revision(t *testing.T) {
 	energy, err := NewEnergy(client)
 	require.NoError(t, err)
 
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
+	require.NoError(t, node.Chain().MintBlock())
+	require.NoError(t, node.Chain().MintBlock())
 
 	hayabusa := int(node.Chain().GetForkConfig().HAYABUSA)
 	supplyAtFork, err := energy.Revision(strconv.Itoa(hayabusa)).TotalSupply()
