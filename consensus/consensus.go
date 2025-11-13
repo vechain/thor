@@ -14,8 +14,8 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/poa"
 	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -27,7 +27,7 @@ import (
 type Consensus struct {
 	repo                 *chain.Repository
 	stater               *state.Stater
-	seeder               *poa.Seeder
+	seeder               *scheduler.Seeder
 	forkConfig           *thor.ForkConfig
 	correctReceiptsRoots map[string]string
 	validatorsCache      *simplelru.LRU
@@ -39,7 +39,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConf
 	return &Consensus{
 		repo:                 repo,
 		stater:               stater,
-		seeder:               poa.NewSeeder(repo),
+		seeder:               scheduler.NewSeeder(repo),
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 		validatorsCache:      validatorsCache,

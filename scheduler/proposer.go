@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package poa
+package scheduler
 
 import (
 	"github.com/vechain/thor/v2/thor"
@@ -13,4 +13,5 @@ import (
 type Proposer struct {
 	Address thor.Address
 	Active  bool
+	Weight  uint64
 }

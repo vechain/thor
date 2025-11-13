@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package pos
+package scheduler
 
 import (
 	"encoding/binary"
@@ -15,12 +15,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type Proposer struct {
-	Address thor.Address
-	Active  bool
-	Weight  uint64
-}
-
 type entry struct {
 	address thor.Address
 	weight  uint64
@@ -29,22 +23,26 @@ type entry struct {
 }
 
 // Scheduler to schedule the time when a proposer to produce a block for PoS.
-type Scheduler struct {
+type PoSScheduler struct {
 	proposer        Proposer
 	parentBlockTime uint64
 	sequence        []entry
+	totalWeight     uint64
 }
 
-// NewScheduler create a Scheduler object.
+var _ Scheduler = (*PoSScheduler)(nil)
+
+// NewPoSScheduler create a PoSScheduler object.
 // `addr` is the proposer to be scheduled.
 // If `addr` is not listed in `proposers`, an error is returned.
-func NewScheduler(
+func NewPoSScheduler(
 	addr thor.Address,
 	proposers []Proposer,
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte,
-) (*Scheduler, error) {
+	totalWeight uint64,
+) (*PoSScheduler, error) {
 	var (
 		listed   = false
 		proposer Proposer
@@ -100,16 +98,17 @@ func NewScheduler(
 		}
 	})
 
-	return &Scheduler{
+	return &PoSScheduler{
 		proposer,
 		parentBlockTime,
 		shuffled,
+		totalWeight,
 	}, nil
 }
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
-func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
+func (s *PoSScheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 	T := thor.BlockInterval()
 
 	newBlockTime = s.parentBlockTime + T
@@ -131,12 +130,12 @@ func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 }
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
-func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
+func (s *PoSScheduler) IsTheTime(newBlockTime uint64) bool {
 	return s.IsScheduled(newBlockTime, s.proposer.Address)
 }
 
 // IsScheduled returns if the schedule(proposer, blockTime) is correct.
-func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
+func (s *PoSScheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 	if s.parentBlockTime >= blockTime {
 		// invalid block time
 		return false
@@ -153,7 +152,7 @@ func (s *Scheduler) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64, totalWeight uint64) ([]Proposer, uint64) {
+func (s *PoSScheduler) Updates(newBlockTime uint64) ([]Proposer, uint64) {
 	T := thor.BlockInterval()
 
 	updates := make([]Proposer, 0)
@@ -181,14 +180,10 @@ func (s *Scheduler) Updates(newBlockTime uint64, totalWeight uint64) ([]Proposer
 		updates = append(updates, Proposer{Address: s.proposer.Address, Active: true})
 	}
 
-	if totalWeight > 0 {
-		score := activeWeight * thor.MaxPosScore / totalWeight
+	if s.totalWeight > 0 {
+		score := activeWeight * thor.MaxPosScore / s.totalWeight
 		return updates, score
 	}
 
 	return updates, 0
-}
-
-func uint64ToI64(u uint64) int64 {
-	return int64(u ^ (1 << 63))
 }
