@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package poa
+package scheduler
 
 import (
 	"reflect"
@@ -39,39 +39,39 @@ func TestSchedulerV2_Updates(t *testing.T) {
 		wantScore   uint64
 	}{
 		{"p1 should not deactivate others", fields{
-			Proposer{p1, true},
+			Proposer{p1, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
 		}, args{uint64(10)}, nil, 5},
 		{"p1 inactive should bring p1 active", fields{
-			Proposer{p1, false},
+			Proposer{p1, false, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
-		}, args{uint64(10)}, []Proposer{{p1, true}}, 5},
+		}, args{uint64(10)}, []Proposer{{p1, true, 0}}, 5},
 		{"p2 should deactivate p1", fields{
-			Proposer{p2, true},
+			Proposer{p2, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
-		}, args{uint64(20)}, []Proposer{{p1, false}}, 4},
+		}, args{uint64(20)}, []Proposer{{p1, false, 0}}, 4},
 		{"p4 should deactivate nodes", fields{
-			Proposer{p4, true},
+			Proposer{p4, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
-		}, args{uint64(50)}, []Proposer{{p1, false}, {p2, false}, {p3, false}}, 2},
+		}, args{uint64(50)}, []Proposer{{p1, false, 0}, {p2, false, 0}, {p3, false, 0}}, 2},
 		{"long time no block should deactivate others", fields{
-			Proposer{p2, true},
+			Proposer{p2, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
-		}, args{uint64(200)}, []Proposer{{p1, false}, {p3, false}, {p4, false}, {p5, false}}, 1},
+		}, args{uint64(200)}, []Proposer{{p1, false, 0}, {p3, false, 0}, {p4, false, 0}, {p5, false, 0}}, 1},
 		{"long time no block with inactive nodes should deactivate others and bring self to active", fields{
-			Proposer{p2, false},
+			Proposer{p2, false, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
-		}, args{uint64(200)}, []Proposer{{p1, false}, {p3, false}, {p4, false}, {p5, false}, {p2, true}}, 1},
+		}, args{uint64(200)}, []Proposer{{p1, false, 0}, {p3, false, 0}, {p4, false, 0}, {p5, false, 0}, {p2, true, 0}}, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &SchedulerV2{
+			s := &PoASchedulerV2{
 				proposer:        tt.fields.proposer,
 				parentBlockTime: tt.fields.parentBlockTime,
 				shuffled:        tt.fields.shuffled,
@@ -128,38 +128,38 @@ func TestNewSchedulerV2(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *SchedulerV2
+		want    *PoASchedulerV2
 		wantErr bool
 	}{
 		{
 			"new scheduler v2",
 			args{
 				p1,
-				[]Proposer{{p1, true}, {p2, true}, {p3, true}, {p4, true}, {p5, true}},
+				[]Proposer{{p1, true, 0}, {p2, true, 0}, {p3, true, 0}, {p4, true, 0}, {p5, true, 0}},
 				parentNumber,
 				parentTime,
 				seed,
 			},
-			&SchedulerV2{Proposer{p1, true}, parentTime, []thor.Address{p1, p4, p3, p2, p5}},
+			&PoASchedulerV2{Proposer{p1, true, 0}, parentTime, []thor.Address{p1, p4, p3, p2, p5}},
 			false,
 		},
 		{
 			"self inactive should add to list",
 			args{
 				p1,
-				[]Proposer{{p1, false}, {p2, true}, {p3, true}, {p4, true}, {p5, true}},
+				[]Proposer{{p1, false, 0}, {p2, true, 0}, {p3, true, 0}, {p4, true, 0}, {p5, true, 0}},
 				parentNumber,
 				parentTime,
 				seed,
 			},
-			&SchedulerV2{Proposer{p1, false}, parentTime, []thor.Address{p1, p4, p3, p2, p5}},
+			&PoASchedulerV2{Proposer{p1, false, 0}, parentTime, []thor.Address{p1, p4, p3, p2, p5}},
 			false,
 		},
 		{
 			"not in list should throw error",
 			args{
 				p1,
-				[]Proposer{{p2, true}, {p3, true}, {p4, true}, {p5, true}},
+				[]Proposer{{p2, true, 0}, {p3, true, 0}, {p4, true, 0}, {p5, true, 0}},
 				parentNumber,
 				parentTime,
 				seed,
@@ -170,7 +170,7 @@ func TestNewSchedulerV2(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewSchedulerV2(tt.args.addr, tt.args.proposers, tt.args.parentBlockNumber, tt.args.parentBlockTime, tt.args.seed)
+			got, err := NewPoASchedulerV2(tt.args.addr, tt.args.proposers, tt.args.parentBlockNumber, tt.args.parentBlockTime, tt.args.seed)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewSchedulerV2() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -198,29 +198,29 @@ func TestSchedulerV2_Schedule(t *testing.T) {
 		wantNewBlockTime uint64
 	}{
 		{"p1 should schedule 10", fields{
-			Proposer{p1, true},
+			Proposer{p1, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
 		}, args{uint64(5)}, 10},
 		{"p2 should schedule 20", fields{
-			Proposer{p2, true},
+			Proposer{p2, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
 		}, args{uint64(5)}, 20},
 		{"p5 should schedule 50", fields{
-			Proposer{p5, true},
+			Proposer{p5, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
 		}, args{uint64(5)}, 50},
 		{"p1 at 15 should schedule 60", fields{
-			Proposer{p1, true},
+			Proposer{p1, true, 0},
 			parentTime,
 			[]thor.Address{p1, p2, p3, p4, p5},
 		}, args{uint64(15)}, 60},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &SchedulerV2{
+			s := &PoASchedulerV2{
 				proposer:        tt.fields.proposer,
 				parentBlockTime: tt.fields.parentBlockTime,
 				shuffled:        tt.fields.shuffled,

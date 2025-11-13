@@ -8,7 +8,7 @@ package packer
 import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/poa"
+	"github.com/vechain/thor/v2/scheduler"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -32,7 +32,7 @@ func (p *Packer) schedulePOA(parent *chain.BlockSummary, nowTimestamp uint64, st
 		return thor.Address{}, 0, 0, err
 	}
 	var (
-		proposers   = make([]poa.Proposer, 0, len(candidates))
+		proposers   = make([]scheduler.Proposer, 0, len(candidates))
 		beneficiary thor.Address
 	)
 	if p.beneficiary != nil {
@@ -44,23 +44,23 @@ func (p *Packer) schedulePOA(parent *chain.BlockSummary, nowTimestamp uint64, st
 			// no beneficiary not set, set it to endorser
 			beneficiary = c.Endorsor
 		}
-		proposers = append(proposers, poa.Proposer{
+		proposers = append(proposers, scheduler.Proposer{
 			Address: c.NodeMaster,
 			Active:  c.Active,
 		})
 	}
 
 	// calc the time when it's turn to produce block
-	var sched poa.Scheduler
+	var sched scheduler.Scheduler
 	if parent.Header.Number()+1 < p.forkConfig.VIP214 {
-		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp())
+		sched, err = scheduler.NewPoASchedulerV1(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp())
 	} else {
 		var seed []byte
 		seed, err = p.seeder.Generate(parent.Header.ID())
 		if err != nil {
 			return thor.Address{}, 0, 0, err
 		}
-		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
+		sched, err = scheduler.NewPoASchedulerV2(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
 	}
 	if err != nil {
 		return thor.Address{}, 0, 0, err
