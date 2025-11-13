@@ -202,10 +202,10 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, *thor.ForkConfig, error)
 	}
 
 	switch network {
-	case "test":
+	case "testnet", "test":
 		gene := genesis.NewTestnet()
 		return gene, thor.GetForkConfig(gene.ID()), nil
-	case "main":
+	case "mainnet", "main":
 		gene := genesis.NewMainnet()
 		return gene, thor.GetForkConfig(gene.ID()), nil
 	default:
