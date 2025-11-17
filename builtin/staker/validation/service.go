@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -185,7 +186,11 @@ func (s *Service) SignalExit(validator thor.Address, currentBlock uint32, minBlo
 }
 
 func (s *Service) IncreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
-	validation.QueuedVET += amount
+	var overflow bool
+	validation.QueuedVET, overflow = math.SafeAdd(validation.QueuedVET, amount)
+	if overflow {
+		return errors.New("queued overflow occurred")
+	}
 
 	return s.repo.updateValidation(validator, validation)
 }
@@ -203,8 +208,12 @@ func (s *Service) SetBeneficiary(validator thor.Address, validation *Validation,
 }
 
 func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
+	var overflow bool
 	if validation.Status == StatusActive {
-		validation.PendingUnlockVET += amount
+		validation.PendingUnlockVET, overflow = math.SafeAdd(validation.PendingUnlockVET, amount)
+		if overflow {
+			return errors.New("pending unlock VET overflow occurred")
+		}
 	}
 	return s.repo.updateValidation(validator, validation)
 }
@@ -386,7 +395,16 @@ func (s *Service) ActivateValidator(
 	lockedIncrease := stakes.NewWeightedStakeWithMultiplier(validation.LockedVET, mul)
 
 	// attach all delegation's weight
-	validation.Weight = lockedIncrease.Weight + aggRenew.LockedIncrease.Weight - aggRenew.LockedDecrease.Weight
+
+	weight, overflow := math.SafeAdd(lockedIncrease.Weight, aggRenew.LockedIncrease.Weight)
+	if overflow {
+		return nil, errors.New("weight overflow in addition")
+	}
+	weight, underflow := math.SafeSub(weight, aggRenew.LockedDecrease.Weight)
+	if underflow {
+		return nil, errors.New("weight underflow in subtraction")
+	}
+	validation.Weight = weight
 
 	// Update validator status
 	validation.Status = StatusActive
