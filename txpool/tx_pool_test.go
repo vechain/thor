@@ -13,7 +13,6 @@ import (
 	r "math/rand/v2"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -58,19 +57,15 @@ func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *TxPoo
 func newPoolWithParams(
 	limit int,
 	limitPerAccount int,
-	BlocklistCacheFilePath string,
-	BlocklistFetchURL string,
 	timestamp uint64,
 	forks *thor.ForkConfig,
 ) *TxPool {
-	return newPoolWithMaxLifetime(limit, limitPerAccount, BlocklistCacheFilePath, BlocklistFetchURL, timestamp, time.Hour, forks)
+	return newPoolWithMaxLifetime(limit, limitPerAccount, timestamp, time.Hour, forks)
 }
 
 func newPoolWithMaxLifetime(
 	limit int,
 	limitPerAccount int,
-	BlocklistCacheFilePath string,
-	BlocklistFetchURL string,
 	timestamp uint64,
 	maxLifetime time.Duration,
 	forks *thor.ForkConfig,
@@ -91,11 +86,9 @@ func newPoolWithMaxLifetime(
 	b0, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, b0)
 	return New(repo, state.NewStater(db), Options{
-		Limit:                  limit,
-		LimitPerAccount:        limitPerAccount,
-		MaxLifetime:            maxLifetime,
-		BlocklistCacheFilePath: BlocklistCacheFilePath,
-		BlocklistFetchURL:      BlocklistFetchURL,
+		Limit:           limit,
+		LimitPerAccount: limitPerAccount,
+		MaxLifetime:     maxLifetime,
 	}, forks)
 }
 
@@ -203,7 +196,7 @@ func TestNewCloseWithServer(t *testing.T) {
 	server := newHTTPServer()
 	defer server.Close()
 
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", server.URL, uint64(time.Now().Unix()), &thor.NoFork)
+	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, uint64(time.Now().Unix()), &thor.NoFork)
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
@@ -308,20 +301,20 @@ func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
 }
 
 func TestAddWithFullErrorSyncedChain(t *testing.T) {
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()), &thor.NoFork)
+	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, uint64(time.Now().Unix()), &thor.NoFork)
 	defer pool.Close()
 
 	FillPoolWithLegacyTxs(pool, t)
 
-	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
+	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
 	FillPoolWithDynFeeTxs(pool, t)
 
-	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
+	pool = newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, uint64(time.Now().Unix()), &thor.ForkConfig{GALACTICA: 1})
 	FillPoolWithMixedTxs(pool, t)
 }
 
 func TestNewCloseWithError(t *testing.T) {
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, " ", " ", uint64(time.Now().Unix())+10000, &thor.NoFork)
+	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, uint64(time.Now().Unix())+10000, &thor.NoFork)
 	defer pool.Close()
 }
 
@@ -943,7 +936,7 @@ func TestBeforeVIP191Add(t *testing.T) {
 
 func TestPoolLimit(t *testing.T) {
 	// synced
-	pool := newPoolWithParams(2, 1, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+	pool := newPoolWithParams(2, 1, uint64(time.Now().Unix()), &thor.NoFork)
 	defer pool.Close()
 
 	trx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
@@ -965,7 +958,7 @@ func TestPoolLimit(t *testing.T) {
 
 func TestExecutableAndNonExecutableLimits(t *testing.T) {
 	// executable pool limit
-	pool := newPoolWithParams(10, 2, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+	pool := newPoolWithParams(10, 2, uint64(time.Now().Unix()), &thor.NoFork)
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
@@ -988,7 +981,7 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 
 	// non-executable pool limit
-	pool = newPoolWithParams(5, 2, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+	pool = newPoolWithParams(5, 2, uint64(time.Now().Unix()), &thor.NoFork)
 	defer pool.Close()
 
 	trx1 = newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[0])
@@ -1012,7 +1005,7 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 }
 
 func TestNonExecutables(t *testing.T) {
-	pool := newPoolWithParams(100, 100, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+	pool := newPoolWithParams(100, 100, uint64(time.Now().Unix()), &thor.NoFork)
 
 	// loop 90 times
 	for i := range 90 {
@@ -1033,7 +1026,7 @@ func TestNonExecutables(t *testing.T) {
 }
 
 func TestExpiredTxs(t *testing.T) {
-	pool := newPoolWithMaxLifetime(100, 100, "", "", uint64(time.Now().Unix()), 3*time.Second, &thor.NoFork)
+	pool := newPoolWithMaxLifetime(100, 100, uint64(time.Now().Unix()), 3*time.Second, &thor.NoFork)
 
 	// loop 90 times
 	for i := range 90 {
@@ -1061,35 +1054,6 @@ func TestExpiredTxs(t *testing.T) {
 	assert.Equal(t, 0, len(executables))
 	assert.Equal(t, 91, washedLegacy+washedDynamicFee)
 	assert.Equal(t, 0, pool.all.Len())
-}
-
-func TestBlocked(t *testing.T) {
-	acc := devAccounts[len(devAccounts)-1]
-
-	file, err := os.CreateTemp("", "blocklist*")
-	assert.Nil(t, err)
-	file.WriteString(acc.Address.String())
-	file.Close()
-
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, file.Name(), "", uint64(time.Now().Unix()), &thor.NoFork)
-	defer pool.Close()
-	<-time.After(10 * time.Millisecond)
-
-	// adding blocked should return nil
-	trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[len(devAccounts)-1])
-	err = pool.Add(trx)
-	assert.Nil(t, err)
-
-	// added into all, will be washed out
-	txObj, err := ResolveTx(trx, false)
-	assert.Nil(t, err)
-	pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
-
-	pool.wash(pool.repo.BestBlockSummary(), false)
-	got := pool.Get(trx.ID())
-	assert.Nil(t, got)
-
-	os.Remove(file.Name())
 }
 
 func TestWash(t *testing.T) {

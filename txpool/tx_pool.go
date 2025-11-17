@@ -8,8 +8,6 @@ package txpool
 import (
 	"context"
 	"math/big"
-	"math/rand/v2"
-	"os"
 	"sync/atomic"
 	"time"
 
@@ -36,11 +34,9 @@ var logger = log.WithContext("pkg", "txpool")
 
 // Options options for tx pool.
 type Options struct {
-	Limit                  int
-	LimitPerAccount        int
-	MaxLifetime            time.Duration
-	BlocklistCacheFilePath string
-	BlocklistFetchURL      string
+	Limit           int
+	LimitPerAccount int
+	MaxLifetime     time.Duration
 }
 
 // TxEvent will be posted when tx is added or status changed.
@@ -69,7 +65,6 @@ type TxPool struct {
 	options      Options
 	repo         *chain.Repository
 	stater       *state.Stater
-	blocklist    blocklist
 	forkConfig   *thor.ForkConfig
 	baseFeeCache *baseFeeCache
 
@@ -100,7 +95,6 @@ func New(repo *chain.Repository, stater *state.Stater, options Options, forkConf
 	}
 
 	pool.goes.Go(pool.housekeeping)
-	pool.goes.Go(pool.fetchBlocklistLoop)
 	return pool
 }
 
@@ -161,58 +155,6 @@ func (p *TxPool) housekeeping() {
 				}
 				logger.Trace("wash done", ctx...)
 			}
-		}
-	}
-}
-
-func (p *TxPool) fetchBlocklistLoop() {
-	var (
-		path = p.options.BlocklistCacheFilePath
-		url  = p.options.BlocklistFetchURL
-	)
-
-	if path != "" {
-		if err := p.blocklist.Load(path); err != nil {
-			if !os.IsNotExist(err) {
-				logger.Warn("blocklist load failed", "error", err, "path", path)
-			}
-		} else {
-			logger.Debug("blocklist loaded", "len", p.blocklist.Len())
-		}
-	}
-	if url == "" {
-		return
-	}
-
-	var eTag string
-	fetch := func() {
-		if err := p.blocklist.Fetch(p.ctx, url, &eTag); err != nil {
-			if err == context.Canceled {
-				return
-			}
-			logger.Warn("blocklist fetch failed", "error", err, "url", url)
-		} else {
-			logger.Debug("blocklist fetched", "len", p.blocklist.Len())
-			if path != "" {
-				if err := p.blocklist.Save(path); err != nil {
-					logger.Warn("blocklist save failed", "error", err, "path", path)
-				} else {
-					logger.Debug("blocklist saved")
-				}
-			}
-		}
-	}
-
-	fetch()
-
-	for {
-		// delay 1~2 min
-		delay := time.Second * time.Duration(rand.Int()%60+60) //#nosec G404
-		select {
-		case <-p.ctx.Done():
-			return
-		case <-time.After(delay):
-			fetch()
 		}
 	}
 }
@@ -281,13 +223,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 // isBlocked checks if the transaction origin or delegator is blocked.
 func (p *TxPool) isBlocked(newTx *tx.Transaction) bool {
 	origin, _ := newTx.Origin()
-	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
+	if thor.IsOriginBlocked(origin) {
 		// tx origin blocked
 		return true
 	}
 
 	delegator, _ := newTx.Delegator()
-	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+	if delegator != nil && thor.IsOriginBlocked(*delegator) {
 		// tx delegator blocked
 		return true
 	}
@@ -472,11 +414,11 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 	txObjs := make([]*TxObject, 0, len(txs))
 	for _, tx := range txs {
 		origin, _ := tx.Origin()
-		if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
+		if thor.IsOriginBlocked(origin) {
 			continue
 		}
 		delegator, _ := tx.Delegator()
-		if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+		if delegator != nil && thor.IsOriginBlocked(*delegator) {
 			continue
 		}
 		// here we ignore errors
@@ -579,13 +521,13 @@ func (p *TxPool) wash(
 	}()
 
 	for _, txObj := range all {
-		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
+		if thor.IsOriginBlocked(txObj.Origin()) {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked")
 			continue
 		}
 		delegator := txObj.Delegator()
-		if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+		if delegator != nil && thor.IsOriginBlocked(*delegator) {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked delegator")
 			continue
