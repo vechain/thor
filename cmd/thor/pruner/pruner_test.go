@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/bft"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -109,7 +111,8 @@ func TestNewPruner(t *testing.T) {
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
-	pr := New(db, repo)
+	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
+	pr := New(db, repo, bftMockedEngine)
 	pr.Stop()
 }
 
@@ -147,6 +150,40 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 	return db, close, nil
 }
 
+type testCommitter struct {
+	repo *chain.Repository
+}
+
+func (tc *testCommitter) Finalized() thor.Bytes32 {
+	best := tc.repo.BestBlockSummary()
+	return best.Header.ID()
+}
+
+func (tc *testCommitter) Justified() (thor.Bytes32, error) {
+	best := tc.repo.BestBlockSummary()
+	return best.Header.ID(), nil
+}
+
+func (tc *testCommitter) Accepts(parentID thor.Bytes32) (bool, error) {
+	// For testing, accept all blocks (they're all on the same chain)
+	return true, nil
+}
+
+func (tc *testCommitter) Select(header *block.Header) (bool, error) {
+	// For testing, always select the new block
+	return true, nil
+}
+
+func (tc *testCommitter) CommitBlock(header *block.Header, isPacking bool) error {
+	// For testing, no-op
+	return nil
+}
+
+func (tc *testCommitter) ShouldVote(parentID thor.Bytes32) (bool, error) {
+	// For testing, don't vote
+	return false, nil
+}
+
 func TestWaitUntil(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
@@ -154,13 +191,15 @@ func TestWaitUntil(t *testing.T) {
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()
+	testCommiter := &testCommitter{repo: repo}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	pruner := &Pruner{
-		repo:   repo,
-		db:     db,
-		ctx:    ctx,
-		cancel: cancel,
+		repo:     repo,
+		db:       db,
+		ctx:      ctx,
+		commiter: testCommiter,
+		cancel:   cancel,
 	}
 
 	parentID := b0.Header().ID()
@@ -189,15 +228,11 @@ func TestWaitUntil(t *testing.T) {
 		parentScore = blk.Header().TotalScore()
 	}
 
-	go func() {
-		cancel()
-	}()
-
-	// not enough signer, will wait for 1 sec
-	// backoff will increase for more waiting
-	// cancel here and restart a new test case
-	_, err = pruner.awaitUntilSteady(100000)
+	cancel()
+	// Use a target that doesn't exist yet to force waiting (where cancellation is checked)
+	_, err = pruner.awaitUntilFinalized(200000) // Target beyond current best
 	assert.NotNil(t, err)
+	assert.Equal(t, context.Canceled, err)
 
 	for i := range 3 {
 		signer := devAccounts[i%2].PrivateKey
@@ -214,7 +249,7 @@ func TestWaitUntil(t *testing.T) {
 	pruner.ctx = ctx
 	pruner.cancel = cancel
 
-	chain, err := pruner.awaitUntilSteady(100000)
+	chain, err := pruner.awaitUntilFinalized(100000)
 	assert.Nil(t, err)
 
 	assert.True(t, block.Number(chain.HeadID()) >= 10000)
