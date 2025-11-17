@@ -313,7 +313,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer p2pCommunicator.Stop()
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
-		pruner := pruner.New(mainDB, repo)
+		pruner := pruner.New(mainDB, repo, bftEngine)
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
@@ -487,13 +487,14 @@ func soloAction(ctx *cli.Context) error {
 		pool = txPool
 	}
 
+	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
 		repo,
 		stater,
 		pool,
 		logDB,
-		bft.NewMockedEngine(repo.GenesisBlock().Header().ID()),
+		bftMockedEngine,
 		&solo.Communicator{},
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, true),
@@ -506,7 +507,7 @@ func soloAction(ctx *cli.Context) error {
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
-		pruner := pruner.New(mainDB, repo)
+		pruner := pruner.New(mainDB, repo, bftMockedEngine)
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
