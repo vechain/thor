@@ -90,9 +90,9 @@ func (p *Pruner) loop() error {
 		// select target
 		target := status.Base + period
 
-		targetChain, err := p.awaitUntilSteady(target + thor.MaxStateHistory)
+		targetChain, err := p.awaitUntilFinalized(target + thor.MaxStateHistory)
 		if err != nil {
-			return errors.Wrap(err, "awaitUntilSteady")
+			return errors.Wrap(err, "awaitUntilFinalized")
 		}
 		startTime := time.Now().UnixNano()
 
@@ -195,9 +195,9 @@ func (p *Pruner) pruneTries(targetChain *chain.Chain, base, target uint32) error
 	return nil
 }
 
-// awaitUntilSteady waits until the target block number becomes almost final(steady),
+// awaitUntilFinalized waits until the target block number becomes almost final(steady),
 // and returns the steady chain.
-func (p *Pruner) awaitUntilSteady(target uint32) (*chain.Chain, error) {
+func (p *Pruner) awaitUntilFinalized(target uint32) (*chain.Chain, error) {
 	for {
 		finalizedID := p.commiter.Finalized()
 		finalizedNum := block.Number(finalizedID)

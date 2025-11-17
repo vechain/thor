@@ -230,7 +230,7 @@ func TestWaitUntil(t *testing.T) {
 
 	cancel()
 	// Use a target that doesn't exist yet to force waiting (where cancellation is checked)
-	_, err = pruner.awaitUntilSteady(200000) // Target beyond current best
+	_, err = pruner.awaitUntilFinalized(200000) // Target beyond current best
 	assert.NotNil(t, err)
 	assert.Equal(t, context.Canceled, err)
 
@@ -249,7 +249,7 @@ func TestWaitUntil(t *testing.T) {
 	pruner.ctx = ctx
 	pruner.cancel = cancel
 
-	chain, err := pruner.awaitUntilSteady(100000)
+	chain, err := pruner.awaitUntilFinalized(100000)
 	assert.Nil(t, err)
 
 	assert.True(t, block.Number(chain.HeadID()) >= 10000)
