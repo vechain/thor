@@ -359,6 +359,9 @@ func soloAction(ctx *cli.Context) error {
 	if blockInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
+	if onDemandBlockProduction && blockInterval != thor.BlockInterval() {
+		return errors.New("can not specify a custom block interval when on-demand is enabled")
+	}
 	thor.SetConfig(thor.Config{BlockInterval: blockInterval})
 
 	// enable metrics as soon as possible
@@ -462,7 +465,6 @@ func soloAction(ctx *cli.Context) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    thor.BlockInterval(),
 	}
 
 	stater := state.NewStater(mainDB)
