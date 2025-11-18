@@ -206,12 +206,6 @@ func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, 
 	if validation.Status == StatusActive {
 		validation.PendingUnlockVET += amount
 	}
-
-	if validation.Status == StatusQueued {
-		validation.QueuedVET -= amount
-		validation.WithdrawableVET += amount
-	}
-
 	return s.repo.updateValidation(validator, validation)
 }
 
