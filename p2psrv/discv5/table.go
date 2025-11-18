@@ -32,9 +32,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
+
 	//"github.com/ethereum/go-ethereum/metrics"
 	"github.com/vechain/thor/v2/p2psrv/discv5/enode"
 	"github.com/vechain/thor/v2/p2psrv/netutil"
+	"github.com/vechain/thor/v2/p2psrv/tempdiscv5"
 )
 
 const (
@@ -700,4 +702,48 @@ func (tab *Table) deleteNode(n *enode.Node) {
 	defer tab.mutex.Unlock()
 	b := tab.bucket(n.ID())
 	tab.deleteInBucket(b, n.ID())
+}
+
+func (tab *Table) ReadRandomNodes(buf []*tempdiscv5.Node) (n int) {
+	if !tab.isInitDone() {
+		return 0
+	}
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	// Find all non-empty buckets and get a fresh slice of their entries.
+	var buckets [][]*tempdiscv5.Node
+	bucketIndex := 0
+	for _, b := range &tab.buckets {
+		if len(b.entries) > 0 {
+			buckets = append(buckets, make([]*tempdiscv5.Node, len(b.entries)))
+			for index, node := range b.entries {
+				buckets[bucketIndex][index] = tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID()), node.IP(), uint16(node.UDP()), uint16(node.TCP()), time.Now())
+			}
+			bucketIndex += 1
+		}
+	}
+	if len(buckets) == 0 {
+		return 0
+	}
+	fmt.Println(buckets)
+	// Shuffle the buckets.
+	for i := len(buckets) - 1; i > 0; i-- {
+		j := tab.rand.Intn(len(buckets))
+		buckets[i], buckets[j] = buckets[j], buckets[i]
+	}
+	// Move head of each bucket into buf, removing buckets that become empty.
+	var i, j int
+	for ; i < len(buf); i, j = i+1, (j+1)%len(buckets) {
+		b := buckets[j]
+		buf[i] = &(*b[0])
+		buckets[j] = b[1:]
+		if len(b) == 1 {
+			buckets = append(buckets[:j], buckets[j+1:]...)
+		}
+		if len(buckets) == 0 {
+			break
+		}
+	}
+	return i + 1
 }

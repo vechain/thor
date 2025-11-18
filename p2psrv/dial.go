@@ -26,7 +26,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2psrv/netutil"
 	"github.com/vechain/thor/v2/p2psrv/tempdiscv5"
 )
@@ -224,7 +224,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[tempdiscv5.NodeID]*Peer, no
 	randomCandidates := needDynDials / 2
 	if randomCandidates > 0 {
 		var n int
-		if !reflect.ValueOf(s.ntab).IsNil() {
+		if s.ntab != nil && !reflect.ValueOf(s.ntab).IsNil() {
 			n = s.ntab.ReadRandomNodes(s.randomNodes)
 			for i := 0; i < randomCandidates && i < n; i++ {
 				if addDial(dynDialedConn, s.randomNodes[i]) {
@@ -232,7 +232,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[tempdiscv5.NodeID]*Peer, no
 				}
 			}
 		}
-		if n < randomCandidates && s.ntabv5 != nil {
+		if n < randomCandidates && s.ntabv5 != nil && !reflect.ValueOf(s.ntabv5).IsNil() {
 			offset := n
 			n := s.ntabv5.ReadRandomNodes(s.randomNodes[offset:])
 			for i := offset; i < randomCandidates && i < offset+n; i++ {

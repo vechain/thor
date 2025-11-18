@@ -26,8 +26,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2psrv/nat"
 	"github.com/vechain/thor/v2/p2psrv/netutil"
 )

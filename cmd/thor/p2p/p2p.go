@@ -61,12 +61,12 @@ func New(
 		NAT:                 nat,
 		BootstrapNodesV5:    bootstrapNodesV5,
 		DiscoveryV5:         discoveryV5,
-		NoDiscovery:         true,
+		NoDiscovery:         false,
 	}
 
 	// allowed peers flag will only allow p2psrv to connect to the designated peers
 	if len(allowedPeers) > 0 {
-		opts.NoDiscovery = true // disable discovery
+		opts.NoDiscovery = false // disable discovery
 		opts.DiscoveryV5 = discoveryV5
 		opts.BootstrapNodes = nil
 		opts.BootstrapNodesV5 = nil
