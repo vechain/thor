@@ -35,7 +35,6 @@ type Options struct {
 	SkipLogs         bool
 	MinTxPriorityFee uint64
 	OnDemand         bool
-	BlockInterval    uint64
 }
 
 // Solo mode is the standalone client without p2p server
@@ -101,7 +100,7 @@ func (s *Solo) loop(ctx context.Context) {
 			logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			if left := uint64(time.Now().Unix()) % s.options.BlockInterval; left == 0 {
+			if left := uint64(time.Now().Unix()) % thor.BlockInterval(); left == 0 {
 				if txs, err := s.core.Pack(s.txPool.Executables(), false); err != nil {
 					logger.Error("failed to pack block", "err", err)
 				} else {
@@ -146,7 +145,7 @@ func (s *Solo) init(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(int64(s.options.BlockInterval)-time.Now().Unix()%int64(s.options.BlockInterval)) * time.Second):
+		case <-time.After(time.Duration(int64(thor.BlockInterval())-time.Now().Unix()%int64(thor.BlockInterval())) * time.Second):
 		}
 	}
 	if _, err := s.core.Pack(tx.Transactions{baseGasPriceTx}, false); err != nil {
