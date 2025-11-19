@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package logdb
+package sqlitedb
 
 import (
 	"context"
@@ -14,8 +14,8 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 
 	"github.com/mattn/go-sqlite3"
 )
@@ -24,7 +24,8 @@ const (
 	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
 )
 
-type LogDB struct {
+// SQLiteDB implements the LogDB interface using SQLite.
+type SQLiteDB struct {
 	path          string
 	driverVersion string
 	db            *sql.DB
@@ -33,8 +34,8 @@ type LogDB struct {
 	stmtCache     *stmtCache
 }
 
-// New create or open log db at given path.
-func New(path string) (logDB *LogDB, err error) {
+// New creates or opens a log database at the given path.
+func New(path string) (logdb.LogDB, error) {
 	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
 	if err != nil {
 		return nil, err
@@ -64,7 +65,7 @@ func New(path string) (logDB *LogDB, err error) {
 	}
 
 	driverVer, _, _ := sqlite3.Version()
-	return &LogDB{
+	return &SQLiteDB{
 		path:          path,
 		driverVersion: driverVer,
 		db:            db,
@@ -74,12 +75,12 @@ func New(path string) (logDB *LogDB, err error) {
 	}, nil
 }
 
-// NewMem create a log db in ram.
+// NewMem creates a log database in memory.
 // Unlike the file-based database, this implementation:
 // 1. Uses synchronous=off for faster writes in memory
 // 2. Uses a single connection with minimal transaction overhead
 // 3. Optimizes for in-memory performance
-func NewMem() (*LogDB, error) {
+func NewMem() (logdb.LogDB, error) {
 	// Generate 6 random bytes for unique database name
 	randBytes := make([]byte, 6)
 	if _, err := rand.Read(randBytes); err != nil {
@@ -110,7 +111,7 @@ func NewMem() (*LogDB, error) {
 	}
 
 	driverVer, _, _ := sqlite3.Version()
-	return &LogDB{
+	return &SQLiteDB{
 		path:          dbName,
 		driverVersion: driverVer,
 		db:            db,
@@ -120,8 +121,8 @@ func NewMem() (*LogDB, error) {
 	}, nil
 }
 
-// Close close the log db.
-func (db *LogDB) Close() (err error) {
+// Close closes the log database.
+func (db *SQLiteDB) Close() (err error) {
 	err = db.wconn.Close()
 	if err1 := db.wconnSyncOff.Close(); err == nil {
 		err = err1
@@ -133,11 +134,11 @@ func (db *LogDB) Close() (err error) {
 	return err
 }
 
-func (db *LogDB) Path() string {
+func (db *SQLiteDB) Path() string {
 	return db.path
 }
 
-func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
+func (db *SQLiteDB) FilterEvents(ctx context.Context, filter *logdb.EventFilter) ([]*logdb.Event, error) {
 	const query = `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
 FROM (%v) e
 	LEFT JOIN ref r0 ON e.blockID = r0.id
@@ -154,7 +155,7 @@ FROM (%v) e
 		return db.queryEvents(ctx, fmt.Sprintf(query, "event"))
 	}
 
-	metricsHandleEventsFilter(filter)
+	logdb.MetricsHandleEventsFilter(filter)
 
 	var (
 		subQuery = "SELECT seq FROM event WHERE 1"
@@ -182,7 +183,7 @@ FROM (%v) e
 		subQuery += " AND ("
 
 		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.toWhereCondition()
+			cond, cargs := c.ToWhereCondition()
 			if i > 0 {
 				subQuery += " OR"
 			}
@@ -194,7 +195,7 @@ FROM (%v) e
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
-		if filter.Order == DESC {
+		if filter.Order == logdb.DESC {
 			subQuery += " ORDER BY seq DESC "
 		} else {
 			subQuery += " ORDER BY seq ASC "
@@ -208,7 +209,7 @@ FROM (%v) e
 	eventQuery := fmt.Sprintf(query, subQuery)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
-		if filter.Order == DESC {
+		if filter.Order == logdb.DESC {
 			eventQuery += " ORDER BY seq DESC "
 		} else {
 			eventQuery += " ORDER BY seq ASC "
@@ -217,7 +218,7 @@ FROM (%v) e
 	return db.queryEvents(ctx, eventQuery, args...)
 }
 
-func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([]*Transfer, error) {
+func (db *SQLiteDB) FilterTransfers(ctx context.Context, filter *logdb.TransferFilter) ([]*logdb.Transfer, error) {
 	const query = `SELECT t.seq, r0.data, t.blockTime, r1.data, r2.data, t.clauseIndex, r3.data, r4.data, t.amount
 FROM (%v) t 
 	LEFT JOIN ref r0 ON t.blockID = r0.id
@@ -230,7 +231,7 @@ FROM (%v) t
 		return db.queryTransfers(ctx, fmt.Sprintf(query, "transfer"))
 	}
 
-	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
+	logdb.MetricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
 
 	var (
 		subQuery = "SELECT seq FROM transfer WHERE 1"
@@ -257,7 +258,7 @@ FROM (%v) t
 	if len(filter.CriteriaSet) > 0 {
 		subQuery += " AND ("
 		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.toWhereCondition()
+			cond, cargs := c.ToWhereCondition()
 			if i > 0 {
 				subQuery += " OR"
 			}
@@ -269,7 +270,7 @@ FROM (%v) t
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
-		if filter.Order == DESC {
+		if filter.Order == logdb.DESC {
 			subQuery += " ORDER BY seq DESC"
 		} else {
 			subQuery += " ORDER BY seq ASC"
@@ -282,7 +283,7 @@ FROM (%v) t
 	transferQuery := fmt.Sprintf(query, subQuery)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
-		if filter.Order == DESC {
+		if filter.Order == logdb.DESC {
 			transferQuery += " ORDER BY seq DESC "
 		} else {
 			transferQuery += " ORDER BY seq ASC "
@@ -291,14 +292,14 @@ FROM (%v) t
 	return db.queryTransfers(ctx, transferQuery, args...)
 }
 
-func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*Event, error) {
+func (db *SQLiteDB) queryEvents(ctx context.Context, query string, args ...any) ([]*logdb.Event, error) {
 	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 
-	var events []*Event
+	var events []*logdb.Event
 	for rows.Next() {
 		select {
 		case <-ctx.Done():
@@ -333,7 +334,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 		); err != nil {
 			return nil, err
 		}
-		event := &Event{
+		event := &logdb.Event{
 			BlockNumber: seq.BlockNumber(),
 			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
@@ -359,13 +360,13 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 	return events, nil
 }
 
-func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) ([]*Transfer, error) {
+func (db *SQLiteDB) queryTransfers(ctx context.Context, query string, args ...any) ([]*logdb.Transfer, error) {
 	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var transfers []*Transfer
+	var transfers []*logdb.Transfer
 	for rows.Next() {
 		select {
 		case <-ctx.Done():
@@ -396,7 +397,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) 
 		); err != nil {
 			return nil, err
 		}
-		trans := &Transfer{
+		trans := &logdb.Transfer{
 			BlockNumber: seq.BlockNumber(),
 			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
@@ -417,13 +418,13 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) 
 	return transfers, nil
 }
 
-// NewestBlockID query newest written block id.
-func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
+// NewestBlockID queries the newest written block ID.
+func (db *SQLiteDB) NewestBlockID() (thor.Bytes32, error) {
 	var data []byte
 	row := db.stmtCache.MustPrepare(`SELECT MAX(data) FROM (
-			SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
-			UNION
-			SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`).QueryRow()
+		SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
+		UNION
+		SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`).QueryRow()
 
 	if err := row.Scan(&data); err != nil {
 		if sql.ErrNoRows != err {
@@ -434,8 +435,8 @@ func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
 	return thor.BytesToBytes32(data), nil
 }
 
-// HasBlockID query whether given block id related logs were written.
-func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
+// HasBlockID queries whether given block ID related logs were written.
+func (db *SQLiteDB) HasBlockID(id thor.Bytes32) (bool, error) {
 	const query = `SELECT COUNT(*) FROM (
 		SELECT * FROM (SELECT seq FROM transfer WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1) 
 		UNION
@@ -455,12 +456,12 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 }
 
 // NewWriter creates a log writer.
-func (db *LogDB) NewWriter() *Writer {
+func (db *SQLiteDB) NewWriter() logdb.Writer {
 	return &Writer{conn: db.wconn, stmtCache: db.stmtCache}
 }
 
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
-func (db *LogDB) NewWriterSyncOff() *Writer {
+func (db *SQLiteDB) NewWriterSyncOff() logdb.Writer {
 	return &Writer{conn: db.wconnSyncOff, stmtCache: db.stmtCache}
 }
 
@@ -481,223 +482,4 @@ func removeLeadingZeros(bytes []byte) []byte {
 		return []byte{0}
 	}
 	return bytes[i:]
-}
-
-// Writer is the transactional log writer.
-type Writer struct {
-	conn      *sql.Conn
-	stmtCache *stmtCache
-
-	tx               *sql.Tx
-	uncommittedCount int
-}
-
-// Truncate truncates the database by deleting logs after blockNum (included).
-func (w *Writer) Truncate(blockNum uint32) error {
-	seq, err := newSequence(blockNum, 0, 0)
-	if err != nil {
-		return err
-	}
-
-	if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
-		return err
-	}
-	if err := w.exec("DELETE FROM transfer WHERE seq >= ?", seq); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Write writes all logs of the given block.
-func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
-	var (
-		blockID        = b.Header().ID()
-		blockNum       = b.Header().Number()
-		blockTimestamp = b.Header().Timestamp()
-		txs            = b.Transactions()
-		isReceiptEmpty = func(r *tx.Receipt) bool {
-			for _, o := range r.Outputs {
-				if len(o.Events) > 0 || len(o.Transfers) > 0 {
-					return false
-				}
-			}
-			return true
-		}
-		blockIDInserted bool
-	)
-
-	eventCount, transferCount := uint32(0), uint32(0)
-	for i, r := range receipts {
-		if isReceiptEmpty(r) {
-			continue
-		}
-
-		if !blockIDInserted {
-			// block id is not yet inserted
-			if err := w.exec(
-				"INSERT OR IGNORE INTO ref(data) VALUES(?)",
-				blockID[:]); err != nil {
-				return err
-			}
-			blockIDInserted = true
-		}
-
-		var (
-			txID     thor.Bytes32
-			txOrigin thor.Address
-		)
-		if i < len(txs) { // block 0 has no tx, but has receipts
-			tx := txs[i]
-			txID = tx.ID()
-			txOrigin, _ = tx.Origin()
-		}
-
-		txIndex := i
-		if err := w.exec(
-			"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",
-			txID[:], txOrigin[:]); err != nil {
-			return err
-		}
-
-		for clauseIndex, output := range r.Outputs {
-			for _, ev := range output.Events {
-				if err := w.exec(
-					"INSERT OR IGNORE INTO ref (data) VALUES(?),(?),(?),(?),(?),(?)",
-					ev.Address[:],
-					topicValue(ev.Topics, 0),
-					topicValue(ev.Topics, 1),
-					topicValue(ev.Topics, 2),
-					topicValue(ev.Topics, 3),
-					topicValue(ev.Topics, 4),
-				); err != nil {
-					return err
-				}
-
-				const query = "INSERT OR IGNORE INTO event(seq, blockTime, clauseIndex, data, blockID, txID, txOrigin, address, topic0, topic1, topic2, topic3, topic4) " +
-					"VALUES(?,?,?,?," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + ")"
-
-				var eventData []byte
-				if len(ev.Data) > 0 {
-					eventData = ev.Data
-				}
-
-				seq, err := newSequence(blockNum, uint32(txIndex), eventCount)
-				if err != nil {
-					return err
-				}
-
-				if err := w.exec(
-					query,
-					seq,
-					blockTimestamp,
-					clauseIndex,
-					eventData,
-					blockID[:],
-					txID[:],
-					txOrigin[:],
-					ev.Address[:],
-					topicValue(ev.Topics, 0),
-					topicValue(ev.Topics, 1),
-					topicValue(ev.Topics, 2),
-					topicValue(ev.Topics, 3),
-					topicValue(ev.Topics, 4)); err != nil {
-					return err
-				}
-				eventCount++
-			}
-
-			for _, tr := range output.Transfers {
-				if err := w.exec(
-					"INSERT OR IGNORE INTO ref (data) VALUES(?),(?)",
-					tr.Sender[:],
-					tr.Recipient[:]); err != nil {
-					return err
-				}
-				const query = "INSERT OR IGNORE INTO transfer(seq, blockTime, clauseIndex, amount, blockID, txID, txOrigin, sender, recipient) " +
-					"VALUES(?,?,?,?," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + "," +
-					refIDQuery + ")"
-
-				seq, err := newSequence(blockNum, uint32(txIndex), transferCount)
-				if err != nil {
-					return err
-				}
-
-				if err := w.exec(
-					query,
-					seq,
-					blockTimestamp,
-					clauseIndex,
-					tr.Amount.Bytes(),
-					blockID[:],
-					txID[:],
-					txOrigin[:],
-					tr.Sender[:],
-					tr.Recipient[:]); err != nil {
-					return err
-				}
-				transferCount++
-			}
-		}
-	}
-	return nil
-}
-
-// Commit commits accumulated logs.
-func (w *Writer) Commit() (err error) {
-	if w.tx == nil {
-		return nil
-	}
-
-	defer func() {
-		if err == nil {
-			w.tx = nil
-			w.uncommittedCount = 0
-		}
-	}()
-	return w.tx.Commit()
-}
-
-// Rollback rollback all uncommitted logs.
-func (w *Writer) Rollback() (err error) {
-	if w.tx == nil {
-		return nil
-	}
-	defer func() {
-		if err == nil {
-			w.tx = nil
-			w.uncommittedCount = 0
-		}
-	}()
-	return w.tx.Rollback()
-}
-
-// UncommittedCount returns the count of uncommitted logs.
-func (w *Writer) UncommittedCount() int {
-	return w.uncommittedCount
-}
-
-func (w *Writer) exec(query string, args ...any) (err error) {
-	if w.tx == nil {
-		if w.tx, err = w.conn.BeginTx(context.Background(), nil); err != nil {
-			return
-		}
-	}
-	if _, err = w.tx.Stmt(w.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
-		return
-	}
-	w.uncommittedCount++
-	return nil
 }

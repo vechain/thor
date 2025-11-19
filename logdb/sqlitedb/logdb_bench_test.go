@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package logdb
+package sqlitedb
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -155,7 +156,7 @@ func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	defer db.Close()
 
 	// find the first 500k blocks with events
-	events, err := db.FilterEvents(context.Background(), &EventFilter{Options: &Options{Offset: 0, Limit: 500_000}})
+	events, err := db.FilterEvents(context.Background(), &logdb.EventFilter{Options: &logdb.Options{Offset: 0, Limit: 500_000}})
 	require.NoError(b, err)
 	require.GreaterOrEqual(b, len(events), 500_000, "there should be more than 500k events in the db")
 
@@ -177,12 +178,12 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	vthoAddress := thor.MustParseAddress(VTHO_ADDRESS)
 	topic := thor.MustParseBytes32(VTHO_TOPIC)
 
-	addressFilterCriteria := []*EventCriteria{
+	addressFilterCriteria := []*logdb.EventCriteria{
 		{
 			Address: &vthoAddress,
 		},
 	}
-	topicFilterCriteria := []*EventCriteria{
+	topicFilterCriteria := []*logdb.EventCriteria{
 		{
 			Topics: [5]*thor.Bytes32{&topic, nil, nil, nil, nil},
 		},
@@ -190,14 +191,14 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 
 	tests := []struct {
 		name string
-		arg  *EventFilter
+		arg  *logdb.EventFilter
 	}{
-		{"AddressCriteriaFilter", &EventFilter{CriteriaSet: addressFilterCriteria, Options: &Options{Offset: 0, Limit: 500000}}},
-		{"TopicCriteriaFilter", &EventFilter{CriteriaSet: topicFilterCriteria, Options: &Options{Offset: 0, Limit: 500000}}},
-		{"EventLimit", &EventFilter{Order: ASC, Options: &Options{Offset: 0, Limit: 500000}}},
-		{"EventLimitDesc", &EventFilter{Order: DESC, Options: &Options{Offset: 0, Limit: 500000}}},
-		{"EventRange", &EventFilter{Range: &Range{From: 500000, To: 1_000_000}}},
-		{"EventRangeDesc", &EventFilter{Range: &Range{From: 500000, To: 1_000_000}, Order: DESC}},
+		{"AddressCriteriaFilter", &logdb.EventFilter{CriteriaSet: addressFilterCriteria, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"TopicCriteriaFilter", &logdb.EventFilter{CriteriaSet: topicFilterCriteria, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"EventLimit", &logdb.EventFilter{Order: logdb.ASC, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"EventLimitDesc", &logdb.EventFilter{Order: logdb.DESC, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"EventRange", &logdb.EventFilter{Range: &logdb.Range{From: 500000, To: 1_000_000}}},
+		{"EventRangeDesc", &logdb.EventFilter{Range: &logdb.Range{From: 500000, To: 1_000_000}, Order: logdb.DESC}},
 	}
 
 	for _, tt := range tests {
@@ -221,7 +222,7 @@ func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	defer db.Close()
 
 	txOrigin := thor.MustParseAddress(TEST_ADDRESS)
-	transferCriteria := []*TransferCriteria{
+	transferCriteria := []*logdb.TransferCriteria{
 		{
 			TxOrigin:  &txOrigin,
 			Sender:    nil,
@@ -231,12 +232,12 @@ func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 
 	tests := []struct {
 		name string
-		arg  *TransferFilter
+		arg  *logdb.TransferFilter
 	}{
-		{"TransferCriteria", &TransferFilter{CriteriaSet: transferCriteria, Options: &Options{Offset: 0, Limit: 500_000}}},
-		{"TransferCriteriaDesc", &TransferFilter{Order: DESC, CriteriaSet: transferCriteria, Options: &Options{Offset: 0, Limit: 500_000}}},
-		{"Ranged500K", &TransferFilter{Range: &Range{From: 500_000, To: 1_000_000}}},
-		{"Ranged500KDesc", &TransferFilter{Range: &Range{From: 500_000, To: 1_000_000}, Order: DESC}},
+		{"TransferCriteria", &logdb.TransferFilter{CriteriaSet: transferCriteria, Options: &logdb.Options{Offset: 0, Limit: 500_000}}},
+		{"TransferCriteriaDesc", &logdb.TransferFilter{Order: logdb.DESC, CriteriaSet: transferCriteria, Options: &logdb.Options{Offset: 0, Limit: 500_000}}},
+		{"Ranged500K", &logdb.TransferFilter{Range: &logdb.Range{From: 500_000, To: 1_000_000}}},
+		{"Ranged500KDesc", &logdb.TransferFilter{Range: &logdb.Range{From: 500_000, To: 1_000_000}, Order: logdb.DESC}},
 	}
 
 	for _, tt := range tests {
@@ -252,7 +253,7 @@ func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	}
 }
 
-func createTempDB() (*LogDB, error) {
+func createTempDB() (logdb.LogDB, error) {
 	dir, err := os.MkdirTemp("", "tempdir-")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
@@ -275,7 +276,7 @@ func createTempDB() (*LogDB, error) {
 	return db, nil
 }
 
-func loadDBFromDisk(b *testing.B) (*LogDB, error) {
+func loadDBFromDisk(b *testing.B) (logdb.LogDB, error) {
 	if dbPath == "" {
 		b.Fatal("Please provide a dbPath")
 	}

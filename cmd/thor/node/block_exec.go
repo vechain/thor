@@ -283,7 +283,7 @@ func (n *Node) postBlockProcessing(newBlock *block.Block, conflicts uint32) {
 }
 
 func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {
-	var w *logdb.Writer
+	var w logdb.Writer
 	if int64(newBlock.Header().Timestamp()) < time.Now().Unix()-24*3600 {
 		// turn off log sync to quickly catch up
 		w = n.logDB.NewWriterSyncOff()

@@ -1,5 +1,5 @@
 // Copyright (c) 2018 The VeChainThor developers
-
+//
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
@@ -45,8 +45,9 @@ type Transfer struct {
 type Order string
 
 const (
-	ASC  Order = "asc"
-	DESC Order = "desc"
+	ASC            Order = "asc"
+	DESC           Order = "desc"
+	MaxBlockNumber       = 268435455 // TODO review this usage with other dbs
 )
 
 type Range struct {
@@ -64,7 +65,23 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
+const (
+	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
+)
+
+func removeLeadingZeros(bytes []byte) []byte {
+	i := 0
+	// increase i until it reaches the first non-zero byte
+	for ; i < len(bytes) && bytes[i] == 0; i++ {
+	}
+	// ensure at least 1 byte exists
+	if i == len(bytes) {
+		return []byte{0}
+	}
+	return bytes[i:]
+}
+
+func (c *EventCriteria) ToWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.Address != nil {
 		cond += " AND address = " + refIDQuery
@@ -93,7 +110,7 @@ type TransferCriteria struct {
 	Recipient *thor.Address // who received tokens
 }
 
-func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
+func (c *TransferCriteria) ToWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.TxOrigin != nil {
 		cond += " AND txOrigin = " + refIDQuery

@@ -24,7 +24,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
+func syncLogDB(ctx context.Context, repo *chain.Repository, logDB logdb.LogDB, verify bool) error {
 	startPos, err := seekLogDBSyncPosition(repo, logDB)
 	if err != nil {
 		return errors.Wrap(err, "seek log db sync position")
@@ -109,7 +109,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	return pumpErr
 }
 
-func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
+func seekLogDBSyncPosition(repo *chain.Repository, logDB logdb.LogDB) (uint32, error) {
 	best := repo.BestBlockSummary().Header
 	if best.Number() == 0 {
 		return 0, nil
@@ -156,7 +156,7 @@ func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, 
 	return block.Number(header.ID()) + 1, nil
 }
 
-func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB *logdb.LogDB) error {
+func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB logdb.LogDB) error {
 	fmt.Println(">> Verifying log db <<")
 	pb := pb.New64(int64(endBlockNum)).
 		Set64(0).

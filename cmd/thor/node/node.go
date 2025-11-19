@@ -53,7 +53,7 @@ type Node struct {
 	repo        *chain.Repository
 	bft         bft.Committer
 	stater      *state.Stater
-	logDB       *logdb.LogDB
+	logDB       logdb.LogDB
 	txPool      txpool.Pool
 	txStashPath string
 	comm        Communicator
@@ -74,7 +74,7 @@ func New(
 	repo *chain.Repository,
 	bft bft.Committer,
 	stater *state.Stater,
-	logDB *logdb.LogDB,
+	logDB logdb.LogDB,
 	txPool txpool.Pool,
 	txStashPath string,
 	communicator Communicator,

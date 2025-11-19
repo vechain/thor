@@ -20,6 +20,7 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logdb/sqlitedb"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thorclient"
@@ -224,7 +225,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 }
 
 // Init functions
-func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
+func insertBlocks(t *testing.T, db logdb.LogDB, n int) {
 	b := new(block.Builder).Build()
 	for range n {
 		b = new(block.Builder).
@@ -243,7 +244,7 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 	}
 }
 
-func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
+func initTransferServer(t *testing.T, logDb logdb.LogDB, limit uint64) {
 	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
@@ -253,8 +254,8 @@ func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
 	ts = httptest.NewServer(router)
 }
 
-func createDb(t *testing.T) *logdb.LogDB {
-	logDb, err := logdb.NewMem()
+func createDb(t *testing.T) logdb.LogDB {
+	logDb, err := sqlitedb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}

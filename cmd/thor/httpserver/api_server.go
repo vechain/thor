@@ -70,7 +70,7 @@ func StartAPIServer(
 	repo *chain.Repository,
 	stater *state.Stater,
 	txPool txpool.Pool,
-	logDB *logdb.LogDB,
+	logDB logdb.LogDB,
 	bft bft.Committer,
 	nw api.Network,
 	forkConfig *thor.ForkConfig,

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	comm2 "github.com/vechain/thor/v2/comm"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logdb/sqlitedb"
 
 	bft2 "github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/genesis"
@@ -56,7 +56,7 @@ func getFlowAndNode(t *testing.T, forkConfig *thor.ForkConfig) (*packer.Flow, *N
 	bft, err := bft2.NewEngine(repo, db, forkConfig, a1.Address)
 	assert.NoError(t, err)
 
-	logdb, err := logdb.NewMem()
+	logdb, err := sqlitedb.NewMem()
 	assert.NoError(t, err)
 
 	comm := comm2.New(repo, pool)
