@@ -396,10 +396,7 @@ func (s *Service) ActivateValidator(
 
 	// attach all delegation's weight
 
-	weight, overflow := math.SafeAdd(lockedIncrease.Weight, aggRenew.LockedIncrease.Weight)
-	if overflow {
-		return nil, errors.New("weight overflow in addition")
-	}
+	weight := lockedIncrease.Weight + aggRenew.LockedIncrease.Weight
 	weight, underflow := math.SafeSub(weight, aggRenew.LockedDecrease.Weight)
 	if underflow {
 		return nil, errors.New("weight underflow in subtraction")

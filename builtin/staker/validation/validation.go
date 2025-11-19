@@ -63,19 +63,13 @@ type Totals struct {
 
 func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 	var exitingVET uint64
-	var exiting, overflow bool
+	var exiting bool
 	// If the validation is due to exit, then all locked VET is considered exiting.
 	if v.Status == StatusActive && v.ExitBlock != nil {
-		exitingVET, overflow = math.SafeAdd(v.LockedVET, agg.Locked.VET)
-		if overflow {
-			return nil, errors.New("exiting VET overflow")
-		}
+		exitingVET = v.LockedVET + agg.Locked.VET
 		exiting = true
 	} else {
-		exitingVET, overflow = math.SafeAdd(v.PendingUnlockVET, agg.Exiting.VET)
-		if overflow {
-			return nil, errors.New("exiting VET overflow")
-		}
+		exitingVET = v.PendingUnlockVET + agg.Exiting.VET
 		exiting = false
 	}
 
@@ -95,34 +89,20 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 		if err != nil {
 			return nil, err
 		}
-		valNextPeriodWeight, overflow := math.SafeAdd(stakes.NewWeightedStakeWithMultiplier(valNextPeriodTVL, multiplier).Weight, agg.Locked.Weight)
-		if overflow {
-			return nil, errors.New("next period weight overflow")
-		}
-		valNextPeriodWeight, overflow = math.SafeAdd(valNextPeriodWeight, agg.Pending.Weight)
-		if overflow {
-			return nil, errors.New("next period weight overflow")
-		}
+
+		valNextPeriodWeight := stakes.NewWeightedStakeWithMultiplier(valNextPeriodTVL, multiplier).Weight + agg.Locked.Weight + agg.Pending.Weight
 		valNextPeriodWeight, underflow := math.SafeSub(valNextPeriodWeight, agg.Exiting.Weight)
 		if underflow {
 			return nil, errors.New("next period weight underflow")
 		}
 		nextPeriodWeight = valNextPeriodWeight
 	}
-	totalLockedStake, overflow := math.SafeAdd(v.LockedVET, agg.Locked.VET)
-	if overflow {
-		return nil, errors.New("total locked stake overflow")
-	}
-	totalQueuedStake, overflow := math.SafeAdd(v.QueuedVET, agg.Pending.VET)
-	if overflow {
-		return nil, errors.New("total queued stake overflow")
-	}
 
 	return &Totals{
 		// Delegation totals can be calculated by subtracting validators stakes / weights from the global totals.
-		TotalLockedStake:  totalLockedStake,
+		TotalLockedStake:  v.LockedVET + agg.Locked.VET,
 		TotalLockedWeight: v.Weight,
-		TotalQueuedStake:  totalQueuedStake,
+		TotalQueuedStake:  v.QueuedVET + agg.Pending.VET,
 		TotalExitingStake: exitingVET,
 		NextPeriodWeight:  nextPeriodWeight,
 	}, nil
@@ -237,25 +217,16 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 	after.valWeight = stakes.NewWeightedStakeWithMultiplier(v.LockedVET, after.multiplier).Weight
 	// calculate the locked stake change based on the validator's weight
 	if prev.valWeight < after.valWeight {
-		lockedIncrease.Weight, underflow = math.SafeSub(after.valWeight, prev.valWeight)
-		if underflow {
-			return nil, errors.New("locked increase weight underflow")
-		}
+		lockedIncrease.Weight = after.valWeight - prev.valWeight
 	} else {
-		lockedDecrease.Weight, underflow = math.SafeSub(prev.valWeight, after.valWeight)
-		if underflow {
-			return nil, errors.New("locked decrease weight underflow")
-		}
+		lockedDecrease.Weight = prev.valWeight - after.valWeight
 	}
 
 	v.WithdrawableVET, overflow = math.SafeAdd(v.WithdrawableVET, v.PendingUnlockVET)
 	if overflow {
 		return nil, errors.New("withdrawable VET overflow")
 	}
-	v.Weight, overflow = math.SafeAdd(after.valWeight, delegationWeight)
-	if overflow {
-		return nil, errors.New("weight overflow")
-	}
+	v.Weight = after.valWeight + delegationWeight
 	v.QueuedVET = 0
 	v.PendingUnlockVET = 0
 
