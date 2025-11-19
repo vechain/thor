@@ -37,7 +37,6 @@ func newSolo() *Solo {
 		SkipLogs:         false,
 		MinTxPriorityFee: 0,
 		OnDemand:         true,
-		BlockInterval:    thor.BlockInterval(),
 	}
 
 	hayabusaTP := uint32(1)
