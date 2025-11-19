@@ -205,7 +205,7 @@ var (
 	}
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
-		Usage: "create new block when there is pending transaction",
+		Usage: "create new block when there is pending transaction, may result in block produced in the future timestamp",
 	}
 	blockInterval = cli.Uint64Flag{
 		Name:  "block-interval",

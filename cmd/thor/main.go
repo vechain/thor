@@ -462,7 +462,6 @@ func soloAction(ctx *cli.Context) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    thor.BlockInterval(),
 	}
 
 	stater := state.NewStater(mainDB)
