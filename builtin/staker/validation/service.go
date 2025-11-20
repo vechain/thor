@@ -186,12 +186,7 @@ func (s *Service) SignalExit(validator thor.Address, currentBlock uint32, minBlo
 }
 
 func (s *Service) IncreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
-	var overflow bool
-	validation.QueuedVET, overflow = math.SafeAdd(validation.QueuedVET, amount)
-	if overflow {
-		return errors.New("queued overflow occurred")
-	}
-
+	validation.QueuedVET += amount
 	return s.repo.updateValidation(validator, validation)
 }
 
@@ -208,12 +203,8 @@ func (s *Service) SetBeneficiary(validator thor.Address, validation *Validation,
 }
 
 func (s *Service) DecreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
-	var overflow bool
 	if validation.Status == StatusActive {
-		validation.PendingUnlockVET, overflow = math.SafeAdd(validation.PendingUnlockVET, amount)
-		if overflow {
-			return errors.New("pending unlock VET overflow occurred")
-		}
+		validation.PendingUnlockVET += amount
 	}
 	return s.repo.updateValidation(validator, validation)
 }

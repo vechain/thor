@@ -98,10 +98,7 @@ func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
 	}
 
 	// All queued values are now removed from the queued tracker
-	queuedDecrease, overflow := math.SafeAdd(validation.QueuedDecrease, aggregation.QueuedDecrease)
-	if overflow {
-		return errors.New("queued decrease overflow occurred")
-	}
+	queuedDecrease := validation.QueuedDecrease + aggregation.QueuedDecrease
 	if queuedDecrease > 0 {
 		if err := s.RemoveQueued(queuedDecrease); err != nil {
 			return err
@@ -117,10 +114,7 @@ func (s *Service) ApplyExit(validation *Exit, aggregation *Exit) error {
 
 	// Both queued (val + del) stakes and exited delegations are now withdrawable
 	// exited delegations do not go on cooldown
-	withdrawableIncrease, overflow := math.SafeAdd(queuedDecrease, aggregation.ExitedTVL.VET)
-	if overflow {
-		return errors.New("withdrawable increase overflow occurred")
-	}
+	withdrawableIncrease := queuedDecrease + aggregation.ExitedTVL.VET
 	if withdrawableIncrease > 0 {
 		if err := s.AddWithdrawable(withdrawableIncrease); err != nil {
 			return err
@@ -151,11 +145,8 @@ func (s *Service) AddQueued(stake uint64) error {
 	if err != nil {
 		return err
 	}
+	queued += stake
 
-	queued, overflow := math.SafeAdd(queued, stake)
-	if overflow {
-		return errors.New("queued overflow occurred")
-	}
 	// for the initial state, use upsert to handle correct gas cost
 	return s.queued.Upsert(queued)
 }
