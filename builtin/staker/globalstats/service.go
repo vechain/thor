@@ -145,8 +145,8 @@ func (s *Service) AddQueued(stake uint64) error {
 	if err != nil {
 		return err
 	}
-	queued += stake
 
+	queued += stake
 	// for the initial state, use upsert to handle correct gas cost
 	return s.queued.Upsert(queued)
 }

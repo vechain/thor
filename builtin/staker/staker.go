@@ -141,7 +141,7 @@ func (s *Staker) GetWithdrawable(validator thor.Address, block uint32) (uint64, 
 		return 0, err
 	}
 
-	return val.CalculateWithdrawableVET(block)
+	return val.CalculateWithdrawableVET(block), err
 }
 
 // GetDelegation returns the delegation.

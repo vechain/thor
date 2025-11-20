@@ -120,10 +120,7 @@ func (v *Validation) IsPeriodEnd(current uint32) bool {
 
 // NextPeriodTVL returns the amount of VET that will be locked in the next staking period for the validator only.
 func (v *Validation) NextPeriodTVL() (uint64, error) {
-	nextPeriodLocked, overflow := math.SafeAdd(v.LockedVET, v.QueuedVET)
-	if overflow {
-		return 0, errors.New("next period locked overflow")
-	}
+	nextPeriodLocked := v.LockedVET + v.QueuedVET
 	if v.PendingUnlockVET > nextPeriodLocked {
 		return 0, errors.New("insufficient locked and queued VET to subtract")
 	}
@@ -197,12 +194,7 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 	lockedIncrease := stakes.NewWeightedStake(v.QueuedVET, 0)
 	lockedDecrease := stakes.NewWeightedStake(v.PendingUnlockVET, 0)
 
-	var overflow bool
-	v.LockedVET, overflow = math.SafeAdd(v.LockedVET, v.QueuedVET)
-	if overflow {
-		return nil, errors.New("locked VET overflow")
-	}
-
+	v.LockedVET += v.QueuedVET
 	var underflow bool
 	v.LockedVET, underflow = math.SafeSub(v.LockedVET, v.PendingUnlockVET)
 	if underflow {
@@ -222,10 +214,7 @@ func (v *Validation) renew(delegationWeight uint64) (*globalstats.Renewal, error
 		lockedDecrease.Weight = prev.valWeight - after.valWeight
 	}
 
-	v.WithdrawableVET, overflow = math.SafeAdd(v.WithdrawableVET, v.PendingUnlockVET)
-	if overflow {
-		return nil, errors.New("withdrawable VET overflow")
-	}
+	v.WithdrawableVET += v.PendingUnlockVET
 	v.Weight = after.valWeight + delegationWeight
 	v.QueuedVET = 0
 	v.PendingUnlockVET = 0
@@ -268,23 +257,15 @@ func (v *Validation) CooldownEnded(currentBlock uint32) bool {
 }
 
 // CalculateWithdrawableVET returns the validator withdrawable amount for a given block + period
-func (v *Validation) CalculateWithdrawableVET(currentBlock uint32) (uint64, error) {
+func (v *Validation) CalculateWithdrawableVET(currentBlock uint32) uint64 {
 	withdrawAmount := v.WithdrawableVET
 
-	var overflow bool
 	if v.CooldownEnded(currentBlock) {
-		withdrawAmount, overflow = math.SafeAdd(withdrawAmount, v.CooldownVET)
-		if overflow {
-			return 0, errors.New("withdrawable VET overflow")
-		}
+		withdrawAmount += v.CooldownVET
 	}
 
-	withdrawAmount, overflow = math.SafeAdd(withdrawAmount, v.QueuedVET)
-	if overflow {
-		return 0, errors.New("withdrawable VET overflow")
-	}
-
-	return withdrawAmount, nil
+	withdrawAmount += v.QueuedVET
+	return withdrawAmount
 }
 
 // multiplier returns the acting multiplier for the validation of the current staking period
