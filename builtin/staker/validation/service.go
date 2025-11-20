@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
@@ -186,7 +187,6 @@ func (s *Service) SignalExit(validator thor.Address, currentBlock uint32, minBlo
 
 func (s *Service) IncreaseStake(validator thor.Address, validation *Validation, amount uint64) error {
 	validation.QueuedVET += amount
-
 	return s.repo.updateValidation(validator, validation)
 }
 
@@ -386,7 +386,13 @@ func (s *Service) ActivateValidator(
 	lockedIncrease := stakes.NewWeightedStakeWithMultiplier(validation.LockedVET, mul)
 
 	// attach all delegation's weight
-	validation.Weight = lockedIncrease.Weight + aggRenew.LockedIncrease.Weight - aggRenew.LockedDecrease.Weight
+
+	weight := lockedIncrease.Weight + aggRenew.LockedIncrease.Weight
+	weight, underflow := math.SafeSub(weight, aggRenew.LockedDecrease.Weight)
+	if underflow {
+		return nil, errors.New("weight underflow in subtraction")
+	}
+	validation.Weight = weight
 
 	// Update validator status
 	validation.Status = StatusActive
