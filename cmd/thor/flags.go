@@ -88,6 +88,11 @@ var (
 		Value: 5,
 		Usage: "percentage of the block base fee for priority fees calculation",
 	}
+	apiSlowQueriesThresholdFlag = cli.Uint64Flag{
+		Name:  "api-slow-queries-threshold",
+		Value: 500,
+		Usage: "all queries with execution time(ms) above threshold will be logged",
+	}
 
 	verbosityFlag = cli.Uint64Flag{
 		Name:  "verbosity",

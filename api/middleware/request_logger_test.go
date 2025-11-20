@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -66,12 +67,14 @@ func TestRequestLoggerHandler(t *testing.T) {
 
 	// Define a test handler to wrap
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(10 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
 	// Create the RequestLoggerHandler
-	loggerHandler := RequestLoggerMiddleware(mockLog, &enabled)(testHandler)
+	slowQueriesThreshold := 0 * time.Millisecond
+	loggerHandler := RequestLoggerMiddleware(mockLog, &enabled, slowQueriesThreshold)(testHandler)
 
 	// Create a test HTTP request
 	reqBody := "test body"
@@ -102,7 +105,7 @@ func TestRequestLoggerHandler(t *testing.T) {
 	// Check if timestamp is present
 	foundTimestamp := false
 	for i := 0; i < len(loggedData); i += 2 {
-		if loggedData[i] == "timestamp" {
+		if loggedData[i] == "Timestamp" {
 			_, ok := loggedData[i+1].(int64)
 			assert.True(t, ok, "timestamp should be an int64")
 			foundTimestamp = true
@@ -110,4 +113,52 @@ func TestRequestLoggerHandler(t *testing.T) {
 		}
 	}
 	assert.True(t, foundTimestamp, "timestamp should be logged")
+
+	// slow queries test
+	mockLog = &mockLogger{}
+	enabled.Store(false)
+	slowQueriesThreshold = 1 * time.Millisecond
+	loggerHandler = RequestLoggerMiddleware(mockLog, &enabled, slowQueriesThreshold)(testHandler)
+
+	// Serve the HTTP request
+	rr = httptest.NewRecorder()
+	reqBody = "slow request test body"
+	req = httptest.NewRequest("POST", "http://example.com/foo", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	loggerHandler.ServeHTTP(rr, req)
+
+	// Check the response status code
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Check the response body
+	assert.Equal(t, "OK", rr.Body.String())
+
+	// Verify that the logger recorded the correct information
+	loggedData = mockLog.GetLoggedData()
+	assert.Contains(t, loggedData, "URI")
+	assert.Contains(t, loggedData, "http://example.com/foo")
+	assert.Contains(t, loggedData, "Method")
+	assert.Contains(t, loggedData, "POST")
+	assert.Contains(t, loggedData, "Body")
+	assert.Contains(t, loggedData, reqBody)
+
+	// Check if timestamp is present
+	foundTimestamp = false
+	foundDuration := false
+	for i := 0; i < len(loggedData); i += 2 {
+		if loggedData[i] == "Timestamp" {
+			_, ok := loggedData[i+1].(int64)
+			assert.True(t, ok, "timestamp should be an int64")
+			foundTimestamp = true
+			continue
+		}
+		if loggedData[i] == "DurationMs" {
+			_, ok := loggedData[i+1].(int64)
+			assert.True(t, ok, "duration should be an int64")
+			foundDuration = true
+			continue
+		}
+	}
+	assert.True(t, foundTimestamp, "timestamp should be logged")
+	assert.True(t, foundDuration, "duration should be logged")
 }

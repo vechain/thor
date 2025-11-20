@@ -63,6 +63,7 @@ type APIConfig struct {
 	APIBacktraceLimit          int
 	PriorityIncreasePercentage int
 	Timeout                    int
+	SlowQueriesThreshold       int
 }
 
 func StartAPIServer(
@@ -143,7 +144,8 @@ func StartAPIServer(
 	}
 
 	// metrics and request logger should be configured as soon as possible
-	router.Use(middleware.RequestLoggerMiddleware(logger, config.EnableReqLogger))
+	slowQueriesThreshold := time.Duration(config.SlowQueriesThreshold) * time.Millisecond
+	router.Use(middleware.RequestLoggerMiddleware(logger, config.EnableReqLogger, slowQueriesThreshold))
 	if config.EnableMetrics {
 		router.Use(middleware.MetricsMiddleware)
 	}
