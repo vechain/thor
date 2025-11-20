@@ -67,6 +67,7 @@ func TestRequestLoggerHandler(t *testing.T) {
 
 	// Define a test handler to wrap
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(10 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
@@ -116,7 +117,7 @@ func TestRequestLoggerHandler(t *testing.T) {
 	// slow queries test
 	mockLog = &mockLogger{}
 	enabled.Store(false)
-	slowQueriesThreshold = 1 * time.Nanosecond
+	slowQueriesThreshold = 1 * time.Millisecond
 	loggerHandler = RequestLoggerMiddleware(mockLog, &enabled, slowQueriesThreshold)(testHandler)
 
 	// Serve the HTTP request
