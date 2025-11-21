@@ -42,7 +42,7 @@ func (c *Client) rawHTTPRequest(method, url string, payload io.Reader) ([]byte, 
 	if err != nil {
 		return nil, 0, fmt.Errorf("error performing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer cleanlyCloseBody(resp.Body)
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -70,4 +70,12 @@ func (c *Client) httpPOST(url string, payload any) ([]byte, error) {
 	}
 
 	return c.httpRequest("POST", url, bytes.NewBuffer(data))
+}
+
+// cleanlyCloseBody avoids sending unnecessary RST_STREAM and PING frames by
+// ensuring the whole body is read before being closed.
+// See https://blog.cloudflare.com/go-and-enhance-your-calm/#reading-bodies-in-go-can-be-unintuitive
+func cleanlyCloseBody(body io.ReadCloser) error {
+	io.Copy(io.Discard, body)
+	return body.Close()
 }
