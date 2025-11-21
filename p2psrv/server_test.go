@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/p2p/discover"
 )
 
 func TestNewServer(t *testing.T) {

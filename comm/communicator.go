@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p"
+	"github.com/vechain/thor/v2/p2p/discv5"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
