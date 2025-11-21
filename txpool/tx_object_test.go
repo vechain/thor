@@ -249,7 +249,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	assert.Nil(t, err)
 
 	// add a block 1
-	tchain.MintBlock(genesis.DevAccounts()[0])
+	tchain.MintBlock()
 
 	// recalculate the base fee since new block is added
 	baseFee = galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
@@ -285,7 +285,7 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	assert.ErrorContains(t, err, "unsupported features")
 
 	// add a block 1
-	tchain.MintBlock(genesis.DevAccounts()[0])
+	tchain.MintBlock()
 
 	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
 	_, err = txObj1.Executable(

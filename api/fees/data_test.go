@@ -151,7 +151,6 @@ func TestRewardsBeforeAndAfterGalactica(t *testing.T) {
 		Build()
 	assert.NoError(t,
 		thorChain.MintBlock(
-			genesis.DevAccounts()[0],
 			tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey),
 			tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey),
 		),
@@ -166,7 +165,7 @@ func TestRewardsBeforeAndAfterGalactica(t *testing.T) {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0], tx.MustSign(trx3, genesis.DevAccounts()[0].PrivateKey)))
+	assert.NoError(t, thorChain.MintBlock(tx.MustSign(trx3, genesis.DevAccounts()[0].PrivateKey)))
 
 	feesData := newFeesData(thorChain.Repo(), thorChain.Stater(), 10)
 
@@ -243,7 +242,6 @@ func TestRewardsComputedAfterWarmupWithoutPercentiles(t *testing.T) {
 		require.NoError(
 			t,
 			thorChain.MintBlock(
-				genesis.DevAccounts()[0],
 				tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey),
 				tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey),
 			),

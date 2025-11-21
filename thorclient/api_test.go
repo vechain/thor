@@ -81,7 +81,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		Build()
 
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx, noClausesTx))
+	require.NoError(t, thorChain.MintBlock(legacyTx, noClausesTx))
 	preMintedTx01 = legacyTx
 
 	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
@@ -97,7 +97,7 @@ func mintTransactions(t *testing.T, thorChain *testchain.Chain) {
 		Build()
 
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
+	require.NoError(t, thorChain.MintBlock(dynFeeTx))
 }
 
 func addTransactionToPool(t *testing.T, testNode testnode.Node) {
@@ -498,7 +498,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
 			},
 			GasUsedRatio: []float64{
-				0.0037,
+				0.000925,
 			},
 		}
 
@@ -517,7 +517,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
 			},
 			GasUsedRatio: []float64{
-				0.0037,
+				0.000925,
 			},
 			Reward: [][]*hexutil.Big{
 				{

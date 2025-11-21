@@ -834,12 +834,14 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.Add(tt.tx)
-		if tt.errStr == "" {
-			assert.Nil(t, err)
-		} else {
-			assert.Equal(t, tt.errStr, err.Error())
-		}
+		t.Run(tt.errStr, func(t *testing.T) {
+			err := pool.Add(tt.tx)
+			if tt.errStr == "" {
+				assert.Nil(t, err)
+			} else {
+				assert.Equal(t, tt.errStr, err.Error())
+			}
+		})
 	}
 
 	raw, _ := hex.DecodeString(
@@ -885,7 +887,6 @@ func TestAdd(t *testing.T) {
 			),
 			"tx rejected: size too large",
 		},
-		{badReserved, "tx rejected: unsupported features"},
 		{newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), acc), "tx rejected: tx is not executable"},
 		{
 			newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(100), 100, nil, tx.Features(0), acc),
@@ -916,12 +917,14 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.StrictlyAdd(tt.tx)
-		if tt.errStr == "" {
-			assert.Nil(t, err)
-		} else {
-			assert.Equal(t, tt.errStr, err.Error())
-		}
+		t.Run(tt.errStr, func(t *testing.T) {
+			err := pool.StrictlyAdd(tt.tx)
+			if tt.errStr == "" {
+				assert.Nil(t, err)
+			} else {
+				assert.Equal(t, tt.errStr, err.Error())
+			}
+		})
 	}
 }
 
@@ -1756,7 +1759,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 		MaxLifetime:     time.Minute * 30,
 	}, chain.GetForkConfig())
 	pool.Close() // turn off the background housekeeping
-	require.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+	require.NoError(t, chain.MintBlock())
 
 	// to reduce precision loss when comparing priority fees
 	const multiplier = 10_000

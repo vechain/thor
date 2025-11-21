@@ -272,7 +272,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+	require.NoError(t, thorChain.MintBlock(tr, txDeploy))
 
 	blocks, err = thorChain.GetAllBlocks()
 	require.NoError(t, err)
@@ -324,10 +324,10 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	require.NoError(t, err)
 	txDeploy = txDeploy.WithSignature(sigTxDeploy)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr, txDeploy))
+	require.NoError(t, thorChain.MintBlock(tr, txDeploy))
 
 	for range 10 {
-		require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0]))
+		require.NoError(t, thorChain.MintBlock())
 	}
 
 	blocks, err = thorChain.GetAllBlocks()
