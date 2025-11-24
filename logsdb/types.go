@@ -6,7 +6,6 @@
 package logsdb
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/v2/thor"
@@ -45,9 +44,8 @@ type Transfer struct {
 type Order string
 
 const (
-	ASC        Order = "asc"
-	DESC       Order = "desc"
-	refIDQuery       = "(SELECT id FROM ref WHERE data=?)"
+	ASC  Order = "asc"
+	DESC Order = "desc"
 )
 
 type Range struct {
@@ -65,21 +63,6 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) ToWhereCondition() (cond string, args []any) {
-	cond = "1"
-	if c.Address != nil {
-		cond += " AND address = " + refIDQuery
-		args = append(args, c.Address.Bytes())
-	}
-	for i, topic := range c.Topics {
-		if topic != nil {
-			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
-			args = append(args, removeLeadingZeros(topic.Bytes()))
-		}
-	}
-	return
-}
-
 // EventFilter filter
 type EventFilter struct {
 	CriteriaSet []*EventCriteria
@@ -94,38 +77,9 @@ type TransferCriteria struct {
 	Recipient *thor.Address // who received tokens
 }
 
-func (c *TransferCriteria) ToWhereCondition() (cond string, args []any) {
-	cond = "1"
-	if c.TxOrigin != nil {
-		cond += " AND txOrigin = " + refIDQuery
-		args = append(args, c.TxOrigin.Bytes())
-	}
-	if c.Sender != nil {
-		cond += " AND sender = " + refIDQuery
-		args = append(args, c.Sender.Bytes())
-	}
-	if c.Recipient != nil {
-		cond += " AND recipient = " + refIDQuery
-		args = append(args, c.Recipient.Bytes())
-	}
-	return
-}
-
 type TransferFilter struct {
 	CriteriaSet []*TransferCriteria
 	Range       *Range
 	Options     *Options
 	Order       Order // default asc
-}
-
-func removeLeadingZeros(bytes []byte) []byte {
-	i := 0
-	// increase i until it reaches the first non-zero byte
-	for ; i < len(bytes) && bytes[i] == 0; i++ {
-	}
-	// ensure at least 1 byte exists
-	if i == len(bytes) {
-		return []byte{0}
-	}
-	return bytes[i:]
 }

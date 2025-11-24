@@ -21,10 +21,6 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-const (
-	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
-)
-
 type LogDB struct {
 	path          string
 	driverVersion string
@@ -183,7 +179,7 @@ FROM (%v) e
 		subQuery += " AND ("
 
 		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.ToWhereCondition()
+			cond, cargs := eventCriteriaToWhereCondition(c)
 			if i > 0 {
 				subQuery += " OR"
 			}
@@ -258,7 +254,7 @@ FROM (%v) t
 	if len(filter.CriteriaSet) > 0 {
 		subQuery += " AND ("
 		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.ToWhereCondition()
+			cond, cargs := transferCriteriaToWhereCondition(c)
 			if i > 0 {
 				subQuery += " OR"
 			}
@@ -470,18 +466,6 @@ func topicValue(topics []thor.Bytes32, i int) []byte {
 		return removeLeadingZeros(topics[i][:])
 	}
 	return nil
-}
-
-func removeLeadingZeros(bytes []byte) []byte {
-	i := 0
-	// increase i until it reaches the first non-zero byte
-	for ; i < len(bytes) && bytes[i] == 0; i++ {
-	}
-	// ensure at least 1 byte exists
-	if i == len(bytes) {
-		return []byte{0}
-	}
-	return bytes[i:]
 }
 
 // Writer is the transactional log writer.
