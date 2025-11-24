@@ -200,6 +200,7 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, *thor.ForkConfig, error)
 		_ = cli.ShowAppHelp(ctx)
 		return nil, nil, errors.New("network flag not specified")
 	}
+	// locks config after setup for production use
 	defer thor.LockConfig()
 
 	switch network {
