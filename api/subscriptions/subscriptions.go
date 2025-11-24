@@ -78,7 +78,6 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		beatCache:  newMessageCache[api.BeatMessage](backtraceLimit),
 	}
 	sub.wg.Go(func() {
-		defer sub.wg.Done()
 		sub.pendingTx.DispatchLoop(sub.done)
 	})
 
@@ -226,7 +225,6 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 
 	closed := make(chan struct{})
 	s.wg.Go(func() {
-		defer s.wg.Done()
 		// close connections if not closed already
 		defer close(closed)
 
