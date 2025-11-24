@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -794,7 +795,7 @@ func (n *nodeNetGuts) startNextQuery(net *Network) {
 	}
 	nextq := n.deferredQueries[0]
 	if nextq.start(net) {
-		n.deferredQueries = append(n.deferredQueries[:0], n.deferredQueries[1:]...)
+		n.deferredQueries = slices.Delete(n.deferredQueries, 0, 1)
 	}
 }
 

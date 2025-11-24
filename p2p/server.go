@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -591,7 +592,7 @@ func (srv *Server) run(dialstate dialer) {
 	delTask := func(t task) {
 		for i := range runningTasks {
 			if runningTasks[i] == t {
-				runningTasks = append(runningTasks[:i], runningTasks[i+1:]...)
+				runningTasks = slices.Delete(runningTasks, i, i+1)
 				break
 			}
 		}
@@ -801,7 +802,7 @@ func (srv *Server) listenLoop() {
 		tokens = srv.MaxPendingPeers
 	}
 	slots := make(chan struct{}, tokens)
-	for i := 0; i < tokens; i++ {
+	for range tokens {
 		slots <- struct{}{}
 	}
 
@@ -1012,7 +1013,7 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	// Sort the result array alphabetically by node identifier
-	for i := 0; i < len(infos); i++ {
+	for i := range len(infos) {
 		for j := i + 1; j < len(infos); j++ {
 			if infos[i].ID > infos[j].ID {
 				infos[i], infos[j] = infos[j], infos[i]

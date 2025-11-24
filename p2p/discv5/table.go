@@ -27,6 +27,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -141,7 +142,7 @@ func (tab *Table) readRandomNodes(buf []*Node) (n int) {
 		buf[i] = &(*b[0])
 		buckets[j] = b[1:]
 		if len(b) == 1 {
-			buckets = append(buckets[:j], buckets[j+1:]...)
+			buckets = slices.Delete(buckets, j, j+1)
 		}
 		if len(buckets) == 0 {
 			break
@@ -248,7 +249,7 @@ func (tab *Table) delete(node *Node) {
 	bucket := tab.buckets[logdist(tab.self.sha, node.sha)]
 	for i := range bucket.entries {
 		if bucket.entries[i].ID == node.ID {
-			bucket.entries = append(bucket.entries[:i], bucket.entries[i+1:]...)
+			bucket.entries = slices.Delete(bucket.entries, i, i+1)
 			tab.count--
 			return
 		}
@@ -260,7 +261,7 @@ func (tab *Table) deleteReplace(node *Node) {
 	i := 0
 	for i < len(b.entries) {
 		if b.entries[i].ID == node.ID {
-			b.entries = append(b.entries[:i], b.entries[i+1:]...)
+			b.entries = slices.Delete(b.entries, i, i+1)
 			tab.count--
 		} else {
 			i++

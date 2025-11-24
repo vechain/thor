@@ -123,7 +123,7 @@ func discoverUPnP() Interface {
 		}
 		return nil
 	})
-	for i := 0; i < cap(found); i++ {
+	for range cap(found) {
 		if c := <-found; c != nil {
 			return c
 		}

@@ -83,7 +83,7 @@ func sntpDrift(measurements int) (time.Duration, error) {
 
 	// Execute each of the measurements
 	drifts := []time.Duration{}
-	for i := 0; i < measurements+2; i++ {
+	for range measurements + 2 {
 		// Dial the NTP server and send the time retrieval request
 		conn, err := net.DialUDP("udp", nil, addr)
 		if err != nil {

@@ -37,7 +37,7 @@ func TestAutoDiscRace(t *testing.T) {
 		err error
 	}
 	results := make(chan rval, 50)
-	for i := 0; i < cap(results); i++ {
+	for range cap(results) {
 		go func() {
 			ip, err := ad.ExternalIP()
 			results <- rval{ip, err}
@@ -46,7 +46,7 @@ func TestAutoDiscRace(t *testing.T) {
 
 	// Check that they all return the correct result within the deadline.
 	deadline := time.After(2 * time.Second)
-	for i := 0; i < cap(results); i++ {
+	for i := range cap(results) {
 		select {
 		case <-deadline:
 			t.Fatal("deadline exceeded")

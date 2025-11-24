@@ -14,14 +14,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/vechain/thor/v2/p2p"
-	"github.com/vechain/thor/v2/p2p/discv5"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/p2p"
+	"github.com/vechain/thor/v2/p2p/discv5"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"

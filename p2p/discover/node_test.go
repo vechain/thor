@@ -301,7 +301,7 @@ func TestNodeID_hashAtDistance(t *testing.T) {
 	// we don't use quick.Check here because its output isn't
 	// very helpful when the test fails.
 	cfg := quickcfg()
-	for i := 0; i < cfg.MaxCount; i++ {
+	for i := range cfg.MaxCount {
 		a := gen(common.Hash{}, cfg.Rand).(common.Hash)
 		dist := cfg.Rand.Intn(len(common.Hash{}) * 8)
 		result := hashAtDistance(a, dist)

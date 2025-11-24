@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/vechain/thor/v2/p2p"
-	"github.com/vechain/thor/v2/p2p/discover"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/p2p"
+	"github.com/vechain/thor/v2/p2p/discover"
 	"github.com/vechain/thor/v2/thor"
 )
 

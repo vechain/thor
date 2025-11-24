@@ -28,6 +28,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -180,7 +181,7 @@ func (tab *Table) ReadRandomNodes(buf []*Node) (n int) {
 		buf[i] = &(*b[0])
 		buckets[j] = b[1:]
 		if len(b) == 1 {
-			buckets = append(buckets[:j], buckets[j+1:]...)
+			buckets = slices.Delete(buckets, j, j+1)
 		}
 		if len(buckets) == 0 {
 			break
@@ -714,7 +715,7 @@ func pushNode(list []*Node, n *Node, max int) ([]*Node, *Node) {
 func deleteNode(list []*Node, n *Node) []*Node {
 	for i := range list {
 		if list[i].ID == n.ID {
-			return append(list[:i], list[i+1:]...)
+			return slices.Delete(list, i, i+1)
 		}
 	}
 	return list

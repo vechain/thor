@@ -36,9 +36,7 @@ func TestTopicRadius(t *testing.T) {
 		dist := prefix ^ rad.topicHashPrefix
 		relDist := float64(dist) / float64(targetRad)
 		relTime := (1 - relDist/2) * 2
-		if relTime < 0 {
-			relTime = 0
-		}
+		relTime = max(relTime, 0)
 		return time.Duration(float64(targetWaitTime) * relTime)
 	}
 

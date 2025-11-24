@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"slices"
 	"sort"
 	"time"
 
@@ -442,7 +443,7 @@ func (s *ticketStore) removeTicketRef(ref ticketRef) {
 	if idx == -1 {
 		panic(nil)
 	}
-	list = append(list[:idx], list[idx+1:]...)
+	list = slices.Delete(list, idx, idx+1)
 	if len(list) != 0 {
 		tickets.buckets[bucket] = list
 	} else {
@@ -549,9 +550,7 @@ func (s *ticketStore) addTicket(localTime mclock.AbsTime, pingHash []byte, ticke
 	if _, ok := s.tickets[topic]; ok {
 		wait := ticket.regTime[topicIdx] - localTime
 		rnd := rand.ExpFloat64()
-		if rnd > 10 {
-			rnd = 10
-		}
+		rnd = min(rnd, 10)
 		if float64(wait) < float64(keepTicketConst)+float64(keepTicketExp)*rnd {
 			// use the ticket to register this topic
 			//fmt.Println("addTicket", ticket.node.ID[:8], ticket.node.addr().String(), ticket.serial, ticket.pong)
@@ -928,12 +927,7 @@ func (r *topicRadius) nextTarget(forceRegular bool) lookupInfo {
 func (r *topicRadius) adjustWithTicket(now mclock.AbsTime, targetHash common.Hash, t ticketRef) {
 	wait := t.t.regTime[t.idx] - t.t.issueTime
 	inside := float64(wait)/float64(targetWaitTime) - 0.5
-	if inside > 1 {
-		inside = 1
-	}
-	if inside < 0 {
-		inside = 0
-	}
+	inside = max(0, min(inside, 1))
 	r.adjust(now, targetHash, t.t.node.sha, inside)
 }
 

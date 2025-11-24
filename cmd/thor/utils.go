@@ -35,8 +35,6 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/p2p/discover"
-	"github.com/vechain/thor/v2/p2p/nat"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/vechain/thor/v2/builtin/staker"
@@ -49,6 +47,8 @@ import (
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
