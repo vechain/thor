@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package logdb
+package logsdb
 
 import (
 	"fmt"
@@ -45,8 +45,9 @@ type Transfer struct {
 type Order string
 
 const (
-	ASC  Order = "asc"
-	DESC Order = "desc"
+	ASC        Order = "asc"
+	DESC       Order = "desc"
+	refIDQuery       = "(SELECT id FROM ref WHERE data=?)"
 )
 
 type Range struct {
@@ -64,7 +65,7 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
+func (c *EventCriteria) ToWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.Address != nil {
 		cond += " AND address = " + refIDQuery
@@ -93,7 +94,7 @@ type TransferCriteria struct {
 	Recipient *thor.Address // who received tokens
 }
 
-func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
+func (c *TransferCriteria) ToWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.TxOrigin != nil {
 		cond += " AND txOrigin = " + refIDQuery
@@ -115,4 +116,16 @@ type TransferFilter struct {
 	Range       *Range
 	Options     *Options
 	Order       Order // default asc
+}
+
+func removeLeadingZeros(bytes []byte) []byte {
+	i := 0
+	// increase i until it reaches the first non-zero byte
+	for ; i < len(bytes) && bytes[i] == 0; i++ {
+	}
+	// ensure at least 1 byte exists
+	if i == len(bytes) {
+		return []byte{0}
+	}
+	return bytes[i:]
 }

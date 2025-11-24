@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -201,7 +201,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, nonExistentDelegator.Multiplier, uint8(0))
 	require.False(t, nonExistentDelegator.Locked)
 
-	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logdb.ASC)
+	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, queuedEvents, 1)
 	require.Equal(t, validator.Address, queuedEvents[0].Endorser)
@@ -233,7 +233,7 @@ func TestStaker(t *testing.T) {
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
-	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logdb.ASC)
+	increaseEvents, err := staker.FilterStakeIncreased(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, increaseEvents, 1)
 	require.Equal(t, validator.Address, increaseEvents[0].Validator)
@@ -249,7 +249,7 @@ func TestStaker(t *testing.T) {
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
 	require.NoError(t, err)
 
-	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
+	decreaseEvents, err := staker.FilterStakeDecreased(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, decreaseEvents, 1)
 	require.Equal(t, queuedID, decreaseEvents[0].Validator)
@@ -262,7 +262,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, receipt.Reverted)
 
-	decreaseEvents, err = staker.FilterStakeDecreased(newRange(receipt), nil, logdb.ASC)
+	decreaseEvents, err = staker.FilterStakeDecreased(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, decreaseEvents, 0)
 
@@ -290,7 +290,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
-	delegationEvents, err := staker.FilterDelegationAdded(newRange(receipt), nil, logdb.ASC)
+	delegationEvents, err := staker.FilterDelegationAdded(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, delegationEvents, 1)
 	delegationID := delegationEvents[0].DelegationID
@@ -335,7 +335,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// DelegationSignaledExit may not emit while queued; ensure no crash and zero events
-	delegationSignaledExit, err := staker.FilterDelegationSignaledExit(newRange(receipt), nil, logdb.ASC)
+	delegationSignaledExit, err := staker.FilterDelegationSignaledExit(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, delegationSignaledExit, 1)
 
@@ -347,7 +347,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	// No events for signal exit when state is queued
-	autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logdb.ASC)
+	autoRenewEvents, err := staker.FilterValidationSignaledExit(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, autoRenewEvents, 1)
 
@@ -356,7 +356,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
-	withdrawEvents, err := staker.FilterValidationWithdrawn(newRange(receipt), nil, logdb.ASC)
+	withdrawEvents, err := staker.FilterValidationWithdrawn(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, withdrawEvents, 1)
 
@@ -369,7 +369,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
-	withdrawDelegationEvents, err := staker.FilterDelegationWithdrawn(newRange(receipt), nil, logdb.ASC)
+	withdrawDelegationEvents, err := staker.FilterDelegationWithdrawn(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, withdrawDelegationEvents, 1)
 
@@ -408,7 +408,7 @@ func TestStaker(t *testing.T) {
 	require.NoError(t, err)
 	DebugRevert(t, receipt, staker.SetBeneficiary(queuedID, beneficiary))
 
-	beneficiaryEvents, err := staker.FilterBeneficiarySet(newRange(receipt), nil, logdb.ASC)
+	beneficiaryEvents, err := staker.FilterBeneficiarySet(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, beneficiaryEvents, 1)
 	require.Equal(t, validator1.Address(), beneficiaryEvents[0].Validator)
@@ -455,15 +455,15 @@ func TestStaker_Filter_EventNotFound(t *testing.T) {
 		name string
 		call func() error
 	}{
-		{"ValidationQueued", func() error { _, err := bad.FilterValidatorQueued(nil, nil, logdb.ASC); return err }},
-		{"ValidationSignaledExit", func() error { _, err := bad.FilterValidationSignaledExit(nil, nil, logdb.ASC); return err }},
-		{"DelegationAdded", func() error { _, err := bad.FilterDelegationAdded(nil, nil, logdb.ASC); return err }},
-		{"DelegationSignaledExit", func() error { _, err := bad.FilterDelegationSignaledExit(nil, nil, logdb.ASC); return err }},
-		{"DelegationWithdrawn", func() error { _, err := bad.FilterDelegationWithdrawn(nil, nil, logdb.ASC); return err }},
-		{"StakeIncreased", func() error { _, err := bad.FilterStakeIncreased(nil, nil, logdb.ASC); return err }},
-		{"StakeDecreased", func() error { _, err := bad.FilterStakeDecreased(nil, nil, logdb.ASC); return err }},
-		{"BeneficiarySet", func() error { _, err := bad.FilterBeneficiarySet(nil, nil, logdb.ASC); return err }},
-		{"ValidationWithdrawn", func() error { _, err := bad.FilterValidationWithdrawn(nil, nil, logdb.ASC); return err }},
+		{"ValidationQueued", func() error { _, err := bad.FilterValidatorQueued(nil, nil, logsdb.ASC); return err }},
+		{"ValidationSignaledExit", func() error { _, err := bad.FilterValidationSignaledExit(nil, nil, logsdb.ASC); return err }},
+		{"DelegationAdded", func() error { _, err := bad.FilterDelegationAdded(nil, nil, logsdb.ASC); return err }},
+		{"DelegationSignaledExit", func() error { _, err := bad.FilterDelegationSignaledExit(nil, nil, logsdb.ASC); return err }},
+		{"DelegationWithdrawn", func() error { _, err := bad.FilterDelegationWithdrawn(nil, nil, logsdb.ASC); return err }},
+		{"StakeIncreased", func() error { _, err := bad.FilterStakeIncreased(nil, nil, logsdb.ASC); return err }},
+		{"StakeDecreased", func() error { _, err := bad.FilterStakeDecreased(nil, nil, logsdb.ASC); return err }},
+		{"BeneficiarySet", func() error { _, err := bad.FilterBeneficiarySet(nil, nil, logsdb.ASC); return err }},
+		{"ValidationWithdrawn", func() error { _, err := bad.FilterValidationWithdrawn(nil, nil, logsdb.ASC); return err }},
 	}
 
 	for _, tc := range cases {
@@ -597,7 +597,7 @@ func TestStaker_Next_NoNext(t *testing.T) {
 	require.NoError(t, err)
 	DebugRevert(t, receipt, method)
 
-	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logdb.ASC)
+	queuedEvents, err := staker.FilterValidatorQueued(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, queuedEvents, 1)
 	queuedID := queuedEvents[0].Node

@@ -31,7 +31,7 @@ import (
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
@@ -397,7 +397,7 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	var mainDB *muxdb.MuxDB
-	var logDB *logdb.LogDB
+	var logDB logsdb.LogDB
 	var instanceDir string
 
 	if ctx.Bool(persistFlag.Name) {

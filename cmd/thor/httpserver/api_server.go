@@ -33,7 +33,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
@@ -71,7 +71,7 @@ func StartAPIServer(
 	repo *chain.Repository,
 	stater *state.Stater,
 	txPool txpool.Pool,
-	logDB *logdb.LogDB,
+	logDB logsdb.LogDB,
 	bft bft.Committer,
 	nw api.Network,
 	forkConfig *thor.ForkConfig,

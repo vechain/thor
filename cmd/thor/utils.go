@@ -47,7 +47,8 @@ import (
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
+	"github.com/vechain/thor/v2/logsdb/sqlite3"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
@@ -381,16 +382,16 @@ func suggestFDCache() int {
 	return n
 }
 
-func openLogDB(dir string) (*logdb.LogDB, error) {
+func openLogDB(dir string) (logsdb.LogDB, error) {
 	path := filepath.Join(dir, "logs-v2.db")
-	db, err := logdb.New(path)
+	db, err := sqlite3.New(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open log database [%v]", path)
 	}
 	return db, nil
 }
 
-func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logdb.LogDB) (*chain.Repository, error) {
+func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB logsdb.LogDB) (*chain.Repository, error) {
 	genesisBlock, genesisEvents, genesisTransfers, err := gene.Build(state.NewStater(mainDB))
 	if err != nil {
 		return nil, errors.Wrap(err, "build genesis block")
@@ -645,8 +646,8 @@ func openMemMainDB() *muxdb.MuxDB {
 	return muxdb.NewMem()
 }
 
-func openMemLogDB() *logdb.LogDB {
-	db, err := logdb.NewMem()
+func openMemLogDB() logsdb.LogDB {
+	db, err := sqlite3.NewMem()
 	if err != nil {
 		panic(errors.Wrap(err, "open log database"))
 	}

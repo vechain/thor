@@ -16,16 +16,16 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 )
 
 type Events struct {
 	repo  *chain.Repository
-	db    *logdb.LogDB
+	db    logsdb.LogDB
 	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Events {
+func New(repo *chain.Repository, db logsdb.LogDB, logsLimit uint64) *Events {
 	return &Events{
 		repo,
 		db,

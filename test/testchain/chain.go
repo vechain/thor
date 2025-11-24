@@ -23,7 +23,8 @@ import (
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
+	"github.com/vechain/thor/v2/logsdb/sqlite3"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/runtime"
@@ -44,7 +45,7 @@ type Chain struct {
 	repo         *chain.Repository
 	stater       *state.Stater
 	genesisBlock *block.Block
-	logDB        *logdb.LogDB
+	logDB        logsdb.LogDB
 	forkConfig   *thor.ForkConfig
 }
 
@@ -55,7 +56,7 @@ func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	genesisBlock *block.Block,
-	logDB *logdb.LogDB,
+	logDB logsdb.LogDB,
 	forkConfig *thor.ForkConfig,
 ) *Chain {
 	return &Chain{
@@ -133,7 +134,7 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	}
 
 	// Create an inMemory logdb
-	logDb, err := logdb.NewMem()
+	logDb, err := sqlite3.NewMem()
 	if err != nil {
 		return nil, err
 	}
@@ -359,6 +360,6 @@ func (c *Chain) Database() *muxdb.MuxDB {
 }
 
 // LogDB returns the current logdb.
-func (c *Chain) LogDB() *logdb.LogDB {
+func (c *Chain) LogDB() logsdb.LogDB {
 	return c.logDB
 }

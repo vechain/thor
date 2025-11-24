@@ -16,16 +16,16 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 )
 
 type Transfers struct {
 	repo  *chain.Repository
-	db    *logdb.LogDB
+	db    logsdb.LogDB
 	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Transfers {
+func New(repo *chain.Repository, db logsdb.LogDB, logsLimit uint64) *Transfers {
 	return &Transfers{
 		repo,
 		db,
@@ -40,10 +40,10 @@ func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*
 		return nil, err
 	}
 
-	transfers, err := t.db.FilterTransfers(ctx, &logdb.TransferFilter{
+	transfers, err := t.db.FilterTransfers(ctx, &logsdb.TransferFilter{
 		CriteriaSet: filter.CriteriaSet,
 		Range:       rng,
-		Options: &logdb.Options{
+		Options: &logsdb.Options{
 			Offset: filter.Options.Offset,
 			Limit:  *filter.Options.Limit,
 		},
