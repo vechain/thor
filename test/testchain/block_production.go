@@ -52,11 +52,11 @@ func (c *Chain) MintBlock(transactions ...*tx.Transaction) error {
 		return fmt.Errorf("unable to process block: %w", err)
 	}
 
-	return c.AddBlock(newBlk, stage, receipts)
+	return c.CommitBlock(newBlk, stage, receipts)
 }
 
-// AddBlock manually adds a new block to the chain.
-func (c *Chain) AddBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
+// CommitBlock manually adds a new block to the chain.
+func (c *Chain) CommitBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
 	// Commit the new block to the chain's state.
 	if _, err := stage.Commit(); err != nil {
 		return fmt.Errorf("unable to commit tx: %w", err)
