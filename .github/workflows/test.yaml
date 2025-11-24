@@ -14,12 +14,11 @@ jobs:
   unit_tests:
     strategy:
       matrix:
-        go-version: [1.25.x]
+        go-version: [1.25.4]
         os: [ubuntu-latest, macos-latest, windows-latest]
-# uncomment to include future versions of go
-#        include:
-#          - go-version: 1.26.x
-#            os: ubuntu-latest
+        include:
+          - go-version: 1.25.x
+            os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
