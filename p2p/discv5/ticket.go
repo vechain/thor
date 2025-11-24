@@ -279,7 +279,7 @@ func (s *ticketStore) ticketsInWindow(topic Topic) []ticketRef {
 	var tickets []ticketRef
 
 	buckets := s.tickets[topic].buckets
-	for idx := timeBucket(0); idx < timeWindow; idx++ {
+	for idx := range timeBucket(timeWindow) {
 		tickets = append(tickets, buckets[s.lastBucketFetched+idx]...)
 	}
 	log.Trace("Retrieved discovery registration tickets", "topic", topic, "from", s.lastBucketFetched, "tickets", len(tickets))
@@ -759,7 +759,7 @@ func (r *topicRadius) targetForBucket(bucket int) common.Hash {
 func globalRandRead(b []byte) {
 	pos := 0
 	val := 0
-	for n := 0; n < len(b); n++ {
+	for n := range b {
 		if pos == 0 {
 			val = rand.Int()
 			pos = 7
@@ -889,10 +889,7 @@ func (r *topicRadius) recalcRadius() (radius uint64, radiusLookup int) {
 	if radiusLookup == -1 {
 		// no more radius lookups needed at the moment, return a radius
 		r.converged = true
-		rad := maxBucket
-		if minRadBucket < rad {
-			rad = minRadBucket
-		}
+		rad := min(minRadBucket, maxBucket)
 		radius = ^uint64(0)
 		if rad > 0 {
 			radius = uint64(math.Pow(2, 64-float64(rad)/radiusBucketsPerBit))
@@ -913,10 +910,7 @@ func (r *topicRadius) nextTarget(forceRegular bool) lookupInfo {
 		}
 	}
 
-	radExt := r.radius / 2
-	if radExt > maxRadius-r.radius {
-		radExt = maxRadius - r.radius
-	}
+	radExt := min(r.radius/2, maxRadius-r.radius)
 	rnd := randUint64n(r.radius) + randUint64n(2*radExt)
 	if rnd > radExt {
 		rnd -= radExt

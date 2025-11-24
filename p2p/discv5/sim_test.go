@@ -318,7 +318,7 @@ func (st *simTransport) localAddr() *net.UDPAddr {
 
 func (st *simTransport) Close() {}
 
-func (st *simTransport) send(remote *Node, ptype nodeEvent, data interface{}) (hash []byte) {
+func (st *simTransport) send(remote *Node, ptype nodeEvent, data any) (hash []byte) {
 	hash = st.nextHash()
 	var raw []byte
 	if ptype == pongPacket {

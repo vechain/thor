@@ -88,7 +88,7 @@ func ParseNetlist(s string) (*Netlist, error) {
 }
 
 // MarshalTOML implements toml.MarshalerRec.
-func (l Netlist) MarshalTOML() interface{} {
+func (l Netlist) MarshalTOML() any {
 	list := make([]string, 0, len(l))
 	for _, net := range l {
 		list = append(list, net.String())
@@ -97,7 +97,7 @@ func (l Netlist) MarshalTOML() interface{} {
 }
 
 // UnmarshalTOML implements toml.UnmarshalerRec.
-func (l *Netlist) UnmarshalTOML(fn func(interface{}) error) error {
+func (l *Netlist) UnmarshalTOML(fn func(any) error) error {
 	var masks []string
 	if err := fn(&masks); err != nil {
 		return err
@@ -280,10 +280,7 @@ func (s *DistinctNetSet) key(ip net.IP) net.IP {
 	if ip4 := ip.To4(); ip4 != nil {
 		typ, ip = '4', ip4
 	}
-	bits := s.Subnet
-	if bits > uint(len(ip)*8) {
-		bits = uint(len(ip) * 8)
-	}
+	bits := min(s.Subnet, uint(len(ip)*8))
 	// Encode the prefix into s.buf.
 	nb := int(bits / 8)
 	mask := ^byte(0xFF >> (bits % 8))

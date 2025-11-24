@@ -201,10 +201,7 @@ func TestTable_closest(t *testing.T) {
 		}
 
 		// check that the number of results is min(N, tablen)
-		wantN := test.N
-		if tab.count < test.N {
-			wantN = tab.count
-		}
+		wantN := min(tab.count, test.N)
 		if len(result) != wantN {
 			t.Errorf("wrong number of nodes: got %d, want %d", len(result), wantN)
 			return false
@@ -245,7 +242,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 	}
 	test := func(buf []*Node) bool {
 		tab := newTable(NodeID{}, &net.UDPAddr{})
-		for i := 0; i < len(buf); i++ {
+		for range buf {
 			ld := cfg.Rand.Intn(len(tab.buckets))
 			tab.stuff([]*Node{nodeAtDistance(tab.self.sha, ld)})
 		}
@@ -320,7 +317,7 @@ func contains(ns []*Node, id NodeID) bool {
 
 // gen wraps quick.Value so it's easier to use.
 // it generates a random value of the given value's type.
-func gen(typ interface{}, rand *rand.Rand) interface{} {
+func gen(typ any, rand *rand.Rand) any {
 	v, ok := quick.Value(reflect.TypeOf(typ), rand)
 	if !ok {
 		panic(fmt.Sprintf("couldn't generate random value of type %T", typ))

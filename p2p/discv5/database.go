@@ -177,7 +177,7 @@ func (db *nodeDB) storeInt64(key []byte, n int64) error {
 	return db.lvl.Put(key, blob, nil)
 }
 
-func (db *nodeDB) storeRLP(key []byte, val interface{}) error {
+func (db *nodeDB) storeRLP(key []byte, val any) error {
 	blob, err := rlp.EncodeToBytes(val)
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func (db *nodeDB) storeRLP(key []byte, val interface{}) error {
 	return db.lvl.Put(key, blob, nil)
 }
 
-func (db *nodeDB) fetchRLP(key []byte, val interface{}) error {
+func (db *nodeDB) fetchRLP(key []byte, val any) error {
 	blob, err := db.lvl.Get(key, nil)
 	if err != nil {
 		return err

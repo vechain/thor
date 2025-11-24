@@ -46,12 +46,12 @@ type Protocol struct {
 
 	// NodeInfo is an optional helper method to retrieve protocol specific metadata
 	// about the host node.
-	NodeInfo func() interface{}
+	NodeInfo func() any
 
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
-	PeerInfo func(id discover.NodeID) interface{}
+	PeerInfo func(id discover.NodeID) any
 }
 
 func (p Protocol) cap() Cap {
@@ -64,8 +64,8 @@ type Cap struct {
 	Version uint
 }
 
-func (cap Cap) RlpData() interface{} {
-	return []interface{}{cap.Name, cap.Version}
+func (cap Cap) RlpData() any {
+	return []any{cap.Name, cap.Version}
 }
 
 func (cap Cap) String() string {

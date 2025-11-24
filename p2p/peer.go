@@ -351,7 +351,6 @@ outer:
 func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error) {
 	p.wg.Add(len(p.running))
 	for _, proto := range p.running {
-		proto := proto
 		proto.closed = p.closed
 		proto.wstart = writeStart
 		proto.werr = writeErr
@@ -438,7 +437,7 @@ type PeerInfo struct {
 		Trusted       bool   `json:"trusted"`
 		Static        bool   `json:"static"`
 	} `json:"network"`
-	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
+	Protocols map[string]any `json:"protocols"` // Sub-protocol specific metadata fields
 }
 
 // Info gathers and returns a collection of metadata known about a peer.
@@ -453,7 +452,7 @@ func (p *Peer) Info() *PeerInfo {
 		ID:        p.ID().String(),
 		Name:      p.Name(),
 		Caps:      caps,
-		Protocols: make(map[string]interface{}),
+		Protocols: make(map[string]any),
 	}
 	info.Network.LocalAddress = p.LocalAddr().String()
 	info.Network.RemoteAddress = p.RemoteAddr().String()
@@ -463,7 +462,7 @@ func (p *Peer) Info() *PeerInfo {
 
 	// Gather all the running protocol infos
 	for _, proto := range p.running {
-		protoInfo := interface{}("unknown")
+		protoInfo := any("unknown")
 		if query := proto.Protocol.PeerInfo; query != nil {
 			if metadata := query(p.ID()); metadata != nil {
 				protoInfo = metadata

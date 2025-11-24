@@ -257,7 +257,7 @@ func TestPythonInterop(t *testing.T) {
 	if addr := r.NodeAddr(); !bytes.Equal(addr, wantAddr) {
 		t.Errorf("wrong addr: got %x, want %x", addr, wantAddr)
 	}
-	want := map[Entry]interface{}{new(IP): &wantIP, new(UDP): &wantUDP}
+	want := map[Entry]any{new(IP): &wantIP, new(UDP): &wantUDP}
 	for k, v := range want {
 		desc := fmt.Sprintf("loading key %q", k.ENRKey())
 		if assert.NoError(t, r.Load(k), desc) {
@@ -288,7 +288,7 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 
 	// random key/value pairs for testing
 	pairs := map[string]uint32{}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		key := randomString(7)
 		value := rnd.Uint32()
 		pairs[key] = value
@@ -310,7 +310,7 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 
 func BenchmarkDecode(b *testing.B) {
 	var r Record
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rlp.DecodeBytes(pyRecord, &r)
 	}
 	b.StopTimer()

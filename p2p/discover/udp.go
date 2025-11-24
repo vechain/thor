@@ -191,7 +191,7 @@ type pending struct {
 	// true, the callback is removed from the pending reply queue.
 	// if it returns false, the reply is considered incomplete and
 	// the callback will be invoked again for the next matching reply.
-	callback func(resp interface{}) (done bool)
+	callback func(resp any) (done bool)
 
 	// errc receives nil when the callback indicates completion or an
 	// error if no further reply is received within the timeout.
@@ -201,7 +201,7 @@ type pending struct {
 type reply struct {
 	from  NodeID
 	ptype byte
-	data  interface{}
+	data  any
 	// loop indicates whether there was
 	// a matching request by sending on this channel.
 	matched chan<- bool
@@ -288,7 +288,7 @@ func (t *udp) sendPing(toid NodeID, toaddr *net.UDPAddr, callback func()) <-chan
 		errc <- err
 		return errc
 	}
-	errc := t.pending(toid, pongPacket, func(p interface{}) bool {
+	errc := t.pending(toid, pongPacket, func(p any) bool {
 		ok := bytes.Equal(p.(*pong).ReplyTok, hash)
 		if ok && callback != nil {
 			callback()
@@ -300,7 +300,7 @@ func (t *udp) sendPing(toid NodeID, toaddr *net.UDPAddr, callback func()) <-chan
 }
 
 func (t *udp) waitping(from NodeID) error {
-	return <-t.pending(from, pingPacket, func(interface{}) bool { return true })
+	return <-t.pending(from, pingPacket, func(any) bool { return true })
 }
 
 // findnode sends a findnode request to the given node and waits until
@@ -315,7 +315,7 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 
 	nodes := make([]*Node, 0, bucketSize)
 	nreceived := 0
-	errc := t.pending(toid, neighborsPacket, func(r interface{}) bool {
+	errc := t.pending(toid, neighborsPacket, func(r any) bool {
 		reply := r.(*neighbors)
 		for _, rn := range reply.Nodes {
 			nreceived++
@@ -337,7 +337,7 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 
 // pending adds a reply callback to the pending reply queue.
 // see the documentation of type pending for a detailed explanation.
-func (t *udp) pending(id NodeID, ptype byte, callback func(interface{}) bool) <-chan error {
+func (t *udp) pending(id NodeID, ptype byte, callback func(any) bool) <-chan error {
 	ch := make(chan error, 1)
 	p := &pending{from: id, ptype: ptype, callback: callback, errc: ch}
 	select {
@@ -499,7 +499,7 @@ func (t *udp) write(toaddr *net.UDPAddr, what string, packet []byte) error {
 	return err
 }
 
-func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (packet, hash []byte, err error) {
+func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req any) (packet, hash []byte, err error) {
 	b := new(bytes.Buffer)
 	b.Write(headSpace)
 	b.WriteByte(ptype)

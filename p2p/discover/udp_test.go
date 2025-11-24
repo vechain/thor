@@ -91,7 +91,7 @@ func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
 
 // waits for a packet to be sent by the transport.
 // validate should have type func(*udpTest, X) error, where X is a packet type.
-func (test *udpTest) waitPacketOut(validate interface{}) ([]byte, error) {
+func (test *udpTest) waitPacketOut(validate any) ([]byte, error) {
 	dgram := test.pipe.waitPacketOut()
 	p, _, hash, err := decodePacket(dgram)
 	if err != nil {
@@ -106,7 +106,7 @@ func (test *udpTest) waitPacketOut(validate interface{}) ([]byte, error) {
 	return hash, nil
 }
 
-func (test *udpTest) errorf(format string, args ...interface{}) error {
+func (test *udpTest) errorf(format string, args ...any) error {
 	_, file, line, ok := runtime.Caller(2) // errorf + waitPacketOut
 	if ok {
 		file = filepath.Base(file)
@@ -158,14 +158,14 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		nilErr     = make(chan error, nReqs) // for requests that get a reply
 		timeoutErr = make(chan error, nReqs) // for requests that time out
 	)
-	for i := 0; i < nReqs; i++ {
+	for i := range nReqs {
 		// Create a matcher for a random request in udp.loop. Requests
 		// with ptype <= 128 will not get a reply and should time out.
 		// For all other requests, a reply is scheduled to arrive
 		// within the timeout window.
 		p := &pending{
 			ptype:    byte(rand.Intn(255)),
-			callback: func(interface{}) bool { return true },
+			callback: func(any) bool { return true },
 		}
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
 		if p.ptype <= 128 {
@@ -190,7 +190,7 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		recvDeadline        = time.After(20 * time.Second)
 		nTimeoutsRecv, nNil = 0, 0
 	)
-	for i := 0; i < nReqs; i++ {
+	for i := range nReqs {
 		select {
 		case err := <-timeoutErr:
 			if err != errTimeout {
@@ -240,7 +240,7 @@ func TestUDP_findnode(t *testing.T) {
 	// take care not to overflow any bucket.
 	targetHash := crypto.Keccak256Hash(testTarget[:])
 	nodes := &nodesByDistance{target: targetHash}
-	for i := 0; i < bucketSize; i++ {
+	for i := range bucketSize {
 		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)
 	}
 	test.table.stuff(nodes.entries)
@@ -390,7 +390,7 @@ func TestUDP_successfulPing(t *testing.T) {
 
 var testPackets = []struct {
 	input      string
-	wantPacket interface{}
+	wantPacket any
 }{
 	{
 		input: "71dbda3a79554728d4f94411e42ee1f8b0d561c10e1e5f5893367948c6a7d70bb87b235fa28a77070271b6c164a2dce8c7e13a5739b53b5e96f2e5acb0e458a02902f5965d55ecbeb2ebb6cabb8b2b232896a36b737666c55265ad0a68412f250001ea04cb847f000001820cfa8215a8d790000000000000000000000000000000018208ae820d058443b9a355",

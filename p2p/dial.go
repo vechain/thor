@@ -421,10 +421,10 @@ func (h *dialHistory) expire(now time.Time) {
 func (h dialHistory) Len() int           { return len(h) }
 func (h dialHistory) Less(i, j int) bool { return h[i].exp.Before(h[j].exp) }
 func (h dialHistory) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *dialHistory) Push(x interface{}) {
+func (h *dialHistory) Push(x any) {
 	*h = append(*h, x.(pastDial))
 }
-func (h *dialHistory) Pop() interface{} {
+func (h *dialHistory) Pop() any {
 	old := *h
 	n := len(old)
 	x := old[n-1]

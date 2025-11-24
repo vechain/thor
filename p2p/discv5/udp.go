@@ -209,7 +209,7 @@ type ingressPacket struct {
 	remoteAddr *net.UDPAddr
 	ev         nodeEvent
 	hash       []byte
-	data       interface{} // one of the RPC structs
+	data       any // one of the RPC structs
 	rawData    []byte
 }
 
@@ -257,7 +257,7 @@ func (t *udp) Close() {
 	t.conn.Close()
 }
 
-func (t *udp) send(remote *Node, ptype nodeEvent, data interface{}) (hash []byte) {
+func (t *udp) send(remote *Node, ptype nodeEvent, data any) (hash []byte) {
 	hash, _ = t.sendPacket(remote.ID, remote.addr(), byte(ptype), data)
 	return hash
 }
@@ -326,7 +326,7 @@ func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node)
 	}
 }
 
-func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req interface{}) (hash []byte, err error) {
+func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req any) (hash []byte, err error) {
 	//fmt.Println("sendPacket", nodeEvent(ptype), toaddr.String(), toid.String())
 	packet, hash, err := encodePacket(t.priv, ptype, req)
 	if err != nil {
@@ -343,7 +343,7 @@ func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req inter
 // zeroed padding space for encodePacket.
 var headSpace = make([]byte, headSize)
 
-func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash []byte, err error) {
+func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req any) (p, hash []byte, err error) {
 	b := new(bytes.Buffer)
 	b.Write(headSpace)
 	b.WriteByte(ptype)

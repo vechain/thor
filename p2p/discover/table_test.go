@@ -137,7 +137,7 @@ func TestTable_IPLimit(t *testing.T) {
 	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
 	defer tab.Close()
 
-	for i := 0; i < tableIPLimit+1; i++ {
+	for i := range tableIPLimit + 1 {
 		n := nodeAtDistance(tab.self.sha, i)
 		n.IP = net.IP{172, 0, 1, byte(i)}
 		tab.add(n)
@@ -154,7 +154,7 @@ func TestTable_BucketIPLimit(t *testing.T) {
 	defer tab.Close()
 
 	d := 3
-	for i := 0; i < bucketIPLimit+1; i++ {
+	for i := range bucketIPLimit + 1 {
 		n := nodeAtDistance(tab.self.sha, d)
 		n.IP = net.IP{172, 0, 1, byte(i)}
 		tab.add(n)
@@ -286,7 +286,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 		defer tab.Close()
 		<-tab.initDone
 
-		for i := 0; i < len(buf); i++ {
+		for range buf {
 			ld := cfg.Rand.Intn(len(tab.buckets))
 			tab.stuff([]*Node{nodeAtDistance(tab.self.sha, ld)})
 		}
@@ -645,7 +645,7 @@ func contains(ns []*Node, id NodeID) bool {
 
 // gen wraps quick.Value so it's easier to use.
 // it generates a random value of the given value's type.
-func gen(typ interface{}, rand *rand.Rand) interface{} {
+func gen(typ any, rand *rand.Rand) any {
 	v, ok := quick.Value(reflect.TypeOf(typ), rand)
 	if !ok {
 		panic(fmt.Sprintf("couldn't generate random value of type %T", typ))

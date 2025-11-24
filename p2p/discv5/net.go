@@ -97,7 +97,7 @@ type transport interface {
 	sendTopicRegister(remote *Node, topics []Topic, topicIdx int, pong []byte)
 	sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node)
 
-	send(remote *Node, ptype nodeEvent, p interface{}) (hash []byte)
+	send(remote *Node, ptype nodeEvent, p any) (hash []byte)
 
 	localAddr() *net.UDPAddr
 	Close()
@@ -1239,7 +1239,7 @@ func (net *Network) checkTopicRegister(data *topicRegister) (*pong, error) {
 	return pongpkt.data.(*pong), nil
 }
 
-func rlpHash(x interface{}) (h common.Hash) {
+func rlpHash(x any) (h common.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])

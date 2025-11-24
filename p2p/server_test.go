@@ -240,7 +240,7 @@ func TestServerTaskScheduling(t *testing.T) {
 	}()
 
 	var gotdone []*testTask
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		gotdone = append(gotdone, <-done)
 	}
 	for i, task := range gotdone {
@@ -308,7 +308,7 @@ func TestServerManyTasks(t *testing.T) {
 			}
 		case <-timeout:
 			t.Errorf("%d of %d tasks got done within 2s", len(doneset), len(alltasks))
-			for i := 0; i < len(alltasks); i++ {
+			for i := range alltasks {
 				if !doneset[i] {
 					t.Logf("task %d not done", i)
 				}
@@ -368,7 +368,7 @@ func TestServerAtCap(t *testing.T) {
 	}
 
 	// Inject a few connections to fill up the peer set.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		c := newconn(randomID())
 		if err := srv.checkpoint(c, srv.addpeer); err != nil {
 			t.Fatalf("could not add conn %d: %v", i, err)

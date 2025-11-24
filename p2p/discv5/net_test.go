@@ -288,7 +288,7 @@ func (tn *preminedTestnet) sendPing(to *Node, addr *net.UDPAddr, topics []Topic)
 	return []byte{1}
 }
 
-func (tn *preminedTestnet) send(to *Node, ptype nodeEvent, data interface{}) (hash []byte) {
+func (tn *preminedTestnet) send(to *Node, ptype nodeEvent, data any) (hash []byte) {
 	switch ptype {
 	case pingPacket:
 		injectResponse(tn.net, to, pongPacket, &pong{ReplyTok: []byte{1}})
@@ -369,6 +369,6 @@ func (tn *preminedTestnet) mine(target NodeID) {
 	fmt.Println("}")
 }
 
-func injectResponse(net *Network, from *Node, ev nodeEvent, packet interface{}) {
+func injectResponse(net *Network, from *Node, ev nodeEvent, packet any) {
 	go net.reqReadPacket(ingressPacket{remoteID: from.ID, remoteAddr: from.addr(), ev: ev, data: packet})
 }

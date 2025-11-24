@@ -345,10 +345,7 @@ func (w *waitControlLoop) registered(tm mclock.AbsTime) {
 
 func (w *waitControlLoop) nextWaitPeriod(tm mclock.AbsTime) time.Duration {
 	period := tm - w.lastIncoming
-	wp := time.Duration(float64(w.waitPeriod) * math.Exp((float64(wcTargetRegInterval)-float64(period))/float64(wcTimeConst)))
-	if wp < minWaitPeriod {
-		wp = minWaitPeriod
-	}
+	wp := max(time.Duration(float64(w.waitPeriod)*math.Exp((float64(wcTargetRegInterval)-float64(period))/float64(wcTimeConst))), minWaitPeriod)
 	return wp
 }
 
@@ -385,14 +382,14 @@ func (tq topicRequestQueue) Swap(i, j int) {
 	tq[j].index = j
 }
 
-func (tq *topicRequestQueue) Push(x interface{}) {
+func (tq *topicRequestQueue) Push(x any) {
 	n := len(*tq)
 	item := x.(*topicRequestQueueItem)
 	item.index = n
 	*tq = append(*tq, item)
 }
 
-func (tq *topicRequestQueue) Pop() interface{} {
+func (tq *topicRequestQueue) Pop() any {
 	old := *tq
 	n := len(old)
 	item := old[n-1]
