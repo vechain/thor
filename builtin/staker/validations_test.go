@@ -616,12 +616,12 @@ func TestStaker_Next(t *testing.T) {
 		leaderGroup = append(leaderGroup, addr)
 	}
 
-	queuedGroup := [100]thor.Address{}
-	for i := range 100 {
+	queuedGroup := make([]thor.Address, 0, 100)
+	for range 100 {
 		addr := datagen.RandAddress()
 		stake := RandomStake()
 		staker.AddValidation(addr, addr, thor.MediumStakingPeriod(), stake)
-		queuedGroup[i] = addr
+		queuedGroup = append(queuedGroup, addr)
 	}
 
 	firstLeader, _ := staker.FirstActive()
