@@ -16,11 +16,7 @@ type Goes struct {
 
 // Go run f in go routine.
 func (g *Goes) Go(f func()) {
-	g.wg.Add(1)
-	go func() {
-		defer g.wg.Done()
-		f()
-	}()
+	g.wg.Go(f)
 }
 
 // Wait wait for all go routines started by 'Go' done.

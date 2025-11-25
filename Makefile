@@ -84,14 +84,14 @@ lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
 	@echo "running golangci-lint..."
 	@golangci-lint run --config .golangci.yml
 	@echo "running modernize..."
-	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 ./...
+	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.20.0 ./...
 	@echo "done."
 
 lint-fix: | go_version_check lint_command_check #@ Attempt to fix linting issues
 	@echo "running golangci-lint..."
 	@golangci-lint run --config .golangci.yml --fix
 	@echo "running modernize..."
-	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.18.1 --fix ./...
+	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.20.0 --fix ./...
 	@echo "running builtin generator..."
 	@go generate ./builtin/gen
 	@echo "done."
