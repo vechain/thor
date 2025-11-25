@@ -176,8 +176,8 @@ func TestNode_Run(t *testing.T) {
 		assert.NoError(t, err, "Node run should not return an error")
 	}()
 
-	// Allow some time for the node to start
-	time.Sleep(100 * time.Millisecond)
+	<-ctx.Done() // Wait for context to be done
+	// If we reach here without errors, the test passes
 }
 
 func TestNode_GuardBlockProcessing_NormalNewBlock(t *testing.T) {
