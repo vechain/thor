@@ -15,12 +15,28 @@ import (
 	"github.com/vechain/thor/v2/log"
 )
 
+type statusCodeCaptor struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (s *statusCodeCaptor) WriteHeader(code int) {
+	s.statusCode = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
 // RequestLoggerMiddleware returns a middleware to ensure requests are syphoned into the writer
-func RequestLoggerMiddleware(logger log.Logger, enabled *atomic.Bool, slowQueriesThreshold time.Duration) func(http.Handler) http.Handler {
+func RequestLoggerMiddleware(
+	logger log.Logger,
+	enabled *atomic.Bool,
+	slowQueriesThreshold time.Duration,
+	log5xxErrors bool,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// If api logging is not enabled and slow queries threshold is set to 0, api logs won't be recorded
-			if !enabled.Load() && slowQueriesThreshold == time.Duration(0) {
+			slowQueriesEnabled := slowQueriesThreshold > time.Duration(0)
+			if !enabled.Load() && !slowQueriesEnabled && !log5xxErrors {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -37,18 +53,31 @@ func RequestLoggerMiddleware(logger log.Logger, enabled *atomic.Bool, slowQuerie
 				r.Body = io.NopCloser(io.Reader(bytes.NewReader(bodyBytes)))
 			}
 
-			start := time.Now()
-			// call the original http.Handler we're wrapping
-			next.ServeHTTP(w, r)
+			captor := &statusCodeCaptor{ResponseWriter: w, statusCode: http.StatusOK}
 
+			start := time.Now()
+			next.ServeHTTP(captor, r)
 			duration := time.Since(start)
-			if enabled.Load() || duration > slowQueriesThreshold {
-				logger.Info("API Request",
+
+			message := ""
+			if enabled.Load() {
+				message = "API Request"
+			}
+			if slowQueriesEnabled && duration > slowQueriesThreshold {
+				message = "Slow API Request"
+			}
+			if log5xxErrors && captor.statusCode >= 500 {
+				message = "5xx API Request"
+			}
+
+			if message != "" {
+				logger.Info(message,
 					"DurationMs", duration.Milliseconds(),
 					"Timestamp", time.Now().Unix(),
 					"URI", r.URL.String(),
 					"Method", r.Method,
 					"Body", string(bodyBytes),
+					"StatusCode", captor.statusCode,
 				)
 			}
 		})

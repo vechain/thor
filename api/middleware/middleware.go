@@ -9,6 +9,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/vechain/thor/v2/api/doc"
@@ -64,6 +65,26 @@ func HandleRequestBodyLimit(maxBodySize int64) func(next http.Handler) http.Hand
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// HandlePanics is a middleware to recover panics in HTTP handlers.
+// If logEnabled is true, the stack trace will be printed to the standard output.
+func HandlePanics(logEnabled bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					status := http.StatusInternalServerError
+					text := http.StatusText(status)
+					http.Error(w, text, status)
+					if logEnabled {
+						println(string(debug.Stack()))
+					}
+				}
+			}()
 			next.ServeHTTP(w, r)
 		})
 	}
