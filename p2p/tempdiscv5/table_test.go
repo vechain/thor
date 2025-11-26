@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package discv5
+package tempdiscv5
 
 import (
 	"crypto/ecdsa"

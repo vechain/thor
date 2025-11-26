@@ -21,7 +21,7 @@ import (
 	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2p"
-	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -140,9 +140,9 @@ func (c *Communicator) Protocols() []*p2p.Protocol {
 }
 
 // DiscTopic returns the topic for p2p network discovery.
-func (c *Communicator) DiscTopic() discv5.Topic {
+func (c *Communicator) DiscTopic() tempdiscv5.Topic {
 	genesisID := c.repo.GenesisBlock().Header().ID()
-	return discv5.Topic(fmt.Sprintf("%v1@%x", proto.Name, genesisID[24:]))
+	return tempdiscv5.Topic(fmt.Sprintf("%v1@%x", proto.Name, genesisID[24:]))
 }
 
 // Start start the communicator.

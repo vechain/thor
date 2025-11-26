@@ -32,9 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/v2/p2p/discover"
-	"github.com/vechain/thor/v2/p2p/discv5"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 )
 
 const (
@@ -93,7 +93,7 @@ type Config struct {
 	// BootstrapNodesV5 are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.
-	BootstrapNodesV5 []*discv5.Node `toml:",omitempty"`
+	BootstrapNodesV5 []*tempdiscv5.Node `toml:",omitempty"`
 
 	// Static nodes are used as pre-configured connections which are always
 	// maintained and re-connected on disconnects.
@@ -162,7 +162,7 @@ type Server struct {
 	listener     net.Listener
 	ourHandshake *protoHandshake
 	lastLookup   time.Time
-	DiscV5       *discv5.Network
+	DiscV5       *tempdiscv5.Network
 
 	// These are for Peers, PeerCount (and nothing else).
 	peerOp     chan peerOpFunc
@@ -502,13 +502,13 @@ func (srv *Server) Start() (err error) {
 
 	if srv.DiscoveryV5 {
 		var (
-			ntab *discv5.Network
+			ntab *tempdiscv5.Network
 			err  error
 		)
 		if sconn != nil {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+			ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
 		} else {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+			ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
 		}
 		if err != nil {
 			return err
