@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/vechain/thor/v2/abi"
 
 	"github.com/vechain/thor/v2/api"

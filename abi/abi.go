@@ -115,7 +115,7 @@ func (a *ABI) EventByID(id thor.Bytes32) (*Event, bool) {
 	return e, found
 }
 
-func UnpackIntoInterface(args *ethabi.Arguments, data []byte, v interface{}) error {
+func UnpackIntoInterface(args *ethabi.Arguments, data []byte, v any) error {
 	values, err := args.UnpackValues(data)
 	if err != nil {
 		return err

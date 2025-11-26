@@ -29,9 +29,9 @@ import (
 // Just replace testString with the data in .quoted
 func TestReplicate(t *testing.T) {
 	t.Parallel()
-	//t.Skip("Test only useful for reproducing issues")
+	// t.Skip("Test only useful for reproducing issues")
 	fuzzAbi([]byte("\x20\x20\x20\x20\x20\x20\x20\x20\x80\x00\x00\x00\x20\x20\x20\x20\x00"))
-	//fuzzAbi([]byte("asdfasdfkadsf;lasdf;lasd;lfk"))
+	// fuzzAbi([]byte("asdfasdfkadsf;lasdf;lasd;lfk"))
 }
 
 // FuzzABI is the main entrypoint for fuzzing
@@ -47,7 +47,8 @@ var (
 	pays     = []string{"true", "false"}
 	vNames   = []string{"a", "b", "c", "d", "e", "f", "g"}
 	varNames = append(vNames, names...)
-	varTypes = []string{"bool", "address", "bytes", "string",
+	varTypes = []string{
+		"bool", "address", "bytes", "string",
 		"uint8", "int8", "uint8", "int8", "uint16", "int16",
 		"uint24", "int24", "uint32", "int32", "uint40", "int40", "uint48", "int48", "uint56", "int56",
 		"uint64", "int64", "uint72", "int72", "uint80", "int80", "uint88", "int88", "uint96", "int96",
@@ -58,10 +59,11 @@ var (
 		"bytes1", "bytes2", "bytes3", "bytes4", "bytes5", "bytes6", "bytes7", "bytes8", "bytes9", "bytes10", "bytes11",
 		"bytes12", "bytes13", "bytes14", "bytes15", "bytes16", "bytes17", "bytes18", "bytes19", "bytes20", "bytes21",
 		"bytes22", "bytes23", "bytes24", "bytes25", "bytes26", "bytes27", "bytes28", "bytes29", "bytes30", "bytes31",
-		"bytes32", "bytes"}
+		"bytes32", "bytes",
+	}
 )
 
-func unpackPack(abi ABI, method string, input []byte) ([]interface{}, bool) {
+func unpackPack(abi ABI, method string, input []byte) ([]any, bool) {
 	if out, err := abi.Unpack(method, input); err == nil {
 		_, err := abi.Pack(method, out...)
 		if err != nil {
@@ -77,7 +79,7 @@ func unpackPack(abi ABI, method string, input []byte) ([]interface{}, bool) {
 	return nil, false
 }
 
-func packUnpack(abi ABI, method string, input *[]interface{}) bool {
+func packUnpack(abi ABI, method string, input *[]any) bool {
 	if packed, err := abi.Pack(method, input); err == nil {
 		outptr := reflect.New(reflect.TypeOf(input))
 		err := abi.UnpackIntoInterface(outptr.Interface(), method, packed)
@@ -125,7 +127,7 @@ func createABI(name string, stateMutability, payable *string, inputs []arg) (ABI
 		sig += "} ]"
 	}
 	sig += `}]`
-	//fmt.Printf("sig: %s\n", sig)
+	// fmt.Printf("sig: %s\n", sig)
 	return JSON(strings.NewReader(sig))
 }
 
@@ -151,7 +153,7 @@ func fuzzAbi(input []byte) {
 	}
 	abi, err := createABI(name, stateM, payable, arguments)
 	if err != nil {
-		//fmt.Printf("err: %v\n", err)
+		// fmt.Printf("err: %v\n", err)
 		panic(err)
 	}
 	structs, _ := unpackPack(abi, name, input)

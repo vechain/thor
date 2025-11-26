@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -87,37 +88,101 @@ var (
 	TupleF, _           = NewType("tuple", "struct Overloader.F", []ArgumentMarshaling{
 		{Name: "_f", Type: "uint256"},
 		{Name: "__f", Type: "uint256"},
-		{Name: "f", Type: "uint256"}})
+		{Name: "f", Type: "uint256"},
+	})
 )
 
 var methods = map[string]Method{
-	"":                    NewMethod("", "", Function, "", false, false, nil, nil),
-	"balance":             NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
-	"send":                NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
-	"test":                NewMethod("test", "test", Function, "", false, false, []Argument{{"number", Uint32, false}}, nil),
-	"string":              NewMethod("string", "string", Function, "", false, false, []Argument{{"inputs", String, false}}, nil),
-	"bool":                NewMethod("bool", "bool", Function, "", false, false, []Argument{{"inputs", Bool, false}}, nil),
-	"address":             NewMethod("address", "address", Function, "", false, false, []Argument{{"inputs", Address, false}}, nil),
-	"uint64[]":            NewMethod("uint64[]", "uint64[]", Function, "", false, false, []Argument{{"inputs", Uint64Arr, false}}, nil),
-	"uint64[2]":           NewMethod("uint64[2]", "uint64[2]", Function, "", false, false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
-	"int8":                NewMethod("int8", "int8", Function, "", false, false, []Argument{{"inputs", Int8, false}}, nil),
-	"bytes32":             NewMethod("bytes32", "bytes32", Function, "", false, false, []Argument{{"inputs", Bytes32, false}}, nil),
-	"foo":                 NewMethod("foo", "foo", Function, "", false, false, []Argument{{"inputs", Uint32, false}}, nil),
-	"bar":                 NewMethod("bar", "bar", Function, "", false, false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
-	"slice":               NewMethod("slice", "slice", Function, "", false, false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
-	"slice256":            NewMethod("slice256", "slice256", Function, "", false, false, []Argument{{"inputs", Uint256Arr2, false}}, nil),
-	"sliceAddress":        NewMethod("sliceAddress", "sliceAddress", Function, "", false, false, []Argument{{"inputs", AddressArr, false}}, nil),
-	"sliceMultiAddress":   NewMethod("sliceMultiAddress", "sliceMultiAddress", Function, "", false, false, []Argument{{"a", AddressArr, false}, {"b", AddressArr, false}}, nil),
-	"nestedArray":         NewMethod("nestedArray", "nestedArray", Function, "", false, false, []Argument{{"a", Uint256ArrNested, false}, {"b", AddressArr, false}}, nil),
-	"nestedArray2":        NewMethod("nestedArray2", "nestedArray2", Function, "", false, false, []Argument{{"a", Uint8ArrNested, false}}, nil),
-	"nestedSlice":         NewMethod("nestedSlice", "nestedSlice", Function, "", false, false, []Argument{{"a", Uint8SliceNested, false}}, nil),
-	"receive":             NewMethod("receive", "receive", Function, "payable", false, true, []Argument{{"memo", Bytes, false}}, []Argument{}),
-	"fixedArrStr":         NewMethod("fixedArrStr", "fixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}}, nil),
-	"fixedArrBytes":       NewMethod("fixedArrBytes", "fixedArrBytes", Function, "view", false, false, []Argument{{"bytes", Bytes, false}, {"fixedArr", Uint256Arr2, false}}, nil),
-	"mixedArrStr":         NewMethod("mixedArrStr", "mixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}}, nil),
-	"doubleFixedArrStr":   NewMethod("doubleFixedArrStr", "doubleFixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
-	"multipleMixedArrStr": NewMethod("multipleMixedArrStr", "multipleMixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
-	"overloadedNames":     NewMethod("overloadedNames", "overloadedNames", Function, "view", false, false, []Argument{{"f", TupleF, false}}, nil),
+	"":             NewMethod("", "", Function, "", false, false, nil, nil),
+	"balance":      NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
+	"send":         NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
+	"test":         NewMethod("test", "test", Function, "", false, false, []Argument{{"number", Uint32, false}}, nil),
+	"string":       NewMethod("string", "string", Function, "", false, false, []Argument{{"inputs", String, false}}, nil),
+	"bool":         NewMethod("bool", "bool", Function, "", false, false, []Argument{{"inputs", Bool, false}}, nil),
+	"address":      NewMethod("address", "address", Function, "", false, false, []Argument{{"inputs", Address, false}}, nil),
+	"uint64[]":     NewMethod("uint64[]", "uint64[]", Function, "", false, false, []Argument{{"inputs", Uint64Arr, false}}, nil),
+	"uint64[2]":    NewMethod("uint64[2]", "uint64[2]", Function, "", false, false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
+	"int8":         NewMethod("int8", "int8", Function, "", false, false, []Argument{{"inputs", Int8, false}}, nil),
+	"bytes32":      NewMethod("bytes32", "bytes32", Function, "", false, false, []Argument{{"inputs", Bytes32, false}}, nil),
+	"foo":          NewMethod("foo", "foo", Function, "", false, false, []Argument{{"inputs", Uint32, false}}, nil),
+	"bar":          NewMethod("bar", "bar", Function, "", false, false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
+	"slice":        NewMethod("slice", "slice", Function, "", false, false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
+	"slice256":     NewMethod("slice256", "slice256", Function, "", false, false, []Argument{{"inputs", Uint256Arr2, false}}, nil),
+	"sliceAddress": NewMethod("sliceAddress", "sliceAddress", Function, "", false, false, []Argument{{"inputs", AddressArr, false}}, nil),
+	"sliceMultiAddress": NewMethod(
+		"sliceMultiAddress",
+		"sliceMultiAddress",
+		Function,
+		"",
+		false,
+		false,
+		[]Argument{{"a", AddressArr, false}, {"b", AddressArr, false}},
+		nil,
+	),
+	"nestedArray": NewMethod(
+		"nestedArray",
+		"nestedArray",
+		Function,
+		"",
+		false,
+		false,
+		[]Argument{{"a", Uint256ArrNested, false}, {"b", AddressArr, false}},
+		nil,
+	),
+	"nestedArray2": NewMethod("nestedArray2", "nestedArray2", Function, "", false, false, []Argument{{"a", Uint8ArrNested, false}}, nil),
+	"nestedSlice":  NewMethod("nestedSlice", "nestedSlice", Function, "", false, false, []Argument{{"a", Uint8SliceNested, false}}, nil),
+	"receive":      NewMethod("receive", "receive", Function, "payable", false, true, []Argument{{"memo", Bytes, false}}, []Argument{}),
+	"fixedArrStr": NewMethod(
+		"fixedArrStr",
+		"fixedArrStr",
+		Function,
+		"view",
+		false,
+		false,
+		[]Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}},
+		nil,
+	),
+	"fixedArrBytes": NewMethod(
+		"fixedArrBytes",
+		"fixedArrBytes",
+		Function,
+		"view",
+		false,
+		false,
+		[]Argument{{"bytes", Bytes, false}, {"fixedArr", Uint256Arr2, false}},
+		nil,
+	),
+	"mixedArrStr": NewMethod(
+		"mixedArrStr",
+		"mixedArrStr",
+		Function,
+		"view",
+		false,
+		false,
+		[]Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}},
+		nil,
+	),
+	"doubleFixedArrStr": NewMethod(
+		"doubleFixedArrStr",
+		"doubleFixedArrStr",
+		Function,
+		"view",
+		false,
+		false,
+		[]Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"fixedArr2", Uint256Arr3, false}},
+		nil,
+	),
+	"multipleMixedArrStr": NewMethod(
+		"multipleMixedArrStr",
+		"multipleMixedArrStr",
+		Function,
+		"view",
+		false,
+		false,
+		[]Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}},
+		nil,
+	),
+	"overloadedNames": NewMethod("overloadedNames", "overloadedNames", Function, "view", false, false, []Argument{{"f", TupleF, false}}, nil),
 }
 
 func TestReader(t *testing.T) {
@@ -321,7 +386,10 @@ func TestCustomErrors(t *testing.T) {
 func TestCustomErrorUnpackIntoInterface(t *testing.T) {
 	t.Parallel()
 	errorName := "MyError"
-	json := fmt.Sprintf(`[{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"uint256","name":"balance","type":"uint256"}],"name":"%s","type":"error"}]`, errorName)
+	json := fmt.Sprintf(
+		`[{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"uint256","name":"balance","type":"uint256"}],"name":"%s","type":"error"}]`,
+		errorName,
+	)
 	abi, err := JSON(strings.NewReader(json))
 	if err != nil {
 		t.Fatal(err)
@@ -782,7 +850,12 @@ func TestBareEvents(t *testing.T) {
 //
 // When receive("X") is called with sender 0x00... and value 1, it produces this tx receipt:
 //
-//	receipt{status=1 cgas=23949 bloom=00000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000040200000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 logs=[log: b6818c8064f645cd82d99b59a1a267d6d61117ef [75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed] 000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158 9ae378b6d4409eada347a5dc0c180f186cb62dc68fcc0f043425eb917335aa28 0 95d429d309bb9d753954195fe2d69bd140b4ae731b9b5b605c34323de162cf00 0]}
+//	receipt{status=1 cgas=23949
+//
+// bloom=00000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000040200000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+// logs=[log: b6818c8064f645cd82d99b59a1a267d6d61117ef [75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed]
+// 000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158
+// 9ae378b6d4409eada347a5dc0c180f186cb62dc68fcc0f043425eb917335aa28 0 95d429d309bb9d753954195fe2d69bd140b4ae731b9b5b605c34323de162cf00 0]}
 func TestUnpackEvent(t *testing.T) {
 	t.Parallel()
 	const abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"receive","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"}],"name":"receivedAddr","type":"event"}]`
@@ -839,8 +912,8 @@ func TestUnpackEventIntoMap(t *testing.T) {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
 
-	receivedMap := map[string]interface{}{}
-	expectedReceivedMap := map[string]interface{}{
+	receivedMap := map[string]any{}
+	expectedReceivedMap := map[string]any{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
 		"memo":   []byte{88},
@@ -861,7 +934,7 @@ func TestUnpackEventIntoMap(t *testing.T) {
 		t.Error("unpacked `received` map does not match expected map")
 	}
 
-	receivedAddrMap := map[string]interface{}{}
+	receivedAddrMap := map[string]any{}
 	if err = abi.UnpackIntoMap(receivedAddrMap, "receivedAddr", data); err != nil {
 		t.Error(err)
 	}
@@ -890,7 +963,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	}
 
 	// Tests a method with no outputs
-	receiveMap := map[string]interface{}{}
+	receiveMap := map[string]any{}
 	if err = abi.UnpackIntoMap(receiveMap, "receive", data); err != nil {
 		t.Error(err)
 	}
@@ -899,7 +972,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	}
 
 	// Tests a method with only outputs
-	sendMap := map[string]interface{}{}
+	sendMap := map[string]any{}
 	if err = abi.UnpackIntoMap(sendMap, "send", data); err != nil {
 		t.Error(err)
 	}
@@ -911,14 +984,271 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	}
 
 	// Tests a method with outputs and inputs
-	getMap := map[string]interface{}{}
+	getMap := map[string]any{}
 	if err = abi.UnpackIntoMap(getMap, "get", data); err != nil {
 		t.Error(err)
 	}
 	if len(getMap) != 1 {
 		t.Error("unpacked `get` map expected to have length 1")
 	}
-	expectedBytes := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 88, 0}
+	expectedBytes := []byte{
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		96,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		1,
+		88,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		96,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		1,
+		88,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		96,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		1,
+		88,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		96,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		1,
+		88,
+		0,
+	}
 	if !bytes.Equal(getMap["hash"].([]byte), expectedBytes) {
 		t.Errorf("unpacked `get` map expected `hash` value of %v", expectedBytes)
 	}
@@ -927,12 +1257,12 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	t.Parallel()
 	// Two methods have the same name
-	var abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"get","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[],"name":"send","outputs":[{"name":"amount","type":"uint256"}],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[{"name":"addr","type":"address"}],"name":"get","outputs":[{"name":"hash","type":"bytes"}],"payable":true,"stateMutability":"payable","type":"function"}]`
+	abiJSON := `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"get","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[],"name":"send","outputs":[{"name":"amount","type":"uint256"}],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[{"name":"addr","type":"address"}],"name":"get","outputs":[{"name":"hash","type":"bytes"}],"payable":true,"stateMutability":"payable","type":"function"}]`
 	abi, err := JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var hexdata = `00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
+	hexdata := `00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
 	data, err := hex.DecodeString(hexdata)
 	if err != nil {
 		t.Fatal(err)
@@ -940,7 +1270,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if len(data)%32 == 0 {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
-	getMap := map[string]interface{}{}
+	getMap := map[string]any{}
 	if err = abi.UnpackIntoMap(getMap, "get", data); err == nil {
 		t.Error("naming conflict between two methods; error expected")
 	}
@@ -959,7 +1289,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if len(data)%32 == 0 {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
-	receivedMap := map[string]interface{}{}
+	receivedMap := map[string]any{}
 	if err = abi.UnpackIntoMap(receivedMap, "received", data); err != nil {
 		t.Error("naming conflict between two events; no error expected")
 	}
@@ -986,7 +1316,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if len(data)%32 == 0 {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
-	expectedReceivedMap := map[string]interface{}{
+	expectedReceivedMap := map[string]any{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
 		"memo":   []byte{88},
@@ -1220,14 +1550,18 @@ func TestUnnamedEventParam(t *testing.T) {
 func TestUnpackRevert(t *testing.T) {
 	t.Parallel()
 
-	var cases = []struct {
+	cases := []struct {
 		input     string
 		expect    string
 		expectErr error
 	}{
 		{"", "", errors.New("invalid data for unpacking")},
 		{"08c379a1", "", errors.New("invalid data for unpacking")},
-		{"08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000", "revert reason", nil},
+		{
+			"08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000",
+			"revert reason",
+			nil,
+		},
 		{"4e487b710000000000000000000000000000000000000000000000000000000000000000", "generic panic", nil},
 		{"4e487b7100000000000000000000000000000000000000000000000000000000000000ff", "unknown panic code: 0xff", nil},
 	}

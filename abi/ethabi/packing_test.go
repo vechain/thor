@@ -24,7 +24,7 @@ import (
 
 type packUnpackTest struct {
 	def      string
-	unpacked interface{}
+	unpacked any
 	packed   string
 }
 
@@ -718,7 +718,10 @@ var packUnpackTests = []packUnpackTest{
 			"00000000000000000000000000000000000000000000000000000000000000c8" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
 			"00000000000000000000000000000000000000000000000000000000000003e8",
-		unpacked: [][][2]*big.Int{{{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}}, {{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}}},
+		unpacked: [][][2]*big.Int{
+			{{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}},
+			{{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}},
+		},
 	},
 	// struct outputs
 	{
@@ -910,7 +913,8 @@ var packUnpackTests = []packUnpackTest{
 				A *big.Int
 				B []*big.Int
 			}{big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}},
-			B: []*big.Int{big.NewInt(1), big.NewInt(2)}},
+			B: []*big.Int{big.NewInt(1), big.NewInt(2)},
+		},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
 			"0000000000000000000000000000000000000000000000000000000000000040" + // a offset
 			"00000000000000000000000000000000000000000000000000000000000000e0" + // b offset

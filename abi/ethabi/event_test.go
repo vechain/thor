@@ -82,7 +82,7 @@ var mixedCaseData1 = "0000000000000000000000000000000000000000000000000000000000
 
 func TestEventId(t *testing.T) {
 	t.Parallel()
-	var table = []struct {
+	table := []struct {
 		definition   string
 		expectations map[string]common.Hash
 	}{
@@ -114,7 +114,7 @@ func TestEventId(t *testing.T) {
 
 func TestEventString(t *testing.T) {
 	t.Parallel()
-	var table = []struct {
+	table := []struct {
 		definition   string
 		expectations map[string]string
 	}{
@@ -213,10 +213,10 @@ func TestEventTupleUnpack(t *testing.T) {
 	bigintExpected2 := big.NewInt(2218516807680)
 	bigintExpected3 := big.NewInt(1000001)
 	addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268")
-	var testCases = []struct {
+	testCases := []struct {
 		data     string
-		dest     interface{}
-		expected interface{}
+		dest     any
+		expected any
 		jsonLog  []byte
 		error    string
 		name     string
@@ -229,8 +229,8 @@ func TestEventTupleUnpack(t *testing.T) {
 		"Can unpack ERC20 Transfer event into structure",
 	}, {
 		transferData1,
-		&[]interface{}{&bigint},
-		&[]interface{}{&bigintExpected},
+		&[]any{&bigint},
+		&[]any{&bigintExpected},
 		jsonEventTransfer,
 		"",
 		"Can unpack ERC20 Transfer event into slice",
@@ -268,34 +268,37 @@ func TestEventTupleUnpack(t *testing.T) {
 		&EventPledge{
 			addr,
 			bigintExpected2,
-			[3]byte{'u', 's', 'd'}},
+			[3]byte{'u', 's', 'd'},
+		},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into structure",
 	}, {
 		pledgeData1,
-		&[]interface{}{&common.Address{}, &bigint, &[3]byte{}},
-		&[]interface{}{
+		&[]any{&common.Address{}, &bigint, &[3]byte{}},
+		&[]any{
 			&addr,
 			&bigintExpected2,
-			&[3]byte{'u', 's', 'd'}},
+			&[3]byte{'u', 's', 'd'},
+		},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into slice",
 	}, {
 		pledgeData1,
-		&[3]interface{}{&common.Address{}, &bigint, &[3]byte{}},
-		&[3]interface{}{
+		&[3]any{&common.Address{}, &bigint, &[3]byte{}},
+		&[3]any{
 			&addr,
 			&bigintExpected2,
-			&[3]byte{'u', 's', 'd'}},
+			&[3]byte{'u', 's', 'd'},
+		},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into an array",
 	}, {
 		pledgeData1,
-		&[]interface{}{new(int), 0, 0},
-		&[]interface{}{},
+		&[]any{new(int), 0, 0},
+		&[]any{},
 		jsonEventPledge,
 		"abi: cannot unmarshal common.Address in to int",
 		"Can not unpack Pledge event into slice with wrong types",
@@ -308,15 +311,15 @@ func TestEventTupleUnpack(t *testing.T) {
 		"Can not unpack Pledge event into struct with wrong filed types",
 	}, {
 		pledgeData1,
-		&[]interface{}{common.Address{}, new(big.Int)},
-		&[]interface{}{},
+		&[]any{common.Address{}, new(big.Int)},
+		&[]any{},
 		jsonEventPledge,
 		"abi: insufficient number of arguments for unpack, want 3, got 2",
 		"Can not unpack Pledge event into too short slice",
 	}, {
 		pledgeData1,
-		new(map[string]interface{}),
-		&[]interface{}{},
+		new(map[string]any),
+		&[]any{},
 		jsonEventPledge,
 		"abi:[2] cannot unmarshal tuple in to map[string]interface {}",
 		"Can not unpack Pledge event into map",
@@ -343,7 +346,7 @@ func TestEventTupleUnpack(t *testing.T) {
 	}
 }
 
-func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, assert *assert.Assertions) error {
+func unpackTestEventData(dest any, hexData string, jsonEvent []byte, assert *assert.Assertions) error {
 	data, err := hex.DecodeString(hexData)
 	assert.NoError(err, "Hex data should be a correct hex-string")
 	var e Event

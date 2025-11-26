@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/api"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
