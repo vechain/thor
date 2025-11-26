@@ -81,7 +81,7 @@ func HandlePanics(logEnabled bool) func(http.Handler) http.Handler {
 					text := http.StatusText(status)
 					http.Error(w, text, status)
 					if logEnabled {
-						println(string(debug.Stack()))
+						println("PANIC in HTTP handler:", string(debug.Stack()))
 					}
 				}
 			}()
