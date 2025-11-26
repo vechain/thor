@@ -45,7 +45,7 @@ func RequestLoggerMiddleware(
 				r.Body = io.NopCloser(io.Reader(bytes.NewReader(bodyBytes)))
 			}
 
-			captor := newMetricsResponseWriter(w)
+			captor := newStatusCodeCaptor(w)
 
 			start := time.Now()
 			next.ServeHTTP(captor, r)

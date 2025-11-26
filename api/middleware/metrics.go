@@ -37,7 +37,7 @@ type statusCodeCaptor struct {
 	statusCode int
 }
 
-func newMetricsResponseWriter(w http.ResponseWriter) *statusCodeCaptor {
+func newStatusCodeCaptor(w http.ResponseWriter) *statusCodeCaptor {
 	return &statusCodeCaptor{w, http.StatusOK}
 }
 
@@ -82,7 +82,7 @@ func MetricsMiddleware(next http.Handler) http.Handler {
 		}
 
 		now := time.Now()
-		mrw := newMetricsResponseWriter(w)
+		mrw := newStatusCodeCaptor(w)
 		if subscription {
 			metricActiveWebsocketGauge().AddWithLabel(1, map[string]string{"name": name})
 			metricWebsocketCounter().AddWithLabel(1, map[string]string{"name": name})
