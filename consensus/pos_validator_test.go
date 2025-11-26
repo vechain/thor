@@ -280,19 +280,25 @@ type hayabusaSetup struct {
 }
 
 func newHayabusaSetup(t *testing.T) *hayabusaSetup {
-	config := &thor.SoloFork
-	config.HAYABUSA = 2
+	forkConfig := thor.SoloFork
+	forkConfig.HAYABUSA = 2
+	cfg := genesis.SoloConfig
 
-	chain, err := testchain.NewWithFork(config, 1)
+	devConfig := genesis.DevConfig{
+		ForkConfig: &forkConfig,
+		Config:     &cfg,
+	}
+
+	chain, err := testchain.NewIntegrationTestChain(devConfig, 1)
 	assert.NoError(t, err)
 
-	consensus := New(chain.Repo(), chain.Stater(), config)
+	consensus := New(chain.Repo(), chain.Stater(), &forkConfig)
 
 	return &hayabusaSetup{
 		chain:     chain,
 		consensus: consensus,
 		t:         t,
-		config:    config,
+		config:    &forkConfig,
 	}
 }
 
@@ -339,7 +345,7 @@ func (h *hayabusaSetup) mintAddValidatorBlock(accs ...genesis.DevAccount) (*chai
 		tx := createTx(h.t, h.chain, txArgs{
 			abi:    builtin.Staker.ABI,
 			method: "addValidation",
-			args:   []any{acc.Address, uint32(360) * 24 * 7},
+			args:   []any{acc.Address, thor.LowStakingPeriod()},
 			signer: acc,
 			vet:    staker.ToWei(minStake),
 			addr:   &builtin.Staker.Address,

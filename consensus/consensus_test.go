@@ -894,12 +894,12 @@ func TestValidateProposer(t *testing.T) {
 }
 
 func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
-	cfg := &thor.SoloFork
+	cfg := thor.SoloFork
 	cfg.HAYABUSA = 2
 	hayabusaTP := uint32(1)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
-	chain, err := testchain.NewWithFork(cfg, 1)
+	chain, err := testchain.NewWithFork(&cfg, 1)
 	assert.NoError(t, err)
 
 	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))

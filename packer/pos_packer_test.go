@@ -25,13 +25,18 @@ import (
 )
 
 func TestFlow_Schedule_POS(t *testing.T) {
-	config := &thor.SoloFork
-	config.HAYABUSA = 2
-	hayabusaTP := uint32(1)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
-	config.BLOCKLIST = math.MaxUint32
+	forkConfig := thor.SoloFork
+	forkConfig.HAYABUSA = 2
+	forkConfig.BLOCKLIST = math.MaxUint32
+	cfg := genesis.SoloConfig
+	cfg.EpochLength = 1
 
-	chain, err := testchain.NewWithFork(config, 1)
+	devConfig := genesis.DevConfig{
+		ForkConfig: &forkConfig,
+		Config:     &cfg,
+	}
+
+	chain, err := testchain.NewIntegrationTestChain(devConfig, 1)
 	assert.NoError(t, err)
 
 	// mint block 1: using PoA
@@ -120,7 +125,7 @@ func packAddValidatorBlock(t *testing.T, chain *testchain.Chain, interval uint64
 
 	method, ok := builtin.Staker.ABI.MethodByName("addValidation")
 	require.True(t, ok)
-	callData, err := method.EncodeInput(genesis.DevAccounts()[0].Address, uint32(360)*24*7)
+	callData, err := method.EncodeInput(genesis.DevAccounts()[0].Address, thor.LowStakingPeriod())
 	require.NoError(t, err)
 	clause := tx.NewClause(&builtin.Staker.Address).WithData(callData).WithValue(vet)
 	trx := tx.NewBuilder(tx.TypeLegacy).
@@ -172,13 +177,18 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 }
 
 func TestFlow_Revert(t *testing.T) {
-	config := &thor.SoloFork
-	config.HAYABUSA = 2
-	hayabusaTP := uint32(1)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
-	config.BLOCKLIST = math.MaxUint32
+	forkConfig := thor.SoloFork
+	forkConfig.HAYABUSA = 2
+	forkConfig.BLOCKLIST = math.MaxUint32
+	cfg := genesis.SoloConfig
+	cfg.EpochLength = 1
 
-	chain, err := testchain.NewWithFork(config, 1)
+	devConfig := genesis.DevConfig{
+		ForkConfig: &forkConfig,
+		Config:     &cfg,
+	}
+
+	chain, err := testchain.NewIntegrationTestChain(devConfig, 1)
 	assert.NoError(t, err)
 
 	// mint block 1: using PoA
