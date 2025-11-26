@@ -9,9 +9,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-
 	"github.com/vechain/thor/v2/metrics"
+	"github.com/vechain/thor/v2/p2p/discv5"
 )
 
 var metricsPeerCount = metrics.GaugeVec("disco_peercount", []string{"id"})
