@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/vechain/thor/v2/abi/ethabi"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
@@ -52,7 +53,12 @@ func (b *CallBuilder) ExecuteInto(result any) error {
 		return err
 	}
 
-	return method.Outputs.Unpack(result, bytes)
+	values, err := method.Outputs.Unpack(bytes)
+	if err != nil {
+		return err
+	}
+
+	return method.Outputs.Copy(result, values)
 }
 
 // Execute implements CallBuilder.Execute.
@@ -92,7 +98,7 @@ func (b *CallBuilder) Execute() (*api.CallResult, error) {
 			if err != nil {
 				return result, fmt.Errorf("failed to decode revert data: %w", err)
 			}
-			revertReason, err := UnpackRevert(decoded)
+			revertReason, err := ethabi.UnpackRevert(decoded)
 			if err == nil {
 				message = fmt.Sprintf("%s: %s", message, revertReason)
 			}

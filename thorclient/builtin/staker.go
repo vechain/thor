@@ -12,6 +12,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -384,7 +385,7 @@ func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -458,7 +459,7 @@ func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -527,7 +528,7 @@ func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Opt
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -571,7 +572,7 @@ func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options,
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -615,7 +616,7 @@ func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options,
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -659,7 +660,7 @@ func (s *Staker) FilterBeneficiarySet(eventsRange *api.Range, opts *api.Options,
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -703,7 +704,7 @@ func (s *Staker) FilterValidationWithdrawn(eventsRange *api.Range, opts *api.Opt
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 

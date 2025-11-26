@@ -11,11 +11,10 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/vechain/thor/v2/abi/ethabi"
 	"github.com/vechain/thor/v2/api"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -24,7 +23,7 @@ import (
 
 type Contract struct {
 	client *thorclient.Client
-	abi    *abi.ABI
+	abi    *ethabi.ABI
 	addr   *thor.Address
 }
 
@@ -33,7 +32,7 @@ func NewContract(client *thorclient.Client, abiData []byte, address *thor.Addres
 	if address == nil {
 		return nil, fmt.Errorf("empty contract address")
 	}
-	contractABI, err := abi.JSON(bytes.NewReader(abiData))
+	contractABI, err := ethabi.JSON(bytes.NewReader(abiData))
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +125,7 @@ func (c *Contract) Address() *thor.Address {
 }
 
 // ABI returns the contract ABI.
-func (c *Contract) ABI() *abi.ABI {
+func (c *Contract) ABI() *ethabi.ABI {
 	return c.abi
 }
 

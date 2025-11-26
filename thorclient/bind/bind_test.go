@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -195,7 +196,7 @@ func TestContract_Filter(t *testing.T) {
 		bytes, err := hexutil.Decode(event.Data)
 		require.NoError(t, err)
 
-		err = eventDef.Inputs.Unpack(&data, bytes)
+		err = abi.UnpackIntoInterface(&eventDef.Inputs, bytes, &data)
 		require.NoError(t, err)
 
 		newValue := *(data[0].(**big.Int))

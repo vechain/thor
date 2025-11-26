@@ -10,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/abi"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
@@ -88,7 +89,7 @@ func (p *Params) FilterSet(eventsRange *api.Range, opts *api.Options, order logd
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 

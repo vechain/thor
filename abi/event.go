@@ -6,7 +6,7 @@
 package abi
 
 import (
-	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
+	ethabi "github.com/vechain/thor/v2/abi/ethabi"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -26,7 +26,7 @@ func newEvent(event *ethabi.Event) *Event {
 		}
 	}
 	return &Event{
-		thor.Bytes32(event.Id()),
+		thor.Bytes32(event.ID),
 		event,
 		argsWithoutIndexed,
 	}
@@ -49,5 +49,5 @@ func (e *Event) Encode(args ...any) ([]byte, error) {
 
 // Decode decodes event data.
 func (e *Event) Decode(data []byte, v any) error {
-	return e.argsWithoutIndexed.Unpack(v, data)
+	return UnpackIntoInterface(&e.argsWithoutIndexed, data, v)
 }

@@ -22,7 +22,7 @@ func TestABI(t *testing.T) {
 	assert.Nil(t, err)
 
 	// pack/unpack input
-	{
+	t.Run("pack/unpack input", func(t *testing.T) {
 		name := "set"
 		method, found := abi.MethodByName(name)
 		assert.True(t, found)
@@ -46,10 +46,10 @@ func TestABI(t *testing.T) {
 		assert.Nil(t, method.DecodeInput(input, &v))
 		assert.Equal(t, key, thor.Bytes32(v.Key))
 		assert.Equal(t, value, v.Value)
-	}
+	})
 
 	// pack/unpack output
-	{
+	t.Run("pack/unpack output", func(t *testing.T) {
 		name := "get"
 		method, found := abi.MethodByName(name)
 		assert.True(t, found)
@@ -62,10 +62,10 @@ func TestABI(t *testing.T) {
 		var v *big.Int
 		assert.Nil(t, method.DecodeOutput(output, &v))
 		assert.Equal(t, value, v)
-	}
+	})
 
 	// pack/unpack event
-	{
+	t.Run("pack/unpack event", func(t *testing.T) {
 		name := "Set"
 		event, found := abi.EventByName(name)
 		assert.True(t, found)
@@ -81,7 +81,7 @@ func TestABI(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, value, d)
-	}
+	})
 }
 
 func TestStakerABI(t *testing.T) {

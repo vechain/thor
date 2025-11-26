@@ -11,6 +11,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/abi"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
@@ -165,7 +166,7 @@ func (e *Energy) FilterTransfer(eventsRange *api.Range, opts *api.Options, order
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -214,7 +215,7 @@ func (e *Energy) FilterApproval(eventsRange *api.Range, opts *api.Options, order
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 

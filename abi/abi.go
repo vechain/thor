@@ -6,10 +6,10 @@
 package abi
 
 import (
-	"encoding/json"
+	"bytes"
 	"errors"
 
-	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
+	ethabi "github.com/vechain/thor/v2/abi/ethabi"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -27,17 +27,8 @@ type ABI struct {
 
 // New create an ABI instance.
 func New(data []byte) (*ABI, error) {
-	var fields []struct {
-		Type            string
-		Name            string
-		Constant        bool
-		Anonymous       bool
-		Inputs          []ethabi.Argument
-		Outputs         []ethabi.Argument
-		StateMutability string
-	}
-
-	if err := json.Unmarshal(data, &fields); err != nil {
+	ethABI, err := ethabi.JSON(bytes.NewReader(data))
+	if err != nil {
 		return nil, err
 	}
 
@@ -48,38 +39,25 @@ func New(data []byte) (*ABI, error) {
 		idToEvent:    make(map[thor.Bytes32]*Event),
 	}
 
-	for _, field := range fields {
-		switch field.Type {
-		case "constructor":
-			abi.constructor = &Method{
-				MethodID{},
-				&ethabi.Method{Inputs: field.Inputs},
-			}
-		// empty defaults to function according to the abi spec
-		case "function", "":
-			ethMethod := ethabi.Method{
-				Name:    field.Name,
-				Const:   field.Constant || field.StateMutability == "view" || field.StateMutability == "pure",
-				Inputs:  field.Inputs,
-				Outputs: field.Outputs,
-			}
-			var id MethodID
-			copy(id[:], ethMethod.Id())
-			method := &Method{id, &ethMethod}
-			abi.methods = append(abi.methods, method)
-			abi.idToMethod[id] = method
-			abi.nameToMethod[ethMethod.Name] = method
-		case "event":
-			ethEvent := ethabi.Event{
-				Name:      field.Name,
-				Anonymous: field.Anonymous,
-				Inputs:    field.Inputs,
-			}
-			event := newEvent(&ethEvent)
-			abi.events = append(abi.events, event)
-			abi.idToEvent[event.ID()] = event
-			abi.nameToEvent[ethEvent.Name] = event
-		}
+	abi.constructor = &Method{
+		MethodID{},
+		&ethABI.Constructor,
+	}
+
+	for _, method := range ethABI.Methods {
+		var id MethodID
+		copy(id[:], method.ID)
+		m := &Method{id, &method}
+		abi.methods = append(abi.methods, m)
+		abi.idToMethod[id] = m
+		abi.nameToMethod[method.Name] = m
+	}
+
+	for _, event := range ethABI.Events {
+		e := newEvent(&event)
+		abi.events = append(abi.events, e)
+		abi.idToEvent[thor.Bytes32(event.ID)] = e
+		abi.nameToEvent[event.Name] = e
 	}
 	return abi, nil
 }
@@ -135,4 +113,15 @@ func (a *ABI) EventByName(name string) (*Event, bool) {
 func (a *ABI) EventByID(id thor.Bytes32) (*Event, bool) {
 	e, found := a.idToEvent[id]
 	return e, found
+}
+
+func UnpackIntoInterface(args *ethabi.Arguments, data []byte, v interface{}) error {
+	values, err := args.UnpackValues(data)
+	if err != nil {
+		return err
+	}
+	if err := args.Copy(v, values); err != nil {
+		return err
+	}
+	return nil
 }
