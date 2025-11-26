@@ -31,19 +31,19 @@ var (
 	metricWebsocketCounter     = metrics.LazyLoadCounterVec("api_websocket_counter", []string{"name"})
 )
 
-// metricsResponseWriter is a wrapper around http.ResponseWriter that captures the status code.
-type metricsResponseWriter struct {
+// statusCodeCaptor is a wrapper around http.ResponseWriter that captures the status code.
+type statusCodeCaptor struct {
 	http.ResponseWriter
 	statusCode int
 }
 
-func newMetricsResponseWriter(w http.ResponseWriter) *metricsResponseWriter {
-	return &metricsResponseWriter{w, http.StatusOK}
+func newMetricsResponseWriter(w http.ResponseWriter) *statusCodeCaptor {
+	return &statusCodeCaptor{w, http.StatusOK}
 }
 
-func (m *metricsResponseWriter) WriteHeader(code int) {
-	m.statusCode = code
-	m.ResponseWriter.WriteHeader(code)
+func (s *statusCodeCaptor) WriteHeader(code int) {
+	s.statusCode = code
+	s.ResponseWriter.WriteHeader(code)
 }
 
 // Hijack complies the writer with WS subscriptions interface
@@ -53,8 +53,8 @@ func (m *metricsResponseWriter) WriteHeader(code int) {
 //
 // It becomes the caller's responsibility to manage
 // and close the connection.
-func (m *metricsResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := m.ResponseWriter.(http.Hijacker)
+func (s *statusCodeCaptor) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := s.ResponseWriter.(http.Hijacker)
 	if !ok {
 		return nil, nil, errors.New("hijack not supported")
 	}

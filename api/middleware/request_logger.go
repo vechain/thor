@@ -9,21 +9,12 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/vechain/thor/v2/log"
 )
-
-type statusCodeCaptor struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (s *statusCodeCaptor) WriteHeader(code int) {
-	s.statusCode = code
-	s.ResponseWriter.WriteHeader(code)
-}
 
 // RequestLoggerMiddleware returns a middleware to ensure requests are syphoned into the writer
 func RequestLoggerMiddleware(
@@ -35,7 +26,8 @@ func RequestLoggerMiddleware(
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// If api logging is not enabled and slow queries threshold is set to 0, api logs won't be recorded
-			slowQueriesEnabled := slowQueriesThreshold > time.Duration(0)
+			slowQueriesEnabled := slowQueriesThreshold > time.Duration(0) &&
+				!strings.HasPrefix(r.URL.Path, "/subscriptions") // disable for all websockets
 			if !enabled.Load() && !slowQueriesEnabled && !log5xxErrors {
 				next.ServeHTTP(w, r)
 				return
@@ -53,7 +45,7 @@ func RequestLoggerMiddleware(
 				r.Body = io.NopCloser(io.Reader(bytes.NewReader(bodyBytes)))
 			}
 
-			captor := &statusCodeCaptor{ResponseWriter: w, statusCode: http.StatusOK}
+			captor := newMetricsResponseWriter(w)
 
 			start := time.Now()
 			next.ServeHTTP(captor, r)
