@@ -556,11 +556,11 @@ func (srv *Server) startListening() error {
 	go srv.listenLoop()
 	// Map the TCP listening port if NAT is configured.
 	if !laddr.IP.IsLoopback() && srv.NAT != nil {
-		srv.loopWG.Add(1)
-		go func() {
-			nat.Map(srv.NAT, srv.quit, "tcp", laddr.Port, laddr.Port, "ethereum p2p")
-			srv.loopWG.Done()
-		}()
+		srv.loopWG.Go(
+			func() {
+				nat.Map(srv.NAT, srv.quit, "tcp", laddr.Port, laddr.Port, "ethereum p2p")
+				srv.loopWG.Done()
+			})
 	}
 	return nil
 }
