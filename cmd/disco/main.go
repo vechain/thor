@@ -18,9 +18,9 @@ import (
 
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/metrics"
-	"github.com/vechain/thor/v2/p2p/discv5"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 )
 
 var (
@@ -93,7 +93,7 @@ func run(ctx *cli.Context) error {
 			realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
 		}
 	}
-	net, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
+	net, err := tempdiscv5.ListenUDP(key, conn, realAddr, "", restrictList)
 	if err != nil {
 		return err
 	}

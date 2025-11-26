@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/vechain/thor/v2/metrics"
-	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 )
 
 var metricsPeerCount = metrics.GaugeVec("disco_peercount", []string{"id"})
 
-func pollMetrics(ctx context.Context, net *discv5.Network) {
+func pollMetrics(ctx context.Context, net *tempdiscv5.Network) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -24,7 +24,7 @@ func pollMetrics(ctx context.Context, net *discv5.Network) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			nodes := make([]*discv5.Node, 1000)
+			nodes := make([]*tempdiscv5.Node, 1000)
 			net.ReadRandomNodes(nodes)
 			var read int64
 			for _, n := range nodes {
