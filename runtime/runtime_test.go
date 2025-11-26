@@ -542,12 +542,12 @@ func TestEVMFunction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := muxdb.NewMem()
-			forkConfig := thor.SoloFork
+			forkConfig := &thor.SoloFork
 			forkConfig.HAYABUSA = 1
 			hayabusaTP := uint32(1)
 			cfg := genesis.SoloConfig
 			cfg.HayabusaTP = &hayabusaTP
-			g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &forkConfig, Config: &cfg})
+			g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: forkConfig, Config: &cfg})
 			stater := state.NewStater(db)
 			b0, _, _, _ := g.Build(stater)
 			repo, _ := chain.NewRepository(db, b0)

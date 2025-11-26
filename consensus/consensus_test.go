@@ -894,12 +894,12 @@ func TestValidateProposer(t *testing.T) {
 }
 
 func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
-	cfg := thor.SoloFork
+	cfg := &thor.SoloFork
 	cfg.HAYABUSA = 2
 	hayabusaTP := uint32(1)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
-	chain, err := testchain.NewWithFork(&cfg, 1)
+	chain, err := testchain.NewWithFork(cfg, 1)
 	assert.NoError(t, err)
 
 	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
@@ -924,19 +924,19 @@ func TestConsensus_ReplayStopsEnergyAtHardfork_Matrix(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := thor.SoloFork
+			cfg := &thor.SoloFork
 			cfg.HAYABUSA = tc.hayabusa
 			hayabusaTP := uint32(1)
 			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
-			chain, err := testchain.NewWithFork(&cfg, 1)
+			chain, err := testchain.NewWithFork(cfg, 1)
 			assert.NoError(t, err)
 
 			assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
 			assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
 
 			best := chain.Repo().BestBlockSummary()
-			c := New(chain.Repo(), chain.Stater(), &cfg)
+			c := New(chain.Repo(), chain.Stater(), cfg)
 
 			_, err = c.NewRuntimeForReplay(best.Header, false)
 			assert.NoError(t, err)
@@ -968,9 +968,9 @@ func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mockForkConfig := &thor.ForkConfig{}
+	mockForkConfig := thor.ForkConfig{}
 
-	consensus := New(repo, stater, mockForkConfig)
+	consensus := New(repo, stater, &mockForkConfig)
 
 	builder := new(block.Builder).
 		ParentID(genesisBlock.Header().ID()).
@@ -998,9 +998,9 @@ func TestNewRuntimeForReplay_ValidateStakingProposerError(t *testing.T) {
 	stater := state.NewStater(db)
 
 	mockRepo := &chain.Repository{}
-	mockForkConfig := &thor.ForkConfig{}
+	mockForkConfig := thor.ForkConfig{}
 
-	consensus := New(mockRepo, stater, mockForkConfig)
+	consensus := New(mockRepo, stater, &mockForkConfig)
 
 	builder := new(block.Builder).
 		ParentID(thor.Bytes32{}).

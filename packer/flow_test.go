@@ -114,13 +114,13 @@ func TestAdopt(t *testing.T) {
 }
 
 func TestAdoptTypedTxs(t *testing.T) {
-	fc := thor.SoloFork
+	fc := &thor.SoloFork
 	fc.HAYABUSA = math.MaxUint32
 	// Setup environment
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
-		ForkConfig: &fc,
+		ForkConfig: fc,
 	})
 
 	// Build genesis block
@@ -133,7 +133,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &fc, 0)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, fc, 0)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)

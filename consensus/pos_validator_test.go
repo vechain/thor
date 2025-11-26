@@ -232,9 +232,9 @@ func TestValidateStakingProposer_LockedVETError(t *testing.T) {
 	stater := state.NewStater(db)
 
 	mockRepo := &chain.Repository{}
-	mockForkConfig := &thor.ForkConfig{}
+	mockForkConfig := thor.ForkConfig{}
 
-	consensus := New(mockRepo, stater, mockForkConfig)
+	consensus := New(mockRepo, stater, &mockForkConfig)
 
 	parent := &block.Header{}
 
@@ -280,25 +280,25 @@ type hayabusaSetup struct {
 }
 
 func newHayabusaSetup(t *testing.T) *hayabusaSetup {
-	forkConfig := thor.SoloFork
+	forkConfig := &thor.SoloFork
 	forkConfig.HAYABUSA = 2
 	cfg := genesis.SoloConfig
 
 	devConfig := genesis.DevConfig{
-		ForkConfig: &forkConfig,
+		ForkConfig: forkConfig,
 		Config:     &cfg,
 	}
 
 	chain, err := testchain.NewIntegrationTestChain(devConfig, 1)
 	assert.NoError(t, err)
 
-	consensus := New(chain.Repo(), chain.Stater(), &forkConfig)
+	consensus := New(chain.Repo(), chain.Stater(), forkConfig)
 
 	return &hayabusaSetup{
 		chain:     chain,
 		consensus: consensus,
 		t:         t,
-		config:    &forkConfig,
+		config:    forkConfig,
 	}
 }
 
