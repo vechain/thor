@@ -5,7 +5,7 @@
 
 package rpc
 
-import "github.com/ethereum/go-ethereum/p2p"
+import "github.com/vechain/thor/v2/p2p"
 
 type msgData struct {
 	ID       uint32

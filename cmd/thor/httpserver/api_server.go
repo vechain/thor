@@ -64,6 +64,7 @@ type APIConfig struct {
 	PriorityIncreasePercentage int
 	Timeout                    int
 	SlowQueriesThreshold       int
+	Log5XXErrors               bool
 }
 
 func StartAPIServer(
@@ -145,10 +146,11 @@ func StartAPIServer(
 
 	// metrics and request logger should be configured as soon as possible
 	slowQueriesThreshold := time.Duration(config.SlowQueriesThreshold) * time.Millisecond
-	router.Use(middleware.RequestLoggerMiddleware(logger, config.EnableReqLogger, slowQueriesThreshold))
+	router.Use(middleware.RequestLoggerMiddleware(logger, config.EnableReqLogger, slowQueriesThreshold, config.Log5XXErrors))
 	if config.EnableMetrics {
 		router.Use(middleware.MetricsMiddleware)
 	}
+	router.Use(middleware.HandlePanics(config.Log5XXErrors))
 
 	router.Use(middleware.HandleXGenesisID(repo.GenesisBlock().Header().ID()))
 	router.Use(middleware.HandleXThorestVersion)
