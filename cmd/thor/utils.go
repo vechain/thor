@@ -383,7 +383,7 @@ func suggestFDCache() int {
 	return n
 }
 
-func openLogDB(dir string) (logsdb.LogDB, error) {
+func openLogDB(dir string) (logsdb.LogsDB, error) {
 	path := filepath.Join(dir, "logs-v2.db")
 	db, err := sqlite3.New(path)
 	if err != nil {
@@ -392,7 +392,7 @@ func openLogDB(dir string) (logsdb.LogDB, error) {
 	return db, nil
 }
 
-func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB logsdb.LogDB) (*chain.Repository, error) {
+func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB logsdb.LogsDB) (*chain.Repository, error) {
 	genesisBlock, genesisEvents, genesisTransfers, err := gene.Build(state.NewStater(mainDB))
 	if err != nil {
 		return nil, errors.Wrap(err, "build genesis block")
@@ -647,7 +647,7 @@ func openMemMainDB() *muxdb.MuxDB {
 	return muxdb.NewMem()
 }
 
-func openMemLogDB() logsdb.LogDB {
+func openMemLogDB() logsdb.LogsDB {
 	db, err := sqlite3.NewMem()
 	if err != nil {
 		panic(errors.Wrap(err, "open log database"))

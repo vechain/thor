@@ -31,7 +31,7 @@ type Core struct {
 	repo       *chain.Repository
 	stater     *state.Stater
 	packer     *packer.Packer
-	logDB      logsdb.LogDB
+	logDB      logsdb.LogsDB
 	bandwidth  bandwidth.Bandwidth
 	options    Options
 	forkConfig *thor.ForkConfig
@@ -41,7 +41,7 @@ type Core struct {
 func NewCore(
 	repo *chain.Repository,
 	stater *state.Stater,
-	logDB logsdb.LogDB,
+	logDB logsdb.LogsDB,
 	options Options,
 	forkConfig *thor.ForkConfig,
 ) *Core {

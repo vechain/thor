@@ -21,11 +21,11 @@ import (
 
 type Transfers struct {
 	repo  *chain.Repository
-	db    logsdb.LogDB
+	db    logsdb.LogsDB
 	limit uint64
 }
 
-func New(repo *chain.Repository, db logsdb.LogDB, logsLimit uint64) *Transfers {
+func New(repo *chain.Repository, db logsdb.LogsDB, logsLimit uint64) *Transfers {
 	return &Transfers{
 		repo,
 		db,

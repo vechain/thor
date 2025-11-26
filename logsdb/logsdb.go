@@ -13,8 +13,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// LogDB defines the interface for log database operations.
-type LogDB interface {
+// LogsDB defines the interface for log database operations.
+type LogsDB interface {
 	// FilterEvents filters events based on the given criteria.
 	FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error)
 

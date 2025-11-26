@@ -21,11 +21,11 @@ import (
 
 type Events struct {
 	repo  *chain.Repository
-	db    logsdb.LogDB
+	db    logsdb.LogsDB
 	limit uint64
 }
 
-func New(repo *chain.Repository, db logsdb.LogDB, logsLimit uint64) *Events {
+func New(repo *chain.Repository, db logsdb.LogsDB, logsLimit uint64) *Events {
 	return &Events{
 		repo,
 		db,

@@ -225,7 +225,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 }
 
 // Init functions
-func insertBlocks(t *testing.T, db logsdb.LogDB, n int) {
+func insertBlocks(t *testing.T, db logsdb.LogsDB, n int) {
 	b := new(block.Builder).Build()
 	for range n {
 		b = new(block.Builder).
@@ -244,7 +244,7 @@ func insertBlocks(t *testing.T, db logsdb.LogDB, n int) {
 	}
 }
 
-func initTransferServer(t *testing.T, logDb logsdb.LogDB, limit uint64) {
+func initTransferServer(t *testing.T, logDb logsdb.LogsDB, limit uint64) {
 	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
@@ -254,7 +254,7 @@ func initTransferServer(t *testing.T, logDb logsdb.LogDB, limit uint64) {
 	ts = httptest.NewServer(router)
 }
 
-func createDb(t *testing.T) logsdb.LogDB {
+func createDb(t *testing.T) logsdb.LogsDB {
 	logDb, err := sqlite3.NewMem()
 	if err != nil {
 		t.Fatal(err)

@@ -45,7 +45,7 @@ type Chain struct {
 	repo         *chain.Repository
 	stater       *state.Stater
 	genesisBlock *block.Block
-	logDB        logsdb.LogDB
+	logDB        logsdb.LogsDB
 	forkConfig   *thor.ForkConfig
 }
 
@@ -56,7 +56,7 @@ func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	genesisBlock *block.Block,
-	logDB logsdb.LogDB,
+	logDB logsdb.LogsDB,
 	forkConfig *thor.ForkConfig,
 ) *Chain {
 	return &Chain{
@@ -360,6 +360,6 @@ func (c *Chain) Database() *muxdb.MuxDB {
 }
 
 // LogDB returns the current logdb.
-func (c *Chain) LogDB() logsdb.LogDB {
+func (c *Chain) LogDB() logsdb.LogsDB {
 	return c.logDB
 }

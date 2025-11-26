@@ -393,7 +393,7 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	var mainDB *muxdb.MuxDB
-	var logDB logsdb.LogDB
+	var logDB logsdb.LogsDB
 	var instanceDir string
 
 	if ctx.Bool(persistFlag.Name) {
