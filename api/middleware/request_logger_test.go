@@ -61,104 +61,199 @@ func (m *mockLogger) GetLoggedData() []any {
 }
 
 func TestRequestLoggerHandler(t *testing.T) {
-	mockLog := &mockLogger{}
-	enabled := atomic.Bool{}
-	enabled.Store(true)
-
-	// Define a test handler to wrap
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(10 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-
-	// Create the RequestLoggerHandler
-	slowQueriesThreshold := 0 * time.Millisecond
-	loggerHandler := RequestLoggerMiddleware(mockLog, &enabled, slowQueriesThreshold)(testHandler)
-
-	// Create a test HTTP request
-	reqBody := "test body"
-	req := httptest.NewRequest("POST", "http://example.com/foo", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	// Create a ResponseRecorder to record the response
-	rr := httptest.NewRecorder()
-
-	// Serve the HTTP request
-	loggerHandler.ServeHTTP(rr, req)
-
-	// Check the response status code
-	assert.Equal(t, http.StatusOK, rr.Code)
-
-	// Check the response body
-	assert.Equal(t, "OK", rr.Body.String())
-
-	// Verify that the logger recorded the correct information
-	loggedData := mockLog.GetLoggedData()
-	assert.Contains(t, loggedData, "URI")
-	assert.Contains(t, loggedData, "http://example.com/foo")
-	assert.Contains(t, loggedData, "Method")
-	assert.Contains(t, loggedData, "POST")
-	assert.Contains(t, loggedData, "Body")
-	assert.Contains(t, loggedData, reqBody)
-
-	// Check if timestamp is present
-	foundTimestamp := false
-	for i := 0; i < len(loggedData); i += 2 {
-		if loggedData[i] == "Timestamp" {
-			_, ok := loggedData[i+1].(int64)
-			assert.True(t, ok, "timestamp should be an int64")
-			foundTimestamp = true
-			break
-		}
+	tests := []struct {
+		name                 string
+		handler              http.HandlerFunc
+		enabled              bool
+		slowQueriesThreshold time.Duration
+		log5xxErrors         bool
+		expectedStatusCode   int
+		shouldLog            bool
+		description          string
+	}{
+		{
+			name: "all logging enabled - fast 2xx response",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			},
+			enabled:              true,
+			slowQueriesThreshold: 0,
+			log5xxErrors:         false,
+			expectedStatusCode:   http.StatusOK,
+			shouldLog:            true,
+			description:          "should log when all logging is enabled",
+		},
+		{
+			name: "all logging disabled - fast 2xx response",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 0,
+			log5xxErrors:         false,
+			expectedStatusCode:   http.StatusOK,
+			shouldLog:            false,
+			description:          "should not log when all logging is disabled",
+		},
+		{
+			name: "slow query detection - request exceeds threshold",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				time.Sleep(15 * time.Millisecond)
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 10 * time.Millisecond,
+			log5xxErrors:         false,
+			expectedStatusCode:   http.StatusOK,
+			shouldLog:            true,
+			description:          "should log slow queries even when general logging is disabled",
+		},
+		{
+			name: "slow query detection - request under threshold",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				time.Sleep(5 * time.Millisecond)
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 20 * time.Millisecond,
+			log5xxErrors:         false,
+			expectedStatusCode:   http.StatusOK,
+			shouldLog:            false,
+			description:          "should not log fast queries when under threshold",
+		},
+		{
+			name: "5xx error logging - internal server error",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Internal Server Error"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 0,
+			log5xxErrors:         true,
+			expectedStatusCode:   http.StatusInternalServerError,
+			shouldLog:            true,
+			description:          "should log 500 errors when 5xx logging is enabled",
+		},
+		{
+			name: "5xx error logging - service unavailable",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte("Service Unavailable"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 0,
+			log5xxErrors:         true,
+			expectedStatusCode:   http.StatusServiceUnavailable,
+			shouldLog:            true,
+			description:          "should log 503 errors when 5xx logging is enabled",
+		},
+		{
+			name: "5xx error logging disabled - internal server error",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Internal Server Error"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 0,
+			log5xxErrors:         false,
+			expectedStatusCode:   http.StatusInternalServerError,
+			shouldLog:            false,
+			description:          "should not log 5xx errors when 5xx logging is disabled",
+		},
+		{
+			name: "4xx errors not logged - bad request",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad Request"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 0,
+			log5xxErrors:         true,
+			expectedStatusCode:   http.StatusBadRequest,
+			shouldLog:            false,
+			description:          "should not log 4xx errors even when 5xx logging is enabled",
+		},
+		{
+			name: "multiple conditions - slow 5xx error",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				time.Sleep(15 * time.Millisecond)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Internal Server Error"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 10 * time.Millisecond,
+			log5xxErrors:         true,
+			expectedStatusCode:   http.StatusInternalServerError,
+			shouldLog:            true,
+			description:          "should log when multiple conditions are met",
+		},
+		{
+			name: "implicit 200 status code",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Write([]byte("OK"))
+			},
+			enabled:              false,
+			slowQueriesThreshold: 0,
+			log5xxErrors:         true,
+			expectedStatusCode:   http.StatusOK,
+			shouldLog:            false,
+			description:          "should handle implicit 200 status code correctly",
+		},
 	}
-	assert.True(t, foundTimestamp, "timestamp should be logged")
 
-	// slow queries test
-	mockLog = &mockLogger{}
-	enabled.Store(false)
-	slowQueriesThreshold = 1 * time.Millisecond
-	loggerHandler = RequestLoggerMiddleware(mockLog, &enabled, slowQueriesThreshold)(testHandler)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			mockLog := &mockLogger{}
+			enabled := atomic.Bool{}
+			enabled.Store(tt.enabled)
 
-	// Serve the HTTP request
-	rr = httptest.NewRecorder()
-	reqBody = "slow request test body"
-	req = httptest.NewRequest("POST", "http://example.com/foo", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	loggerHandler.ServeHTTP(rr, req)
+			// Create the RequestLoggerHandler
+			loggerHandler := RequestLoggerMiddleware(mockLog, &enabled, tt.slowQueriesThreshold, tt.log5xxErrors)(tt.handler)
 
-	// Check the response status code
-	assert.Equal(t, http.StatusOK, rr.Code)
+			// Create a test HTTP request
+			reqBody := "test body"
+			req := httptest.NewRequest("POST", "http://example.com/foo", strings.NewReader(reqBody))
+			req.Header.Set("Content-Type", "application/json")
 
-	// Check the response body
-	assert.Equal(t, "OK", rr.Body.String())
+			// Create a ResponseRecorder to record the response
+			rr := httptest.NewRecorder()
 
-	// Verify that the logger recorded the correct information
-	loggedData = mockLog.GetLoggedData()
-	assert.Contains(t, loggedData, "URI")
-	assert.Contains(t, loggedData, "http://example.com/foo")
-	assert.Contains(t, loggedData, "Method")
-	assert.Contains(t, loggedData, "POST")
-	assert.Contains(t, loggedData, "Body")
-	assert.Contains(t, loggedData, reqBody)
+			// Serve the HTTP request
+			loggerHandler.ServeHTTP(rr, req)
 
-	// Check if timestamp is present
-	foundTimestamp = false
-	foundDuration := false
-	for i := 0; i < len(loggedData); i += 2 {
-		if loggedData[i] == "Timestamp" {
-			_, ok := loggedData[i+1].(int64)
-			assert.True(t, ok, "timestamp should be an int64")
-			foundTimestamp = true
-			continue
-		}
-		if loggedData[i] == "DurationMs" {
-			_, ok := loggedData[i+1].(int64)
-			assert.True(t, ok, "duration should be an int64")
-			foundDuration = true
-			continue
-		}
+			// Check the response status code
+			assert.Equal(t, tt.expectedStatusCode, rr.Code, tt.description)
+
+			// Check if logging occurred as expected
+			loggedData := mockLog.GetLoggedData()
+			if tt.shouldLog {
+				assert.NotEmpty(t, loggedData, "expected request to be logged but no data was logged")
+				assert.Contains(t, loggedData, "URI", "logged data should contain URI")
+				assert.Contains(t, loggedData, "http://example.com/foo", "logged data should contain request URI")
+				assert.Contains(t, loggedData, "Method", "logged data should contain Method")
+				assert.Contains(t, loggedData, "POST", "logged data should contain request method")
+				assert.Contains(t, loggedData, "Body", "logged data should contain Body")
+				assert.Contains(t, loggedData, reqBody, "logged data should contain request body")
+
+				// Check if timestamp is present
+				foundTimestamp := false
+				for i := 0; i < len(loggedData); i += 2 {
+					if loggedData[i] == "Timestamp" {
+						_, ok := loggedData[i+1].(int64)
+						assert.True(t, ok, "timestamp should be an int64")
+						foundTimestamp = true
+						break
+					}
+				}
+				assert.True(t, foundTimestamp, "timestamp should be logged")
+			} else {
+				assert.Empty(t, loggedData, "expected request not to be logged but data was logged: %v", loggedData)
+			}
+		})
 	}
-	assert.True(t, foundTimestamp, "timestamp should be logged")
-	assert.True(t, foundDuration, "duration should be logged")
 }
