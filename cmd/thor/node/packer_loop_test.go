@@ -158,9 +158,9 @@ func TestUpdatePackMetrics(t *testing.T) {
 }
 
 func TestCleanupTransactions_WithTransactions(t *testing.T) {
-	forkConfig := thor.SoloFork
+	forkConfig := &thor.SoloFork
 	forkConfig.GALACTICA = 1000
-	_, n := getFlowAndNode(t, &forkConfig)
+	_, n := getFlowAndNode(t, forkConfig)
 
 	bbSum := n.repo.BestBlockSummary()
 

@@ -38,7 +38,5 @@ func TestNewDevnet(t *testing.T) {
 
 func TestNewDevnet_SoloConfig(t *testing.T) {
 	id := NewDevnet().ID()
-
-	// Thor Solo Genesis ID should never change
-	assert.Equal(t, thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6"), id)
+	assert.Equal(t, thor.MustParseBytes32("0x00000000a4f3c0cf9218d99644321582025ea4e4664cb8001d14735e68ccd75f"), id)
 }
