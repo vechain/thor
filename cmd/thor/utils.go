@@ -270,6 +270,7 @@ func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool)
 		EnableTxPool:               ctx.Bool(apiTxpoolFlag.Name),
 		Timeout:                    ctx.Int(apiTimeoutFlag.Name),
 		SlowQueriesThreshold:       ctx.Int(apiSlowQueriesThresholdFlag.Name),
+		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),
 	}
 }
 
