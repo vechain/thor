@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	github.com/beevik/ntp v0.2.0
+	github.com/cockroachdb/pebble v1.1.5
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/dop251/goja v0.0.0-20230707174833-636fdf960de1
@@ -14,11 +15,11 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 	github.com/holiman/uint256 v1.2.4
-	github.com/mattn/go-isatty v0.0.3
+	github.com/mattn/go-isatty v0.0.17
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/mattn/go-tty v0.0.0-20180219170247-931426f7535a
 	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
-	github.com/pkg/errors v0.8.1-0.20171216070316-e881fd58d78e
+	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/client_model v0.5.0
@@ -36,27 +37,39 @@ require (
 )
 
 require (
+	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/aristanetworks/goarista v0.0.0-20180222005525-c41ed3986faa // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cockroachdb/errors v1.11.3 // indirect
+	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
+	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
+	github.com/cockroachdb/redact v1.1.5 // indirect
+	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
+	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/go-stack/stack v1.7.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/huin/goupnp v0.0.0-20171109214107-dceda08e705b // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458 // indirect
-	github.com/mattn/go-colorable v0.0.9 // indirect
+	github.com/klauspost/compress v1.16.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
+	github.com/rogpeppe/go-internal v1.10.0 // indirect
+	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect

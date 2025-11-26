@@ -1,0 +1,793 @@
+// Copyright (c) 2025 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package pebblev3
+
+import (
+	"context"
+	"log"
+
+	"github.com/cockroachdb/pebble"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/thor"
+)
+
+// StreamingQueryEngine handles all query execution with streaming iteration
+type StreamingQueryEngine struct {
+	db *pebble.DB
+}
+
+// NewStreamingQueryEngine creates a new query engine
+func NewStreamingQueryEngine(db *pebble.DB) *StreamingQueryEngine {
+	return &StreamingQueryEngine{
+		db: db,
+	}
+}
+
+// FilterEvents implements event filtering with proper AND/OR semantics
+func (q *StreamingQueryEngine) FilterEvents(ctx context.Context, filter *logdb.EventFilter) (results []*logdb.Event, err error) {
+	// Build criterion-level streams
+	criterionStreams, err := q.buildEventCriterionStreams(filter)
+	if err != nil {
+		return nil, err
+	}
+	
+	defer func() {
+		// Guaranteed cleanup regardless of success/failure
+		q.closeEventStreams(criterionStreams)
+		
+		// Handle context cancellation cleanup
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+	}()
+	
+	// Execute streaming query (always in ASC order internally)
+	sequences, err := q.executeEventStreaming(ctx, criterionStreams, filter.Options, filter.Order)
+	if err != nil {
+		return nil, err
+	}
+	
+	// For DESC queries: reverse collected sequences, then apply offset/limit
+	if filter.Order == logdb.DESC {
+		sequences = q.reverseAndApplyLimits(sequences, filter.Options.Offset, filter.Options.Limit)
+	}
+	
+	// Materialization step
+	return q.materializeEvents(sequences)
+}
+
+// FilterTransfers implements transfer filtering with proper AND/OR semantics
+func (q *StreamingQueryEngine) FilterTransfers(ctx context.Context, filter *logdb.TransferFilter) (results []*logdb.Transfer, err error) {
+	criterionStreams, err := q.buildTransferCriterionStreams(filter)
+	if err != nil {
+		return nil, err
+	}
+	
+	defer func() {
+		q.closeTransferStreams(criterionStreams)
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+	}()
+	
+	sequences, err := q.executeTransferStreaming(ctx, criterionStreams, filter.Options, filter.Order)
+	if err != nil {
+		return nil, err
+	}
+	
+	if filter.Order == logdb.DESC {
+		sequences = q.reverseAndApplyLimits(sequences, filter.Options.Offset, filter.Options.Limit)
+	}
+	
+	return q.materializeTransfers(sequences)
+}
+
+// buildEventCriterionStreams creates criterion-level intersectors for events
+func (q *StreamingQueryEngine) buildEventCriterionStreams(filter *logdb.EventFilter) ([]*StreamIntersector, error) {
+	// Handle empty CriteriaSet with synthetic range-only criterion
+	criteria := filter.CriteriaSet
+	if len(criteria) == 0 {
+		criteria = []*logdb.EventCriteria{{}} // synthetic range-only criterion
+	}
+	
+	minSeq, maxSeq := sequenceRangeFromRange(filter.Range)
+	var criterionStreams []*StreamIntersector
+	
+	// Fast path: single-criterion queries
+	if len(criteria) == 1 {
+		criterion := criteria[0]
+		if isSingleAddressOnly(criterion) {
+			// Single address-only fast path
+			iter := q.createAddressRangeIterator(*criterion.Address, minSeq, maxSeq, true)
+			intersector := NewStreamIntersector([]*StreamIterator{iter}, true)
+			return []*StreamIntersector{intersector}, nil
+		}
+	}
+	
+	for _, criterion := range criteria {
+		var iterators []*StreamIterator
+		
+		// Address iterator
+		if criterion.Address != nil {
+			iter := q.createAddressIterator(*criterion.Address, minSeq, maxSeq, true) // Always ASC
+			iterators = append(iterators, iter)
+		}
+		
+		// Topic iterators
+		for i, topic := range criterion.Topics {
+			if topic != nil {
+				iter := q.createTopicIterator(i, *topic, minSeq, maxSeq, true) // Always ASC
+				iterators = append(iterators, iter)
+			}
+		}
+		
+		// If no address/topics (range-only criterion), create primary range iterator
+		if len(iterators) == 0 {
+			iter := q.createPrimaryRangeIteratorEvents(minSeq, maxSeq, true) // Always ASC
+			iterators = append(iterators, iter)
+		}
+		
+		criterionStream := NewStreamIntersector(iterators, true) // Always ASC
+		criterionStreams = append(criterionStreams, criterionStream)
+	}
+	
+	return criterionStreams, nil
+}
+
+// buildTransferCriterionStreams creates criterion-level intersectors for transfers
+func (q *StreamingQueryEngine) buildTransferCriterionStreams(filter *logdb.TransferFilter) ([]*StreamIntersector, error) {
+	// Handle empty CriteriaSet with synthetic range-only criterion
+	criteria := filter.CriteriaSet
+	if len(criteria) == 0 {
+		criteria = []*logdb.TransferCriteria{{}} // synthetic range-only criterion
+	}
+	
+	minSeq, maxSeq := sequenceRangeFromRange(filter.Range)
+	var criterionStreams []*StreamIntersector
+	
+	// Fast path: single-criterion queries
+	if len(criteria) == 1 {
+		criterion := criteria[0]
+		if isSingleSenderOnly(criterion) {
+			iter := q.createSenderRangeIterator(*criterion.Sender, minSeq, maxSeq, true)
+			intersector := NewStreamIntersector([]*StreamIterator{iter}, true)
+			return []*StreamIntersector{intersector}, nil
+		}
+		if isSingleRecipientOnly(criterion) {
+			iter := q.createRecipientRangeIterator(*criterion.Recipient, minSeq, maxSeq, true)
+			intersector := NewStreamIntersector([]*StreamIterator{iter}, true)
+			return []*StreamIntersector{intersector}, nil
+		}
+		if isSingleTxOriginOnly(criterion) {
+			iter := q.createTxOriginRangeIterator(*criterion.TxOrigin, minSeq, maxSeq, true)
+			intersector := NewStreamIntersector([]*StreamIterator{iter}, true)
+			return []*StreamIntersector{intersector}, nil
+		}
+	}
+	
+	for _, criterion := range criteria {
+		var iterators []*StreamIterator
+		
+		if criterion.Sender != nil {
+			iter := q.createTransferSenderIterator(*criterion.Sender, minSeq, maxSeq, true)
+			iterators = append(iterators, iter)
+		}
+		
+		if criterion.Recipient != nil {
+			iter := q.createTransferRecipientIterator(*criterion.Recipient, minSeq, maxSeq, true)
+			iterators = append(iterators, iter)
+		}
+		
+		if criterion.TxOrigin != nil {
+			iter := q.createTransferTxOriginIterator(*criterion.TxOrigin, minSeq, maxSeq, true)
+			iterators = append(iterators, iter)
+		}
+		
+		if len(iterators) == 0 {
+			iter := q.createPrimaryRangeIteratorTransfers(minSeq, maxSeq, true)
+			iterators = append(iterators, iter)
+		}
+		
+		criterionStream := NewStreamIntersector(iterators, true)
+		criterionStreams = append(criterionStreams, criterionStream)
+	}
+	
+	return criterionStreams, nil
+}
+
+// executeEventStreaming executes the streaming query for events with corrected signature
+func (q *StreamingQueryEngine) executeEventStreaming(
+	ctx context.Context,
+	intersectors []*StreamIntersector,
+	options *logdb.Options,
+	order logdb.Order,
+) ([]sequence, error) {
+	var sequences []sequence
+	
+	if len(intersectors) == 1 {
+		// Single intersector fast path - no union overhead
+		intersector := intersectors[0]
+		
+		if order == logdb.ASC {
+			// Skip offset items
+			for i := 0; i < int(options.Offset); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				if _, ok := intersector.Next(); !ok {
+					break
+				}
+			}
+			
+			// Collect limit items
+			for i := 0; i < int(options.Limit); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := intersector.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		} else { // DESC
+			// Collect offset+limit in ASC order, FilterEvents will handle reversal
+			maxItems := int(options.Offset + options.Limit)
+			for i := 0; i < maxItems; i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := intersector.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		}
+	} else {
+		// Multi-intersector union logic
+		union := NewStreamUnion(intersectors, true) // Always ASC internally
+		defer union.Close()
+		
+		if order == logdb.ASC {
+			// Skip offset items
+			for i := 0; i < int(options.Offset); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				if _, ok := union.Next(); !ok {
+					break
+				}
+			}
+			
+			// Collect limit items
+			for i := 0; i < int(options.Limit); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := union.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		} else { // DESC
+			// Collect offset+limit in ASC order, FilterEvents will handle reversal
+			maxItems := int(options.Offset + options.Limit)
+			for i := 0; i < maxItems; i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := union.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		}
+	}
+	
+	return sequences, nil // Always returns ASC order
+}
+
+// executeTransferStreaming executes the streaming query for transfers with corrected signature
+func (q *StreamingQueryEngine) executeTransferStreaming(
+	ctx context.Context,
+	intersectors []*StreamIntersector,
+	options *logdb.Options,
+	order logdb.Order,
+) ([]sequence, error) {
+	var sequences []sequence
+	
+	if len(intersectors) == 1 {
+		// Single intersector fast path - no union overhead
+		intersector := intersectors[0]
+		
+		if order == logdb.ASC {
+			// Skip offset items
+			for i := 0; i < int(options.Offset); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				if _, ok := intersector.Next(); !ok {
+					break
+				}
+			}
+			
+			// Collect limit items
+			for i := 0; i < int(options.Limit); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := intersector.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		} else { // DESC
+			// Collect offset+limit in ASC order, FilterTransfers will handle reversal
+			maxItems := int(options.Offset + options.Limit)
+			for i := 0; i < maxItems; i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := intersector.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		}
+	} else {
+		// Multi-intersector union logic
+		union := NewStreamUnion(intersectors, true) // Always ASC internally
+		defer union.Close()
+		
+		if order == logdb.ASC {
+			// Skip offset items
+			for i := 0; i < int(options.Offset); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				if _, ok := union.Next(); !ok {
+					break
+				}
+			}
+			
+			// Collect limit items
+			for i := 0; i < int(options.Limit); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := union.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		} else { // DESC
+			// Collect offset+limit in ASC order, FilterTransfers will handle reversal
+			maxItems := int(options.Offset + options.Limit)
+			for i := 0; i < maxItems; i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+				
+				seq, ok := union.Next()
+				if !ok {
+					break
+				}
+				sequences = append(sequences, seq)
+			}
+		}
+	}
+	
+	return sequences, nil // Always returns ASC order
+}
+
+// reverseAndApplyLimits reverses sequences for DESC order and applies offset/limit
+func (q *StreamingQueryEngine) reverseAndApplyLimits(sequences []sequence, offset, limit uint64) []sequence {
+	// Reverse slice
+	for i, j := 0, len(sequences)-1; i < j; i, j = i+1, j-1 {
+		sequences[i], sequences[j] = sequences[j], sequences[i]
+	}
+	
+	// Apply offset and limit
+	start := int(offset)
+	if start >= len(sequences) {
+		return []sequence{}
+	}
+	
+	end := start + int(limit)
+	if end > len(sequences) {
+		end = len(sequences)
+	}
+	
+	return sequences[start:end]
+}
+
+// sequenceRangeFromRange calculates sequence range from block range - unified helper
+func sequenceRangeFromRange(r *logdb.Range) (sequence, sequence) {
+	if r == nil {
+		return 0, MaxSequenceValue
+	}
+	minSeq, _ := newSequence(r.From, 0, 0)
+	maxSeq, _ := newSequence(r.To, txIndexMask, logIndexMask)
+	return minSeq, maxSeq
+}
+
+// Iterator creation methods
+
+func (q *StreamingQueryEngine) createAddressIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := eventAddressKey(addr, minSeq)
+	upperBound := eventAddressKey(addr, maxSeq.Next())
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating address iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createTopicIterator(topicIndex int, topic thor.Bytes32, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := eventTopicKey(topicIndex, topic, minSeq)
+	upperBound := eventTopicKey(topicIndex, topic, maxSeq.Next())
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating topic iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createTransferSenderIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := transferSenderKey(addr, minSeq)
+	upperBound := transferSenderKey(addr, maxSeq.Next())
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating transfer sender iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createTransferRecipientIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := transferRecipientKey(addr, minSeq)
+	upperBound := transferRecipientKey(addr, maxSeq.Next())
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating transfer recipient iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createTransferTxOriginIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := transferTxOriginKey(addr, minSeq)
+	upperBound := transferTxOriginKey(addr, maxSeq.Next())
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating transfer tx origin iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createPrimaryRangeIteratorEvents(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	// Explicit key layout: E/<minSeq> to E/<maxSeq+1>
+	lowerBound := eventPrimaryKey(minSeq)
+	upperBound := eventPrimaryKey(maxSeq.Next())
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating primary range iterator for events: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createPrimaryRangeIteratorTransfers(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	// Explicit key layout: T/<minSeq> to T/<maxSeq+1>
+	lowerBound := transferPrimaryKey(minSeq)
+	upperBound := transferPrimaryKey(maxSeq.Next())
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating primary range iterator for transfers: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+// Fast path range iterator constructors
+
+func (q *StreamingQueryEngine) createAddressRangeIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := eventAddressKey(addr, minSeq)        // EA/<addr>/<minSeq>
+	upperBound := eventAddressKey(addr, maxSeq.Next()) // EA/<addr>/<maxSeq+1>
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating address range iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createSenderRangeIterator(sender thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := transferSenderKey(sender, minSeq)        // TS/<sender>/<minSeq>
+	upperBound := transferSenderKey(sender, maxSeq.Next()) // TS/<sender>/<maxSeq+1>
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating sender range iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createRecipientRangeIterator(recipient thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := transferRecipientKey(recipient, minSeq)        // TR/<recipient>/<minSeq>
+	upperBound := transferRecipientKey(recipient, maxSeq.Next()) // TR/<recipient>/<maxSeq+1>
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating recipient range iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+func (q *StreamingQueryEngine) createTxOriginRangeIterator(txOrigin thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := transferTxOriginKey(txOrigin, minSeq)        // TO/<txorigin>/<minSeq>
+	upperBound := transferTxOriginKey(txOrigin, maxSeq.Next()) // TO/<txorigin>/<maxSeq+1>
+	
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+	
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating txorigin range iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+	
+	if ascending {
+		recordSeekGE() // Debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Debug metrics
+		iter.SeekLT(upperBound)
+	}
+	
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+// Cleanup methods
+
+func (q *StreamingQueryEngine) closeEventStreams(streams []*StreamIntersector) {
+	for _, stream := range streams {
+		if err := stream.Close(); err != nil {
+			log.Printf("Error closing event stream: %v", err)
+		}
+	}
+}
+
+func (q *StreamingQueryEngine) closeTransferStreams(streams []*StreamIntersector) {
+	for _, stream := range streams {
+		if err := stream.Close(); err != nil {
+			log.Printf("Error closing transfer stream: %v", err)
+		}
+	}
+}
+
+// Helper functions for fast path detection
+
+func isSingleAddressOnly(criterion *logdb.EventCriteria) bool {
+	if criterion.Address == nil {
+		return false
+	}
+	// All topics must be nil
+	for _, topic := range criterion.Topics {
+		if topic != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func isSingleSenderOnly(criterion *logdb.TransferCriteria) bool {
+	return criterion.Sender != nil && criterion.Recipient == nil && criterion.TxOrigin == nil
+}
+
+func isSingleRecipientOnly(criterion *logdb.TransferCriteria) bool {
+	return criterion.Recipient != nil && criterion.Sender == nil && criterion.TxOrigin == nil
+}
+
+func isSingleTxOriginOnly(criterion *logdb.TransferCriteria) bool {
+	return criterion.TxOrigin != nil && criterion.Sender == nil && criterion.Recipient == nil
+}
