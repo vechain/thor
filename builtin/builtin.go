@@ -33,8 +33,9 @@ var (
 		mustLoadContract("ExtensionV2"),
 		mustLoadContract("ExtensionV3"),
 	}
-	Staker  = &stakerContract{mustLoadContract("Staker")}
-	Measure = mustLoadContract("Measure")
+	Staker       = &stakerContract{mustLoadContract("Staker")}
+	Measure      = mustLoadContract("Measure")
+	TestContract = mustLoadContract("TestContract")
 
 	// return gas map maintains the builtin contracts that can be made native call cheaper
 	// only the 0.4.24 compiled contracts are allowed to return gas, as the newer compiler
