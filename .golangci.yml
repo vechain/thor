@@ -48,6 +48,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - p2p/*
 issues:
   max-issues-per-linter: 1000
 formatters:
@@ -74,3 +75,4 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - p2p/*

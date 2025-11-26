@@ -31,8 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
@@ -50,6 +48,8 @@ import (
 	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/logsdb/sqlite3"
 	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -271,6 +271,7 @@ func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool)
 		EnableTxPool:               ctx.Bool(apiTxpoolFlag.Name),
 		Timeout:                    ctx.Int(apiTimeoutFlag.Name),
 		SlowQueriesThreshold:       ctx.Int(apiSlowQueriesThresholdFlag.Name),
+		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),
 	}
 }
 

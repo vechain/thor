@@ -93,6 +93,10 @@ var (
 		Value: 500,
 		Usage: "all queries with execution time(ms) above threshold will be logged",
 	}
+	apiLog5xxErrorsFlag = cli.BoolFlag{
+		Name:  "api-log-5xx-errors",
+		Usage: "log all API requests resulting in 5xx status codes",
+	}
 
 	verbosityFlag = cli.Uint64Flag{
 		Name:  "verbosity",
@@ -204,10 +208,6 @@ var (
 	}
 
 	// solo mode only flags
-	hayabusaFlag = cli.BoolFlag{
-		Name:  "hayabusa",
-		Usage: "start solo immediately as hayabusa",
-	}
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
 		Usage: "create new block when there is pending transaction, may result in block produced in the future timestamp",

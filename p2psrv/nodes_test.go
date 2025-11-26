@@ -10,9 +10,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/p2p/discover"
 )
 
 func dummyNode(idbyte byte) *discover.Node {

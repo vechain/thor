@@ -6,7 +6,7 @@
 package p2p
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/vechain/thor/v2/p2p/discover"
 )
 
 const remoteDiscoveryNodesList = "https://vechain.github.io/bootstraps/node.list"
