@@ -10,10 +10,11 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -24,7 +25,30 @@ type DevConfig struct {
 	ForkConfig      *thor.ForkConfig
 	KeyBaseGasPrice *big.Int
 	LaunchTime      uint64
+	Config          *thor.Config
 }
+
+// SoloConfig is the default configuration for solo/dev mode.
+// Uses short staking periods for faster testing.
+var SoloConfig = thor.Config{
+	LowStakingPeriod:    12,
+	MediumStakingPeriod: 30,
+	HighStakingPeriod:   90,
+	CooldownPeriod:      12,
+	HayabusaTP:          &DefaultHayabusaTP,
+}
+
+// DefaultHayabusaTP is the default Hayabusa transition period (0 = immediate PoS).
+var DefaultHayabusaTP = uint32(0)
+
+const (
+	// DefaultDevnetLaunchTime is the default genesis timestamp for devnet.
+	// Wed May 16 2018 00:00:00 GMT+0800 (CST)
+	DefaultDevnetLaunchTime = uint64(1526400000)
+
+	// InitialDevAccountBalance is 1 billion VET in wei (1e27).
+	InitialDevAccountBalance = "1000000000000000000000000000"
+)
 
 // DevAccount account for development.
 type DevAccount struct {
@@ -65,15 +89,27 @@ func DevAccounts() []DevAccount {
 	return accs
 }
 
-// NewDevnet create genesis for solo mode.
 func NewDevnet() *Genesis {
-	return NewDevnetWithConfig(DevConfig{ForkConfig: &thor.SoloFork})
+	forkConfig := thor.SoloFork
+	return NewDevnetWithConfig(DevConfig{
+		ForkConfig: &forkConfig,
+		Config:     &SoloConfig,
+	})
 }
 
 func NewDevnetWithConfig(config DevConfig) *Genesis {
+	if config.ForkConfig == nil {
+		forkConfig := thor.SoloFork
+		config.ForkConfig = &forkConfig
+	}
+
+	if config.Config != nil && !thor.IsConfigLocked() {
+		thor.SetConfig(*config.Config)
+	}
+
 	launchTime := config.LaunchTime
 	if launchTime == 0 {
-		launchTime = uint64(1526400000) // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+		launchTime = DefaultDevnetLaunchTime
 	}
 
 	executor := DevAccounts()[0].Address
@@ -81,6 +117,8 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 	if config.KeyBaseGasPrice == nil {
 		config.KeyBaseGasPrice = thor.InitialBaseGasPrice
 	}
+
+	isHayabusa := isHayabusaDevnet(&config)
 
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -103,11 +141,16 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
 				return err
 			}
+			if isHayabusa {
+				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+					return err
+				}
+			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range DevAccounts() {
-				bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+				bal, _ := new(big.Int).SetString(InitialDevAccountBalance, 10)
 				if err := state.SetBalance(a.Address, bal); err != nil {
 					return err
 				}
@@ -138,6 +181,17 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 				WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
 			executor)
 
+	if isHayabusa {
+		data := mustEncodeInput(builtin.Staker.ABI, "addValidation", soloBlockSigner.Address, thor.HighStakingPeriod())
+		builder.Call(tx.NewClause(&builtin.Staker.Address).WithData(data).WithValue(staker.MinStake), soloBlockSigner.Address)
+
+		builder.PostCallState(func(state *state.State) error {
+			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
+			_, err := stk.Housekeep(0)
+			return err
+		})
+	}
+
 	id, err := builder.ComputeID()
 	if err != nil {
 		panic(err)
@@ -146,60 +200,12 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 	return &Genesis{builder, id, "devnet"}
 }
 
-// NewHayabusaDevnet create genesis for solo mode.
-func NewHayabusaDevnet() (*Genesis, *thor.ForkConfig) {
-	hayabusaTP := uint32(0)
-	largeNo := (*HexOrDecimal256)(new(big.Int).SetBytes(hexutil.MustDecode("0xffffffffffffffffffffffffffffffffff")))
-	fc := thor.ForkConfig{
-		VIP191:    0,
-		ETH_CONST: 0,
-		BLOCKLIST: 0,
-		ETH_IST:   0,
-		VIP214:    0,
-		FINALITY:  0,
-		HAYABUSA:  0,
-		GALACTICA: 0,
+// isHayabusaDevnet returns true if Hayabusa PoS should be fully active from genesis.
+// This occurs when HAYABUSA fork is at block 0 and HayabusaTP (transition period) is 0,
+// meaning PoS is immediately active without a transition period.
+func isHayabusaDevnet(config *DevConfig) bool {
+	if config.ForkConfig == nil || config.Config == nil || config.Config.HayabusaTP == nil {
+		return false
 	}
-	// Create accounts for all DevAccounts
-	accounts := make([]Account, len(DevAccounts()))
-	for i, devAcc := range DevAccounts() {
-		accounts[i] = Account{
-			Address: devAcc.Address,
-			Balance: largeNo,
-			Energy:  largeNo,
-		}
-	}
-
-	gen := &CustomGenesis{
-		LaunchTime: uint64(1526400000), // Default launch time 'Wed May 16 2018 00:00:00 GMT+0800 (CST)',
-		GasLimit:   thor.InitialGasLimit,
-		ExtraData:  "hayabusa solo",
-		Accounts:   accounts,
-		Authority: []Authority{
-			{
-				MasterAddress:   DevAccounts()[0].Address,
-				EndorsorAddress: DevAccounts()[0].Address,
-				Identity:        thor.BytesToBytes32([]byte("Solo Block Signer")),
-			},
-		},
-		Params: Params{
-			ExecutorAddress: &DevAccounts()[0].Address,
-		},
-		ForkConfig: &fc,
-		Config: &thor.Config{
-			BlockInterval:       10,
-			LowStakingPeriod:    12,
-			MediumStakingPeriod: 30,
-			HighStakingPeriod:   90,
-			CooldownPeriod:      12,
-			EpochLength:         6,
-			HayabusaTP:          &hayabusaTP,
-		},
-	}
-
-	customNet, err := NewCustomNet(gen)
-	if err != nil {
-		panic(err)
-	}
-	return customNet, &fc
+	return config.ForkConfig.HAYABUSA == 0 && *config.Config.HayabusaTP == 0
 }
