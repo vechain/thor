@@ -13,14 +13,14 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/metrics"
+	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p/nat"
+	"github.com/vechain/thor/v2/p2p/netutil"
 )
 
 var (
