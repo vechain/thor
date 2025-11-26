@@ -64,9 +64,8 @@ var SoloFork = ForkConfig{
 	ETH_IST:   0,
 	VIP214:    0,
 	FINALITY:  0,
-	// Any subsequent fork should be started from block 1.
-	GALACTICA: 1,
-	HAYABUSA:  1,
+	GALACTICA: 0,
+	HAYABUSA:  0,
 }
 
 // for well-known networks

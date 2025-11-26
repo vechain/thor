@@ -70,7 +70,6 @@ jobs:
         matrix:
             args:
               - 'solo'
-              - 'solo --hayabusa'
               - 'solo --on-demand'
     runs-on: ubuntu-latest
     steps:

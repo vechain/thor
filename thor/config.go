@@ -93,6 +93,9 @@ func SetConfig(cfg Config) {
 // Required for mainnet and testnet.
 func LockConfig() { locked = true }
 
+// IsConfigLocked returns true if the config is locked.
+func IsConfigLocked() bool { return locked }
+
 // default value is 10 seconds
 func BlockInterval() uint64 { return blockInterval }
 
