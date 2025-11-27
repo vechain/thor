@@ -584,6 +584,45 @@ func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*api.Rece
 	return c.httpConn.GetTransactionReceipt(id, options.revision)
 }
 
+// DebugRevertedTransaction retrieves the revert reason for a reverted transaction.
+//
+// This method corresponds to the POST /debug/tracers API endpoint and provides
+// detailed debugging information for transactions that failed during execution.
+// It returns the revert reason message that explains why the transaction was reverted.
+//
+// This is useful for:
+//   - Debugging failed transaction executions
+//   - Understanding why a smart contract call reverted
+//   - Extracting revert messages from require() statements
+//   - Troubleshooting contract interaction issues
+//
+// The method traces the transaction execution to extract the revert reason,
+// which may include custom error messages from require() or revert() statements
+// in the smart contract code.
+//
+// Note: The node must have the 'call' tracer enabled for this request to succeed.
+// Ensure the node is started with the appropriate tracer configuration.
+//
+// Parameters:
+//   - tx: The 32-byte transaction ID of the reverted transaction
+//
+// Returns:
+//   - hexutil.Bytes: The revert reason data (can be decoded as a string message)
+//   - error: Error if the request fails or transaction ID is invalid
+//
+// Example:
+//
+//	// Debug a reverted transaction
+//	txID := thor.BytesToBytes32([]byte("..."))
+//	revertData, err := client.DebugRevertedTransaction(&txID)
+//	if err != nil {
+//		return fmt.Errorf("failed to debug transaction: %v", err)
+//	}
+//	fmt.Printf("Revert reason: %s\n", string(revertData))
+func (c *Client) DebugRevertedTransaction(tx *thor.Bytes32) (hexutil.Bytes, error) {
+	return c.httpConn.DebugRevertedTransaction(tx)
+}
+
 // SendTransaction submits a signed transaction to the VeChainThor blockchain.
 //
 // This method corresponds to the POST /transactions API endpoint and broadcasts
