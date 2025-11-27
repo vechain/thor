@@ -58,7 +58,6 @@ bin/thor -h
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
 | `--txpool-limit`             | Transaction pool size limit                        |
-| `--hayabusa`                  | Start solo immediately as hayabusa |
 
 
 ## Discovery Node Commands
