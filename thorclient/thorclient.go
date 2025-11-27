@@ -600,6 +600,9 @@ func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*api.Rece
 // which may include custom error messages from require() or revert() statements
 // in the smart contract code.
 //
+// Note: The node must have the 'call' tracer enabled for this request to succeed.
+// Ensure the node is started with the appropriate tracer configuration.
+//
 // Parameters:
 //   - tx: The 32-byte transaction ID of the reverted transaction
 //
