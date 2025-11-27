@@ -6,17 +6,23 @@
 package thorclient
 
 import (
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/testnode"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
+	_ "github.com/vechain/thor/v2/tracers/native"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -127,4 +133,38 @@ func TestGetTransaction(t *testing.T) {
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
 		})
 	}
+}
+
+func TestClient_DebugRevertedTransaction(t *testing.T) {
+	node, err := testnode.NewNodeBuilder().Build()
+	assert.NoError(t, err)
+	require.NoError(t, node.Start())
+	t.Cleanup(func() {
+		require.NoError(t, node.Stop())
+	})
+
+	txThatReverts := tx.NewBuilder(tx.TypeLegacy).
+		Gas(100_000).
+		Expiration(1000).
+		GasPriceCoef(255).
+		ChainTag(node.Chain().ChainTag())
+
+	method, ok := builtin.Params.ABI.MethodByName("set")
+	assert.True(t, ok)
+
+	input, err := method.EncodeInput(thor.Bytes32{}, big.NewInt(1))
+	assert.NoError(t, err)
+	clause := tx.NewClause(&builtin.Params.Address).WithData(input)
+
+	txThatReverts.Clause(clause)
+
+	trx := txThatReverts.Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0], trx))
+
+	client := New(node.APIServer().URL)
+	id := trx.ID()
+	data, err := client.DebugRevertedTransaction(&id)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "builtin: executor required")
 }
