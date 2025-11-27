@@ -1,0 +1,26 @@
+name: Zizmor Scan
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["**"]
+    paths: ['.github/workflows/**']
+
+permissions: {}
+
+jobs:
+  zizmor:
+    uses: vechain/github-actions-public/.github/workflows/scan-workflows.yaml@77660aeff2fac9bbb704b3a2ce786814d0b632fa # v.1.1.0
+    with:
+      persona: 'auditor'
+      min_severity: 'high'
+      min_confidence: 'high'
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      issues: write
+      pull-requests: write
+    secrets:
+      ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
