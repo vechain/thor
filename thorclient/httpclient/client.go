@@ -270,6 +270,8 @@ func (c *Client) DebugRevertedTransaction(txID *thor.Bytes32) (hexutil.Bytes, er
 		}
 		if resp.Error == "execution reverted" {
 			return resp.Output, nil
+		} else if resp.Error != "" {
+			return nil, fmt.Errorf("transaction errored with: %s", resp.Error)
 		}
 	}
 
