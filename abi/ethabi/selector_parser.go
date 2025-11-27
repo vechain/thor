@@ -45,12 +45,12 @@ func parseToken(unescapedSelector string, isIdent bool) (string, string, error) 
 	}
 	firstChar := unescapedSelector[0]
 	position := 1
-	if !(isAlpha(firstChar) || (isIdent && isIdentifierSymbol(firstChar))) {
+	if !(isAlpha(firstChar) || (isIdent && isIdentifierSymbol(firstChar))) { //nolint: staticcheck
 		return "", "", fmt.Errorf("invalid token start: %c", firstChar)
 	}
 	for position < len(unescapedSelector) {
 		char := unescapedSelector[position]
-		if !(isAlpha(char) || isDigit(char) || (isIdent && isIdentifierSymbol(char))) {
+		if !(isAlpha(char) || isDigit(char) || (isIdent && isIdentifierSymbol(char))) { //nolint: staticcheck
 			break
 		}
 		position++

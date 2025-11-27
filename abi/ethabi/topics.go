@@ -138,7 +138,7 @@ func genIntType(rule int64, size uint) []byte {
 		}
 	}
 	for i := range size {
-		topic[common.HashLength-i-1] = byte(rule >> (i * 8))
+		topic[common.HashLength-i-1] = byte(rule >> (i * 8)) //nolint: gosec
 	}
 	return topic[:]
 }
