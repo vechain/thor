@@ -23,7 +23,6 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
-	_ "github.com/vechain/thor/v2/tracers/native"
 	"github.com/vechain/thor/v2/tx"
 )
 
