@@ -251,12 +251,10 @@ func (c *Client) DebugRevertedTransaction(txID *thor.Bytes32) (hexutil.Bytes, er
 		return nil, fmt.Errorf("unable to debug reverted transaction - %w", err)
 	}
 	for i := range tx.Clauses {
-		reqBody := map[string]any{
-			"target": fmt.Sprintf("%s/%s/%d", receipt.Meta.BlockID.String(), txID.String(), i),
-			"name":   "call",
-			"config": map[string]any{
-				"OnlyTopCall": true,
-			},
+		reqBody := &api.TraceClauseOption{
+			Target: fmt.Sprintf("%s/%s/%d", receipt.Meta.BlockID.String(), txID.String(), i),
+			Name:   "call",
+			Config: json.RawMessage(`{"OnlyTopCall": true}`),
 		}
 		body, err := c.httpPOST(c.url+"/debug/tracers", reqBody)
 		if err != nil {
