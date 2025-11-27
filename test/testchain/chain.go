@@ -24,6 +24,11 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/logger"
+	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
 // Chain represents the blockchain structure.
