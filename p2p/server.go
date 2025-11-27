@@ -559,7 +559,6 @@ func (srv *Server) startListening() error {
 		srv.loopWG.Go(
 			func() {
 				nat.Map(srv.NAT, srv.quit, "tcp", laddr.Port, laddr.Port, "ethereum p2p")
-				srv.loopWG.Done()
 			})
 	}
 	return nil
