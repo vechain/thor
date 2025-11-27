@@ -168,16 +168,10 @@ func TestNode_Run(t *testing.T) {
 	node, err := testNode(t)
 	assert.NoError(t, err, "Failed to create test node")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
-	go func() {
-		err := node.Run(ctx)
-		assert.NoError(t, err, "Node run should not return an error")
-	}()
-
-	// Allow some time for the node to start
-	time.Sleep(100 * time.Millisecond)
+	assert.NoError(t, node.Run(ctx), "Node run should not return an error")
 }
 
 func TestNode_GuardBlockProcessing_NormalNewBlock(t *testing.T) {
