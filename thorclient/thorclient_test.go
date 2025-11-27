@@ -150,19 +150,24 @@ func TestClient_DebugRevertedTransaction(t *testing.T) {
 		GasPriceCoef(255).
 		ChainTag(node.Chain().ChainTag())
 
+	// add a simple VET transfer, no revert
+	firstClauseNoRevert := tx.NewClause(&thor.Address{0x1}).WithValue(big.NewInt(2))
+	txThatReverts.Clause(firstClauseNoRevert)
+
+	// try to update params with the wrong caller, causes a revert
 	method, ok := builtin.Params.ABI.MethodByName("set")
 	assert.True(t, ok)
-
 	input, err := method.EncodeInput(thor.Bytes32{}, big.NewInt(1))
 	assert.NoError(t, err)
-	clause := tx.NewClause(&builtin.Params.Address).WithData(input)
+	secondClauseReverts := tx.NewClause(&builtin.Params.Address).WithData(input)
+	txThatReverts.Clause(secondClauseReverts)
 
-	txThatReverts.Clause(clause)
-
+	// build and send the transaction
 	trx := txThatReverts.Build()
 	trx = tx.MustSign(trx, genesis.DevAccounts()[1].PrivateKey)
 	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0], trx))
 
+	// check that we can get debug info for the reverted transaction
 	client := New(node.APIServer().URL)
 	id := trx.ID()
 	data, err := client.DebugRevertedTransaction(&id)
