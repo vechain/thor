@@ -75,7 +75,7 @@ jobs:
           GITHUB_HEAD_REF: ${{ github.head_ref }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
-          THOR_BRANCH=${GITHUB_HEAD_REF || GITHUB_REF_NAME} \
+          THOR_BRANCH=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME} \
           RUNTESTS=TestSmokeTest,TestGenerateRequests,TestConnectionDiesNoPingResponse,TestConnectionClosedWithoutSubscription \
           TEST_NETWORK_ADDR=http://127.0.0.1:8669 \
           TEST_PK=99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36 \
