@@ -89,8 +89,13 @@ func (v *Validation) Totals(agg *aggregation.Aggregation) (*Totals, error) {
 		if err != nil {
 			return nil, err
 		}
-		nextPeriodWeight = stakes.NewWeightedStakeWithMultiplier(valNextPeriodTVL, multiplier).Weight +
-			agg.Locked.Weight + agg.Pending.Weight - agg.Exiting.Weight
+
+		valNextPeriodWeight := stakes.NewWeightedStakeWithMultiplier(valNextPeriodTVL, multiplier).Weight + agg.Locked.Weight + agg.Pending.Weight
+		valNextPeriodWeight, underflow := math.SafeSub(valNextPeriodWeight, agg.Exiting.Weight)
+		if underflow {
+			return nil, errors.New("next period weight underflow")
+		}
+		nextPeriodWeight = valNextPeriodWeight
 	}
 
 	return &Totals{

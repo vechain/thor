@@ -104,6 +104,8 @@ func main() {
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
 			apiPriorityFeesPercentageFlag,
+			apiSlowQueriesThresholdFlag,
+			apiLog5xxErrorsFlag,
 			verbosityFlag,
 			verbosityStakerFlag,
 			jsonLogsFlag,
@@ -141,9 +143,11 @@ func main() {
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
 					apiEnableDeprecatedFlag,
+					apiSlowQueriesThresholdFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
 					apiPriorityFeesPercentageFlag,
+					apiLog5xxErrorsFlag,
 					onDemandFlag,
 					blockInterval,
 					persistFlag,
@@ -163,7 +167,6 @@ func main() {
 					enableAdminFlag,
 					allowedTracersFlag,
 					minEffectivePriorityFeeFlag,
-					hayabusaFlag,
 				},
 				Action: soloAction,
 			},
@@ -353,7 +356,6 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
-	isHayabusa := ctx.Bool(hayabusaFlag.Name)
 	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
 	blockInterval := ctx.Uint64(blockInterval.Name)
 	if blockInterval == 0 {
@@ -381,12 +383,8 @@ func soloAction(ctx *cli.Context) error {
 
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
-		if isHayabusa {
-			gene, forkConfig = genesis.NewHayabusaDevnet()
-		} else {
-			forkConfig = &thor.SoloFork
-			gene = genesis.NewDevnet()
-		}
+		forkConfig = &thor.SoloFork
+		gene = genesis.NewDevnet()
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {
@@ -462,7 +460,6 @@ func soloAction(ctx *cli.Context) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		OnDemand:         onDemandBlockProduction,
-		BlockInterval:    thor.BlockInterval(),
 	}
 
 	stater := state.NewStater(mainDB)

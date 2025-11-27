@@ -887,9 +887,9 @@ func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mockForkConfig := &thor.ForkConfig{}
+	mockForkConfig := thor.ForkConfig{}
 
-	consensus := New(repo, stater, mockForkConfig)
+	consensus := New(repo, stater, &mockForkConfig)
 
 	builder := new(block.Builder).
 		ParentID(genesisBlock.Header().ID()).
@@ -917,9 +917,9 @@ func TestNewRuntimeForReplay_ValidateStakingProposerError(t *testing.T) {
 	stater := state.NewStater(db)
 
 	mockRepo := &chain.Repository{}
-	mockForkConfig := &thor.ForkConfig{}
+	mockForkConfig := thor.ForkConfig{}
 
-	consensus := New(mockRepo, stater, mockForkConfig)
+	consensus := New(mockRepo, stater, &mockForkConfig)
 
 	builder := new(block.Builder).
 		ParentID(thor.Bytes32{}).

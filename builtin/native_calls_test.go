@@ -1840,8 +1840,8 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 }
 
 func TestExtensionV3(t *testing.T) {
-	fc := thor.SoloFork
-	chain, err := testchain.NewWithFork(&fc, 180)
+	fc := &thor.SoloFork
+	chain, err := testchain.NewWithFork(fc, 180)
 	assert.Nil(t, err)
 
 	// galactica fork happens at block 1

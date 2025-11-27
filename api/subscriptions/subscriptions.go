@@ -77,13 +77,10 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		beat2Cache: newMessageCache[api.Beat2Message](backtraceLimit),
 		beatCache:  newMessageCache[api.BeatMessage](backtraceLimit),
 	}
-
-	sub.wg.Add(1)
-	go func() {
-		defer sub.wg.Done()
-
+	sub.wg.Go(func() {
 		sub.pendingTx.DispatchLoop(sub.done)
-	}()
+	})
+
 	return sub
 }
 
@@ -227,10 +224,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 	conn.SetReadLimit(100 * 1024) // 100 KB
 
 	closed := make(chan struct{})
-	// start read loop to handle close event
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
+	s.wg.Go(func() {
 		// close connections if not closed already
 		defer close(closed)
 
@@ -250,7 +244,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 				break
 			}
 		}
-	}()
+	})
 
 	return conn, closed, nil
 }

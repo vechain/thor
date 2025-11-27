@@ -14,7 +14,7 @@ jobs:
   unit_tests:
     strategy:
       matrix:
-        go-version: [1.24.x]
+        go-version: [1.25.4]
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - go-version: 1.25.x
@@ -45,7 +45,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24.x
+          go-version: 1.25.x
 
       - name: Make all
         run: make all
@@ -66,7 +66,6 @@ jobs:
         matrix:
             args:
               - 'solo'
-              - 'solo --hayabusa'
               - 'solo --on-demand'
     runs-on: ubuntu-latest
     steps:
@@ -76,7 +75,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24.x
+          go-version: 1.25.x
 
       - name: Make all
         run: make thor

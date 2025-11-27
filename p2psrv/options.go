@@ -8,8 +8,8 @@ package p2psrv
 import (
 	"crypto/ecdsa"
 
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/vechain/thor/v2/p2p/nat"
+	"github.com/vechain/thor/v2/p2p/netutil"
 )
 
 // Options options for creating p2p server.
