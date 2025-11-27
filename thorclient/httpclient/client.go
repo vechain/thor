@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
@@ -233,6 +235,47 @@ func (c *Client) SendTransaction(obj *api.RawTx) (*api.SendTxResult, error) {
 	}
 
 	return &txID, nil
+}
+
+// DebugRevertedTransaction debugs a reverted transaction and returns the revert reason in hex format.
+func (c *Client) DebugRevertedTransaction(txID *thor.Bytes32) (hexutil.Bytes, error) {
+	receipt, err := c.GetTransactionReceipt(txID, "")
+	if err != nil {
+		return nil, fmt.Errorf("unable to debug reverted transaction - %w", err)
+	}
+	if !receipt.Reverted {
+		return nil, fmt.Errorf("transaction did not revert")
+	}
+	tx, err := c.GetTransaction(txID, "", false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to debug reverted transaction - %w", err)
+	}
+	for i := range tx.Clauses {
+		reqBody := &api.TraceClauseOption{
+			Target: fmt.Sprintf("%s/%s/%d", receipt.Meta.BlockID.String(), txID.String(), i),
+			Name:   "call",
+			Config: json.RawMessage(`{"OnlyTopCall": true}`),
+		}
+		body, err := c.httpPOST(c.url+"/debug/tracers", reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("unable to debug reverted transaction - %w", err)
+		}
+
+		var resp struct {
+			Output hexutil.Bytes `json:"output"`
+			Error  string        `json:"error"`
+		}
+		if err = json.Unmarshal(body, &resp); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal debug reverted transaction result - %w", err)
+		}
+		if resp.Error == "execution reverted" {
+			return resp.Output, nil
+		} else if resp.Error != "" {
+			return nil, fmt.Errorf("transaction errored with: %s", resp.Error)
+		}
+	}
+
+	return hexutil.Bytes{}, fmt.Errorf("unable to find reverted clause")
 }
 
 // GetBlock retrieves a block by its block ID.
