@@ -6,7 +6,7 @@
 package validation
 
 import (
-	"github.com/pkg/errors"
+	"errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"

@@ -6,10 +6,10 @@
 package node
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
@@ -44,13 +44,13 @@ func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
 func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) error {
 	expanded, err := restutil.StringToBoolean(req.URL.Query().Get("expanded"), false)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "expanded"))
+		return restutil.BadRequest(fmt.Errorf("expanded: %w", err))
 	}
 
 	originString := req.URL.Query().Get("origin")
 	origin, err := restutil.StringToAddress(originString)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "origin"))
+		return restutil.BadRequest(fmt.Errorf("origin: %w", err))
 	}
 
 	filteredTransactions := n.pool.Dump()
@@ -113,7 +113,7 @@ func filterTransactions(origin thor.Address, allTransactions tx.Transactions) (t
 	for _, tx := range allTransactions {
 		sender, err := tx.Origin()
 		if err != nil {
-			return nil, restutil.BadRequest(errors.WithMessage(err, "filtering origin"))
+			return nil, restutil.BadRequest(fmt.Errorf("filtering origin: %w", err))
 		}
 		if sender == origin {
 			filtered = append(filtered, tx)

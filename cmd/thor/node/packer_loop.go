@@ -7,10 +7,10 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
@@ -159,14 +159,14 @@ func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error)
 	if flow.Number() >= n.forkConfig.FINALITY {
 		shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 		if err != nil {
-			return errors.Wrap(err, "get vote")
+			return fmt.Errorf("get vote: %w", err)
 		}
 	}
 
 	// pack the new block
 	ctx.newBlock, ctx.stage, ctx.receipts, err = flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 	if err != nil {
-		return errors.Wrap(err, "failed to pack block")
+		return fmt.Errorf("failed to pack block: %w", err)
 	}
 
 	err = n.commitBlock(ctx)

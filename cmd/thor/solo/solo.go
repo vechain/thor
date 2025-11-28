@@ -7,12 +7,13 @@ package solo
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/big"
 	"math/rand/v2"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -119,7 +120,7 @@ func (s *Solo) init(ctx context.Context) error {
 	newState := s.stater.NewState(best.Root())
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
-		return errors.WithMessage(err, "failed to get the current base gas price")
+		return fmt.Errorf("failed to get the current base gas price: %w", err)
 	}
 	if currentBGP != nil && currentBGP.Cmp(baseGasPrice) == 0 {
 		return nil
@@ -127,6 +128,7 @@ func (s *Solo) init(ctx context.Context) error {
 
 	method, found := builtin.Params.ABI.MethodByName("set")
 	if !found {
+		//nolint:staticcheck
 		return errors.New("Params ABI: set method not found")
 	}
 
@@ -149,7 +151,7 @@ func (s *Solo) init(ctx context.Context) error {
 		}
 	}
 	if _, err := s.core.Pack(tx.Transactions{baseGasPriceTx}, false); err != nil {
-		return errors.WithMessage(err, "failed to pack base gas price transaction")
+		return fmt.Errorf("failed to pack base gas price transaction: %w", err)
 	}
 
 	return nil

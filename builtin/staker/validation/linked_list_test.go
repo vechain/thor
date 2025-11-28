@@ -6,10 +6,10 @@
 package validation
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/builtin/solidity"

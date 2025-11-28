@@ -19,7 +19,6 @@ import (
 	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/bft"
@@ -512,7 +511,7 @@ func openTempMainDB(dir string) (*muxdb.MuxDB, error) {
 
 	db, err := muxdb.Open(filepath.Join(dir, "maindb"), &opts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "open main database [%v]", dir)
+		return nil, fmt.Errorf("open main database [%v]: %w", dir, err)
 	}
 	return db, nil
 }

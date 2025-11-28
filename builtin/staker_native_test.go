@@ -6,13 +6,13 @@
 package builtin_test
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/abi"

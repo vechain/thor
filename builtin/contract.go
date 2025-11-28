@@ -6,7 +6,7 @@
 package builtin
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin/gen"
@@ -24,7 +24,7 @@ func mustLoadContract(name string) *contract {
 	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
 	if err != nil {
-		panic(errors.Wrap(err, "load ABI for '"+name+"'"))
+		panic(fmt.Errorf("load ABI for '%v': %w", name, err))
 	}
 
 	return &contract{
@@ -53,7 +53,7 @@ func (c *contract) NativeABI() *abi.ABI {
 	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
 	if err != nil {
-		panic(errors.Wrap(err, "load native ABI for '"+c.name+"'"))
+		panic(fmt.Errorf("load native ABI for '%v': %w", c.name, err))
 	}
 	return abi
 }

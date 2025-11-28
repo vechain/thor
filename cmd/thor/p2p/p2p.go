@@ -13,7 +13,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/p2p/discover"
 	"github.com/vechain/thor/v2/p2p/nat"
 
@@ -88,7 +87,7 @@ func New(
 func (p *P2P) Start() error {
 	log.Info("starting P2P networking")
 	if err := p.p2pSrv.Start(p.comm.Protocols(), p.comm.DiscTopic()); err != nil {
-		return errors.Wrap(err, "start P2P server")
+		return fmt.Errorf("start P2P server: %w", err)
 	}
 	p.comm.Start()
 	return nil

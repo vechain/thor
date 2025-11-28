@@ -7,12 +7,13 @@ package rpc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/rand/v2"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/p2p"
 
 	"github.com/vechain/thor/v2/log"
@@ -190,7 +191,7 @@ func (r *RPC) Call(ctx context.Context, msgCode uint64, arg any, result any) err
 		// msg should decode here, or its payload will be discarded by msg loop
 		err := msg.Decode(result)
 		if err != nil {
-			err = errors.WithMessage(err, "decode result")
+			err = fmt.Errorf("decode result: %w", err)
 		}
 		errCh <- err
 		return err

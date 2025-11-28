@@ -7,12 +7,12 @@ package comm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -28,7 +28,7 @@ type rawBlockBatch struct {
 func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32, handler HandleBlockStream) error {
 	ancestor, err := findCommonAncestor(_ctx, repo, peer, headNum)
 	if err != nil {
-		return errors.WithMessage(err, "find common ancestor")
+		return fmt.Errorf("find common ancestor: %w", err)
 	}
 
 	var (
@@ -114,7 +114,7 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 			for i, raw := range batch.rawBlocks {
 				var blk block.Block
 				if err = rlp.DecodeBytes(raw, &blk); err != nil {
-					err = errors.Wrap(err, "invalid block")
+					err = fmt.Errorf("invalid block: %w", err)
 					return
 				}
 

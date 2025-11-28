@@ -6,9 +6,9 @@
 package validation
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
-
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
@@ -55,14 +55,14 @@ func (r *Repository) getValidation(validator thor.Address) (*Validation, error) 
 
 func (r *Repository) addValidation(validator thor.Address, entry *Validation) error {
 	if err := r.queuedList.Add(validator, entry); err != nil {
-		return errors.Wrap(err, "failed to add validator to queued list")
+		return fmt.Errorf("failed to add validator to queued list: %w", err)
 	}
 	return nil
 }
 
 func (r *Repository) updateValidation(validator thor.Address, entry *Validation) error {
 	if err := r.storage.updateValidation(validator, entry); err != nil {
-		return errors.Wrap(err, "failed to set validator")
+		return fmt.Errorf("failed to set validator: %w", err)
 	}
 	return nil
 }
@@ -95,7 +95,7 @@ func (r *Repository) firstActive() (thor.Address, error) {
 func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
 	val, err := r.storage.getValidation(prev)
 	if err != nil {
-		return thor.Address{}, errors.Wrap(err, "failed to get next")
+		return thor.Address{}, fmt.Errorf("failed to get next: %w", err)
 	}
 
 	if val == nil {

@@ -7,9 +7,10 @@ package chain
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"sync/atomic"
 
-	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/vechain/thor/v2/block"
@@ -109,7 +110,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		bestID := thor.BytesToBytes32(val)
 		existingGenesisID, err := repo.NewChain(bestID).GetBlockID(0)
 		if err != nil {
-			return nil, errors.Wrap(err, "get existing genesis id")
+			return nil, fmt.Errorf("get existing genesis id: %w", err)
 		}
 		if existingGenesisID != genesisID {
 			return nil, errors.New("genesis mismatch")
@@ -117,7 +118,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 
 		summary, err := repo.GetBlockSummary(bestID)
 		if err != nil {
-			return nil, errors.Wrap(err, "get best block")
+			return nil, fmt.Errorf("get best block: %w", err)
 		}
 		repo.bestSummary.Store(summary)
 	}

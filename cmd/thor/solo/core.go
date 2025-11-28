@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -87,7 +86,7 @@ func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transactio
 
 	flow, _, err := c.packer.Mock(best, now, c.options.GasLimit)
 	if err != nil {
-		return nil, errors.WithMessage(err, "mock packer")
+		return nil, fmt.Errorf("mock packer: %w", err)
 	}
 
 	startTime := mclock.Now()
@@ -105,7 +104,7 @@ func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transactio
 
 	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
 	if err != nil {
-		return nil, errors.WithMessage(err, "pack")
+		return nil, fmt.Errorf("pack: %w", err)
 	}
 	execElapsed := mclock.Now() - startTime
 
@@ -115,23 +114,23 @@ func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transactio
 	}
 
 	if _, err := stage.Commit(); err != nil {
-		return nil, errors.WithMessage(err, "commit state")
+		return nil, fmt.Errorf("commit state: %w", err)
 	}
 
 	if !c.options.SkipLogs {
 		w := c.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
-			return nil, errors.WithMessage(err, "write logs")
+			return nil, fmt.Errorf("write logs: %w", err)
 		}
 
 		if err := w.Commit(); err != nil {
-			return nil, errors.WithMessage(err, "commit logs")
+			return nil, fmt.Errorf("commit logs: %w", err)
 		}
 	}
 
 	// ignore fork when solo
 	if err := c.repo.AddBlock(b, receipts, 0, true); err != nil {
-		return nil, errors.WithMessage(err, "commit block")
+		return nil, fmt.Errorf("commit block: %w", err)
 	}
 	realElapsed := mclock.Now() - startTime
 	commitElapsed := mclock.Now() - startTime - execElapsed
@@ -161,7 +160,7 @@ func (c *Core) IsExecutable(trx *tx.Transaction) (bool, error) {
 
 	txObject, err := txpool.ResolveTx(trx, true)
 	if err != nil {
-		return false, errors.WithMessage(err, "resolve transaction")
+		return false, fmt.Errorf("resolve transaction: %w", err)
 	}
 
 	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee)
