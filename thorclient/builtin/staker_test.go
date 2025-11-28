@@ -118,7 +118,7 @@ func TestStaker(t *testing.T) {
 	}
 
 	// pack a new block
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
+	require.NoError(t, node.Chain().MintBlock())
 
 	// TotalStake
 	totalStake, totalWeight, err := staker.TotalStake()
@@ -240,7 +240,7 @@ func TestStaker(t *testing.T) {
 	require.Equal(t, minStake, increaseEvents[0].Added)
 
 	// pack a new block
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0]))
+	require.NoError(t, node.Chain().MintBlock())
 
 	// DecreaseStake
 	receipt, _, err = staker.DecreaseStake(queuedID, minStake).
