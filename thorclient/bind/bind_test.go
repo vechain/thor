@@ -47,7 +47,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	// mint a block to arrive to Galactica
-	if err := testNode.Chain().MintBlock(genesis.DevAccounts()[0]); err != nil {
+	if err := testNode.Chain().MintBlock(); err != nil {
 		require.NoErrorf(t, err, "failed to mint genesis block")
 	}
 

@@ -3,384 +3,291 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package consensus
+package consensus_test
 
 import (
+	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/hashicorp/golang-lru/simplelru"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/builtin/staker"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/staker"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/trie"
-	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vrf"
 )
 
-var minStake = uint64(25_000_000)
+func newHayabusaSetup(t *testing.T, fork, tp uint32, forked bool) *testchain.Chain {
+	thor.MockBlocklist([]string{})
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{
+		HAYABUSA: fork,
+	}, tp)
+	require.NoError(t, err)
+
+	if forked {
+		for range fork {
+			require.NoError(t, chain.MintBlock())
+		}
+		require.NoError(t, chain.AddValidators())
+		for chain.Repo().BestBlockSummary().Header.Number() <= fork+tp {
+			require.NoError(t, chain.MintBlock())
+		}
+		assertConsensus(t, chain, false, true)
+	}
+
+	return chain
+}
+
+func assertConsensus(t *testing.T, chain *testchain.Chain, isPoA, stakerDeployed bool) {
+	active, err := builtin.Staker.Native(chain.State()).IsPoSActive()
+	assert.NoError(t, err)
+	if isPoA {
+		assert.False(t, active, "consensus should be PoA")
+	} else {
+		assert.True(t, active, "consensus should be PoS")
+	}
+
+	code, err := chain.State().GetCode(builtin.Staker.Address)
+	assert.NoError(t, err)
+	if stakerDeployed {
+		assert.NotEmpty(t, code, "staker contract should be deployed")
+	} else {
+		assert.Empty(t, code, "staker contract should not be deployed")
+	}
+}
+
+// copyBlock creates a copy of blk and applies the given function to the block builder before building.
+// The block does not get signed
+func copyBlock(blk *block.Block, apply func(*block.Builder)) *block.Block {
+	header := blk.Header()
+	builder := new(block.Builder).
+		ParentID(header.ParentID()).
+		Timestamp(header.Timestamp()).
+		TotalScore(header.TotalScore()).
+		GasLimit(header.GasLimit()).
+		GasUsed(header.GasUsed()).
+		Beneficiary(header.Beneficiary()).
+		StateRoot(header.StateRoot()).
+		ReceiptsRoot(header.ReceiptsRoot()).
+		TransactionFeatures(header.TxsFeatures()).
+		Alpha(header.Alpha()).
+		BaseFee(header.BaseFee())
+
+	if blk.Header().COM() {
+		builder.COM()
+	}
+
+	for _, tx := range blk.Transactions() {
+		builder.Transaction(tx)
+	}
+
+	apply(builder)
+
+	return builder.Build()
+}
 
 func TestConsensus_PosFork(t *testing.T) {
-	setup := newHayabusaSetup(t)
+	chain := newHayabusaSetup(t, 2, 2, false)
 
 	// mint block 1: update the MBP
-	setup.mintMbpBlock(1)
+	require.NoError(t, chain.MintBlock())
+	assertConsensus(t, chain, true, false)
 
 	// mint block 2: chain should set the staker contract, still using PoA
-	best, parent, st := setup.mintBlock()
-	_, err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "pos - block signer invalid")
-	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
-	assert.NoError(t, err)
+	require.NoError(t, chain.MintBlock())
+	assertConsensus(t, chain, true, true)
 
 	// mint block 3: add validator to the contract
-	setup.mintAddValidatorBlock()
+	require.NoError(t, chain.AddValidators())
 
 	// mint block 4: chain should switch to PoS
-	best, parent, st = setup.mintBlock()
-	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.NoError(t, err)
+	require.NoError(t, chain.MintBlock())
+	assertConsensus(t, chain, false, true)
+}
 
-	cache, err := simplelru.NewLRU(16, nil)
-	assert.NoError(t, err)
+func TestConsensus_PoS_IsTheTime(t *testing.T) {
+	chain := newHayabusaSetup(t, 2, 2, true)
 
-	staker := builtin.Staker.Native(st)
-	leaders, err := staker.LeaderGroup()
-	assert.NoError(t, err)
+	parent := chain.Repo().BestBlockSummary()
+	require.NoError(t, chain.MintBlock())
+	best, err := chain.BestBlock()
+	require.NoError(t, err)
+	signer, err := best.Header().Signer()
+	require.NoError(t, err)
 
-	signer, err := best.Header.Signer()
-	assert.NoError(t, err)
-
-	parentSig, err := parent.Header.Signer()
-	assert.NoError(t, err)
-
-	beneficiary := thor.BytesToAddress([]byte("test"))
-
-	var newLeaders []validation.Leader
-	for _, leader := range leaders {
-		// delete(leaders, signer)
-		if leader.Address == signer {
-			continue
+	var privateKey *ecdsa.PrivateKey
+	for _, acc := range genesis.DevAccounts() {
+		if acc.Address != signer {
+			privateKey = acc.PrivateKey
+			break
 		}
-		newLeaders = append(newLeaders, leader)
 	}
 
-	newLeaders = append(newLeaders, validation.Leader{
-		Address:     parentSig,
-		Beneficiary: &beneficiary,
-		Endorser:    thor.Address{},
-		Weight:      10,
-		Active:      false,
+	copied := signBlock(t, parent.Header, best, privateKey)
+
+	_, _, err = consensus.New(chain.Repo(), chain.Stater(), chain.GetForkConfig()).
+		Process(parent, copied, copied.Header().Timestamp(), 0)
+
+	assert.ErrorContains(t, err, "pos - block timestamp unscheduled")
+}
+
+func TestConsensus_BadScore(t *testing.T) {
+	chain := newHayabusaSetup(t, 2, 2, true)
+
+	parent := chain.Repo().BestBlockSummary()
+	require.NoError(t, chain.MintBlock())
+	best, err := chain.BestBlock()
+	require.NoError(t, err)
+	signer, err := best.Header().Signer()
+	require.NoError(t, err)
+
+	var privateKey *ecdsa.PrivateKey
+	for _, acc := range genesis.DevAccounts() {
+		if acc.Address == signer {
+			privateKey = acc.PrivateKey
+			break
+		}
+	}
+
+	copied := copyBlock(best, func(b *block.Builder) {
+		b.TotalScore(best.Header().TotalScore() + 10)
 	})
-	cache.Add(parent.Header.ID(), newLeaders)
-	setup.consensus.validatorsCache = cache
+	copied = signBlock(t, parent.Header, copied, privateKey)
 
-	newParentHeader := new(block.Builder).
-		ParentID(parent.Header.ParentID()).
-		Timestamp(parent.Header.Timestamp()).
-		GasLimit(parent.Header.GasLimit()).
-		GasUsed(parent.Header.GasUsed()).
-		TotalScore(10003).
-		StateRoot(parent.Header.StateRoot()).
-		ReceiptsRoot(parent.Header.ReceiptsRoot()).
-		Beneficiary(parent.Header.Beneficiary()).
-		Build().Header()
+	_, _, err = consensus.New(chain.Repo(), chain.Stater(), chain.GetForkConfig()).
+		Process(parent, copied, copied.Header().Timestamp(), 0)
 
-	_, err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "pos - stake beneficiary mismatch")
-
-	newLeaders = make([]validation.Leader, 0, len(leaders))
-	for _, leader := range newLeaders {
-		if leader.Address == parentSig {
-			newLeaders = append(newLeaders, validation.Leader{
-				Address:     parentSig,
-				Beneficiary: nil,
-				Endorser:    thor.Address{},
-				Weight:      10,
-				Active:      false,
-			})
-		} else {
-			newLeaders = append(newLeaders, leader)
-		}
-	}
-	cache.Add(parent.Header.ID(), newLeaders)
-	setup.consensus.validatorsCache = cache
-
-	newParentHeader = new(block.Builder).
-		ParentID(parent.Header.ParentID()).
-		Timestamp(parent.Header.Timestamp()).
-		GasLimit(parent.Header.GasLimit()).
-		GasUsed(parent.Header.GasUsed()).
-		TotalScore(1).
-		StateRoot(parent.Header.StateRoot()).
-		ReceiptsRoot(parent.Header.ReceiptsRoot()).
-		Beneficiary(parent.Header.Beneficiary()).
-		Build().Header()
-
-	_, err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
 	assert.ErrorContains(t, err, "pos - block total score invalid")
-
-	slotLockedVET := thor.BytesToBytes32([]byte(("total-weighted-stake")))
-	st.SetRawStorage(builtin.Staker.Address, slotLockedVET, rlp.RawValue{0xFF})
-
-	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "pos - cannot get total weight")
-
-	newParentHeader = new(block.Builder).
-		ParentID(parent.Header.ParentID()).
-		Timestamp(parent.Header.Timestamp()).
-		GasLimit(parent.Header.GasLimit()).
-		GasUsed(parent.Header.GasUsed()).
-		TotalScore(10003).
-		StateRoot(parent.Header.StateRoot()).
-		ReceiptsRoot(parent.Header.ReceiptsRoot()).
-		Beneficiary(parent.Header.Beneficiary()).
-		Build().Header()
-
-	slotValidation := thor.BytesToBytes32([]byte(("validations")))
-	slot := thor.Blake2b(parentSig.Bytes(), slotValidation.Bytes())
-	st.SetRawStorage(builtin.Staker.Address, slot, rlp.RawValue{0xFF})
-
-	_, err = setup.consensus.validateStakingProposer(best.Header, newParentHeader, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "failed to get validator")
 }
 
-func TestConsensus_CannotGetLeaderGroup(t *testing.T) {
-	setup := newHayabusaSetup(t)
+func TestConsensus_BadBeneficiary(t *testing.T) {
+	chain := newHayabusaSetup(t, 2, 2, true)
 
-	setup.mintMbpBlock(1)
+	validator := genesis.DevAccounts()[0]
 
-	best, parent, st := setup.mintBlock()
-	_, err := setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "pos - block signer invalid")
-	_, err = setup.consensus.validateAuthorityProposer(best.Header, parent.Header, st)
-	assert.NoError(t, err)
+	require.NoError(t, chain.MintFromABI(
+		validator,
+		builtin.Staker.Address,
+		builtin.Staker.ABI,
+		big.NewInt(0),
+		"setBeneficiary",
+		validator.Address,
+		datagen.RandAddress(),
+	))
 
-	setup.mintAddValidatorBlock()
+	parent := chain.Repo().BestBlockSummary()
+	best, err := chain.BestBlock()
+	require.NoError(t, err)
+	signer, err := best.Header().Signer()
+	require.NoError(t, err)
 
-	best, parent, st = setup.mintBlock()
-	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.NoError(t, err)
-
-	slotValidationsActiveHead := thor.BytesToBytes32([]byte("validations-active-head"))
-
-	st.SetRawStorage(builtin.Staker.Address, slotValidationsActiveHead, rlp.RawValue{0xFF})
-
-	_, err = setup.consensus.validateStakingProposer(best.Header, parent.Header, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "pos - cannot get leader group")
-}
-
-func TestConsensus_POS_MissedSlots(t *testing.T) {
-	setup := newHayabusaSetup(t)
-	signer := genesis.DevAccounts()[0]
-
-	setup.mintMbpBlock(1)              // mint block 1: update MBP
-	setup.mintBlock()                  // mint block 2: set staker contract
-	setup.mintAddValidatorBlock()      // mint block 3: add validator to queue
-	setup.mintBlock()                  // mint block 4: chain should switch to PoS on future blocks
-	_, parent, st := setup.mintBlock() // mint block 5: Full PoS
-
-	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
-	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval()*2, 10_000_000)
-	assert.NoError(t, err)
-	blk, stage, receipts, err := flow.Pack(signer.PrivateKey, 0, false)
-	assert.NoError(t, err)
-	assert.NoError(t, setup.chain.AddBlock(blk, stage, receipts))
-
-	_, err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
-	assert.NoError(t, err)
-	staker := builtin.Staker.Native(st)
-	validator, err := staker.GetValidation(signer.Address)
-	assert.NoError(t, err)
-	assert.Nil(t, validator.OfflineBlock)
-}
-
-func TestConsensus_POS_Unscheduled(t *testing.T) {
-	setup := newHayabusaSetup(t)
-	signer := genesis.DevAccounts()[0]
-
-	setup.mintMbpBlock(1)              // mint block 1: update MBP
-	setup.mintBlock()                  // mint block 2: set staker contract
-	setup.mintAddValidatorBlock()      // mint block 3: add validator to queue
-	setup.mintBlock()                  // mint block 4: chain should switch to PoS on future blocks
-	_, parent, st := setup.mintBlock() // mint block 5: Full PoS
-
-	blkPacker := packer.New(setup.chain.Repo(), setup.chain.Stater(), signer.Address, &signer.Address, setup.config, 0)
-	flow, _, err := blkPacker.Mock(parent, parent.Header.Timestamp()+1, 10_000_000)
-	assert.NoError(t, err)
-	blk, _, _, err := flow.Pack(signer.PrivateKey, 0, false)
-	assert.NoError(t, err)
-
-	_, err = setup.consensus.validateStakingProposer(blk.Header(), parent.Header, builtin.Staker.Native(st))
-	assert.ErrorContains(t, err, "block timestamp unscheduled")
-}
-
-func TestValidateStakingProposer_LockedVETError(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-
-	mockRepo := &chain.Repository{}
-	mockForkConfig := thor.ForkConfig{}
-
-	consensus := New(mockRepo, stater, &mockForkConfig)
-
-	parent := &block.Header{}
-
-	st := stater.NewState(trie.Root{})
-
-	stakerAddr := builtin.Staker.Address
-	st.SetCode(stakerAddr, builtin.Staker.RuntimeBytecodes())
-
-	paramsAddr := builtin.Params.Address
-	st.SetCode(paramsAddr, builtin.Params.RuntimeBytecodes())
-
-	paramKey := thor.BytesToBytes32([]byte("some_param"))
-	paramValue := []byte("valid_value")
-	st.SetStorage(paramsAddr, paramKey, thor.BytesToBytes32(paramValue))
-
-	staker := builtin.Staker.Native(st)
-
-	builder := new(block.Builder).
-		ParentID(thor.Bytes32{}).
-		Timestamp(1000).
-		GasLimit(1000000).
-		GasUsed(0).
-		TotalScore(0).
-		StateRoot(thor.Bytes32{}).
-		ReceiptsRoot(thor.Bytes32{}).
-		Beneficiary(thor.Address{})
-
-	blk := builder.Build()
-	validSignature := make([]byte, 65)
-	copy(validSignature, []byte("valid_signature_65_bytes_long_for_testing"))
-	blk = blk.WithSignature(validSignature)
-	header := blk.Header()
-
-	_, err := consensus.validateStakingProposer(header, parent, staker)
-	assert.ErrorContains(t, err, "pos - block signer invalid")
-}
-
-type hayabusaSetup struct {
-	chain     *testchain.Chain
-	consensus *Consensus
-	t         *testing.T
-	config    *thor.ForkConfig
-}
-
-func newHayabusaSetup(t *testing.T) *hayabusaSetup {
-	forkConfig := &thor.SoloFork
-	forkConfig.HAYABUSA = 2
-	cfg := genesis.SoloConfig
-
-	devConfig := genesis.DevConfig{
-		ForkConfig: forkConfig,
-		Config:     &cfg,
+	for signer != validator.Address {
+		require.NoError(t, chain.MintBlock())
+		best, err = chain.BestBlock()
+		require.NoError(t, err)
+		signer, err = best.Header().Signer()
+		require.NoError(t, err)
 	}
 
-	chain, err := testchain.NewIntegrationTestChain(devConfig, 1)
-	assert.NoError(t, err)
-
-	consensus := New(chain.Repo(), chain.Stater(), forkConfig)
-
-	return &hayabusaSetup{
-		chain:     chain,
-		consensus: consensus,
-		t:         t,
-		config:    forkConfig,
-	}
-}
-
-func (h *hayabusaSetup) mintBlock(txs ...*tx.Transaction) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
-	signer := genesis.DevAccounts()[0]
-	assert.NoError(h.t, h.chain.MintBlock(signer, txs...))
-
-	best := h.chain.Repo().BestBlockSummary()
-	parent, err := h.chain.Repo().GetBlockSummary(best.Header.ParentID())
-	assert.NoError(h.t, err)
-
-	st := h.chain.Stater().NewState(parent.Root())
-	_, err = builtin.Staker.Native(st).SyncPOS(h.config, best.Header.Number())
-	assert.NoError(h.t, err)
-
-	// actualGroup, err := builtin.Staker.Native(st).LeaderGroup()
-	// assert.NoError(h.t, err)
-	// eq := reflect.DeepEqual(activeGroup, actualGroup)
-	// assert.True(h.t, eq)
-	// assert.Equal(h.t, activeGroup, actualGroup)
-
-	return best, parent, st
-}
-
-func (h *hayabusaSetup) mintMbpBlock(amount int64) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
-	tx := createTx(h.t, h.chain, txArgs{
-		abi:    builtin.Params.ABI,
-		method: "set",
-		args:   []any{thor.KeyMaxBlockProposers, big.NewInt(amount)},
-		signer: genesis.DevAccounts()[0],
-		vet:    big.NewInt(0),
-		addr:   &builtin.Params.Address,
+	copied := copyBlock(best, func(b *block.Builder) {
+		b.Beneficiary(datagen.RandAddress())
 	})
-	return h.mintBlock(tx)
+	copied = signBlock(t, parent.Header, copied, validator.PrivateKey)
+
+	_, _, err = consensus.New(chain.Repo(), chain.Stater(), chain.GetForkConfig()).
+		Process(parent, copied, copied.Header().Timestamp(), 0)
+
+	assert.ErrorContains(t, err, "pos - stake beneficiary mismatch")
 }
 
-func (h *hayabusaSetup) mintAddValidatorBlock(accs ...genesis.DevAccount) (*chain.BlockSummary, *chain.BlockSummary, *state.State) {
-	if len(accs) == 0 {
-		accs = make([]genesis.DevAccount, 1)
-		accs[0] = genesis.DevAccounts()[0]
-	}
-	txs := make([]*tx.Transaction, 0, len(accs))
-	for _, acc := range accs {
-		tx := createTx(h.t, h.chain, txArgs{
-			abi:    builtin.Staker.ABI,
-			method: "addValidation",
-			args:   []any{acc.Address, thor.LowStakingPeriod()},
-			signer: acc,
-			vet:    staker.ToWei(minStake),
-			addr:   &builtin.Staker.Address,
-		})
-		txs = append(txs, tx)
-	}
-	return h.mintBlock(txs...)
+func TestConsensus_Updates(t *testing.T) {
+	chain := newHayabusaSetup(t, 2, 2, true)
+
+	next, ok := chain.NextValidator()
+	require.True(t, ok, "no next validator found")
+
+	val, err := builtin.Staker.Native(chain.State()).GetValidation(next.Address)
+	require.NoError(t, err)
+	require.True(t, val.IsOnline())
+
+	chain.RemoveValidator(next.Address)
+	require.NoError(t, chain.MintBlock())
+	chain.AddValidator(next)
+
+	val, err = builtin.Staker.Native(chain.State()).GetValidation(next.Address)
+	require.NoError(t, err)
+	require.False(t, val.IsOnline())
 }
 
-type txArgs struct {
-	abi    *abi.ABI
-	addr   *thor.Address
-	method string
-	args   []any
-	signer genesis.DevAccount
-	vet    *big.Int
+func TestConsensus_TransitionPeriodBalanceCheck(t *testing.T) {
+	thor.MockBlocklist([]string{})
+	fc := &thor.ForkConfig{
+		HAYABUSA: 2,
+	}
+	// forks but never transitions to PoS within the test
+	gene, err := testchain.CreateGenesis(genesis.DevConfig{ForkConfig: fc}, 2, 2, 100000)
+	require.NoError(t, err)
+	chain, err := testchain.NewIntegrationTestChainWithGenesis(gene, fc, 2)
+	require.NoError(t, err)
+
+	require.NoError(t, chain.MintBlock())
+	require.NoError(t, chain.MintBlock())
+	assertConsensus(t, chain, true, true)
+
+	validator := genesis.DevAccounts()[0]
+
+	require.NoError(t, chain.MintFromABI(
+		validator,
+		builtin.Staker.Address,
+		builtin.Staker.ABI,
+		staker.MinStake,
+		"addValidation",
+		validator.Address,
+		thor.LowStakingPeriod(),
+	))
+
+	for range 32 {
+		require.NoError(t, chain.MintBlock())
+		best := chain.Repo().BestBlockSummary()
+		signer, err := best.Header.Signer()
+		require.NoError(t, err)
+		if signer == validator.Address {
+			t.Log("test passed, transition period is okay")
+			return
+		}
+	}
+
+	t.Fatal("validator failed to sign block during transition period")
 }
 
-func createTx(t *testing.T, chain *testchain.Chain, args txArgs) *tx.Transaction {
-	method, ok := args.abi.MethodByName(args.method)
-	if !ok {
-		t.Fatalf("method %s not found in ABI", args.method)
+func signBlock(t *testing.T, parent *block.Header, blk *block.Block, privateKey *ecdsa.PrivateKey) *block.Block {
+	parentBeta, err := parent.Beta()
+	require.NoError(t, err)
+
+	var alpha []byte
+	// initial value of chained VRF
+	if len(parentBeta) == 0 {
+		alpha = parent.StateRoot().Bytes()
+	} else {
+		alpha = parentBeta
 	}
-	data, err := method.EncodeInput(args.args...)
-	if err != nil {
-		t.Fatalf("failed to encode input: %v", err)
-	}
-	clause := tx.NewClause(args.addr).WithData(data).WithValue(args.vet)
-	trx := new(tx.Builder).
-		ChainTag(chain.ChainTag()).
-		Gas(1_000_000).
-		BlockRef(tx.NewBlockRef(0)).
-		Expiration(1000).
-		Clause(clause).
-		Build()
-	trx = tx.MustSign(trx, args.signer.PrivateKey)
-	return trx
+
+	ec, err := crypto.Sign(blk.Header().SigningHash().Bytes(), privateKey)
+	require.NoError(t, err)
+
+	_, proof, err := vrf.Prove(privateKey, alpha)
+	require.NoError(t, err)
+	sig, err := block.NewComplexSignature(ec, proof)
+	require.NoError(t, err)
+
+	return blk.WithSignature(sig)
 }
