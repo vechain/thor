@@ -128,6 +128,7 @@ func (s *Solo) init(ctx context.Context) error {
 
 	method, found := builtin.Params.ABI.MethodByName("set")
 	if !found {
+		//nolint:staticcheck
 		return errors.New("Params ABI: set method not found")
 	}
 

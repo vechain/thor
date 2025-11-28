@@ -49,6 +49,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	}
 
 	if raw && expanded {
+		//nolint:staticcheck
 		return restutil.BadRequest(fmt.Errorf("raw&expanded: %w", errors.New("Raw and Expanded are mutually exclusive")))
 	}
 

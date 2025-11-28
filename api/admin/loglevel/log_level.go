@@ -51,6 +51,7 @@ func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) e
 	var req api.LogLevelRequest
 
 	if err := restutil.ParseJSON(r.Body, &req); err != nil {
+		//nolint:staticcheck
 		return restutil.BadRequest(fmt.Errorf("Invalid request body: %w", err))
 	}
 
@@ -68,6 +69,7 @@ func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) e
 	case "crit":
 		l.logLevel.Set(log.LevelCrit)
 	default:
+		//nolint:staticcheck
 		return restutil.BadRequest(errors.New("Invalid verbosity level"))
 	}
 

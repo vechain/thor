@@ -128,7 +128,7 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) ([]float64, error) {
 	rewardPercentiles := make([]float64, 0, len(percentileStrs))
 
 	if len(percentileStrs) > maxRewardPercentiles {
-		return nil, restutil.BadRequest(errors.New(fmt.Sprintf("there can be at most %d rewardPercentiles", maxRewardPercentiles)))
+		return nil, restutil.BadRequest(fmt.Errorf("there can be at most %d rewardPercentiles", maxRewardPercentiles))
 	}
 
 	for i, str := range percentileStrs {
@@ -141,7 +141,7 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) ([]float64, error) {
 		}
 		if i > 0 && val < rewardPercentiles[i-1] {
 			return nil, restutil.BadRequest(
-				errors.New(fmt.Sprintf("reward percentiles must be in ascending order, but %f is less than %f", val, rewardPercentiles[i-1])),
+				fmt.Errorf("reward percentiles must be in ascending order, but %f is less than %f", val, rewardPercentiles[i-1]),
 			)
 		}
 		rewardPercentiles = append(rewardPercentiles, val)
