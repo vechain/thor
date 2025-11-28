@@ -30,6 +30,12 @@ jobs:
     name: Go Module Check
     uses: ./.github/workflows/go-mod-check.yaml
 
+  scan-workflows:
+    name: Scan Workflows
+    uses: ./.github/workflows/scan-workflows.yaml
+    secrets:
+      ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
+
   thor-docker-test-suite:
     uses: ./.github/workflows/thor-docker-test-suite.yaml
     secrets:

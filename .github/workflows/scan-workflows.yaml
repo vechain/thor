@@ -1,11 +1,7 @@
 name: Zizmor Scan
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["**"]
-    paths: ['.github/workflows/**']
+  workflow_call:
 
 permissions: {}
 
