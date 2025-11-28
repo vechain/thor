@@ -81,11 +81,11 @@ func NewSignalExitAction(
 					return fmt.Errorf("Check SignalExit GetValidation failed: %w", err)
 				}
 
-				if val.Status != validation.StatusActive {
-					return fmt.Errorf("Check SignalExit GetValidation failed: expected status to be active, got %d", val.Status)
+				if val.Status() != validation.StatusActive {
+					return fmt.Errorf("Check SignalExit GetValidation failed: expected status to be active, got %d", val.Status())
 				}
 
-				if val.ExitBlock == nil {
+				if val.ExitBlock() == nil {
 					return fmt.Errorf("Check SignalExit GetValidation failed: nil ExitBlock")
 				}
 
@@ -179,16 +179,16 @@ func NewIncreaseStakeAction(
 					return fmt.Errorf("Check IncreaseStake failed, validator not found: %w", err)
 				}
 
-				if val.Endorser != endorserID {
+				if val.Endorser() != endorserID {
 					return fmt.Errorf("Check IncreaseStake failed, endorser not found")
 				}
-				if val.Status == validation.StatusExit {
+				if val.Status() == validation.StatusExit {
 					return fmt.Errorf("Check IncreaseStake failed, validator exited")
 				}
-				if val.Status != validation.StatusActive {
+				if val.Status() != validation.StatusActive {
 					return fmt.Errorf("Check IncreaseStake failed, can't increase stake while validator not active")
 				}
-				if val.ExitBlock != nil {
+				if val.ExitBlock() != nil {
 					return fmt.Errorf("Check IncreaseStake failed, validator has signaled exit, cannot increase stake")
 				}
 				if err = staker.validateStakeIncrease(validationID, val, amount); err != nil {
@@ -232,16 +232,16 @@ func NewDecreaseStakeAction(
 				if amount > MaxStakeVET-MinStakeVET {
 					return fmt.Errorf("Check DecreaseStake failed, decrease amount is too large")
 				}
-				if val.Endorser != endorserID {
+				if val.Endorser() != endorserID {
 					return fmt.Errorf("Check DecreaseStake failed, endorser not found")
 				}
-				if val.Status == validation.StatusExit {
+				if val.Status() == validation.StatusExit {
 					return fmt.Errorf("Check DecreaseStake failed, validator exited")
 				}
-				if val.Status != validation.StatusActive {
+				if val.Status() != validation.StatusActive {
 					return fmt.Errorf("Check DecreaseStake failed, can't decrease stake while validator not active")
 				}
-				if val.ExitBlock != nil {
+				if val.ExitBlock() != nil {
 					return fmt.Errorf("Check DecreaseStake failed, validator has signaled exit, cannot decrease stake")
 				}
 
@@ -311,10 +311,10 @@ func NewSetBeneficiaryAction(
 				if err != nil {
 					return fmt.Errorf("Check SetBeneficiary failed, validator not found: %w", err)
 				}
-				if val.Endorser != endorserID {
+				if val.Endorser() != endorserID {
 					return fmt.Errorf("Check SetBeneficiary failed, endorser not found")
 				}
-				if val.Status == validation.StatusExit || val.ExitBlock != nil {
+				if val.Status() == validation.StatusExit || val.ExitBlock() != nil {
 					return fmt.Errorf("Check SetBeneficiary failed, validator has exited or signaled exit")
 				}
 				return nil
@@ -365,12 +365,12 @@ func NewAddDelegationAction(
 					return err
 				}
 
-				if val.Status != validation.StatusQueued && val.Status != validation.StatusActive {
+				if val.Status() != validation.StatusQueued && val.Status() != validation.StatusActive {
 					return NewReverts("validation is not queued or active")
 				}
 
 				// delegations cannot be added to a validator that has signaled to exit
-				if val.ExitBlock != nil {
+				if val.ExitBlock() != nil {
 					return NewReverts("cannot add delegation to exiting validator")
 				}
 
@@ -411,16 +411,16 @@ func NewSignalExitDelegationAction(
 				if del == nil {
 					return NewReverts("delegation is empty")
 				}
-				if del.LastIteration == nil {
+				if del.LastIteration() == nil {
 					return NewReverts("delegation is not signaled exit")
 				}
-				if del.Stake == 0 {
+				if del.Stake() == 0 {
 					return NewReverts("delegation has already been withdrawn")
 				}
 
 				// there can never be a delegation pointing to a non-existent validation
 				// if the validation does not exist it's a system error
-				val, err := staker.validationService.GetExistingValidation(del.Validation)
+				val, err := staker.validationService.GetExistingValidation(del.Validation())
 				if err != nil {
 					return err
 				}
@@ -483,7 +483,7 @@ func NewWithdrawDelegationAction(
 
 				// there can never be a delegation pointing to a non-existent validation
 				// if the validation does not exist it's a system error
-				val, err := staker.validationService.GetExistingValidation(del.Validation)
+				val, err := staker.validationService.GetExistingValidation(del.Validation())
 				if err != nil {
 					return err
 				}

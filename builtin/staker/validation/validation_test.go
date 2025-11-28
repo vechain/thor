@@ -9,35 +9,59 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/builtin/staker/aggregation"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
 var baseVal = Validation{
-	Endorser:         thor.Address{},
-	Beneficiary:      nil,
-	Period:           5,
-	CompletedPeriods: 0,
-	Status:           StatusActive,
-	StartBlock:       0,
-	ExitBlock:        nil,
-	OfflineBlock:     nil,
-	LockedVET:        1000,
-	PendingUnlockVET: 900,
-	QueuedVET:        800,
-	CooldownVET:      700,
-	WithdrawableVET:  600,
-	Weight:           1000,
+	body: &body{
+		Endorser:         thor.Address{},
+		Beneficiary:      nil,
+		Period:           5,
+		CompletedPeriods: 0,
+		Status:           StatusActive,
+		StartBlock:       0,
+		ExitBlock:        nil,
+		OfflineBlock:     nil,
+		LockedVET:        1000,
+		PendingUnlockVET: 900,
+		QueuedVET:        800,
+		CooldownVET:      700,
+		WithdrawableVET:  600,
+		Weight:           1000,
+	},
+}
+
+type testAggregation struct {
+	queued  *stakes.WeightedStake
+	locked  *stakes.WeightedStake
+	exiting *stakes.WeightedStake
+}
+
+func (ta *testAggregation) Locked() *stakes.WeightedStake {
+	return ta.locked
+}
+
+func (ta *testAggregation) Pending() *stakes.WeightedStake {
+	return ta.queued
+}
+
+func (ta *testAggregation) Exiting() *stakes.WeightedStake {
+	return ta.exiting
+}
+
+func (ta *testAggregation) NextPeriodTVL() (uint64, error) {
+	return ta.locked.VET + ta.queued.VET - ta.exiting.VET, nil
 }
 
 func TestValidation_Totals(t *testing.T) {
-	agg := aggregation.Aggregation{
-		Locked:  stakes.NewWeightedStake(500, 1000),
-		Pending: stakes.NewWeightedStake(400, 800),
-		Exiting: stakes.NewWeightedStake(300, 600),
+	agg := &testAggregation{
+		locked:  stakes.NewWeightedStake(500, 1000),
+		queued:  stakes.NewWeightedStake(400, 800),
+		exiting: stakes.NewWeightedStake(300, 600),
 	}
-	totals, err := baseVal.Totals(&agg)
+	totals, err := baseVal.Totals(agg)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
 	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
@@ -47,8 +71,8 @@ func TestValidation_Totals(t *testing.T) {
 
 	exitBlock := uint32(2)
 	val := baseVal
-	val.ExitBlock = &exitBlock
-	totals, err = val.Totals(&agg)
+	val.body.ExitBlock = &exitBlock
+	totals, err = val.Totals(agg)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1500), totals.TotalLockedStake)
 	assert.Equal(t, uint64(1000), totals.TotalLockedWeight)
@@ -71,11 +95,11 @@ func TestValidation_NextPeriodTVL(t *testing.T) {
 func TestValidation_Exit(t *testing.T) {
 	val := baseVal
 	delta := val.exit()
-	assert.Equal(t, StatusExit, val.Status)
-	assert.Equal(t, uint64(1000), val.CooldownVET)
-	assert.Equal(t, uint64(0), val.LockedVET)
-	assert.Equal(t, uint64(0), val.PendingUnlockVET)
-	assert.Equal(t, uint64(0), val.Weight)
+	assert.Equal(t, StatusExit, val.Status())
+	assert.Equal(t, uint64(1000), val.CooldownVET())
+	assert.Equal(t, uint64(0), val.LockedVET())
+	assert.Equal(t, uint64(0), val.PendingUnlockVET())
+	assert.Equal(t, uint64(0), val.Weight())
 
 	assert.Equal(t, uint64(1000), delta.ExitedTVL.VET)
 	assert.Equal(t, uint64(1000), delta.ExitedTVL.Weight)
@@ -84,9 +108,11 @@ func TestValidation_Exit(t *testing.T) {
 
 func TestIterations(t *testing.T) {
 	val := Validation{
-		Status:     StatusQueued,
-		Period:     5,
-		StartBlock: 0,
+		body: &body{
+			Status:     StatusQueued,
+			Period:     5,
+			StartBlock: 0,
+		},
 	}
 	current, err := val.CurrentIteration(10)
 	assert.NoError(t, err)
@@ -95,7 +121,7 @@ func TestIterations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), current)
 
-	val.Status = StatusUnknown
+	val.body.Status = StatusUnknown
 	current, err = val.CurrentIteration(10)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), current)
@@ -104,12 +130,12 @@ func TestIterations(t *testing.T) {
 	assert.Equal(t, uint32(0), current)
 
 	// change to exit
-	val.Status = StatusExit
+	val.body.Status = StatusExit
 	current, err = val.CompletedIterations(10)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), current)
 
-	val.CompletedPeriods = 1
+	val.body.CompletedPeriods = 1
 	current, err = val.CompletedIterations(10)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), current)
@@ -118,8 +144,8 @@ func TestIterations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), current)
 
-	val.Status = StatusActive
-	val.CompletedPeriods = 0
+	val.body.Status = StatusActive
+	val.body.CompletedPeriods = 0
 
 	current, err = val.CurrentIteration(10)
 	assert.NoError(t, err)
@@ -130,7 +156,7 @@ func TestIterations(t *testing.T) {
 	assert.Equal(t, uint32(2), current)
 
 	// signaled exit in period 3, block 13
-	val.CompletedPeriods = 3
+	val.body.CompletedPeriods = 3
 
 	current, err = val.CurrentIteration(13)
 	assert.NoError(t, err)
@@ -146,7 +172,7 @@ func TestIterations(t *testing.T) {
 	assert.Equal(t, uint32(2), current)
 
 	// exited
-	val.Status = StatusExit
+	val.body.Status = StatusExit
 	current, err = val.CompletedIterations(18)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(3), current)

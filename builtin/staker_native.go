@@ -69,13 +69,13 @@ func init() {
 				}, nil
 			}
 			exitBlock := uint32(math.MaxUint32)
-			if validator.ExitBlock != nil {
-				exitBlock = *validator.ExitBlock
+			if validator.ExitBlock() != nil {
+				exitBlock = *validator.ExitBlock()
 			}
 
 			offlineBlock := uint32(math.MaxUint32)
-			if validator.OfflineBlock != nil {
-				offlineBlock = *validator.OfflineBlock
+			if validator.OfflineBlock() != nil {
+				offlineBlock = *validator.OfflineBlock()
 			}
 
 			completeIterations, err := validator.CompletedIterations(env.BlockContext().Number)
@@ -83,14 +83,14 @@ func init() {
 				return nil, err
 			}
 			return []any{
-				validator.Endorser,
-				staker.ToWei(validator.LockedVET),
-				staker.ToWei(validator.Weight),
-				staker.ToWei(validator.QueuedVET),
-				validator.Status,
+				validator.Endorser(),
+				staker.ToWei(validator.LockedVET()),
+				staker.ToWei(validator.Weight()),
+				staker.ToWei(validator.QueuedVET()),
+				validator.Status(),
 				offlineBlock,
-				validator.Period,
-				validator.StartBlock,
+				validator.Period(),
+				validator.StartBlock(),
 				exitBlock,
 				completeIterations,
 			}, nil
@@ -353,8 +353,8 @@ func init() {
 			}
 
 			lastPeriod := uint32(math.MaxUint32)
-			if delegation.LastIteration != nil {
-				lastPeriod = *delegation.LastIteration
+			if delegation.LastIteration() != nil {
+				lastPeriod = *delegation.LastIteration()
 			}
 			isLocked, err := delegation.IsLocked(validation, env.BlockContext().Number)
 			if err != nil {
@@ -362,11 +362,11 @@ func init() {
 			}
 
 			return []any{
-				delegation.Validation,
-				staker.ToWei(delegation.Stake),
-				delegation.Multiplier,
+				delegation.Validation(),
+				staker.ToWei(delegation.Stake()),
+				delegation.Multiplier(),
 				isLocked,
-				delegation.FirstIteration,
+				delegation.FirstIteration(),
 				lastPeriod,
 			}, nil
 		}},

@@ -657,42 +657,42 @@ func assertValidation(t *testing.T, test *StakerTest, addr thor.Address) *Valida
 }
 
 func (va *ValidationAssertions) Status(expected validation.Status) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.Status, "validator %s status mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.Status(), "validator %s status mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) Weight(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.Weight, "validator %s weight mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.Weight(), "validator %s weight mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) LockedVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.LockedVET, "validator %s locked VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.LockedVET(), "validator %s locked VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) QueuedVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.QueuedVET, "validator %s pending locked VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.QueuedVET(), "validator %s pending locked VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) CooldownVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.CooldownVET, "validator %s cooldown VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.CooldownVET(), "validator %s cooldown VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) WithdrawableVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.WithdrawableVET, "validator %s withdrawable VET mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.WithdrawableVET(), "validator %s withdrawable VET mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) Period(expected uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.Period, "validator %s period mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.Period(), "validator %s period mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) PendingUnlockVET(expected uint64) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.PendingUnlockVET, "validator %s next period decrease mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.PendingUnlockVET(), "validator %s next period decrease mismatch", va.addr.String())
 	return va
 }
 
@@ -703,20 +703,20 @@ func (va *ValidationAssertions) IsEmpty(expected bool) *ValidationAssertions {
 
 func (va *ValidationAssertions) Beneficiary(expected thor.Address) *ValidationAssertions {
 	if expected.IsZero() {
-		assert.Nil(va.t, va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+		assert.Nil(va.t, va.validator.Beneficiary(), "validator %s beneficiary mismatch", va.addr.String())
 	} else {
-		assert.Equal(va.t, expected, *va.validator.Beneficiary, "validator %s beneficiary mismatch", va.addr.String())
+		assert.Equal(va.t, expected, *va.validator.Beneficiary(), "validator %s beneficiary mismatch", va.addr.String())
 	}
 	return va
 }
 
 func (va *ValidationAssertions) OfflineBlock(expected *uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.OfflineBlock, "validator %s offline block mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.OfflineBlock(), "validator %s offline block mismatch", va.addr.String())
 	return va
 }
 
 func (va *ValidationAssertions) ExitBlock(expected *uint32) *ValidationAssertions {
-	assert.Equal(va.t, expected, va.validator.ExitBlock, "validator %s exit block mismatch", va.addr.String())
+	assert.Equal(va.t, expected, va.validator.ExitBlock(), "validator %s exit block mismatch", va.addr.String())
 	return va
 }
 
@@ -740,32 +740,32 @@ func assertAggregation(t *testing.T, staker *Staker, validationID thor.Address) 
 }
 
 func (aa *AggregationAssertions) PendingVET(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.Pending.VET, "aggregation for validator %s pending VET mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Pending().VET, "aggregation for validator %s pending VET mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) PendingWeight(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.Pending.Weight, "aggregation for validator %s pending weight mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Pending().Weight, "aggregation for validator %s pending weight mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) LockedVET(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.Locked.VET, "aggregation for validator %s locked VET mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Locked().VET, "aggregation for validator %s locked VET mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) LockedWeight(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.Locked.Weight, "aggregation for validator %s locked weight mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Locked().Weight, "aggregation for validator %s locked weight mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) ExitingVET(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.Exiting.VET, "aggregation for validator %s exiting VET mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Exiting().VET, "aggregation for validator %s exiting VET mismatch", aa.validationID.String())
 	return aa
 }
 
 func (aa *AggregationAssertions) ExitingWeight(expected uint64) *AggregationAssertions {
-	assert.Equal(aa.t, expected, aa.aggregation.Exiting.Weight, "aggregation for validator %s exiting weight mismatch", aa.validationID.String())
+	assert.Equal(aa.t, expected, aa.aggregation.Exiting().Weight, "aggregation for validator %s exiting weight mismatch", aa.validationID.String())
 	return aa
 }
 
@@ -783,12 +783,12 @@ func assertDelegation(t *testing.T, staker *Staker, delegationID *big.Int) *Dele
 }
 
 func (da *DelegationAssertions) Validation(expected thor.Address) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Validation, "delegation %s validation ID mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.Validation(), "delegation %s validation ID mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) Stake(expected uint64) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Stake, "delegation %s stake mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.Stake(), "delegation %s stake mismatch", da.delegationID.String())
 	return da
 }
 
@@ -798,17 +798,17 @@ func (da *DelegationAssertions) Weight(expected uint64) *DelegationAssertions {
 }
 
 func (da *DelegationAssertions) Multiplier(expected uint8) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.Multiplier, "delegation %s multiplier mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.Multiplier(), "delegation %s multiplier mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) FirstIteration(expected uint32) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.FirstIteration, "delegation %s first iteration mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.FirstIteration(), "delegation %s first iteration mismatch", da.delegationID.String())
 	return da
 }
 
 func (da *DelegationAssertions) LastIteration(expected *uint32) *DelegationAssertions {
-	assert.Equal(da.t, expected, da.delegation.LastIteration, "delegation %s last iteration mismatch", da.delegationID.String())
+	assert.Equal(da.t, expected, da.delegation.LastIteration(), "delegation %s last iteration mismatch", da.delegationID.String())
 	return da
 }
 

@@ -38,13 +38,13 @@ func TestValidatorExitInSamePeriod(t *testing.T) {
 
 	// Verify all validators are active
 	val1 := staker.GetValidation(validator1)
-	assert.Equal(t, validation.StatusActive, val1.Status)
+	assert.Equal(t, validation.StatusActive, val1.Status())
 
 	val2 := staker.GetValidation(validator2)
-	assert.Equal(t, validation.StatusActive, val2.Status)
+	assert.Equal(t, validation.StatusActive, val2.Status())
 
 	val3 := staker.GetValidation(validator3)
-	assert.Equal(t, validation.StatusActive, val3.Status)
+	assert.Equal(t, validation.StatusActive, val3.Status())
 
 	// Step 3: Add delegations to all validators
 	delegation1 := staker.AddDelegation(validator1, 1000, 100, thor.MediumStakingPeriod()+1)
@@ -59,14 +59,14 @@ func TestValidatorExitInSamePeriod(t *testing.T) {
 
 	// Step 6: Verify validator1 is in exit state
 	val1 = staker.GetValidation(validator1)
-	assert.Equal(t, validation.StatusExit, val1.Status)
+	assert.Equal(t, validation.StatusExit, val1.Status())
 
 	// Step 7: Verify other validators are still active
 	staker.GetValidation(validator2)
-	assert.Equal(t, validation.StatusActive, val2.Status)
+	assert.Equal(t, validation.StatusActive, val2.Status())
 
 	staker.GetValidation(validator3)
-	assert.Equal(t, validation.StatusActive, val3.Status)
+	assert.Equal(t, validation.StatusActive, val3.Status())
 
 	// Step 8: Verify delegations are still active on remaining validators
 	del2 := staker.GetDelegation(delegation2)
@@ -142,20 +142,20 @@ func TestCascadingExits(t *testing.T) {
 	// Step 6: Verify exit validators are in exit state
 	for _, i := range exitValidators {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusExit, val.Status, "validator %d should be in exit state", i+1)
+		assert.Equal(t, validation.StatusExit, val.Status(), "validator %d should be in exit state", i+1)
 	}
 
 	// Step 7: Verify remaining validators are still active
 	remainingValidators := []int{1, 3} // 2, 4
 	for _, i := range remainingValidators {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusActive, val.Status, "validator %d should still be active", i+1)
+		assert.Equal(t, validation.StatusActive, val.Status(), "validator %d should still be active", i+1)
 	}
 
 	// Step 8: Verify delegations on remaining validators are still active
 	for _, i := range remainingValidators {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		started, err := del.Started(val, thor.MediumStakingPeriod()*2+1)
 		require.NoError(t, err)
 		assert.True(t, started, "delegation on validator %d should still be active", i+1)
@@ -164,7 +164,7 @@ func TestCascadingExits(t *testing.T) {
 	// Step 9: Verify delegations on exit validators are ended
 	for _, i := range exitValidators {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		ended, err := del.Ended(val, thor.MediumStakingPeriod()*2+1)
 		require.NoError(t, err)
 		assert.True(t, ended, "delegation on validator %d should be ended", i+1)
@@ -191,7 +191,7 @@ func TestQueueManagement(t *testing.T) {
 	// Step 2: Verify all validators are queued
 	for i := range 5 {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusQueued, val.Status, "validator %d should be queued", i+1)
+		assert.Equal(t, validation.StatusQueued, val.Status(), "validator %d should be queued", i+1)
 	}
 
 	// Step 3: Activate first 2 validators
@@ -200,13 +200,13 @@ func TestQueueManagement(t *testing.T) {
 	// Step 4: Verify first 2 validators are active
 	for i := range 2 {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusActive, val.Status, "validator %d should be active", i+1)
+		assert.Equal(t, validation.StatusActive, val.Status(), "validator %d should be active", i+1)
 	}
 
 	// Step 5: Verify remaining validators are still queued
 	for i := 2; i < 5; i++ {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusQueued, val.Status, "validator %d should still be queued", i+1)
+		assert.Equal(t, validation.StatusQueued, val.Status(), "validator %d should still be queued", i+1)
 	}
 
 	// Step 6: Signal exit for validator 1
@@ -217,16 +217,16 @@ func TestQueueManagement(t *testing.T) {
 
 	// Step 8: Verify validator 1 is in exit state
 	val1 := staker.GetValidation(validators[0])
-	assert.Equal(t, validation.StatusExit, val1.Status, "validator 1 should be in exit state")
+	assert.Equal(t, validation.StatusExit, val1.Status(), "validator 1 should be in exit state")
 
 	// Step 9: Verify validator 3 is now active (moved from queue)
 	val3 := staker.GetValidation(validators[2])
-	assert.Equal(t, validation.StatusActive, val3.Status, "validator 3 should now be active")
+	assert.Equal(t, validation.StatusActive, val3.Status(), "validator 3 should now be active")
 
 	// Step 10: Verify remaining validators are still queued
 	for i := 3; i < 5; i++ {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusQueued, val.Status, "validator %d should still be queued", i+1)
+		assert.Equal(t, validation.StatusQueued, val.Status(), "validator %d should still be queued", i+1)
 	}
 }
 
@@ -253,12 +253,12 @@ func TestLeaderGroupRotation(t *testing.T) {
 	// Step 3: Verify first 3 validators are active
 	for i := range 3 {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusActive, val.Status, "validator %d should be active", i+1)
+		assert.Equal(t, validation.StatusActive, val.Status(), "validator %d should be active", i+1)
 	}
 
 	// Step 4: Verify validator 4 is queued
 	val4 := staker.GetValidation(validators[3])
-	assert.Equal(t, validation.StatusQueued, val4.Status, "validator 4 should be queued")
+	assert.Equal(t, validation.StatusQueued, val4.Status(), "validator 4 should be queued")
 
 	// Step 5: Add delegations to active validators
 	delegations := make([]*big.Int, 3)
@@ -274,21 +274,21 @@ func TestLeaderGroupRotation(t *testing.T) {
 
 	// Step 8: Verify validator 1 is in exit state
 	val1 := staker.GetValidation(validators[0])
-	assert.Equal(t, validation.StatusExit, val1.Status, "validator 1 should be in exit state")
+	assert.Equal(t, validation.StatusExit, val1.Status(), "validator 1 should be in exit state")
 
 	// Step 9: Verify validator 4 is now active (rotated in)
 	val4 = staker.GetValidation(validators[3])
-	assert.Equal(t, validation.StatusActive, val4.Status, "validator 4 should now be active")
+	assert.Equal(t, validation.StatusActive, val4.Status(), "validator 4 should now be active")
 
 	// Step 10: Verify remaining validators are still active
 	for i := 1; i < 3; i++ {
 		val := staker.GetValidation(validators[i])
-		assert.Equal(t, validation.StatusActive, val.Status, "validator %d should still be active", i+1)
+		assert.Equal(t, validation.StatusActive, val.Status(), "validator %d should still be active", i+1)
 	}
 
 	// Step 11: Verify delegation on validator 1 is ended
 	del1 := staker.GetDelegation(delegations[0])
-	val1 = staker.GetValidation(del1.Validation)
+	val1 = staker.GetValidation(del1.Validation())
 	started, err := del1.Started(val1, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.False(t, started, "delegation on validator 1 shouldn't be started")
@@ -299,7 +299,7 @@ func TestLeaderGroupRotation(t *testing.T) {
 	// Step 12: Verify delegations on remaining validators are still active
 	for i := 1; i < 3; i++ {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		started, err := del.Started(val, thor.MediumStakingPeriod()*2+1)
 		require.NoError(t, err)
 		assert.True(t, started, "delegation on validator %d should still be active", i+1)
@@ -333,10 +333,7 @@ func TestValidatorEviction(t *testing.T) {
 	staker.Housekeep(thor.LowStakingPeriod())
 
 	// Step 4: Simulate validator 1 going offline by setting offline block
-	val1 := staker.GetValidation(validators[0])
-	val1.OfflineBlock = &[]uint32{1}[0]
-	err := staker.validationService.UpdateOfflineBlock(validators[0], 1, false)
-	assert.NoError(t, err)
+	staker.SetOnline(validators[0], []uint32{1}[0], false)
 
 	// Step 5: Wait for eviction threshold
 	evictionBlock := thor.EvictionCheckInterval() * 3
@@ -345,16 +342,16 @@ func TestValidatorEviction(t *testing.T) {
 	staker.Housekeep(evictionBlock + thor.EpochLength())
 
 	// Step 6: Verify validator 1 is evicted (should be in exit state)
-	val1 = staker.GetValidation(validators[0])
-	assert.Equal(t, validation.StatusExit, val1.Status, "validator 1 should be evicted")
+	val1 := staker.GetValidation(validators[0])
+	assert.Equal(t, validation.StatusExit, val1.Status(), "validator 1 should be evicted")
 
 	// Step 7: Verify validator 4 is now active (replaced evicted validator)
 	val4 := staker.GetValidation(validators[3])
-	assert.Equal(t, validation.StatusActive, val4.Status, "validator 4 should now be active")
+	assert.Equal(t, validation.StatusActive, val4.Status(), "validator 4 should now be active")
 
 	// Step 8: Verify delegation on evicted validator is ended
 	del1 := staker.GetDelegation(delegations[0])
-	val1 = staker.GetValidation(del1.Validation)
+	val1 = staker.GetValidation(del1.Validation())
 	started, err := del1.Started(val1, evictionBlock+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on evicted validator should be started")
@@ -365,7 +362,7 @@ func TestValidatorEviction(t *testing.T) {
 	// Step 9: Verify delegations on remaining validators are still active
 	for i := 1; i < 3; i++ {
 		del := staker.GetDelegation(delegations[i])
-		val := staker.GetValidation(del.Validation)
+		val := staker.GetValidation(del.Validation())
 		started, err := del.Started(val, evictionBlock+1)
 		require.NoError(t, err)
 		assert.True(t, started, "delegation on validator %d should still be active", i+1)
@@ -409,24 +406,24 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 
 	// Step 6: Verify exit validators are in exit state
 	val1 := staker.GetValidation(validators[0])
-	assert.Equal(t, validation.StatusExit, val1.Status, "validator 1 should be in exit state")
+	assert.Equal(t, validation.StatusExit, val1.Status(), "validator 1 should be in exit state")
 
 	val3 := staker.GetValidation(validators[2])
-	assert.Equal(t, validation.StatusExit, val3.Status, "validator 3 should be in exit state")
+	assert.Equal(t, validation.StatusExit, val3.Status(), "validator 3 should be in exit state")
 
 	// Step 7: Verify validators 5 and 6 are now active (moved from queue)
 	val5 := staker.GetValidation(validators[4])
-	assert.Equal(t, validation.StatusActive, val5.Status, "validator 5 should now be active")
+	assert.Equal(t, validation.StatusActive, val5.Status(), "validator 5 should now be active")
 
 	val6 := staker.GetValidation(validators[5])
-	assert.Equal(t, validation.StatusActive, val6.Status, "validator 6 should now be active")
+	assert.Equal(t, validation.StatusActive, val6.Status(), "validator 6 should now be active")
 
 	// Step 8: Verify remaining validators are still active
 	val2 := staker.GetValidation(validators[1])
-	assert.Equal(t, validation.StatusActive, val2.Status, "validator 2 should still be active")
+	assert.Equal(t, validation.StatusActive, val2.Status(), "validator 2 should still be active")
 
 	val4 := staker.GetValidation(validators[3])
-	assert.Equal(t, validation.StatusActive, val4.Status, "validator 4 should still be active")
+	assert.Equal(t, validation.StatusActive, val4.Status(), "validator 4 should still be active")
 
 	// Step 9: Add delegations to new active validators
 	delegation5 := staker.AddDelegation(validators[4], 5000, 150, thor.MediumStakingPeriod()*2+1)
@@ -436,26 +433,26 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 
 	// Step 10: Verify delegations on exit validators are ended
 	del1 := staker.GetDelegation(delegations[0])
-	val1 = staker.GetValidation(del1.Validation)
+	val1 = staker.GetValidation(del1.Validation())
 	ended, err := del1.Ended(val1, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, ended, "delegation on validator 1 should be ended")
 
 	del3 := staker.GetDelegation(delegations[2])
-	val3 = staker.GetValidation(del3.Validation)
+	val3 = staker.GetValidation(del3.Validation())
 	ended, err = del3.Ended(val3, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, ended, "delegation on validator 3 should be ended")
 
 	// Step 11: Verify delegations on remaining validators are still active
 	del2 := staker.GetDelegation(delegations[1])
-	val2 = staker.GetValidation(del2.Validation)
+	val2 = staker.GetValidation(del2.Validation())
 	started, err := del2.Started(val2, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 2 should still be active")
 
 	del4 := staker.GetDelegation(delegations[3])
-	val4 = staker.GetValidation(del4.Validation)
+	val4 = staker.GetValidation(del4.Validation())
 	started, err = del4.Started(val4, thor.MediumStakingPeriod()*2+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 4 should still be active")
@@ -463,7 +460,7 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 	staker.Housekeep(thor.MediumStakingPeriod() * 3)
 	// Step 12: Verify new delegations are active
 	del5 := staker.GetDelegation(delegation5)
-	val5 = staker.GetValidation(del5.Validation)
+	val5 = staker.GetValidation(del5.Validation())
 	started, err = del5.Started(val5, thor.MediumStakingPeriod()*3+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 5 should be active")
@@ -471,7 +468,7 @@ func TestComplexMultiValidatorScenario(t *testing.T) {
 	staker.Housekeep(thor.MediumStakingPeriod() * 4)
 	require.NoError(t, err)
 	del6 := staker.GetDelegation(delegation6)
-	val6 = staker.GetValidation(del6.Validation)
+	val6 = staker.GetValidation(del6.Validation())
 	started, err = del6.Started(val6, thor.MediumStakingPeriod()*4+1)
 	require.NoError(t, err)
 	assert.True(t, started, "delegation on validator 6 should be active")

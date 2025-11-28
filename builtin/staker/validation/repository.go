@@ -101,10 +101,10 @@ func (r *Repository) nextEntry(prev thor.Address) (thor.Address, error) {
 	if val == nil {
 		return thor.Address{}, nil // not found, just return empty
 	}
-	if val.Next == nil {
+	if val.body.Next == nil {
 		return thor.Address{}, nil
 	}
-	return *val.Next, nil
+	return *val.body.Next, nil
 }
 
 func (r *Repository) activeListSize() (uint64, error) {

@@ -45,11 +45,11 @@ func TestService_Add_And_GetDelegation(t *testing.T) {
 
 	del, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, thor.BytesToAddress([]byte("v")), del.Validation)
-	assert.Equal(t, uint32(2), del.FirstIteration)
-	assert.Equal(t, uint64(1000), del.Stake)
-	assert.Equal(t, uint8(50), del.Multiplier)
-	assert.Nil(t, del.LastIteration)
+	assert.Equal(t, thor.BytesToAddress([]byte("v")), del.Validation())
+	assert.Equal(t, uint32(2), del.FirstIteration())
+	assert.Equal(t, uint64(1000), del.Stake())
+	assert.Equal(t, uint8(50), del.Multiplier())
+	assert.Nil(t, del.LastIteration())
 }
 
 func TestService_SetDelegation_RoundTrip(t *testing.T) {
@@ -60,15 +60,15 @@ func TestService_SetDelegation_RoundTrip(t *testing.T) {
 
 	del, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
-	del.Multiplier = 99
-	del.FirstIteration = 5
+	del.body.Multiplier = 99
+	del.body.FirstIteration = 5
 
-	assert.NoError(t, svc.delegations.Update(id, del))
+	assert.NoError(t, svc.delegations.Update(id, del.body))
 
 	got, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, uint8(99), got.Multiplier)
-	assert.Equal(t, uint32(5), got.FirstIteration)
+	assert.Equal(t, uint8(99), got.Multiplier())
+	assert.Equal(t, uint32(5), got.FirstIteration())
 }
 
 func TestService_Withdraw(t *testing.T) {
@@ -86,7 +86,7 @@ func TestService_Withdraw(t *testing.T) {
 
 	after, err := svc.GetDelegation(id)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(0), after.Stake)
+	assert.Equal(t, uint64(0), after.Stake())
 }
 
 func TestService_GetDelegation_NotFoundZeroValue(t *testing.T) {
