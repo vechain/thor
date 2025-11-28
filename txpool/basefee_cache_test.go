@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -31,7 +30,7 @@ func TestCacheBaseFee(t *testing.T) {
 	baseFee := cache.Get(repo.BestBlockSummary().Header)
 	assert.Nil(t, baseFee)
 
-	tchain.MintBlock(genesis.DevAccounts()[0])
+	tchain.MintBlock()
 
 	// GALACTICA as next block
 	baseFee = cache.Get(repo.BestBlockSummary().Header)
