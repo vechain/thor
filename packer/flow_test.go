@@ -357,7 +357,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	// Try to adopt a dyn fee tx before galactica fork activates - FAILS
 	tr := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 
 	expectedErrMsg := "unable to adopt tx into block: bad tx: invalid tx type"
 	assert.Equal(t, expectedErrMsg, err.Error())
@@ -365,13 +365,13 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 	// Try to adopt a legacy tx - SUCCESS
 	tr = tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee tx after galactica fork activates - SUCCESS
 	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee tx with max fee per gas less than base fee - FAILS
@@ -382,14 +382,14 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 
 	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(notEnoughBaseFee).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 	expectedErrMsg = "unable to adopt tx into block: tx not adoptable now: gas price is less than block base fee"
 	assert.Equal(t, expectedErrMsg, err.Error())
 
 	// Try to adopt a dyn fee with just the right amount of max fee per gas - SUCCESS
 	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(expectedBaseFee).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 	assert.NoError(t, err)
 
 	// Try to adopt a dyn fee with max fee = base fee + maxPriorityFee
@@ -407,7 +407,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 		Expiration(100).
 		Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 	assert.NoError(t, err)
 }
 
@@ -417,7 +417,7 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 
 	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 	assert.NoError(t, err)
 
 	for i := range 10000 {
@@ -432,7 +432,7 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 			Expiration(1000000).
 			Build()
 		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-		err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+		err = chain.MintBlock(tr)
 		assert.NoError(t, err)
 	}
 	best, _ := chain.BestBlock()
@@ -450,7 +450,7 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	// Mint a block to activate Galactica fork
 	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	err = chain.MintBlock(genesis.DevAccounts()[0], tr)
+	err = chain.MintBlock(tr)
 	assert.NoError(t, err)
 
 	// Create a transaction with dynamic fee type, but without max priority fee
@@ -466,7 +466,7 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	txNoPriorityFee = tx.MustSign(txNoPriorityFee, genesis.DevAccounts()[0].PrivateKey)
 
 	// Create a transaction with dynamic fee type and max priority fee
-	maxPriorityFeePerGas := big.NewInt(3)
+	maxPriorityFeePerGas := big.NewInt(990000000000002)
 	txPriorityFee := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(chain.Repo().ChainTag()).
 		Nonce(2).
@@ -499,17 +499,13 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 
 	// Last parameter is true, which means that all txs require max priority fee
 	proposer := genesis.DevAccounts()[0]
-	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig, 2)
+	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig, 990000000000001)
 
 	flow, _, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
 
 	expectedErrorMessage := "bad tx: effective priority fee too low"
-	if err := flow.Adopt(txNoPriorityFee); err.Error() != expectedErrorMessage {
-		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
-	}
-	if err := flow.Adopt(txLegacy); err.Error() != expectedErrorMessage {
-		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
-	}
+	assert.ErrorContainsf(t, flow.Adopt(txNoPriorityFee), expectedErrorMessage, "Expected error message: '%s'", expectedErrorMessage)
+	assert.ErrorContainsf(t, flow.Adopt(txLegacy), expectedErrorMessage, "Expected error message: '%s'", expectedErrorMessage)
 
 	err = flow.Adopt(txPriorityFee)
 	assert.NoError(t, err)

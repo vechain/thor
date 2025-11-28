@@ -45,6 +45,18 @@ type TestTxDescription struct {
 	vet        *big.Int
 }
 
+func newChain(t *testing.T, fc *thor.ForkConfig) *testchain.Chain {
+	if fc == nil {
+		fc = &thor.SoloFork
+	}
+	epochLength := uint32(2)
+	genesis, err := testchain.CreateGenesis(genesis.DevConfig{ForkConfig: fc}, 1, epochLength, epochLength)
+	require.NoError(t, err)
+	chain, err := testchain.NewIntegrationTestChainWithGenesis(genesis, fc, epochLength)
+	require.NoError(t, err)
+	return chain
+}
+
 func inspectClauseWithBlockRef(clause *tx.Clause, blockRef *tx.BlockRef) ([]byte, uint64, error) {
 	builder := new(tx.Builder).
 		ChainTag(thorChain.Repo().ChainTag()).
@@ -114,7 +126,7 @@ func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.B
 	}
 
 	trx = tx.MustSign(trx, description.acc.PrivateKey)
-	err = thorChain.MintTransactions(description.acc, trx)
+	err = thorChain.MintBlock(trx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -126,7 +138,7 @@ func executeTxAndGetReceipt(description TestTxDescription) (*tx.Receipt, *thor.B
 }
 
 func TestParamsNative(t *testing.T) {
-	thorChain, _ = testchain.NewDefault()
+	thorChain = newChain(t, nil)
 
 	toAddr := builtin.Params.Address
 	abi := builtin.Params.ABI
@@ -176,7 +188,7 @@ func TestParamsNative(t *testing.T) {
 }
 
 func TestAuthorityNative(t *testing.T) {
-	thorChain, _ = testchain.NewDefault()
+	thorChain = newChain(t, nil)
 	var (
 		master1   = genesis.DevAccounts()[1]
 		endorsor1 = genesis.DevAccounts()[2]
@@ -352,7 +364,7 @@ func TestAuthorityNative(t *testing.T) {
 		Build()
 
 	trx = tx.MustSign(trx, endorsor2.PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(endorsor2, trx))
+	require.NoError(t, thorChain.MintBlock(trx))
 
 	fetchedTx, _, err = executeTxAndGetReceipt(TestTxDescription{
 		t:          t,
@@ -387,7 +399,7 @@ func TestEnergyNative(t *testing.T) {
 
 	fc := &thor.SoloFork
 	fc.HAYABUSA = 4
-	thorChain, _ = testchain.NewWithFork(fc, 1)
+	thorChain, _ = testchain.NewWithFork(fc, 10)
 
 	var stringOutput string
 	_, err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
@@ -604,7 +616,7 @@ func TestEnergyNative(t *testing.T) {
 		methodName: "addValidation",
 		address:    builtin.Staker.Address,
 		acc:        acc1,
-		args:       []any{acc1.Address, uint32(360) * 24 * 7},
+		args:       []any{acc1.Address, thor.LowStakingPeriod()},
 		duplicate:  false,
 		vet:        minStake,
 	}
@@ -634,7 +646,7 @@ func TestEnergyNative(t *testing.T) {
 	for range 5 {
 		_, err = callContractAndGetOutput(abi, "totalSupply", toAddr, &totalSupplyBefore)
 		require.NoError(t, err)
-		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+		require.NoError(t, thorChain.MintBlock())
 		summary = thorChain.Repo().BestBlockSummary()
 		st := thorChain.Stater().NewState(summary.Root())
 		energyAtBlock, err = builtin.Energy.Native(st, summary.Header.Timestamp()).Get(summary.Header.Beneficiary())
@@ -692,7 +704,7 @@ func TestPrototypeNative(t *testing.T) {
 		recoveryRate = big.NewInt(10)
 	)
 
-	thorChain, _ = testchain.NewDefault()
+	thorChain = newChain(t, nil)
 	abi := builtin.Prototype.ABI
 	toAddr := builtin.Prototype.Address
 
@@ -708,7 +720,7 @@ func TestPrototypeNative(t *testing.T) {
 		Build()
 
 	trx = tx.MustSign(trx, master1.PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(master1, trx))
+	require.NoError(t, thorChain.MintBlock(trx))
 
 	id := trx.ID()
 	fetchedTx, err := thorChain.GetTxReceipt(id)
@@ -1048,7 +1060,7 @@ func TestPrototypeNative(t *testing.T) {
 		Build()
 
 	trx = tx.MustSign(trx, master1.PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(master1, trx))
+	require.NoError(t, thorChain.MintBlock(trx))
 	bestBlock, err := thorChain.BestBlock()
 	assert.NoError(t, err)
 
@@ -1091,7 +1103,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		toAddr = builtin.Prototype.Address
 		abi    = builtin.Prototype.ABI
 	)
-	thorChain, _ = testchain.NewDefault()
+	thorChain = newChain(t, nil)
 
 	var outputBigInt *big.Int
 	_, err := callContractAndGetOutput(abi, "balance", toAddr, &outputBigInt, acc2, big.NewInt(0))
@@ -1108,7 +1120,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		Build()
 
 	trx = tx.MustSign(trx, acc1.PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(acc1, trx))
+	require.NoError(t, thorChain.MintBlock(trx))
 	bestBlock, err := thorChain.BestBlock()
 	assert.NoError(t, err)
 
@@ -1153,7 +1165,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		Build()
 
 	trx = tx.MustSign(trx, acc1.PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(acc1, trx))
+	require.NoError(t, thorChain.MintBlock(trx))
 	bestBlock, err = thorChain.BestBlock()
 	assert.NoError(t, err)
 
@@ -1185,7 +1197,16 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 }
 
 func TestExtensionNative(t *testing.T) {
-	thorChain, _ = testchain.NewDefault()
+	thorChain = newChain(t, &thor.ForkConfig{
+		BLOCKLIST: 0,
+		VIP191:    1,
+		VIP214:    2,
+		ETH_CONST: math.MaxUint32,
+		ETH_IST:   math.MaxUint32,
+		FINALITY:  math.MaxUint32,
+		GALACTICA: math.MaxUint32,
+		HAYABUSA:  math.MaxUint32,
+	})
 
 	master1 := genesis.DevAccounts()[0]
 	master2 := genesis.DevAccounts()[1]
@@ -1408,51 +1429,30 @@ func TestExtensionNative(t *testing.T) {
 }
 
 func TestStakerContract_Native(t *testing.T) {
-	fc := &thor.SoloFork
+	fc := &thor.ForkConfig{}
 	fc.HAYABUSA = 2
-	hayabusaTP := uint32(2)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
 	var err error
-	thorChain, err = testchain.NewWithFork(fc, 1)
+	thorChain = newChain(t, fc)
 	assert.NoError(t, err)
+	hayabusaTP := uint32(4)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
 	// add validator as authority
 	endorsor := genesis.DevAccounts()[0] // dev acc, since it has to be in PoA
-	master := genesis.DevAccounts()[8]
-	var b32 [32]uint8
-	copy(b32[12:], genesis.DevAccounts()[3].Address.Bytes())
-	receipt, _, err := executeTxAndGetReceipt(TestTxDescription{
-		t:          t,
-		abi:        builtin.Authority.ABI,
-		methodName: "add",
-		address:    builtin.Authority.Address,
-		acc:        genesis.DevAccounts()[0],
-		args:       []any{master.Address, endorsor.Address, b32},
-		duplicate:  false,
-	})
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
+	master := genesis.DevAccounts()[0]
 
 	energyAbi := builtin.Energy.ABI
 	energyAddress := builtin.Energy.Address
 
-	mbp := TestTxDescription{
-		t:          t,
-		abi:        builtin.Params.ABI,
-		methodName: "set",
-		address:    builtin.Params.Address,
-		acc:        genesis.DevAccounts()[0],
-		args:       []any{thor.KeyMaxBlockProposers, big.NewInt(1)},
-	}
-	receipt, a, err := executeTxAndGetReceipt(mbp) // mint block 1
-	assert.NoError(t, err)
-	assert.NotNil(t, receipt)
-	assert.NotNil(t, a)
-
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
 
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
+	assert.NoError(t, thorChain.MintBlock())
+	assert.NoError(t, thorChain.MintBlock()) // mint block 2: hayabusa should fork here and set the contract bytecode
+	code, err := thorChain.State().GetCode(builtin.Staker.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, true, len(code) > 0)
 
 	totalNumRes := make([]any, 2)
 	totalNumRes[0] = new(uint64)
@@ -1472,10 +1472,9 @@ func TestStakerContract_Native(t *testing.T) {
 	// parameters
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidation
-	addValidationArgs := []any{master.Address, minStakingPeriod}
+	addValidationArgs := []any{master.Address, thor.LowStakingPeriod()}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1549,7 +1548,7 @@ func TestStakerContract_Native(t *testing.T) {
 	getPeriodRes[3] = new(uint32)
 	_, err = callContractAndGetOutput(abi, "getValidationPeriodDetails", toAddr, &getPeriodRes, node)
 	assert.NoError(t, err)
-	assert.Equal(t, uint32(360*24*15), *getPeriodRes[0].(*uint32))
+	assert.Equal(t, thor.LowStakingPeriod(), *getPeriodRes[0].(*uint32))
 	assert.Equal(t, uint32(0), *getPeriodRes[1].(*uint32))              // start period
 	assert.Equal(t, uint32(math.MaxUint32), *getPeriodRes[2].(*uint32)) // exit block
 	assert.Equal(t, uint32(0), *getPeriodRes[3].(*uint32))              // completed periods
@@ -1568,8 +1567,8 @@ func TestStakerContract_Native(t *testing.T) {
 	expectedTotalStake = big.NewInt(0).Mul(expectedTotalStake, big.NewInt(1e18))
 	assert.Equal(t, expectedTotalStake, *queuedStakeRes)
 
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 4: Transition period block
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 5: PoS should become active and active the queued validators
+	assert.NoError(t, thorChain.MintBlock()) // mint block 4: Transition period block
+	assert.NoError(t, thorChain.MintBlock()) // mint block 5: PoS should become active and active the queued validators
 
 	// firstActive
 	firstActiveRes := new(common.Address)
@@ -1643,7 +1642,7 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 	assert.NotNil(t, receipt)
 	assert.NotNil(t, a)
 
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0])) // mint block 2: hayabusa should fork here and set the contract bytecode
+	assert.NoError(t, thorChain.MintBlock()) // mint block 2: hayabusa should fork here and set the contract bytecode
 
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
@@ -1778,8 +1777,8 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	var err error
 	thorChain, err = testchain.NewWithFork(fc, 180)
 	assert.NoError(t, err)
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, thorChain.MintBlock())
+	assert.NoError(t, thorChain.MintBlock())
 
 	abi := builtin.Staker.ABI
 	toAddr := builtin.Staker.Address
@@ -1789,10 +1788,9 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	// parameters
 	minStake := big.NewInt(25_000_000)
 	minStake = minStake.Mul(minStake, big.NewInt(1e18))
-	minStakingPeriod := uint32(360) * 24 * 15
 
 	// addValidator
-	addValidatorArgs := []any{master.Address, minStakingPeriod}
+	addValidatorArgs := []any{master.Address, thor.LowStakingPeriod()}
 	desc := TestTxDescription{
 		t:          t,
 		abi:        abi,
@@ -1819,7 +1817,7 @@ func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
 	}
 	_, _, err = executeTxAndGetReceipt(desc)
 	assert.NoError(t, err)
-	assert.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, thorChain.MintBlock())
 
 	// getValidation
 	getRes := make([]any, 6)
@@ -1847,8 +1845,8 @@ func TestExtensionV3(t *testing.T) {
 	assert.Nil(t, err)
 
 	// galactica fork happens at block 1
-	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
-	assert.NoError(t, chain.MintBlock(genesis.DevAccounts()[0]))
+	assert.NoError(t, chain.MintBlock())
+	assert.NoError(t, chain.MintBlock())
 
 	// setup txClauseIndex call data
 	txClauseIndexABI, ok := builtin.Extension.V3.ABI.MethodByName("txClauseIndex")

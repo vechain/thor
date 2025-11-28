@@ -23,16 +23,15 @@ import (
 // NewCustomNet create custom network genesis.
 func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	if gen.Config != nil {
-		if gen.Config.BlockInterval <= 1 {
+		// value of 0 does not update thor config
+		if gen.Config.BlockInterval == 1 {
 			return nil, errors.New("BlockInterval can not be zero or one")
 		}
-
-		if gen.Config.EpochLength <= 1 {
+		if gen.Config.EpochLength == 1 {
 			return nil, errors.New("EpochLength can not be zero or one")
 		}
 
 		thor.SetConfig(*gen.Config)
-		thor.LockConfig()
 	}
 
 	launchTime := gen.LaunchTime

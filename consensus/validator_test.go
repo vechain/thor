@@ -202,3 +202,48 @@ func TestValidate_NegativeCases(t *testing.T) {
 	assert.Nil(t, r)
 	assert.Error(t, err)
 }
+
+func TestValidateStakingProposer_LockedVETError(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+
+	mockRepo := &chain.Repository{}
+	mockForkConfig := &thor.ForkConfig{}
+
+	consensus := New(mockRepo, stater, mockForkConfig)
+
+	parent := &block.Header{}
+
+	st := stater.NewState(trie.Root{})
+
+	stakerAddr := builtin.Staker.Address
+	st.SetCode(stakerAddr, builtin.Staker.RuntimeBytecodes())
+
+	paramsAddr := builtin.Params.Address
+	st.SetCode(paramsAddr, builtin.Params.RuntimeBytecodes())
+
+	paramKey := thor.BytesToBytes32([]byte("some_param"))
+	paramValue := []byte("valid_value")
+	st.SetStorage(paramsAddr, paramKey, thor.BytesToBytes32(paramValue))
+
+	staker := builtin.Staker.Native(st)
+
+	builder := new(block.Builder).
+		ParentID(thor.Bytes32{}).
+		Timestamp(1000).
+		GasLimit(1000000).
+		GasUsed(0).
+		TotalScore(0).
+		StateRoot(thor.Bytes32{}).
+		ReceiptsRoot(thor.Bytes32{}).
+		Beneficiary(thor.Address{})
+
+	blk := builder.Build()
+	validSignature := make([]byte, 65)
+	copy(validSignature, []byte("valid_signature_65_bytes_long_for_testing"))
+	blk = blk.WithSignature(validSignature)
+	header := blk.Header()
+
+	_, err := consensus.validateStakingProposer(header, parent, staker)
+	assert.ErrorContains(t, err, "pos - block signer invalid")
+}

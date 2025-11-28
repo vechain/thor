@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	expectedGasPriceUsedRatio = 0.0042
+	expectedGasPriceUsedRatio = 0.00105
 	expectedBaseFee           = thor.InitialBaseFee
 	priorityFeesPercentage    = 5
 )
@@ -169,7 +169,6 @@ func initFeesServer(t *testing.T, backtraceLimit int, fixedCacheSize int, number
 		require.NoError(
 			t,
 			thorChain.MintBlock(
-				genesis.DevAccounts()[0],
 				tx.MustSign(trx1, genesis.DevAccounts()[0].PrivateKey),
 				tx.MustSign(trx2, genesis.DevAccounts()[0].PrivateKey),
 			),
