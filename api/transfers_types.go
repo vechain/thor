@@ -8,7 +8,7 @@ package api
 import (
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -20,13 +20,13 @@ type FilteredTransfer struct {
 }
 
 type TransferFilter struct {
-	CriteriaSet []*logdb.TransferCriteria `json:"criteriaSet,omitempty"`
-	Range       *Range                    `json:"range,omitempty"`
-	Options     *Options                  `json:"options,omitempty"`
-	Order       logdb.Order               `json:"order,omitempty"`
+	CriteriaSet []*logsdb.TransferCriteria `json:"criteriaSet,omitempty"`
+	Range       *Range                     `json:"range,omitempty"`
+	Options     *Options                   `json:"options,omitempty"`
+	Order       logsdb.Order               `json:"order,omitempty"`
 }
 
-func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {
+func ConvertTransfer(transfer *logsdb.Transfer, addIndexes bool) *FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Amount)
 	ft := &FilteredTransfer{
 		Sender:    transfer.Sender,

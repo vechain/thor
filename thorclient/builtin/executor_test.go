@@ -12,7 +12,7 @@ import (
 
 	builtinpkg "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -53,7 +53,7 @@ func TestExecutor(t *testing.T) {
 	require.False(t, receipt.Reverted)
 
 	// Filter Proposals
-	proposals, err := executor.FilterProposals(newRange(receipt), nil, logdb.ASC)
+	proposals, err := executor.FilterProposals(newRange(receipt), nil, logsdb.ASC)
 	require.NoError(t, err)
 	require.Len(t, proposals, 1)
 
@@ -118,7 +118,7 @@ func TestExecutor_NegativePaths(t *testing.T) {
 	require.NoError(t, err)
 	bad := &Executor{contract: badContract}
 
-	_, err = bad.FilterProposals(nil, nil, logdb.ASC)
+	_, err = bad.FilterProposals(nil, nil, logsdb.ASC)
 	require.Error(t, err)
 	exec, err := NewExecutor(client)
 	require.NoError(t, err)

@@ -9,7 +9,7 @@ import (
 	"errors"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -18,7 +18,7 @@ type FilterBuilder struct {
 	op      *MethodBuilder
 	evRange *api.Range
 	opts    *api.Options
-	order   logdb.Order
+	order   logsdb.Order
 }
 
 // InRange implements FilterBuilder.InRange.
@@ -34,7 +34,7 @@ func (b *FilterBuilder) WithOptions(opts *api.Options) *FilterBuilder {
 }
 
 // OrderBy implements FilterBuilder.OrderBy.
-func (b *FilterBuilder) OrderBy(order logdb.Order) *FilterBuilder {
+func (b *FilterBuilder) OrderBy(order logsdb.Order) *FilterBuilder {
 	b.order = order
 	return b
 }

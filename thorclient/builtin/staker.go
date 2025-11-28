@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -358,7 +358,7 @@ type ValidatorQueuedEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidationQueuedEvent, error) {
+func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ValidationQueuedEvent, error) {
 	event, ok := s.contract.ABI().Events["ValidationQueued"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -405,7 +405,7 @@ type ValidationSignaledExitEvent struct {
 	Log  api.FilteredEvent
 }
 
-func (s *Staker) FilterValidationSignaledExit(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidationSignaledExitEvent, error) {
+func (s *Staker) FilterValidationSignaledExit(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ValidationSignaledExitEvent, error) {
 	raw, err := s.contract.FilterEvent("ValidationSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
@@ -432,7 +432,7 @@ type DelegationAddedEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationAddedEvent, error) {
+func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]DelegationAddedEvent, error) {
 	event, ok := s.contract.ABI().Events["DelegationAdded"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -479,7 +479,7 @@ type DelegationSignaledExitEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationSignaledExitEvent, error) {
+func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]DelegationSignaledExitEvent, error) {
 	raw, err := s.contract.FilterEvent("DelegationSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
 	if err != nil {
 		return nil, err
@@ -503,7 +503,7 @@ type DelegationWithdrawnEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]DelegationWithdrawnEvent, error) {
+func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]DelegationWithdrawnEvent, error) {
 	event, ok := s.contract.ABI().Events["DelegationWithdrawn"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -547,7 +547,7 @@ type StakeIncreasedEvent struct {
 	Log       api.FilteredEvent
 }
 
-func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]StakeIncreasedEvent, error) {
+func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]StakeIncreasedEvent, error) {
 	event, ok := s.contract.ABI().Events["StakeIncreased"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -591,7 +591,7 @@ type StakeDecreasedEvent struct {
 	Log       api.FilteredEvent
 }
 
-func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]StakeDecreasedEvent, error) {
+func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]StakeDecreasedEvent, error) {
 	event, ok := s.contract.ABI().Events["StakeDecreased"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -635,7 +635,7 @@ type BeneficiarySetEvent struct {
 	Log         api.FilteredEvent
 }
 
-func (s *Staker) FilterBeneficiarySet(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]BeneficiarySetEvent, error) {
+func (s *Staker) FilterBeneficiarySet(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]BeneficiarySetEvent, error) {
 	event, ok := s.contract.ABI().Events["BeneficiarySet"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
@@ -679,7 +679,7 @@ type ValidationWithdrawnEvent struct {
 	Log       api.FilteredEvent
 }
 
-func (s *Staker) FilterValidationWithdrawn(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ValidationWithdrawnEvent, error) {
+func (s *Staker) FilterValidationWithdrawn(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ValidationWithdrawnEvent, error) {
 	event, ok := s.contract.ABI().Events["ValidationWithdrawn"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")

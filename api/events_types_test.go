@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -49,7 +49,7 @@ func testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest(t *testing.T, c
 	bestBlock := chain.Repo().BestBlockSummary()
 
 	rng := newRange(TimeRangeType, genesis.Timestamp()-1_000, bestBlock.Header.Timestamp()+1_000)
-	expectedRange := &logdb.Range{
+	expectedRange := &logsdb.Range{
 		From: genesis.Number(),
 		To:   bestBlock.Header.Number(),
 	}
@@ -65,7 +65,7 @@ func testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo(t *testing.T, chain 
 	bestBlock := chain.Repo().BestBlockSummary()
 
 	rng := newRange(TimeRangeType, bestBlock.Header.Timestamp(), genesis.Timestamp())
-	expectedRange := &logdb.Range{
+	expectedRange := &logsdb.Range{
 		From: bestBlock.Header.Number(),
 		To:   genesis.Number(),
 	}
@@ -87,7 +87,7 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 }
 
 func testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber(t *testing.T, chain *testchain.Chain) {
-	rng := newRange(BlockRangeType, logdb.MaxBlockNumber+1, logdb.MaxBlockNumber+2)
+	rng := newRange(BlockRangeType, logsdb.MaxBlockNumber+1, logsdb.MaxBlockNumber+2)
 
 	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
@@ -96,7 +96,7 @@ func testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber(t *testing.T, chai
 }
 
 func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain *testchain.Chain) {
-	rng := newRange(BlockRangeType, logdb.MaxBlockNumber, 0)
+	rng := newRange(BlockRangeType, logsdb.MaxBlockNumber, 0)
 
 	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
@@ -107,9 +107,9 @@ func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
 	rng := newRange(TimeRangeType, chain.GenesisBlock().Header().Timestamp()-1000, chain.GenesisBlock().Header().Timestamp()-100)
-	expectedEmptyRange := &logdb.Range{
-		From: logdb.MaxBlockNumber,
-		To:   logdb.MaxBlockNumber,
+	expectedEmptyRange := &logsdb.Range{
+		From: logsdb.MaxBlockNumber,
+		To:   logsdb.MaxBlockNumber,
 	}
 
 	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
@@ -122,7 +122,7 @@ func testConvertRangeWithTimeRangeType(t *testing.T, chain *testchain.Chain) {
 	genesis := chain.GenesisBlock().Header()
 
 	rng := newRange(TimeRangeType, 1, genesis.Timestamp())
-	expectedZeroRange := &logdb.Range{
+	expectedZeroRange := &logsdb.Range{
 		From: 0,
 		To:   0,
 	}
@@ -137,9 +137,9 @@ func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.C
 	genesis := chain.GenesisBlock().Header()
 
 	rng := newRange(TimeRangeType, genesis.Timestamp()+1_000, genesis.Timestamp()+10_000)
-	expectedEmptyRange := &logdb.Range{
-		From: logdb.MaxBlockNumber,
-		To:   logdb.MaxBlockNumber,
+	expectedEmptyRange := &logsdb.Range{
+		From: logsdb.MaxBlockNumber,
+		To:   logsdb.MaxBlockNumber,
 	}
 
 	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
@@ -161,7 +161,7 @@ func initChain(t *testing.T) *testchain.Chain {
 }
 
 func TestConvertEvent(t *testing.T) {
-	event := &logdb.Event{
+	event := &logsdb.Event{
 		Address:     thor.Address{0x01},
 		Data:        []byte{0x02, 0x03},
 		BlockID:     thor.Bytes32{0x04},

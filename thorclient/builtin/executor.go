@@ -12,7 +12,7 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -142,7 +142,7 @@ type ProposalEvent struct {
 	Log        api.FilteredEvent
 }
 
-func (e *Executor) FilterProposals(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]ProposalEvent, error) {
+func (e *Executor) FilterProposals(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ProposalEvent, error) {
 	_, ok := e.contract.ABI().Events["Proposal"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")

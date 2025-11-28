@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package logdb
+package logsdb
 
 import (
 	"math/rand/v2"
@@ -23,20 +23,20 @@ func TestSequence(t *testing.T) {
 		args args
 	}{
 		{"regular", args{1, 2, 3}},
-		{"max bn", args{blockNumMask, 1, 2}},
-		{"max tx index", args{5, txIndexMask, 4}},
-		{"max log index", args{5, 4, logIndexMask}},
-		{"close to max", args{blockNumMask - 5, txIndexMask - 5, logIndexMask - 5}},
-		{"both max", args{blockNumMask, txIndexMask, logIndexMask}},
+		{"max bn", args{BlockNumMask, 1, 2}},
+		{"max tx index", args{5, TxIndexMask, 4}},
+		{"max log index", args{5, 4, LogIndexMask}},
+		{"close to max", args{BlockNumMask - 5, TxIndexMask - 5, LogIndexMask - 5}},
+		{"both max", args{BlockNumMask, TxIndexMask, LogIndexMask}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := newSequence(tt.args.blockNum, tt.args.txIndex, tt.args.logIndex)
+			got, err := NewSequence(tt.args.blockNum, tt.args.txIndex, tt.args.logIndex)
 			if err != nil {
 				t.Error(err)
 			}
 
-			assert.True(t, got > 0, "sequence should be positive")
+			assert.True(t, got > 0, "Sequence should be positive")
 			if bn := got.BlockNumber(); bn != tt.args.blockNum {
 				t.Errorf("seq.blockNum() = %v, want %v", bn, tt.args.blockNum)
 			}
@@ -52,17 +52,17 @@ func TestSequence(t *testing.T) {
 
 func TestSequence_Errors(t *testing.T) {
 	t.Run("blockNum out of range", func(t *testing.T) {
-		_, err := newSequence(blockNumMask+1, 0, 0)
+		_, err := NewSequence(BlockNumMask+1, 0, 0)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "block number out of range")
 	})
 	t.Run("txIndex out of range", func(t *testing.T) {
-		_, err := newSequence(0, txIndexMask+1, 0)
+		_, err := NewSequence(0, TxIndexMask+1, 0)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "tx index out of range")
 	})
 	t.Run("logIndex out of range", func(t *testing.T) {
-		_, err := newSequence(0, 0, logIndexMask+1)
+		_, err := NewSequence(0, 0, LogIndexMask+1)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "log index out of range")
 	})
@@ -72,21 +72,21 @@ func TestSequence_Errors(t *testing.T) {
 func TestSequenceValue(t *testing.T) {
 	//#nosec G404
 	for range 2 {
-		blk := rand.Uint32N(blockNumMask)
-		txIndex := rand.Uint32N(txIndexMask)
-		logIndex := rand.Uint32N(logIndexMask)
+		blk := rand.Uint32N(BlockNumMask)
+		txIndex := rand.Uint32N(TxIndexMask)
+		logIndex := rand.Uint32N(LogIndexMask)
 
-		seq, err := newSequence(blk, txIndex, logIndex)
+		seq, err := NewSequence(blk, txIndex, logIndex)
 		assert.Nil(t, err)
-		assert.True(t, seq > 0, "sequence should be positive")
+		assert.True(t, seq > 0, "Sequence should be positive")
 
-		a := rand.Uint32N(blockNumMask)
-		b := rand.Uint32N(txIndexMask)
-		c := rand.Uint32N(logIndexMask)
+		a := rand.Uint32N(BlockNumMask)
+		b := rand.Uint32N(TxIndexMask)
+		c := rand.Uint32N(LogIndexMask)
 
-		seq1, err := newSequence(a, b, c)
+		seq1, err := NewSequence(a, b, c)
 		assert.Nil(t, err)
-		assert.True(t, seq1 > 0, "sequence should be positive")
+		assert.True(t, seq1 > 0, "Sequence should be positive")
 
 		expected := func() bool {
 			if blk != a {
@@ -105,5 +105,5 @@ func TestSequenceValue(t *testing.T) {
 }
 
 func TestBitDistribution(t *testing.T) {
-	assert.Less(t, blockNumBits+txIndexBits+logIndexBits, 64, "total bits in sequence should be less than 64")
+	assert.Less(t, blockNumBits+txIndexBits+logIndexBits, 64, "total bits in Sequence should be less than 64")
 }
