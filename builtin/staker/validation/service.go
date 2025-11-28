@@ -388,8 +388,12 @@ func (s *Service) ActivateValidator(
 	lockedIncrease := stakes.NewWeightedStakeWithMultiplier(validation.LockedVET(), mul)
 
 	// attach all delegation's weight
-	// TODO : math.safe
-	validation.body.Weight = lockedIncrease.Weight + aggRenew.LockedIncrease.Weight - aggRenew.LockedDecrease.Weight
+	weight := lockedIncrease.Weight + aggRenew.LockedIncrease.Weight
+	weight, underflow := math.SafeSub(weight, aggRenew.LockedDecrease.Weight)
+	if underflow {
+		return nil, errors.New("weight underflow in subtraction")
+	}
+	validation.body.Weight = weight
 
 	// Update validator status
 	validation.body.Status = StatusActive
