@@ -52,7 +52,7 @@ func (b *MethodBuilder) Clause() (*tx.Clause, error) {
 		return nil, fmt.Errorf("failed to pack method (%s): %w", b.method, err)
 	}
 
-	data = append(method.Id()[:], data...)
+	data = append(method.ID[:], data...)
 	clause := tx.NewClause(b.contract.addr).WithData(data).WithValue(b.vet)
 
 	return clause, nil
