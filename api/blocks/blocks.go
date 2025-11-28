@@ -7,12 +7,12 @@ package blocks
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
@@ -37,19 +37,19 @@ func New(repo *chain.Repository, bft bft.Committer) *Blocks {
 func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
 	revision, err := restutil.ParseRevision(mux.Vars(req)["revision"], false)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 	raw, err := restutil.StringToBoolean(req.URL.Query().Get("raw"), false)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "raw"))
+		return restutil.BadRequest(fmt.Errorf("raw: %w", err))
 	}
 	expanded, err := restutil.StringToBoolean(req.URL.Query().Get("expanded"), false)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "expanded"))
+		return restutil.BadRequest(fmt.Errorf("expanded: %w", err))
 	}
 
 	if raw && expanded {
-		return restutil.BadRequest(errors.WithMessage(errors.New("Raw and Expanded are mutually exclusive"), "raw&expanded"))
+		return restutil.BadRequest(fmt.Errorf("raw&expanded: %w", errors.New("Raw and Expanded are mutually exclusive")))
 	}
 
 	summary, err := restutil.GetSummary(revision, b.repo, b.bft)

@@ -6,11 +6,12 @@
 package loglevel
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
@@ -50,7 +51,7 @@ func (l *LogLevel) postLogLevelHandler(w http.ResponseWriter, r *http.Request) e
 	var req api.LogLevelRequest
 
 	if err := restutil.ParseJSON(r.Body, &req); err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "Invalid request body"))
+		return restutil.BadRequest(fmt.Errorf("Invalid request body: %w", err))
 	}
 
 	switch req.Level {

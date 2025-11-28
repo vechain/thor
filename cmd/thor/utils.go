@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -34,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
-	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/vechain/thor/v2/builtin/staker"
@@ -61,11 +61,11 @@ var devNetGenesisID thor.Bytes32
 func initLogger(ctx *cli.Context) (*slog.LevelVar, error) {
 	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
-		return nil, errors.Wrap(err, "parse verbosity flag")
+		return nil, fmt.Errorf("parse verbosity flag: %w", err)
 	}
 	stakerLvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityStakerFlag.Name))
 	if err != nil {
-		return nil, errors.Wrap(err, "parse staker-verbosity flag")
+		return nil, fmt.Errorf("parse staker-verbosity flag: %w", err)
 	}
 	jsonLogs := ctx.Bool(jsonLogsFlag.Name)
 
@@ -221,13 +221,13 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") {
 		res, err := http.Get(uri) // #nosec
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "http get genesis file")
+			return nil, nil, fmt.Errorf("http get genesis file: %w", err)
 		}
 		reader = res.Body
 	} else {
 		reader, err = os.Open(uri)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "open genesis file")
+			return nil, nil, fmt.Errorf("open genesis file: %w", err)
 		}
 	}
 	defer reader.Close()
@@ -240,12 +240,12 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	gen.ForkConfig = &forkConfig
 
 	if err := decoder.Decode(&gen); err != nil {
-		return nil, nil, errors.Wrap(err, "decode genesis file")
+		return nil, nil, fmt.Errorf("decode genesis file: %w", err)
 	}
 
 	customGen, err := genesis.NewCustomNet(&gen)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "build genesis")
+		return nil, nil, fmt.Errorf("build genesis: %w", err)
 	}
 
 	return customGen, &forkConfig, nil
@@ -280,7 +280,7 @@ func makeConfigDir(ctx *cli.Context) (string, error) {
 		return "", fmt.Errorf("unable to infer default config dir, use -%s to specify", configDirFlag.Name)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", errors.Wrapf(err, "create config dir [%v]", dir)
+		return "", fmt.Errorf("create config dir [%v]: %w", dir, err)
 	}
 	return dir, nil
 }
@@ -298,7 +298,7 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 
 	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v4", gene.ID().Bytes()[24:])+suffix)
 	if err := os.MkdirAll(instanceDir, 0o700); err != nil {
-		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
+		return "", fmt.Errorf("create instance dir [%v]: %w", instanceDir, err)
 	}
 	return instanceDir, nil
 }
@@ -337,7 +337,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	path := filepath.Join(dir, "main.db")
 	db, err := muxdb.Open(path, &opts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "open main database [%v]", path)
+		return nil, fmt.Errorf("open main database [%v]: %w", path, err)
 	}
 	return db, nil
 }
@@ -386,7 +386,7 @@ func openLogDB(dir string) (*logdb.LogDB, error) {
 	path := filepath.Join(dir, "logs-v2.db")
 	db, err := logdb.New(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "open log database [%v]", path)
+		return nil, fmt.Errorf("open log database [%v]: %w", path, err)
 	}
 	return db, nil
 }
@@ -394,12 +394,12 @@ func openLogDB(dir string) (*logdb.LogDB, error) {
 func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logdb.LogDB) (*chain.Repository, error) {
 	genesisBlock, genesisEvents, genesisTransfers, err := gene.Build(state.NewStater(mainDB))
 	if err != nil {
-		return nil, errors.Wrap(err, "build genesis block")
+		return nil, fmt.Errorf("build genesis block: %w", err)
 	}
 
 	repo, err := chain.NewRepository(mainDB, genesisBlock)
 	if err != nil {
-		return nil, errors.Wrap(err, "initialize block chain")
+		return nil, fmt.Errorf("initialize block chain: %w", err)
 	}
 	w := logDB.NewWriter()
 	if err := w.Write(genesisBlock, tx.Receipts{{
@@ -407,10 +407,10 @@ func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logd
 			{Events: genesisEvents, Transfers: genesisTransfers},
 		},
 	}}); err != nil {
-		return nil, errors.Wrap(err, "write genesis logs")
+		return nil, fmt.Errorf("write genesis logs: %w", err)
 	}
 	if err := w.Commit(); err != nil {
-		return nil, errors.Wrap(err, "commit genesis logs")
+		return nil, fmt.Errorf("commit genesis logs: %w", err)
 	}
 	return repo, nil
 }
@@ -422,7 +422,7 @@ func beneficiary(ctx *cli.Context) (*thor.Address, error) {
 	}
 	addr, err := thor.ParseAddress(value)
 	if err != nil {
-		return nil, errors.Wrap(err, "invalid beneficiary")
+		return nil, fmt.Errorf("invalid beneficiary: %w", err)
 	}
 	return &addr, nil
 }
@@ -464,7 +464,7 @@ func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 	if useStdin {
 		key, err = loadNodeMasterFromStdin()
 		if err != nil {
-			return nil, errors.Wrap(err, "read master key from stdin")
+			return nil, fmt.Errorf("read master key from stdin: %w", err)
 		}
 	} else {
 		path, err := masterKeyPath(ctx)
@@ -473,7 +473,7 @@ func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 		}
 		key, err = loadOrGeneratePrivateKey(path)
 		if err != nil {
-			return nil, errors.Wrap(err, "load or generate master key")
+			return nil, fmt.Errorf("load or generate master key: %w", err)
 		}
 	}
 
@@ -495,13 +495,13 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 
 	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
 	if err != nil {
-		return nil, errors.Wrap(err, "load or generate P2P key")
+		return nil, fmt.Errorf("load or generate P2P key: %w", err)
 	}
 
 	userNAT, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		cli.ShowAppHelp(ctx)
-		return nil, errors.Wrap(err, "parse -nat flag")
+		return nil, fmt.Errorf("parse -nat flag: %w", err)
 	}
 
 	allowedPeers, err := parseNodeList(strings.TrimSpace(ctx.String(allowedPeersFlag.Name)))
@@ -649,7 +649,7 @@ func openMemMainDB() *muxdb.MuxDB {
 func openMemLogDB() *logdb.LogDB {
 	db, err := logdb.NewMem()
 	if err != nil {
-		panic(errors.Wrap(err, "open log database"))
+		panic(fmt.Errorf("open log database: %w", err))
 	}
 	return db
 }

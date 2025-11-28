@@ -5,10 +5,10 @@
 package bft
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 	"sync/atomic"
-
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -313,7 +313,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 		var err error
 		js, err = engine.newJustifier(header.ParentID())
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to create vote set")
+			return nil, fmt.Errorf("failed to create vote set %w", err)
 		}
 		end = js.checkpoint
 	}

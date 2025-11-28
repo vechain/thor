@@ -6,6 +6,7 @@
 package fees
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
@@ -79,7 +79,7 @@ func (f *Fees) validateBlockCount(req *http.Request) (uint64, error) {
 	blockCountParam := req.URL.Query().Get("blockCount")
 	blockCount, err := strconv.ParseUint(blockCountParam, 10, 32)
 	if err != nil {
-		return 0, restutil.BadRequest(errors.WithMessage(err, "invalid blockCount, it should represent an integer"))
+		return 0, restutil.BadRequest(fmt.Errorf("invalid blockCount, it should represent an integer: %w", err))
 	}
 
 	if blockCount == 0 {
@@ -92,13 +92,13 @@ func (f *Fees) validateBlockCount(req *http.Request) (uint64, error) {
 func (f *Fees) validateNewestBlock(req *http.Request, blockCount uint64) (*chain.BlockSummary, uint64, error) {
 	newestBlock, err := restutil.ParseRevision(req.URL.Query().Get("newestBlock"), true)
 	if err != nil {
-		return nil, 0, restutil.BadRequest(errors.WithMessage(err, "newestBlock"))
+		return nil, 0, restutil.BadRequest(fmt.Errorf("newestBlock: %w", err))
 	}
 
 	newestBlockSummary, _, err := restutil.GetSummaryAndState(newestBlock, f.data.repo, f.bft, f.data.stater, f.forkConfig)
 	if err != nil {
 		if f.data.repo.IsNotFound(err) {
-			return nil, 0, restutil.BadRequest(errors.WithMessage(err, "newestBlock"))
+			return nil, 0, restutil.BadRequest(fmt.Errorf("newestBlock: %w", err))
 		}
 		return nil, 0, err
 	}
@@ -134,7 +134,7 @@ func (f *Fees) validateRewardPercentiles(req *http.Request) ([]float64, error) {
 	for i, str := range percentileStrs {
 		val, err := strconv.ParseFloat(str, 64)
 		if err != nil {
-			return nil, restutil.BadRequest(errors.WithMessage(err, "invalid rewardPercentiles value"))
+			return nil, restutil.BadRequest(fmt.Errorf("invalid rewardPercentiles value: %w", err))
 		}
 		if val < 0 || val > 100 {
 			return nil, restutil.BadRequest(errors.New("rewardPercentiles values must be between 0 and 100"))
