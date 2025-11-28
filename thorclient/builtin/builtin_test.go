@@ -37,12 +37,9 @@ func txOpts() *bind.TxOptions {
 	}
 }
 
-func newRange(receipt *api.Receipt) *api.Range {
-	block64 := uint64(receipt.Meta.BlockNumber)
-	return &api.Range{
-		From: &block64,
-		To:   &block64,
-	}
+func newRange(receipt *api.Receipt) bind.FilterOption {
+	block := uint64(receipt.Meta.BlockNumber)
+	return bind.FilterBlocks(block, block)
 }
 
 // newTestNode creates a node with the API enabled to test the smart contract wrappers
