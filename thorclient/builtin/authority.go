@@ -12,7 +12,6 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -119,13 +118,13 @@ type CandidateEvent struct {
 }
 
 // FilterCandidate filters Candidate events within the given block range
-func (a *Authority) FilterCandidate(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]CandidateEvent, error) {
+func (a *Authority) FilterCandidate(opts ...bind.FilterOption) ([]CandidateEvent, error) {
 	event, ok := a.contract.ABI().Events["Candidate"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := a.contract.FilterEvent("Candidate").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := a.contract.FilterEvent("Candidate").Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
