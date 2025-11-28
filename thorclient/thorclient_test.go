@@ -164,7 +164,7 @@ func TestClient_DebugRevertedTransaction(t *testing.T) {
 	// build and send the transaction
 	trx := txThatReverts.Build()
 	trx = tx.MustSign(trx, genesis.DevAccounts()[1].PrivateKey)
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0], trx))
+	require.NoError(t, node.Chain().MintBlock(trx))
 
 	// check that we can get debug info for the reverted transaction
 	client := New(node.APIServer().URL)
@@ -198,7 +198,7 @@ func TestClient_DebugReverted_VMError(t *testing.T) {
 
 	trx := txThatReverts.Build()
 	trx = tx.MustSign(trx, genesis.DevAccounts()[1].PrivateKey)
-	require.NoError(t, node.Chain().MintBlock(genesis.DevAccounts()[0], trx))
+	require.NoError(t, node.Chain().MintBlock(trx))
 
 	// check that we can get debug info for the reverted transaction
 	client := New(node.APIServer().URL)

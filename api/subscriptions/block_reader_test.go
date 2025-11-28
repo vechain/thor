@@ -92,7 +92,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], tr))
+	require.NoError(t, thorChain.MintBlock(tr))
 
 	txDeploy := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
@@ -104,7 +104,7 @@ func initChain(t *testing.T) *testchain.Chain {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 	txDeploy = tx.MustSign(txDeploy, genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], txDeploy))
+	require.NoError(t, thorChain.MintBlock(txDeploy))
 
 	return thorChain
 }
