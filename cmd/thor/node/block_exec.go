@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -122,7 +121,7 @@ func (n *Node) executeAndCommitBlock(newBlock *block.Block, stats *blockStats, c
 
 	// reject the block if the parent is conflicting with finalized checkpoint
 	if ok, err := n.bft.Accepts(newBlock.Header().ParentID()); err != nil {
-		return errors.Wrap(err, "bft accepts")
+		return fmt.Errorf("bft accepts: %w", err)
 	} else if !ok {
 		return errBFTRejected
 	}
@@ -137,7 +136,7 @@ func (n *Node) executeAndCommitBlock(newBlock *block.Block, stats *blockStats, c
 	if newBlock.Header().Number() >= n.forkConfig.FINALITY && ctx.prevBest.Number() >= n.forkConfig.FINALITY {
 		ctx.becomeBest, err = n.bft.Select(newBlock.Header())
 		if err != nil {
-			return errors.Wrap(err, "bft select")
+			return fmt.Errorf("bft select: %w", err)
 		}
 	} else {
 		ctx.becomeBest = newBlock.Header().BetterThan(ctx.prevBest)
@@ -161,13 +160,13 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 	// write logs
 	if logEnabled {
 		if err := n.writeLogs(ctx.newBlock, ctx.receipts, ctx.prevBest.ID()); err != nil {
-			return errors.Wrap(err, "write logs")
+			return fmt.Errorf("write logs: %w", err)
 		}
 	}
 
 	// commit the states
 	if _, err := ctx.stage.Commit(); err != nil {
-		return errors.Wrap(err, "commit state")
+		return fmt.Errorf("commit state: %w", err)
 	}
 
 	// sync the log-writing task
@@ -180,13 +179,13 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 
 	// add the new block into repository
 	if err := n.repo.AddBlock(ctx.newBlock, ctx.receipts, ctx.conflicts, ctx.becomeBest); err != nil {
-		return errors.Wrap(err, "add block")
+		return fmt.Errorf("add block: %w", err)
 	}
 
 	// commit block in bft engine
 	if ctx.newBlock.Header().Number() >= n.forkConfig.FINALITY {
 		if err := n.bft.CommitBlock(ctx.newBlock.Header(), ctx.packing); err != nil {
-			return errors.Wrap(err, "bft commits")
+			return fmt.Errorf("bft commits: %w", err)
 		}
 	}
 

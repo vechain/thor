@@ -7,9 +7,8 @@ package validation
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
-
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
@@ -38,21 +37,21 @@ func NewStorage(sctx *solidity.Context) *Storage {
 func (s *Storage) getValidation(validator thor.Address) (*Validation, error) {
 	v, err := s.validations.Get(validator)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get validator")
+		return nil, fmt.Errorf("failed to get validator: %w", err)
 	}
 	return v, nil
 }
 
 func (s *Storage) updateValidation(validator thor.Address, entry *Validation) error {
 	if err := s.validations.Update(validator, entry); err != nil {
-		return errors.Wrap(err, "failed to set validator")
+		return fmt.Errorf("failed to set validator: %w", err)
 	}
 	return nil
 }
 
 func (s *Storage) upsertValidation(validator thor.Address, entry *Validation) error {
 	if err := s.validations.Upsert(validator, entry); err != nil {
-		return errors.Wrap(err, "failed to set validator")
+		return fmt.Errorf("failed to set validator: %w", err)
 	}
 	return nil
 }
@@ -62,7 +61,7 @@ func (s *Storage) upsertValidation(validator thor.Address, entry *Validation) er
 func (s *Storage) getReward(key thor.Bytes32) (*big.Int, error) {
 	reward, err := s.rewards.Get(key)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get reward")
+		return nil, fmt.Errorf("failed to get reward: %w", err)
 	}
 	if reward == nil {
 		return new(big.Int), nil
@@ -86,7 +85,7 @@ func (s *Storage) setExit(block uint32, validator thor.Address) error {
 	binary.BigEndian.PutUint32(key[:], block)
 
 	if err := s.exits.Insert(key, validator); err != nil {
-		return errors.Wrap(err, "failed to set exit epoch")
+		return fmt.Errorf("failed to set exit epoch %w", err)
 	}
 	return nil
 }

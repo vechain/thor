@@ -6,9 +6,8 @@
 package runtime
 
 import (
+	"errors"
 	"math/big"
-
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/state"

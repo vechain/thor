@@ -13,7 +13,6 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/vechain/thor/v2/block"
@@ -69,7 +68,7 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 				if summary, err := repo.GetBlockSummary(headID); err == nil {
 					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot())
 				} else {
-					initErr = errors.Wrap(err, fmt.Sprintf("lazy init chain, head=%v", headID))
+					initErr = fmt.Errorf("lazy init chain, head=%v: %w", headID, err)
 				}
 			}
 			return indexTrie, initErr
@@ -122,7 +121,7 @@ func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
 
 		s, err := c.GetBlockSummary(uint32(blockNum))
 		if err != nil {
-			return nil, errors.Wrap(err, "block missing")
+			return nil, fmt.Errorf("block missing: %w", err)
 		}
 		if s.Conflicts == uint32(conflicts) {
 			var sMeta storageTxMeta
@@ -189,7 +188,7 @@ func (c *Chain) HasTransaction(txid thor.Bytes32, txBlockRef uint32) (bool, erro
 
 		s, err := c.GetBlockSummary(uint32(blockNum))
 		if err != nil {
-			return false, errors.Wrap(err, "block missing")
+			return false, fmt.Errorf("block missing: %w", err)
 		}
 
 		if s.Conflicts == uint32(conflicts) {

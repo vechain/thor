@@ -6,6 +6,7 @@
 package httpserver
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
@@ -80,7 +80,7 @@ func StartAPIServer(
 ) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen API addr [%v]", addr)
+		return "", nil, fmt.Errorf("listen API addr [%v]: %w", addr, err)
 	}
 
 	origins := strings.Split(strings.TrimSpace(config.AllowedOrigins), ",")

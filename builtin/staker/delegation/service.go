@@ -6,9 +6,9 @@
 package delegation
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
-
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/thor"
@@ -37,7 +37,7 @@ func New(sctx *solidity.Context) *Service {
 func (s *Service) GetDelegation(delegationID *big.Int) (*Delegation, error) {
 	d, err := s.delegations.Get(delegationID)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get delegation")
+		return nil, fmt.Errorf("failed to get delegation: %w", err)
 	}
 
 	return d, nil
@@ -63,7 +63,7 @@ func (s *Service) Add(
 	}
 
 	if err := s.delegations.Insert(delegationID, delegation); err != nil {
-		return nil, errors.Wrap(err, "failed to set delegation")
+		return nil, fmt.Errorf("failed to set delegation: %w", err)
 	}
 
 	return delegationID, nil

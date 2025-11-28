@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"math/rand/v2"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
