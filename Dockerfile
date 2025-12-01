@@ -11,7 +11,7 @@ FROM alpine:3.21.3
 
 RUN apk add --no-cache ca-certificates
 RUN apk update && \
-    apk add --no-cache libssl3=3.3.5-r0 libcrypto3=3.3.5-r0
+    apk add --no-cache libssl3=3.3.5-r0 libcrypto3=3.3.5-r0 busybox=1.37.0-r14
 COPY --from=builder /go/thor/bin/thor /usr/local/bin/
 COPY --from=builder /go/thor/bin/disco /usr/local/bin/
 RUN adduser -D -s /bin/ash thor
