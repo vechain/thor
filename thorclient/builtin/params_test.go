@@ -14,7 +14,6 @@ import (
 
 	contracts "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
@@ -44,7 +43,7 @@ func TestParams(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, big.NewInt(2), mbp)
 
-		events, err := params.FilterSet(newRange(receipt), nil, logsdb.ASC)
+		events, err := params.FilterSet(newRange(receipt))
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 		require.Equal(t, thor.KeyMaxBlockProposers, events[0].Key)
@@ -108,7 +107,7 @@ func TestParams_FilterSet_EventNotFound(t *testing.T) {
 	require.NoError(t, err)
 	bad := &Params{contract: badContract}
 
-	_, err = bad.FilterSet(nil, nil, logsdb.ASC)
+	_, err = bad.FilterSet()
 	require.Error(t, err)
 }
 

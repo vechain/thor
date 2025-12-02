@@ -13,6 +13,8 @@ curl https://unpkg.com/swagger-ui-dist@5.29.0/swagger-ui-standalone-preset.js > 
 ## Stoplight
 Spotlight UI from https://github.com/stoplightio/elements @v9.0.6
 - Created [window-observer.js](./stoplight-ui/window-observer.js) to remove `Send API Request` functionality for subscription endpoints
+- Added `Human readable format` functionality to [window-observer.js](./stoplight-ui/window-observer.js) in order to format 
+  amounts and timestamps, from responses, to human readable values
 - See the latest version [here](https://unpkg.com/browse/@stoplight/elements-core@9.0.6/)
 
 ```bash

@@ -13,44 +13,80 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// FilterBuilder is the concrete implementation of FilterBuilder.
-type FilterBuilder struct {
-	op      *MethodBuilder
+type filterConfig struct {
 	evRange *api.Range
 	opts    *api.Options
 	order   logsdb.Order
 }
 
-// InRange implements FilterBuilder.InRange.
-func (b *FilterBuilder) InRange(r *api.Range) *FilterBuilder {
-	b.evRange = r
-	return b
+// FilterOption configures event filtering behavior.
+type FilterOption func(*filterConfig)
+
+// FilterBlocks filters events within the given block range.
+func FilterBlocks(from, to uint64) FilterOption {
+	return func(c *filterConfig) {
+		c.evRange = &api.Range{
+			From: &from,
+			To:   &to,
+			Unit: api.BlockRangeType,
+		}
+	}
 }
 
-// WithOptions implements FilterBuilder.WithOptions.
-func (b *FilterBuilder) WithOptions(opts *api.Options) *FilterBuilder {
-	b.opts = opts
-	return b
+// FilterTimestamps filters events within the given timestamp range.
+func FilterTimestamps(from, to uint64) FilterOption {
+	return func(c *filterConfig) {
+		c.evRange = &api.Range{
+			From: &from,
+			To:   &to,
+			Unit: api.TimeRangeType,
+		}
+	}
 }
 
-// OrderBy implements FilterBuilder.OrderBy.
-func (b *FilterBuilder) OrderBy(order logsdb.Order) *FilterBuilder {
-	b.order = order
-	return b
+// FilterPagination sets pagination options for the filter.
+func FilterPagination(offset, limit uint64) FilterOption {
+	return func(c *filterConfig) {
+		c.opts = &api.Options{
+			Offset: offset,
+			Limit:  &limit,
+		}
+	}
 }
 
-// Execute implements FilterBuilder.Execute.
-func (b *FilterBuilder) Execute() ([]api.FilteredEvent, error) {
+// FilterOrder sets the sort order for returned events.
+func FilterOrder(order logsdb.Order) FilterOption {
+	return func(c *filterConfig) {
+		c.order = order
+	}
+}
+
+// FilterBuilder is the concrete implementation of FilterBuilder.
+type FilterBuilder struct {
+	op *MethodBuilder
+}
+
+// Execute runs the event filter with the given options.
+func (b *FilterBuilder) Execute(options ...FilterOption) ([]api.FilteredEvent, error) {
 	event, ok := b.op.contract.abi.Events[b.op.method]
 	if !ok {
 		return nil, errors.New("event not found: " + b.op.method)
 	}
 
+	cfg := &filterConfig{}
+	for _, opt := range options {
+		opt(cfg)
+	}
+	if cfg.opts == nil {
+		cfg.opts = &api.Options{}
+	}
+	cfg.opts.IncludeIndexes = true
+
 	id := thor.Bytes32(event.Id())
 	req := &api.EventFilter{
-		Range:   b.evRange,
-		Options: b.opts,
-		Order:   b.order,
+		Range:   cfg.evRange,
+		Options: cfg.opts,
+		Order:   cfg.order,
 		CriteriaSet: []*api.EventCriteria{
 			{
 				Address: b.op.contract.addr,

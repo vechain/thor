@@ -251,7 +251,7 @@ func initBlockServer(t *testing.T) {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], legacyTx))
+	require.NoError(t, thorChain.MintBlock(legacyTx))
 
 	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(thorChain.Repo().ChainTag()).
@@ -265,7 +265,7 @@ func initBlockServer(t *testing.T) {
 		Build()
 	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
 
-	require.NoError(t, thorChain.MintTransactions(genesis.DevAccounts()[0], dynFeeTx))
+	require.NoError(t, thorChain.MintBlock(dynFeeTx))
 
 	allBlocks, err := thorChain.GetAllBlocks()
 	require.NoError(t, err)

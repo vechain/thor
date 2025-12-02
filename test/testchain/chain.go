@@ -8,13 +8,8 @@ package testchain
 import (
 	"errors"
 	"fmt"
-	"math"
-	"math/big"
-	"math/rand/v2"
 	"slices"
 	"time"
-
-	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -26,13 +21,15 @@ import (
 	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/logsdb/sqlite3"
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/packer"
-	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/xenv"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/logger"
+	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
 // Chain represents the blockchain structure.
@@ -47,11 +44,12 @@ type Chain struct {
 	genesisBlock *block.Block
 	logDB        logsdb.LogsDB
 	forkConfig   *thor.ForkConfig
+	validators   []genesis.DevAccount
 }
 
 func New(
 	db *muxdb.MuxDB,
-	genesis *genesis.Genesis,
+	gene *genesis.Genesis,
 	engine bft.Committer,
 	repo *chain.Repository,
 	stater *state.Stater,
@@ -61,26 +59,19 @@ func New(
 ) *Chain {
 	return &Chain{
 		db:           db,
-		genesis:      genesis,
+		genesis:      gene,
 		engine:       engine,
 		repo:         repo,
 		stater:       stater,
 		genesisBlock: genesisBlock,
 		logDB:        logDB,
 		forkConfig:   forkConfig,
+		validators:   genesis.DevAccounts(),
 	}
 }
 
-var DefaultForkConfig = thor.ForkConfig{
-	BLOCKLIST: 0,
-	VIP191:    1,
-	VIP214:    2,
-	ETH_CONST: math.MaxUint32,
-	ETH_IST:   math.MaxUint32,
-	FINALITY:  math.MaxUint32,
-	GALACTICA: math.MaxUint32,
-	HAYABUSA:  math.MaxUint32,
-}
+// DefaultForkConfig enables all forks at block 0
+var DefaultForkConfig = thor.ForkConfig{}
 
 // NewDefault is a wrapper function that creates a Chain for testing with the default fork config.
 func NewDefault() (*Chain, error) {
@@ -96,13 +87,10 @@ func NewWithFork(forkConfig *thor.ForkConfig, epochLength uint32) (*Chain, error
 // It uses an in-memory database, development network genesis, and a solo BFT engine.
 func NewIntegrationTestChain(config genesis.DevConfig, epochLength uint32) (*Chain, error) {
 	// If the launch time is not set, set it to the current time minus the current time aligned with the block interval
-	if config.LaunchTime == 0 {
-		now := uint64(time.Now().Unix())
-		config.LaunchTime = now - now%thor.BlockInterval()
+	gene, err := CreateGenesis(config, 10, epochLength, epochLength)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create genesis: %w", err)
 	}
-
-	// Initialize the genesis and retrieve the genesis block
-	gene := genesis.NewDevnetWithConfig(config)
 	return NewIntegrationTestChainWithGenesis(gene, config.ForkConfig, epochLength)
 }
 
@@ -110,12 +98,6 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	// Initialize the database
 	db := muxdb.NewMem()
 	st := state.New(db, trie.Root{})
-
-	if epochLength != thor.EpochLength() {
-		thor.SetConfig(thor.Config{
-			EpochLength: epochLength,
-		})
-	}
 
 	prm := params.New(thor.BytesToAddress([]byte("params")), st)
 	_ = staker.New(builtin.Staker.Address, st, prm, nil)
@@ -161,6 +143,12 @@ func (c *Chain) Repo() *chain.Repository {
 	return c.repo
 }
 
+// State returns the current state at the best block of the chain.
+func (c *Chain) State() *state.State {
+	bestBlkSummary := c.Repo().BestBlockSummary()
+	return c.Stater().NewState(bestBlkSummary.Root())
+}
+
 // Stater returns the current state manager of the chain, which is responsible for managing the state of accounts and other elements.
 func (c *Chain) Stater() *state.Stater {
 	return c.stater
@@ -174,126 +162,6 @@ func (c *Chain) Engine() bft.Committer {
 // GenesisBlock returns the genesis block of the chain, which is the first block in the blockchain.
 func (c *Chain) GenesisBlock() *block.Block {
 	return c.genesisBlock
-}
-
-// MintTransactions creates a block with the provided transactions and adds it to the blockchain.
-// It wraps the transactions with receipts and passes them to MintTransactionsWithReceiptFunc.
-func (c *Chain) MintTransactions(account genesis.DevAccount, transactions ...*tx.Transaction) error {
-	return c.MintBlock(account, transactions...)
-}
-
-// MintClauses creates a transaction with the provided clauses and adds it to the blockchain.
-func (c *Chain) MintClauses(account genesis.DevAccount, clauses []*tx.Clause) error {
-	builder := new(tx.Builder).GasPriceCoef(255).
-		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
-		Expiration(1000).
-		ChainTag(c.Repo().ChainTag()).
-		Gas(10e6).
-		Nonce(rand.Uint64()) //#nosec G404
-
-	for _, clause := range clauses {
-		builder.Clause(clause)
-	}
-
-	tx := builder.Build()
-	signature, err := crypto.Sign(tx.SigningHash().Bytes(), account.PrivateKey)
-	if err != nil {
-		return fmt.Errorf("unable to sign tx: %w", err)
-	}
-	tx = tx.WithSignature(signature)
-
-	return c.MintBlock(account, tx)
-}
-
-// MintBlock creates and finalizes a new block with the given transactions.
-// It schedules a new block, adopts transactions, packs them into a block, and commits it to the chain.
-func (c *Chain) MintBlock(account genesis.DevAccount, transactions ...*tx.Transaction) error {
-	// Create a new block packer with the current chain state and account information.
-	blkPacker := packer.New(c.Repo(), c.Stater(), account.Address, &genesis.DevAccounts()[0].Address, c.forkConfig, 0)
-
-	// Create a new block
-	blkFlow, _, err := blkPacker.Mock(
-		c.Repo().BestBlockSummary(),
-		c.Repo().BestBlockSummary().Header.Timestamp()+thor.BlockInterval(),
-		c.Repo().BestBlockSummary().Header.GasLimit(),
-	)
-	if err != nil {
-		return fmt.Errorf("unable to mock a new block: %w", err)
-	}
-
-	// Adopt the provided transactions into the block.
-	for _, trx := range transactions {
-		if err = blkFlow.Adopt(trx); err != nil {
-			return fmt.Errorf("unable to adopt tx into block: %w", err)
-		}
-	}
-
-	// Pack the adopted transactions into a block.
-	newBlk, stage, receipts, err := blkFlow.Pack(account.PrivateKey, 0, false)
-	if err != nil {
-		return fmt.Errorf("unable to pack tx: %w", err)
-	}
-
-	return c.AddBlock(newBlk, stage, receipts)
-}
-
-// AddBlock manually adds a new block to the chain.
-func (c *Chain) AddBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
-	// Commit the new block to the chain's state.
-	if _, err := stage.Commit(); err != nil {
-		return fmt.Errorf("unable to commit tx: %w", err)
-	}
-
-	// Add the block to the repository.
-	if err := c.Repo().AddBlock(newBlk, receipts, 0, true); err != nil {
-		return fmt.Errorf("unable to add tx to repo: %w", err)
-	}
-
-	// Write the new block and receipts to the logdb.
-	w := c.LogDB().NewWriter()
-	if err := w.Write(newBlk, receipts); err != nil {
-		return err
-	}
-	if err := w.Commit(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// ClauseCall executes contract call with clause referenced by the clauseIdx parameter, the rest of tx is passed as is.
-func (c *Chain) ClauseCall(account genesis.DevAccount, trx *tx.Transaction, clauseIdx int) ([]byte, uint64, error) {
-	ch := c.repo.NewBestChain()
-	summary, err := c.repo.GetBlockSummary(ch.HeadID())
-	if err != nil {
-		return nil, 0, err
-	}
-	st := state.New(c.db, trie.Root{Hash: summary.Header.StateRoot(), Ver: trie.Version{Major: summary.Header.Number()}})
-	rt := runtime.New(
-		ch,
-		st,
-		&xenv.BlockContext{Number: summary.Header.Number(), Time: summary.Header.Timestamp(), TotalScore: summary.Header.TotalScore(), Signer: account.Address},
-		c.forkConfig,
-	)
-	maxGas := uint64(math.MaxUint32)
-	exec, _ := rt.PrepareClause(trx.Clauses()[clauseIdx],
-		0, maxGas, &xenv.TransactionContext{
-			ID:         trx.ID(),
-			Origin:     account.Address,
-			GasPrice:   &big.Int{},
-			GasPayer:   account.Address,
-			ProvedWork: trx.UnprovedWork(),
-			BlockRef:   trx.BlockRef(),
-			Expiration: trx.Expiration(),
-		})
-
-	out, _, err := exec()
-	if err != nil {
-		return nil, 0, err
-	}
-	if out.VMErr != nil {
-		return nil, 0, out.VMErr
-	}
-	return out.Data, maxGas - out.LeftOverGas, err
 }
 
 func (c *Chain) GetTxReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
@@ -362,4 +230,19 @@ func (c *Chain) Database() *muxdb.MuxDB {
 // LogDB returns the current logdb.
 func (c *Chain) LogDB() logsdb.LogsDB {
 	return c.logDB
+}
+
+// RemoveValidator removes a validator from the chain's validator set based on the provided address.
+func (c *Chain) RemoveValidator(address thor.Address) {
+	for i, v := range c.validators {
+		if v.Address == address {
+			c.validators = slices.Delete(c.validators, i, i+1)
+			return
+		}
+	}
+}
+
+// AddValidator adds a validator to the chain's validator set.
+func (c *Chain) AddValidator(validator genesis.DevAccount) {
+	c.validators = append(c.validators, validator)
 }

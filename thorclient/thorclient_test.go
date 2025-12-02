@@ -6,12 +6,18 @@
 package thorclient
 
 import (
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/testnode"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
@@ -127,4 +133,77 @@ func TestGetTransaction(t *testing.T) {
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
 		})
 	}
+}
+
+func TestClient_DebugRevertedTransaction(t *testing.T) {
+	node, err := testnode.NewNodeBuilder().Build()
+	assert.NoError(t, err)
+	require.NoError(t, node.Start())
+	t.Cleanup(func() {
+		require.NoError(t, node.Stop())
+	})
+
+	txThatReverts := tx.NewBuilder(tx.TypeLegacy).
+		Gas(100_000).
+		Expiration(1000).
+		GasPriceCoef(255).
+		ChainTag(node.Chain().ChainTag())
+
+	// add a simple VET transfer, no revert
+	firstClauseNoRevert := tx.NewClause(&thor.Address{0x1}).WithValue(big.NewInt(2))
+	txThatReverts.Clause(firstClauseNoRevert)
+
+	// try to update params with the wrong caller, causes a revert
+	method, ok := builtin.Params.ABI.MethodByName("set")
+	assert.True(t, ok)
+	input, err := method.EncodeInput(thor.Bytes32{}, big.NewInt(1))
+	assert.NoError(t, err)
+	secondClauseReverts := tx.NewClause(&builtin.Params.Address).WithData(input)
+	txThatReverts.Clause(secondClauseReverts)
+
+	// build and send the transaction
+	trx := txThatReverts.Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, node.Chain().MintBlock(trx))
+
+	// check that we can get debug info for the reverted transaction
+	client := New(node.APIServer().URL)
+	id := trx.ID()
+	data, err := client.DebugRevertedTransaction(&id)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "builtin: executor required")
+}
+
+func TestClient_DebugReverted_VMError(t *testing.T) {
+	node, err := testnode.NewNodeBuilder().Build()
+	assert.NoError(t, err)
+	require.NoError(t, node.Start())
+	t.Cleanup(func() {
+		require.NoError(t, node.Stop())
+	})
+
+	txThatReverts := tx.NewBuilder(tx.TypeLegacy).
+		Gas(30_000). // not enough gas for VTHO transfer
+		Expiration(1000).
+		GasPriceCoef(255).
+		ChainTag(node.Chain().ChainTag())
+
+	// add a simple VTHO transfer
+	transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+	assert.True(t, ok)
+	transferInput, err := transferMethod.EncodeInput(&thor.Address{0x2}, big.NewInt(1))
+	assert.NoError(t, err)
+	transferClause := tx.NewClause(&builtin.Energy.Address).WithData(transferInput)
+	txThatReverts.Clause(transferClause)
+
+	trx := txThatReverts.Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[1].PrivateKey)
+	require.NoError(t, node.Chain().MintBlock(trx))
+
+	// check that we can get debug info for the reverted transaction
+	client := New(node.APIServer().URL)
+	id := trx.ID()
+	data, err := client.DebugRevertedTransaction(&id)
+	assert.ErrorContains(t, err, "transaction errored with: out of gas")
+	assert.Empty(t, string(data))
 }

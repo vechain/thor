@@ -14,7 +14,6 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -140,13 +139,13 @@ type TransferEvent struct {
 }
 
 // FilterTransfer filters Transfer events for the specified range and options.
-func (e *Energy) FilterTransfer(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]TransferEvent, error) {
+func (e *Energy) FilterTransfer(opts ...bind.FilterOption) ([]TransferEvent, error) {
 	event, ok := e.contract.ABI().Events["Transfer"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	logs, err := e.contract.FilterEvent("Transfer").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	logs, err := e.contract.FilterEvent("Transfer").Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -189,13 +188,13 @@ type ApprovalEvent struct {
 }
 
 // FilterApproval filters Approval events for the specified range and options.
-func (e *Energy) FilterApproval(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ApprovalEvent, error) {
+func (e *Energy) FilterApproval(opts ...bind.FilterOption) ([]ApprovalEvent, error) {
 	event, ok := e.contract.ABI().Events["Approval"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	logs, err := e.contract.FilterEvent("Approval").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	logs, err := e.contract.FilterEvent("Approval").Execute(opts...)
 	if err != nil {
 		return nil, err
 	}

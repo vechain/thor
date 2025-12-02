@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -358,13 +357,13 @@ type ValidatorQueuedEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterValidatorQueued(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ValidationQueuedEvent, error) {
+func (s *Staker) FilterValidatorQueued(opts ...bind.FilterOption) ([]ValidationQueuedEvent, error) {
 	event, ok := s.contract.ABI().Events["ValidationQueued"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -405,8 +404,8 @@ type ValidationSignaledExitEvent struct {
 	Log  api.FilteredEvent
 }
 
-func (s *Staker) FilterValidationSignaledExit(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ValidationSignaledExitEvent, error) {
-	raw, err := s.contract.FilterEvent("ValidationSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+func (s *Staker) FilterValidationSignaledExit(opts ...bind.FilterOption) ([]ValidationSignaledExitEvent, error) {
+	raw, err := s.contract.FilterEvent("ValidationSignaledExit").Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -432,13 +431,13 @@ type DelegationAddedEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationAdded(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]DelegationAddedEvent, error) {
+func (s *Staker) FilterDelegationAdded(opts ...bind.FilterOption) ([]DelegationAddedEvent, error) {
 	event, ok := s.contract.ABI().Events["DelegationAdded"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -479,8 +478,8 @@ type DelegationSignaledExitEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationSignaledExit(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]DelegationSignaledExitEvent, error) {
-	raw, err := s.contract.FilterEvent("DelegationSignaledExit").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+func (s *Staker) FilterDelegationSignaledExit(opts ...bind.FilterOption) ([]DelegationSignaledExitEvent, error) {
+	raw, err := s.contract.FilterEvent("DelegationSignaledExit").Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -503,13 +502,13 @@ type DelegationWithdrawnEvent struct {
 	Log          api.FilteredEvent
 }
 
-func (s *Staker) FilterDelegationWithdrawn(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]DelegationWithdrawnEvent, error) {
+func (s *Staker) FilterDelegationWithdrawn(opts ...bind.FilterOption) ([]DelegationWithdrawnEvent, error) {
 	event, ok := s.contract.ABI().Events["DelegationWithdrawn"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent("DelegationWithdrawn").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent("DelegationWithdrawn").Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -547,13 +546,13 @@ type StakeIncreasedEvent struct {
 	Log       api.FilteredEvent
 }
 
-func (s *Staker) FilterStakeIncreased(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]StakeIncreasedEvent, error) {
+func (s *Staker) FilterStakeIncreased(opts ...bind.FilterOption) ([]StakeIncreasedEvent, error) {
 	event, ok := s.contract.ABI().Events["StakeIncreased"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -591,13 +590,13 @@ type StakeDecreasedEvent struct {
 	Log       api.FilteredEvent
 }
 
-func (s *Staker) FilterStakeDecreased(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]StakeDecreasedEvent, error) {
+func (s *Staker) FilterStakeDecreased(opts ...bind.FilterOption) ([]StakeDecreasedEvent, error) {
 	event, ok := s.contract.ABI().Events["StakeDecreased"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -635,13 +634,13 @@ type BeneficiarySetEvent struct {
 	Log         api.FilteredEvent
 }
 
-func (s *Staker) FilterBeneficiarySet(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]BeneficiarySetEvent, error) {
+func (s *Staker) FilterBeneficiarySet(opts ...bind.FilterOption) ([]BeneficiarySetEvent, error) {
 	event, ok := s.contract.ABI().Events["BeneficiarySet"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -679,13 +678,13 @@ type ValidationWithdrawnEvent struct {
 	Log       api.FilteredEvent
 }
 
-func (s *Staker) FilterValidationWithdrawn(eventsRange *api.Range, opts *api.Options, order logsdb.Order) ([]ValidationWithdrawnEvent, error) {
+func (s *Staker) FilterValidationWithdrawn(opts ...bind.FilterOption) ([]ValidationWithdrawnEvent, error) {
 	event, ok := s.contract.ABI().Events["ValidationWithdrawn"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvent(event.Name).WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := s.contract.FilterEvent(event.Name).Execute(opts...)
 	if err != nil {
 		return nil, err
 	}

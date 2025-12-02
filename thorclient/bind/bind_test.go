@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/api"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +44,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	// mint a block to arrive to Galactica
-	if err := testNode.Chain().MintBlock(genesis.DevAccounts()[0]); err != nil {
+	if err := testNode.Chain().MintBlock(); err != nil {
 		require.NoErrorf(t, err, "failed to mint genesis block")
 	}
 
@@ -170,12 +168,9 @@ func TestContract_Filter(t *testing.T) {
 		assert.False(t, receipt.Reverted)
 
 		// Filter events
+		block := uint64(receipt.Meta.BlockNumber)
 		events, err := env.bindContract.FilterEvent("ValueChanged").
-			InRange(&api.Range{
-				From: ptr(uint64(receipt.Meta.BlockNumber)),
-				To:   ptr(uint64(receipt.Meta.BlockNumber)),
-			}).
-			Execute()
+			Execute(FilterBlocks(block, block))
 		require.NoError(t, err)
 		assert.Len(t, events, 1)
 

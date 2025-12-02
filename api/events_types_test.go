@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -154,7 +153,7 @@ func initChain(t *testing.T) *testchain.Chain {
 	require.NoError(t, err)
 
 	for range 10 {
-		require.NoError(t, thorChain.MintBlock(genesis.DevAccounts()[0]))
+		require.NoError(t, thorChain.MintBlock())
 	}
 
 	return thorChain
