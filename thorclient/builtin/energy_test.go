@@ -15,7 +15,6 @@ import (
 
 	contracts "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
@@ -73,7 +72,7 @@ func TestEnergy(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted, "Transaction should not be reverted")
 
-		approvals, err := energy.FilterApproval(newRange(receipt), nil, logdb.ASC)
+		approvals, err := energy.FilterApproval(newRange(receipt))
 		require.NoError(t, err)
 		require.Len(t, approvals, 1, "There should be one approval event")
 
@@ -107,7 +106,7 @@ func TestEnergy(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, transferAmount, balance, "Balance should match the transferred amount")
 
-		transfers, err := energy.FilterTransfer(newRange(receipt), nil, logdb.ASC)
+		transfers, err := energy.FilterTransfer(newRange(receipt))
 		require.NoError(t, err)
 
 		found := false
@@ -184,7 +183,7 @@ func TestEnergy_Move(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted)
 
-	transfers, err := energy.FilterTransfer(newRange(receipt), nil, logdb.ASC)
+	transfers, err := energy.FilterTransfer(newRange(receipt))
 	require.NoError(t, err)
 	found := false
 	for _, tr := range transfers {
@@ -211,14 +210,14 @@ func TestEnergy_FilterEvents_EventNotFound(t *testing.T) {
 		{
 			name: "Transfer",
 			call: func() error {
-				_, err := bad.FilterTransfer(nil, nil, logdb.ASC)
+				_, err := bad.FilterTransfer()
 				return err
 			},
 		},
 		{
 			name: "Approval",
 			call: func() error {
-				_, err := bad.FilterApproval(nil, nil, logdb.ASC)
+				_, err := bad.FilterApproval()
 				return err
 			},
 		},
