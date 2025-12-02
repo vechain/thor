@@ -10,6 +10,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/vechain/thor/v2/abi"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/logdb"
@@ -139,7 +141,7 @@ func (a *Authority) FilterCandidate(eventsRange *api.Range, opts *api.Options, o
 		data[0] = new(common.Hash)
 
 		bytes := common.FromHex(log.Data)
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 

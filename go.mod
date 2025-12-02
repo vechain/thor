@@ -10,6 +10,7 @@ require (
 	github.com/elastic/gosigar v0.10.5
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/golang/snappy v0.0.4
+	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.4.1

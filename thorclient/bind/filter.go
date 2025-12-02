@@ -46,7 +46,7 @@ func (b *FilterBuilder) Execute() ([]api.FilteredEvent, error) {
 		return nil, errors.New("event not found: " + b.op.method)
 	}
 
-	id := thor.Bytes32(event.Id())
+	id := thor.Bytes32(event.ID)
 	req := &api.EventFilter{
 		Range:   b.evRange,
 		Options: b.opts,
