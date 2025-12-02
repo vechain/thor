@@ -429,7 +429,7 @@ func init() {
 		{"native_issuance", func(env *xenv.Environment) ([]any, error) {
 			env.UseGas(thor.SloadGas)
 			staker := Staker.NativeMetered(env.State(), env.UseGas)
-			issuance, err := Energy.Native(env.State(), env.BlockContext().Time).CalculateRewards(staker)
+			issuance, err := env.Energy().CalculateRewards(staker)
 			if err != nil {
 				return nil, err
 			}

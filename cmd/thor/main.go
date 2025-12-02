@@ -236,7 +236,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
-	repo, err := initChainRepository(gene, mainDB, logDB)
+	repo, err := initChainRepository(gene, forkConfig, mainDB, logDB)
 	if err != nil {
 		return err
 	}
@@ -418,7 +418,7 @@ func soloAction(ctx *cli.Context) error {
 		logDB = openMemLogDB()
 	}
 
-	repo, err := initChainRepository(gene, mainDB, logDB)
+	repo, err := initChainRepository(gene, forkConfig, mainDB, logDB)
 	if err != nil {
 		return err
 	}

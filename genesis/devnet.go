@@ -160,7 +160,7 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 				tokenSupply.Add(tokenSupply, bal)
 				energySupply.Add(energySupply, bal)
 			}
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			return builtin.Energy.Native(state, launchTime, energyStopTimeFunc(config.ForkConfig, launchTime)).SetInitialSupply(tokenSupply, energySupply)
 		}).
 		Call(
 			tx.NewClause(&builtin.Params.Address).

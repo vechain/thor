@@ -164,5 +164,7 @@ func (c *Core) IsExecutable(trx *tx.Transaction) (bool, error) {
 		return false, errors.WithMessage(err, "resolve transaction")
 	}
 
-	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee)
+	energy := txpool.LoadEnergy(best, state, chain, c.forkConfig)
+
+	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee, energy)
 }

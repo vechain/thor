@@ -94,7 +94,7 @@ func NewMainnet() *Genesis {
 				return err
 			}
 
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			return builtin.Energy.Native(state, launchTime, energyStopTimeFunc(&thor.NoFork, launchTime)).SetInitialSupply(tokenSupply, energySupply)
 		})
 
 	///// initialize builtin contracts

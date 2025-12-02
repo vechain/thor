@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/vechain/thor/v2/builtin/energy"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -93,6 +94,7 @@ type Context struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE (0 if vm runs with NoBaseFee flag and 0 gas price)
+	Energy      *energy.Energy // Provides usage of energy builtin
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides

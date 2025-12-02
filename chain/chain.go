@@ -11,12 +11,14 @@ import (
 	"math"
 	"slices"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin/energy"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
@@ -74,6 +76,38 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 			}
 			return indexTrie, initErr
 		},
+	}
+}
+
+func (c *Chain) EnergyStopTime() energy.StopTimeFunc {
+	if block.Number(c.headID) == c.repo.fc.HAYABUSA {
+		return func() (uint64, error) {
+			return 0, errors.New("hayabusa block does not exist in chain yet")
+		}
+	}
+
+	var (
+		stopTime uint64 = math.MaxUint64
+		stopErr  error
+		once     sync.Once
+	)
+
+	if block.Number(c.headID) < c.repo.fc.HAYABUSA {
+		return func() (uint64, error) {
+			return stopTime, stopErr
+		}
+	}
+
+	return func() (uint64, error) {
+		once.Do(func() {
+			hayabusaBlock, err := c.GetBlock(c.repo.fc.HAYABUSA)
+			if err != nil {
+				stopErr = errors.Wrap(err, "failed to get hayabusa fork block")
+				return
+			}
+			stopTime = hayabusaBlock.Header().Timestamp()
+		})
+		return stopTime, stopErr
 	}
 }
 

@@ -7,10 +7,13 @@ package chain
 
 import (
 	"encoding/binary"
+	"math"
+	"sync"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/vechain/thor/v2/builtin/energy"
 
 	"github.com/vechain/thor/v2/block"
 	cache2 "github.com/vechain/thor/v2/cache"
@@ -52,6 +55,7 @@ type Repository struct {
 
 	genesis *block.Block
 	tag     byte
+	fc      *thor.ForkConfig
 
 	bestSummary atomic.Value
 	tick        co.Signal
@@ -70,7 +74,7 @@ type Repository struct {
 }
 
 // NewRepository create an instance of repository.
-func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
+func NewRepository(db *muxdb.MuxDB, genesis *block.Block, fc *thor.ForkConfig) (*Repository, error) {
 	if genesis.Header().Number() != 0 {
 		return nil, errors.New("genesis number != 0")
 	}
@@ -88,6 +92,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		txIndexer: db.NewStore(txIndexStoreName),
 		genesis:   genesis,
 		tag:       genesisID[31],
+		fc:        fc,
 	}
 
 	repo.caches.summaries = newCache(512)
@@ -123,6 +128,46 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	}
 
 	return repo, nil
+}
+
+// EnergyStopTimeFunc returns a function to get the energy growth stop time, based on the current blockID.
+func (r *Repository) EnergyStopTimeFunc(blockID thor.Bytes32, blockTime uint64) energy.StopTimeFunc {
+	blockNum := block.Number(blockID)
+
+	// before the fork, energy growth never stops
+	if blockNum < r.fc.HAYABUSA {
+		return func() (uint64, error) {
+			return math.MaxUint64, nil
+		}
+	}
+
+	// in case the current block is the fork block, return the block time directly
+	if blockNum == r.fc.HAYABUSA {
+		return func() (uint64, error) {
+			return blockTime, nil
+		}
+	}
+
+	// after the fork, fetch the hayabusa block time once and cache the timestamp across the block
+	var (
+		stopTime uint64
+		stopErr  error
+		once     sync.Once
+	)
+
+	return func() (uint64, error) {
+		once.Do(func() {
+			// TODO: optimize by caching the hayabusa block time in repository
+			// TODO: how to handle forks in the case of caching?
+			var b *block.Block
+			b, stopErr = newChain(r, blockID).GetBlock(r.fc.HAYABUSA)
+			if stopErr != nil {
+				return
+			}
+			stopTime = b.Header().Timestamp()
+		})
+		return stopTime, stopErr
+	}
 }
 
 // ChainTag returns chain tag, which is the last byte of genesis id.

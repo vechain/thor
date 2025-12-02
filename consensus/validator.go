@@ -306,8 +306,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		if err := staker.ContractBalanceCheck(0); err != nil {
 			return nil, nil, consensusError(fmt.Sprintf("staker sanity check failed while verifying block: %v", err))
 		}
-		energy := builtin.Energy.Native(state, header.Timestamp())
-		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker, header.Number()); err != nil {
+		if err := rt.Energy().DistributeRewards(blk.Header().Beneficiary(), signer, staker, header.Number()); err != nil {
 			return nil, nil, err
 		}
 	}

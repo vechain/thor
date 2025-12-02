@@ -393,13 +393,13 @@ func openLogDB(dir string) (*logdb.LogDB, error) {
 	return db, nil
 }
 
-func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logdb.LogDB) (*chain.Repository, error) {
+func initChainRepository(gene *genesis.Genesis, fc *thor.ForkConfig, mainDB *muxdb.MuxDB, logDB *logdb.LogDB) (*chain.Repository, error) {
 	genesisBlock, genesisEvents, genesisTransfers, err := gene.Build(state.NewStater(mainDB))
 	if err != nil {
 		return nil, errors.Wrap(err, "build genesis block")
 	}
 
-	repo, err := chain.NewRepository(mainDB, genesisBlock)
+	repo, err := chain.NewRepository(mainDB, genesisBlock, fc)
 	if err != nil {
 		return nil, errors.Wrap(err, "initialize block chain")
 	}

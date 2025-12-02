@@ -216,8 +216,8 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 	if f.posActive {
 		signer := crypto.PubkeyToAddress(privateKey.PublicKey)
 		staker := builtin.Staker.Native(f.runtime.State())
-		energy := builtin.Energy.Native(f.runtime.State(), f.runtime.Context().Time)
-		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker, f.Number()); err != nil {
+
+		if err := f.runtime.Energy().DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker, f.Number()); err != nil {
 			return nil, nil, nil, err
 		}
 	}

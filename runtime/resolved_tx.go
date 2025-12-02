@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/builtin/energy"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/state"
@@ -112,7 +113,7 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseFee *big.Int) (
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseFee *big.Int, energy *energy.Energy) (
 	legacyTxBaseGasPrice *big.Int,
 	effectiveGasPrice *big.Int,
 	payer thor.Address,
@@ -130,7 +131,6 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseF
 		return nil, nil, thor.Address{}, nil, nil, errors.New("gas price is less than block base fee")
 	}
 
-	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) (*big.Int, error) {
 		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), effectiveGasPrice)
 		if err := energy.Add(payer, returnedEnergy); err != nil {

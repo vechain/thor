@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"math/rand/v2"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/builtin/energy"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -339,12 +341,15 @@ func (p *TxPool) addWhenSynced(
 	localSubmitted bool,
 ) error {
 	state := p.stater.NewState(headSummary.Root())
+	chain := p.repo.NewChain(headSummary.Header.ID())
+	energy := LoadEnergy(headSummary, state, chain, p.forkConfig)
 	executable, err := txObj.Executable(
-		p.repo.NewChain(headSummary.Header.ID()),
+		chain,
 		state,
 		headSummary.Header,
 		p.forkConfig,
 		p.baseFeeCache.Get(headSummary.Header),
+		energy,
 	)
 	if err != nil {
 		return txRejectedError{err.Error()}
@@ -372,13 +377,13 @@ func (p *TxPool) addWhenSynced(
 	txObj.executable = executable
 	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 		// check payer's balance
-		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+		balance, err := energy.Get(payer)
 		if err != nil {
 			return err
 		}
 
 		if balance.Cmp(needs) < 0 {
-			return errors.New("insufficient energy for overall pending cost")
+			return errors.New("insufficient LoadEnergy for overall pending cost")
 		}
 
 		return nil
@@ -392,6 +397,32 @@ func (p *TxPool) addWhenSynced(
 	logger.Trace("tx added", "id", newTx.ID(), "executable", executable)
 
 	return nil
+}
+
+func LoadEnergy(
+	summary *chain.BlockSummary,
+	state *state.State,
+	chain *chain.Chain,
+	fc *thor.ForkConfig,
+) *energy.Energy {
+	nextTimestamp := summary.Header.Timestamp() + thor.BlockInterval()
+	nextBlock := summary.Header.Number() + 1
+
+	var stopTimeFunc energy.StopTimeFunc
+	if nextBlock < fc.HAYABUSA {
+		stopTimeFunc = func() (uint64, error) {
+			return math.MaxUint64, nil
+		}
+	} else if nextBlock == fc.HAYABUSA {
+		stopTimeFunc = func() (uint64, error) {
+			return nextTimestamp, nil
+		}
+	} else {
+		// hayabusa has passed, used the chain
+		stopTimeFunc = chain.EnergyStopTime()
+	}
+
+	return builtin.Energy.Native(state, nextTimestamp, stopTimeFunc)
 }
 
 // addWhenNotSynced handles transaction addition when the chain is not synced.
@@ -492,7 +523,7 @@ func (p *TxPool) Dump() tx.Transactions {
 	return p.all.ToTxs()
 }
 
-// wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
+// wash to evict txs that are over limit, out of lifetime, out of LoadEnergy, settled, expired or dep broken.
 // this method should only be called in housekeeping go routine
 func (p *TxPool) wash(
 	headSummary *chain.BlockSummary,
@@ -597,8 +628,10 @@ func (p *TxPool) wash(
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
 		}
-		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.forkConfig, baseFee)
+		// settled, out of LoadEnergy or dep broken
+		st := newState()
+		energy := LoadEnergy(headSummary, st, chain, p.forkConfig)
+		executable, err := txObj.Executable(chain, st, headSummary.Header, p.forkConfig, baseFee, energy)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)

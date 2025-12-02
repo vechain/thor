@@ -27,24 +27,30 @@ var (
 	bigE18            = big.NewInt(1e18)
 )
 
+type StopTimeFunc func() (uint64, error)
+
 // Energy implements energy operations.
 type Energy struct {
 	addr      thor.Address
 	state     *state.State
 	blockTime uint64
-	stopTime  uint64
+	stopTime  StopTimeFunc
 	params    *params.Params
 }
 
 // New creates a new energy instance.
-func New(addr thor.Address, state *state.State, blockTime uint64, params *params.Params) *Energy {
-	var eng Energy
-	eng.addr = addr
-	eng.state = state
-	eng.blockTime = blockTime
-	eng.params = params
+func New(addr thor.Address, state *state.State, blockTime uint64, stopTime StopTimeFunc, params *params.Params) *Energy {
+	return &Energy{
+		addr:      addr,
+		state:     state,
+		blockTime: blockTime,
+		params:    params,
+		stopTime:  stopTime,
+	}
+}
 
-	return &eng
+func (e *Energy) StopTimeFunc() StopTimeFunc {
+	return e.stopTime
 }
 
 func (e *Energy) getInitialSupply() (init initialSupply, err error) {
@@ -121,7 +127,7 @@ func (e *Energy) TotalSupply() (*big.Int, error) {
 	}
 
 	// this is a virtual account, use account.CalcEnergy directly
-	stopTime, err := e.GetEnergyGrowthStopTime()
+	stopTime, err := e.stopTime()
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +153,7 @@ func (e *Energy) TotalBurned() (*big.Int, error) {
 
 // Get returns energy of an account at given block time.
 func (e *Energy) Get(addr thor.Address) (*big.Int, error) {
-	stopTime, err := e.GetEnergyGrowthStopTime()
+	stopTime, err := e.stopTime()
 	if err != nil {
 		return nil, err
 	}
@@ -221,18 +227,13 @@ func (e *Energy) StopEnergyGrowth() error {
 		return err
 	}
 
-	e.stopTime = e.blockTime
 	return nil
 }
 
 // GetEnergyGrowthStopTime returns the stop time of energy growth
 // if the stop time is not set, return math.MaxUint64
 func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
-	if e.stopTime != 0 {
-		return e.stopTime, nil
-	}
-
-	var time uint64
+	var time uint64 = math.MaxUint64
 	if err := e.state.DecodeStorage(e.addr, growthStopTimeKey, func(raw []byte) error {
 		if len(raw) == 0 {
 			return nil
@@ -244,13 +245,7 @@ func (e *Energy) GetEnergyGrowthStopTime() (uint64, error) {
 		return math.MaxUint64, err
 	}
 
-	if time == 0 {
-		e.stopTime = math.MaxUint64
-	} else {
-		e.stopTime = time
-	}
-
-	return e.stopTime, nil
+	return time, nil
 }
 
 func (e *Energy) addIssued(issued *big.Int) error {

@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/builtin/energy"
 
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/chain"
@@ -53,6 +54,7 @@ type Environment struct {
 	txCtx       *TransactionContext
 	evm         *vm.EVM
 	contract    *vm.Contract
+	energy      *energy.Energy
 	clauseIndex uint32
 	forkConfig  *thor.ForkConfig
 }
@@ -67,6 +69,7 @@ func New(
 	txCtx *TransactionContext,
 	evm *vm.EVM,
 	contract *vm.Contract,
+	energy *energy.Energy,
 	clauseIndex uint32,
 ) *Environment {
 	return &Environment{
@@ -78,6 +81,7 @@ func New(
 		txCtx:       txCtx,
 		evm:         evm,
 		contract:    contract,
+		energy:      energy,
 		clauseIndex: clauseIndex,
 	}
 }
@@ -90,6 +94,7 @@ func (env *Environment) Caller() thor.Address                    { return thor.A
 func (env *Environment) To() thor.Address                        { return thor.Address(env.contract.Address()) }
 func (env *Environment) ClauseIndex() uint32                     { return env.clauseIndex }
 func (env *Environment) ForkConfig() *thor.ForkConfig            { return env.forkConfig }
+func (env *Environment) Energy() *energy.Energy                  { return env.energy }
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {

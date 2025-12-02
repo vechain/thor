@@ -8,11 +8,13 @@ package genesis
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
+	
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/energy"
 	"github.com/vechain/thor/v2/builtin/params"
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/state"
@@ -125,7 +127,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				}
 			}
 
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			return builtin.Energy.Native(state, launchTime, energyStopTimeFunc(gen.ForkConfig, gen.LaunchTime)).SetInitialSupply(tokenSupply, energySupply)
 		})
 
 	///// initialize builtin contracts
@@ -229,4 +231,13 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 
 func isHayabusaGenesis(gen *CustomGenesis) bool {
 	return gen.ForkConfig.HAYABUSA == 0 && gen.Config != nil && gen.Config.HayabusaTP != nil && *gen.Config.HayabusaTP == 0
+}
+
+func energyStopTimeFunc(fc *thor.ForkConfig, genesisLaunchTime uint64) energy.StopTimeFunc {
+	return func() (uint64, error) {
+		if fc.HAYABUSA == 0 {
+			return genesisLaunchTime, nil
+		}
+		return math.MaxUint64, nil
+	}
 }

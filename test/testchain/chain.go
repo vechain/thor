@@ -109,7 +109,7 @@ func NewIntegrationTestChainWithGenesis(gene *genesis.Genesis, forkConfig *thor.
 	}
 
 	// Create the repository which manages chain data, using the database and genesis block.
-	repo, err := chain.NewRepository(db, geneBlk)
+	repo, err := chain.NewRepository(db, geneBlk, forkConfig)
 	if err != nil {
 		return nil, err
 	}

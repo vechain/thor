@@ -100,7 +100,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 	if err != nil {
 		return nil, err
 	}
-	energy, err := builtin.Energy.Native(state, header.Timestamp()).Get(addr)
+	energy, err := builtin.Energy.Native(state, header.Timestamp(), a.repo.EnergyStopTimeFunc(header.ID(), header.Timestamp())).Get(addr)
 	if err != nil {
 		return nil, err
 	}

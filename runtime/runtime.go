@@ -7,6 +7,7 @@ package runtime
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"sync/atomic"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/builtin/energy"
 
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
@@ -91,6 +93,7 @@ type Runtime struct {
 	ctx         *xenv.BlockContext
 	chainConfig vm.ChainConfig
 	forkConfig  *thor.ForkConfig
+	energy      *energy.Energy
 }
 
 // New create a Runtime object.
@@ -104,6 +107,9 @@ func New(
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
+	if chain == nil && ctx.Number != 0 {
+		panic(fmt.Sprintf("chain is nil but block number is %d", ctx.Number))
+	}
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
@@ -135,13 +141,26 @@ func New(
 		}
 	}
 
+	var energy *energy.Energy
+	if forkConfig.HAYABUSA == ctx.Number {
+		energy = builtin.Energy.Native(state, ctx.Time, func() (uint64, error) {
+			return ctx.Time, nil
+		})
+	} else if chain == nil { // in case genesis is not hayabusa
+		energy = builtin.Energy.Native(state, ctx.Time, func() (uint64, error) {
+			return math.MaxUint64, nil
+		})
+	} else {
+		energy = builtin.Energy.Native(state, ctx.Time, chain.EnergyStopTime())
+	}
+
 	// Prepare the transition period
 	if forkConfig.HAYABUSA == ctx.Number {
 		logger.Info("HAYABUSA fork, setting up staker contract")
 		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
-		if err := builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth(); err != nil {
+		if err := energy.StopEnergyGrowth(); err != nil {
 			panic(err)
 		}
 	}
@@ -152,10 +171,12 @@ func New(
 		ctx:         ctx,
 		chainConfig: currentChainConfig,
 		forkConfig:  forkConfig,
+		energy:      energy,
 	}
 	return &rt
 }
 
+func (rt *Runtime) Energy() *energy.Energy      { return rt.energy }
 func (rt *Runtime) Chain() *chain.Chain         { return rt.chain }
 func (rt *Runtime) State() *state.State         { return rt.state }
 func (rt *Runtime) Context() *xenv.BlockContext { return rt.ctx }
@@ -176,6 +197,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		baseFee = new(big.Int).Set(rt.ctx.BaseFee)
 	}
 	return vm.NewEVM(vm.Context{
+		Energy: rt.energy,
 		CanTransfer: func(_ vm.StateDB, addr common.Address, amount *big.Int) bool {
 			return stateDB.GetBalance(addr).Cmp(amount) >= 0
 		},
@@ -185,11 +207,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			// touch energy balance when token balance changed
 			// SHOULD be performed before transfer
-			senderEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(sender))
+			senderEnergy, err := rt.energy.Get(thor.Address(sender))
 			if err != nil {
 				panic(err)
 			}
-			recipientEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(recipient))
+			recipientEnergy, err := rt.energy.Get(thor.Address(recipient))
 			if err != nil {
 				panic(err)
 			}
@@ -257,7 +279,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				}
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, rt.forkConfig, txCtx, evm, contract, clauseIndex).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, rt.forkConfig, txCtx, evm, contract, rt.energy, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
@@ -279,14 +301,14 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		},
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
-			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
+			energy, err := rt.energy.Get(thor.Address(contractAddr))
 			if err != nil {
 				panic(err)
 			}
 			bal := stateDB.GetBalance(contractAddr)
 
 			if bal.Sign() != 0 || energy.Sign() != 0 {
-				receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
+				receiverEnergy, err := rt.energy.Get(thor.Address(tokenReceiver))
 				if err != nil {
 					panic(err)
 				}
@@ -428,6 +450,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 		rt.state,
 		rt.ctx.Time,
 		rt.ctx.BaseFee,
+		rt.energy,
 	)
 	if err != nil {
 		return nil, err
@@ -539,7 +562,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 				receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))
 			}
 
-			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, receipt.Reward); err != nil {
+			if err := rt.energy.Add(rt.ctx.Beneficiary, receipt.Reward); err != nil {
 				return nil, err
 			}
 			return receipt, nil
