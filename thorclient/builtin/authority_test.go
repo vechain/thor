@@ -14,7 +14,6 @@ import (
 
 	contracts "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
@@ -79,7 +78,7 @@ func TestAuthority(t *testing.T) {
 	})
 
 	// 1 for Add, 1 for Revoke
-	events, err := authority.FilterCandidate(nil, nil, logdb.ASC)
+	events, err := authority.FilterCandidate()
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(events), "Expected two candidate event")
 }
@@ -152,7 +151,7 @@ func TestAuthority_FilterCandidate_EventNotFound(t *testing.T) {
 	require.NoError(t, err)
 	bad := &Authority{contract: badContract}
 
-	_, err = bad.FilterCandidate(nil, nil, logdb.ASC)
+	_, err = bad.FilterCandidate()
 	require.Error(t, err)
 }
 

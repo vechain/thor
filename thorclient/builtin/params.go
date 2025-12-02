@@ -13,7 +13,6 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -64,13 +63,13 @@ type SetEvent struct {
 	Log   api.FilteredEvent
 }
 
-func (p *Params) FilterSet(eventsRange *api.Range, opts *api.Options, order logdb.Order) ([]SetEvent, error) {
+func (p *Params) FilterSet(opts ...bind.FilterOption) ([]SetEvent, error) {
 	event, ok := p.contract.ABI().Events["Set"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := p.contract.FilterEvent("Set").WithOptions(opts).InRange(eventsRange).OrderBy(order).Execute()
+	raw, err := p.contract.FilterEvent("Set").Execute(opts...)
 	if err != nil {
 		return nil, err
 	}
