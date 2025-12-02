@@ -32,8 +32,8 @@ var dbPath string
 
 // Command used to benchmark
 //
-// go test -bench="^Benchmark"  -benchmem -count=5 github.com/vechain/thor/v2/logdb -dbPath <path-to-logs.db> |tee -a master.txt
-// go test -bench="^Benchmark"  -benchmem -count=5 github.com/vechain/thor/v2/logdb -dbPath <path-to-logs.db> |tee -a pr.txt
+// go test -bench="^Benchmark"  -benchmem -count=5 github.com/vechain/thor/v2/logsdb -dbPath <path-to-logs.db> |tee -a master.txt
+// go test -bench="^Benchmark"  -benchmem -count=5 github.com/vechain/thor/v2/logsdb -dbPath <path-to-logs.db> |tee -a pr.txt
 // benchstat maser.txt pr.txt
 //
 
@@ -216,7 +216,7 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 }
 
 // BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Transfer filtering functionality of LogDB.
-// Running: go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
+// Running: go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logsdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	db, err := loadDBFromDisk(b)
 	require.NoError(b, err)
