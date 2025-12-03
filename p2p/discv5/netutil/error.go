@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,23 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package enr
+package netutil
 
-import (
-	"crypto/ecdsa"
-	"math/big"
-	"testing"
-)
+// IsTemporaryError checks whether the given error should be considered temporary.
+func IsTemporaryError(err error) bool {
+	tempErr, ok := err.(interface {
+		Temporary() bool
+	})
+	return ok && tempErr.Temporary() || isPacketTooBig(err)
+}
 
-// Checks that failure to sign leaves the record unmodified.
-func TestSignError(t *testing.T) {
-	invalidKey := &ecdsa.PrivateKey{D: new(big.Int), PublicKey: *pubkey}
-
-	var r Record
-	if err := SignV4(&r, invalidKey); err == nil {
-		t.Fatal("expected error from SignV4")
-	}
-	if len(r.pairs) > 0 {
-		t.Fatal("expected empty record, have", r.pairs)
-	}
+// IsTimeout checks whether the given error is a timeout.
+func IsTimeout(err error) bool {
+	timeoutErr, ok := err.(interface {
+		Timeout() bool
+	})
+	return ok && timeoutErr.Timeout()
 }

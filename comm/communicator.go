@@ -96,7 +96,8 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 
 			best := c.repo.BestBlockSummary().Header
 			// choose peer which has the head block with higher total score
-			peer := c.peerSet.Slice().Find(func(peer *Peer) bool {
+			slice := c.peerSet.Slice()
+			peer := slice.Find(func(peer *Peer) bool {
 				_, totalScore := peer.Head()
 				return totalScore >= best.TotalScore()
 			})
