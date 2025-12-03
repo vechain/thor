@@ -7,7 +7,6 @@ package test
 
 import (
 	"context"
-	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,21 +21,9 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const (
-	VTHO_ADDRESS = "0x0000000000000000000000000000456E65726779"
-	VTHO_TOPIC   = "0xDDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF"
-	TEST_ADDRESS = "0x7567D83B7B8D80ADDCB281A71D54FC7B3364FFED"
-)
+// Constants moved to constants.go
 
-var (
-	dbPath     string
-	pebblePath string
-)
-
-func init() {
-	flag.StringVar(&dbPath, "dbPath", "", "Path to the SQLite database file")
-	flag.StringVar(&pebblePath, "pebblePath", "", "Path to the Pebble database directory")
-}
+// Flags are now defined in shared_flags.go
 
 // BenchmarkComparative_FilterEvents runs comprehensive benchmarks comparing SQLite vs Pebble
 // query performance across various scenarios including complex multi-criteria queries.
@@ -51,7 +38,7 @@ func init() {
 // Range + intersection scenarios are particularly important for blockchain applications
 // where queries often combine block ranges with contract addresses and event types.
 //
-// Usage: go test -bench=BenchmarkComparative_FilterEvents -dbPath=<sqlite> -pebblePath=<pebble>
+// Usage: go test -bench=BenchmarkComparative_FilterEvents -sqliteDbPath=<sqlite> -pebblePath=<pebble>
 func BenchmarkComparative_FilterEvents(b *testing.B) {
 	// Test scenarios
 	vthoAddress := thor.MustParseAddress(VTHO_ADDRESS)
@@ -396,17 +383,17 @@ func BenchmarkComparative_WriteBlocks(b *testing.B) {
 // BenchmarkMigration benchmarks the migration process itself
 // If a Pebble database already exists at pebblePath, migration is skipped
 func BenchmarkMigration(b *testing.B) {
-	if dbPath == "" {
-		b.Skip("dbPath flag required for migration benchmark")
+	if *SqliteDbPath == "" {
+		b.Skip("sqliteDbPath flag required for migration benchmark")
 	}
 
 	b.Run("SQLiteToPebble", func(b *testing.B) {
 		// Check if Pebble database already exists
-		if pebblePath != "" {
-			if db, err := pebbledb.Open(pebblePath); err == nil {
+		if *PebblePath != "" {
+			if db, err := pebbledb.Open(*PebblePath); err == nil {
 				db.Close()
 				b.Log("Pebble database already exists, skipping migration")
-				b.Skip("Migration skipped - Pebble database already exists at " + pebblePath)
+				b.Skip("Migration skipped - Pebble database already exists at " + *PebblePath)
 				return
 			}
 		}
@@ -417,8 +404,8 @@ func BenchmarkMigration(b *testing.B) {
 			var pebbleDir string
 			var cleanup func()
 
-			if pebblePath != "" {
-				pebbleDir = pebblePath
+			if *PebblePath != "" {
+				pebbleDir = *PebblePath
 				cleanup = func() {} // No cleanup for permanent database
 			} else {
 				tempDir, err := os.MkdirTemp("", "benchmark_migration_")
@@ -431,7 +418,7 @@ func BenchmarkMigration(b *testing.B) {
 			b.StartTimer()
 
 			// Run migration
-			stats, err := MigrateSQLiteToPebble(dbPath, pebbleDir, &MigrationOptions{
+			stats, err := MigrateSQLiteToPebble(*SqliteDbPath, pebbleDir, &MigrationOptions{
 				BatchSize:   10000,
 				ProgressLog: false,
 				VerifyData:  false,
@@ -452,11 +439,11 @@ func BenchmarkMigration(b *testing.B) {
 
 // Helper functions
 func loadSQLiteDB(b *testing.B) logsdb.LogsDB {
-	if dbPath == "" {
-		b.Fatal("Please provide a dbPath")
+	if *SqliteDbPath == "" {
+		b.Fatal("Please provide a sqliteDbPath")
 	}
 
-	db, err := sqlite3.New(dbPath)
+	db, err := sqlite3.New(*SqliteDbPath)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -464,11 +451,11 @@ func loadSQLiteDB(b *testing.B) logsdb.LogsDB {
 }
 
 func loadPebbleDB(b *testing.B) logsdb.LogsDB {
-	if pebblePath == "" {
+	if *PebblePath == "" {
 		b.Fatal("Please provide a pebblePath")
 	}
 
-	db, err := pebbledb.Open(pebblePath)
+	db, err := pebbledb.Open(*PebblePath)
 	if err != nil {
 		b.Fatal(err)
 	}

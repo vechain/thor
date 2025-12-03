@@ -10,22 +10,22 @@ import (
 )
 
 func main() {
-	// // mainnet db
-	//const (
-	//	TOTAL_EVENTS    = 703698865
-	//	TOTAL_TRANSFERS = 18143572
-	//	sqliteDBPath      = "/Volumes/vechain/mainnet/data/instance-39627e6be7ec1b4a-v4-full/logs-v2.db"
-	//	pebbleDBPath    = "/Volumes/vechain/mainnet/data/instance-39627e6be7ec1b4a-v4-full/pebbledb.db"
-	//)
-
-	// testnet db
+	// mainnet db
 	const (
-		TOTAL_EVENTS    = 247065997
-		TOTAL_TRANSFERS = 7452777
-
-		sqliteDBPath = "/Volumes/vechain/testnet/data/instance-7f466536b20bb127-v4/logs-v2.db"
-		pebbleDBPath = "/Volumes/vechain/testnet/data/instance-7f466536b20bb127-v4/pebbledb.db"
+		TOTAL_EVENTS    = 703698865
+		TOTAL_TRANSFERS = 18143572
+		sqliteDBPath    = "/Volumes/vechain/mainnet/data/instance-39627e6be7ec1b4a-v4/logs-v2.db"
+		pebbleDBPath    = "/Volumes/vechain/mainnet/data/instance-39627e6be7ec1b4a-v4/pebbledb.db"
 	)
+
+	//// testnet db
+	//const (
+	//	TOTAL_EVENTS    = 247065997
+	//	TOTAL_TRANSFERS = 7452777
+	//
+	//	sqliteDBPath = "/Volumes/vechain/testnet/data/instance-7f466536b20bb127-v4/logs-v2.db"
+	//	pebbleDBPath = "/Volumes/vechain/testnet/data/instance-7f466536b20bb127-v4/pebbledb.db"
+	//)
 
 	// Command line flags
 	var (

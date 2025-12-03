@@ -13,11 +13,19 @@ import (
 
 // Test the discovery caching system
 func TestDiscoveryCache(t *testing.T) {
-	// Set the discovery database path to testnet for this test
-	testnetPath := "/Volumes/vechain/testnet/data/instance-7f466536b20bb127-v4/logs-v2.db"
-	discoveryDbPath = &testnetPath
+	// Save original SqliteDbPath and restore after test
+	originalDbPath := *SqliteDbPath
+	defer func() {
+		*SqliteDbPath = originalDbPath
+		// Reset discovery cache to prevent contamination
+		discoveryOnce = sync.Once{}
+		discovered = nil
+	}()
 
-	t.Logf("Testing discovery cache with database: %s", testnetPath)
+	// Set the SQLite database path to testnet for this test
+	*SqliteDbPath = DEFAULT_TESTNET_DB
+
+	t.Logf("Testing discovery cache with database: %s", DEFAULT_TESTNET_DB)
 
 	// First call - should either load from cache or perform discovery and save
 	t.Log("=== First GetDiscoveryData() call ===")

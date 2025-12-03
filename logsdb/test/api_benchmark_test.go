@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+
 // Global benchmark discovery data with sync.Once
 var (
 	benchmarkDiscoveryOnce sync.Once
@@ -42,11 +43,11 @@ func parseBytes32Safe(s string) (thor.Bytes32, error) {
 
 // loadSQLiteForBenchmark loads SQLite database for benchmarking
 func loadSQLiteForBenchmark(b *testing.B) logsdb.LogsDB {
-	if dbPath == "" {
-		b.Fatal("Please provide a dbPath flag")
+	if *SqliteDbPath == "" {
+		b.Fatal("Please provide a sqliteDbPath flag")
 	}
 
-	db, err := sqlite3.New(dbPath)
+	db, err := sqlite3.New(*SqliteDbPath)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -55,11 +56,11 @@ func loadSQLiteForBenchmark(b *testing.B) logsdb.LogsDB {
 
 // loadPebbleForBenchmark loads Pebble database for benchmarking
 func loadPebbleForBenchmark(b *testing.B) logsdb.LogsDB {
-	if pebblePath == "" {
+	if *PebblePath == "" {
 		b.Fatal("Please provide a pebblePath flag")
 	}
 
-	db, err := pebbledb.Open(pebblePath)
+	db, err := pebbledb.Open(*PebblePath)
 	if err != nil {
 		b.Fatal(err)
 	}

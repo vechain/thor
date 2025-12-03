@@ -8,7 +8,6 @@ package test
 import (
 	"database/sql"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -19,8 +18,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Global configuration flag for SQLite database path
-var discoveryDbPath = flag.String("discoveryDbPath", "", "Path to SQLite logs DB for discovery")
+// SQLite database path is now defined in shared_flags.go as SqliteDbPath
 
 // Global variables for sync.Once discovery
 var (
@@ -71,29 +69,53 @@ func GetDiscoveryData() *DiscoveryData {
 	return discovered
 }
 
-// getDiscoveryDataWithCache attempts to load from cache first, falls back to full discovery
+// getDiscoveryDataWithCache attempts to load from cache first, falls back to discovery
 func getDiscoveryDataWithCache() *DiscoveryData {
-	if *discoveryDbPath == "" {
-		fmt.Printf("[%s] No database path provided, returning empty discovery data\n", time.Now().Format("15:04:05.000"))
+	if *SqliteDbPath == "" {
+		alwaysLogf("No database path provided, returning empty discovery data")
 		return &DiscoveryData{}
 	}
 
-	cacheFilePath := *discoveryDbPath + ".discovery.json"
+	// Validate discovery mode
+	if *DiscoveryMode != "fast" && *DiscoveryMode != "full" {
+		alwaysLogf("Invalid discovery mode '%s', using 'fast' mode. Valid options: fast, full", *DiscoveryMode)
+		*DiscoveryMode = "fast"
+	}
 
-	// Try to load from cache first
-	if data, loaded := tryLoadFromCache(cacheFilePath, *discoveryDbPath); loaded {
+	alwaysLogf("Discovery mode: %s", *DiscoveryMode)
+
+	// Generate cache file path based on mode
+	var cacheFilePath string
+	if *DiscoveryMode == "fast" {
+		cacheFilePath = *SqliteDbPath + ".discovery-fast.json"
+	} else {
+		cacheFilePath = *SqliteDbPath + ".discovery-full.json"
+	}
+
+	// Also try legacy cache file (no mode suffix) for backward compatibility
+	legacyCacheFilePath := *SqliteDbPath + ".discovery.json"
+
+	// Try mode-specific cache first
+	if data, loaded := tryLoadFromCache(cacheFilePath, *SqliteDbPath); loaded {
+		alwaysLogf("Loaded %s mode cache from: %s", *DiscoveryMode, cacheFilePath)
 		return data
 	}
 
-	// Fallback to full discovery
-	fmt.Printf("[%s] Cache miss - performing full discovery...\n", time.Now().Format("15:04:05.000"))
+	// Try legacy cache as fallback (treat as full mode data)
+	if data, loaded := tryLoadFromCache(legacyCacheFilePath, *SqliteDbPath); loaded {
+		alwaysLogf("Loaded legacy cache (full mode) from: %s", legacyCacheFilePath)
+		return data
+	}
+
+	// Fallback to discovery based on mode
+	alwaysLogf("Cache miss - performing %s mode discovery...", *DiscoveryMode)
 	data := performDiscovery()
 
-	// Save to cache for next time
+	// Save to mode-specific cache for next time
 	if err := saveToCache(data, cacheFilePath); err != nil {
-		fmt.Printf("[%s] Warning: Failed to save discovery data to cache: %v\n", time.Now().Format("15:04:05.000"), err)
+		alwaysLogf("Warning: Failed to save discovery data to cache: %v", err)
 	} else {
-		fmt.Printf("[%s] Discovery data cached to: %s\n", time.Now().Format("15:04:05.000"), cacheFilePath)
+		alwaysLogf("Discovery data cached to: %s", cacheFilePath)
 	}
 
 	return data
@@ -150,9 +172,9 @@ func tryLoadFromCache(cacheFilePath, dbPath string) (*DiscoveryData, bool) {
 		len(data.TransferHotAddresses) + len(data.TransferMediumAddresses) + len(data.TransferSparseAddresses)
 	totalTopics := len(data.HotTopics) + len(data.MediumTopics) + len(data.SparseTopics)
 
-	fmt.Printf("[%s] ✅ Cache hit! Loaded in %v\n", time.Now().Format("15:04:05.000"), loadDuration)
-	fmt.Printf("[%s]   - Addresses: %d, Topics: %d, Patterns: %d\n",
-		time.Now().Format("15:04:05.000"), totalAddresses, totalTopics, len(data.MultiTopicPatterns))
+	alwaysLogf("✅ Cache hit! Loaded in %v", loadDuration)
+	alwaysLogf("  - Addresses: %d, Topics: %d, Patterns: %d",
+		totalAddresses, totalTopics, len(data.MultiTopicPatterns))
 
 	return &data, true
 }
@@ -184,20 +206,20 @@ func performDiscovery() *DiscoveryData {
 	fmt.Printf("[%s] Starting benchmark data discovery process...\n", startTime.Format("15:04:05.000"))
 
 	// Initialize fixed random seed for reproducible results
-	rand.Seed(12345) // nolint
-	fmt.Printf("[%s] Initialized random seed (12345) for reproducible results\n", time.Now().Format("15:04:05.000"))
+	rand.Seed(DISCOVERY_SEED) // nolint
+	fmt.Printf("[%s] Initialized random seed (%d) for reproducible results\n", time.Now().Format("15:04:05.000"), DISCOVERY_SEED)
 
 	// Validate database path and connectivity
-	fmt.Printf("[%s] Validating database path: %s\n", time.Now().Format("15:04:05.000"), *discoveryDbPath)
-	if err := validateDatabase(*discoveryDbPath); err != nil {
+	logf("Validating database path: %s", *SqliteDbPath)
+	if err := validateDatabase(*SqliteDbPath); err != nil {
 		fmt.Printf("[%s] Discovery failed: %v\n", time.Now().Format("15:04:05.000"), err)
 		return &DiscoveryData{} // Return empty data rather than nil
 	}
 	fmt.Printf("[%s] Database validation successful\n", time.Now().Format("15:04:05.000"))
 
 	// Open SQLite database
-	fmt.Printf("[%s] Opening SQLite database...\n", time.Now().Format("15:04:05.000"))
-	db, err := sql.Open("sqlite3", *discoveryDbPath)
+	fmt.Printf("[%s] Opening SQLite database: %s\n", time.Now().Format("15:04:05.000"), *SqliteDbPath)
+	db, err := sql.Open("sqlite3", *SqliteDbPath)
 	if err != nil {
 		fmt.Printf("[%s] Failed to open database: %v\n", time.Now().Format("15:04:05.000"), err)
 		return &DiscoveryData{}
@@ -289,23 +311,48 @@ type AddressSample struct {
 // queryAddressSample performs sampling-based address discovery for all tiers
 // Uses rowid % 97 = 0 for ~1% statistical sample to avoid full table scans
 func queryAddressSample(db *sql.DB) (hot, medium, sparse []string, err error) {
-	fmt.Printf("[%s]   -> Executing sampling-based address discovery (rowid %% 97 = 0)...\n", time.Now().Format("15:04:05.000"))
+	var query string
+	var queryDescription string
+
+	if *DiscoveryMode == "fast" {
+		// Fast mode: Use index-friendly range sampling
+		queryDescription = "index-friendly address discovery (multiple ranges)"
+		logf("  -> Executing %s...", queryDescription)
+		
+		query = `
+			SELECT LOWER('0x' || HEX(r.data)) as address, COUNT(*) as cnt 
+			FROM event e
+			JOIN ref r ON e.address = r.id
+			WHERE (e.seq BETWEEN 1000000 AND 1010000)
+			   OR (e.seq BETWEEN 2000000 AND 2010000) 
+			   OR (e.seq BETWEEN 3000000 AND 3010000)
+			   OR (e.seq BETWEEN 5000000 AND 5010000)
+			   OR (e.seq BETWEEN 8000000 AND 8010000)
+			   OR (e.seq BETWEEN 13000000 AND 13010000)
+			   OR (e.seq BETWEEN 21000000 AND 21010000)
+			   OR (e.seq BETWEEN 34000000 AND 34010000)
+			GROUP BY e.address 
+			ORDER BY cnt DESC 
+			LIMIT 1000`
+	} else {
+		// Full mode: Use modulo sampling (original behavior)
+		queryDescription = "sampling-based address discovery (rowid % 97 = 0)"
+		logf("  -> Executing %s...", queryDescription)
+		
+		query = `
+			SELECT LOWER('0x' || HEX(r.data)) as address, COUNT(*) as cnt 
+			FROM event e
+			JOIN ref r ON e.address = r.id
+			WHERE e.rowid % 97 = 0 
+			GROUP BY e.address 
+			ORDER BY cnt DESC 
+			LIMIT 5000`
+	}
+
 	queryStart := time.Now()
-
-	// Single query to sample ~1% of events and group by address
-	// Join with ref table to get actual hex addresses
-	query := `
-		SELECT LOWER('0x' || HEX(r.data)) as address, COUNT(*) as cnt 
-		FROM event e
-		JOIN ref r ON e.address = r.id
-		WHERE e.rowid % 97 = 0 
-		GROUP BY e.address 
-		ORDER BY cnt DESC 
-		LIMIT 5000`
-
 	rows, err := db.Query(query)
 	if err != nil {
-		fmt.Printf("[%s]   -> Address sampling query failed: %v\n", time.Now().Format("15:04:05.000"), err)
+		alwaysLogf("  -> %s failed: %v", queryDescription, err)
 		return nil, nil, nil, err
 	}
 	defer rows.Close()
@@ -328,8 +375,8 @@ func queryAddressSample(db *sql.DB) (hot, medium, sparse []string, err error) {
 	}
 
 	queryDuration := time.Since(queryStart)
-	fmt.Printf("[%s]   -> Address sampling completed in %v\n", time.Now().Format("15:04:05.000"), queryDuration)
-	fmt.Printf("[%s]     Sample size: %d addresses (range: %d - %d sample events each)\n", time.Now().Format("15:04:05.000"), len(samples), minCount, maxCount)
+	logf("  -> %s completed in %v", queryDescription, queryDuration)
+	logf("    Sample size: %d addresses (range: %d - %d sample events each)", len(samples), minCount, maxCount)
 
 	// Classify addresses into tiers based on sample counts
 	// Hot: sample_count >= 50 (extrapolates to ~5000+ actual events)
@@ -345,12 +392,67 @@ func queryAddressSample(db *sql.DB) (hot, medium, sparse []string, err error) {
 		}
 	}
 
+	totalAddresses := len(hot) + len(medium) + len(sparse)
+
+	// Fast mode fallback: if insufficient addresses found, try reduced modulo sampling
+	if *DiscoveryMode == "fast" && totalAddresses < 10 {
+		alwaysLogf("  -> Fast mode found only %d addresses, falling back to reduced modulo sampling...", totalAddresses)
+		
+		fallbackQuery := `
+			SELECT LOWER('0x' || HEX(r.data)) as address, COUNT(*) as cnt 
+			FROM event e
+			JOIN ref r ON e.address = r.id
+			WHERE e.rowid % 997 = 0 
+			GROUP BY e.address 
+			ORDER BY cnt DESC 
+			LIMIT 5000`
+		
+		fallbackStart := time.Now()
+		fallbackRows, err := db.Query(fallbackQuery)
+		if err != nil {
+			alwaysLogf("  -> Fallback query failed: %v", err)
+			// Continue with what we found from fast mode
+		} else {
+			defer fallbackRows.Close()
+
+			// Re-process with fallback results
+			var fallbackSamples []AddressSample
+
+			for fallbackRows.Next() {
+				var sample AddressSample
+				if err := fallbackRows.Scan(&sample.Address, &sample.Count); err != nil {
+					continue
+				}
+				fallbackSamples = append(fallbackSamples, sample)
+			}
+
+			fallbackDuration := time.Since(fallbackStart)
+			alwaysLogf("  -> Fallback sampling completed in %v", fallbackDuration)
+			alwaysLogf("    Fallback sample size: %d addresses", len(fallbackSamples))
+
+			// Re-classify with fallback data if we got better results
+			if len(fallbackSamples) > totalAddresses {
+				hot, medium, sparse = []string{}, []string{}, []string{}
+				for _, sample := range fallbackSamples {
+					if sample.Count >= 50 {
+						hot = append(hot, sample.Address)
+					} else if sample.Count >= 5 {
+						medium = append(medium, sample.Address)
+					} else if sample.Count >= 1 {
+						sparse = append(sparse, sample.Address)
+					}
+				}
+				alwaysLogf("    Fallback improved results: Hot=%d, Medium=%d, Sparse=%d", len(hot), len(medium), len(sparse))
+			}
+		}
+	}
+
 	// Randomize and limit selections
 	hot = randomizeSlice(hot, 10)       // Top hot addresses
 	medium = randomizeSlice(medium, 30) // Medium activity addresses
 	sparse = randomizeSlice(sparse, 50) // Lower activity addresses
 
-	fmt.Printf("[%s]     Tier classification: Hot=%d, Medium=%d, Sparse=%d\n", time.Now().Format("15:04:05.000"), len(hot), len(medium), len(sparse))
+	alwaysLogf("    Final tier classification: Hot=%d, Medium=%d, Sparse=%d", len(hot), len(medium), len(sparse))
 	return hot, medium, sparse, nil
 }
 
