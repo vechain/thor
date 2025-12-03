@@ -148,7 +148,7 @@ func (p *PebbleDBLogDB) NewestBlockID() (thor.Bytes32, error) {
 		defer closer.Close()
 
 		var eventRecord EventRecord
-		if err := eventRecord.RLPDecode(value); err != nil {
+		if err := eventRecord.Decode(value); err != nil {
 			return thor.Bytes32{}, err
 		}
 
@@ -181,7 +181,7 @@ func (p *PebbleDBLogDB) NewestBlockID() (thor.Bytes32, error) {
 		defer closer.Close()
 
 		var transferRecord TransferRecord
-		if err := transferRecord.RLPDecode(value); err != nil {
+		if err := transferRecord.Decode(value); err != nil {
 			return thor.Bytes32{}, err
 		}
 

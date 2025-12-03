@@ -18,13 +18,33 @@ import (
 // StreamingQueryEngine handles all query execution with streaming iteration
 type StreamingQueryEngine struct {
 	db *pebble.DB
+	// Reusable buffer for key construction during materialization
+	keyBuffer []byte
 }
+
 
 // NewStreamingQueryEngine creates a new query engine
 func NewStreamingQueryEngine(db *pebble.DB) *StreamingQueryEngine {
 	return &StreamingQueryEngine{
-		db: db,
+		db:        db,
+		keyBuffer: make([]byte, 32), // Pre-allocate buffer for key construction
 	}
+}
+
+// buildEventPrimaryKey efficiently builds an event primary key using the reusable buffer
+func (q *StreamingQueryEngine) buildEventPrimaryKey(seq sequence) []byte {
+	q.keyBuffer = q.keyBuffer[:0] // Reset buffer length but keep capacity
+	q.keyBuffer = append(q.keyBuffer, eventPrimaryPrefix...)
+	q.keyBuffer = append(q.keyBuffer, seq.BigEndianBytes()...)
+	return q.keyBuffer
+}
+
+// buildTransferPrimaryKey efficiently builds a transfer primary key using the reusable buffer
+func (q *StreamingQueryEngine) buildTransferPrimaryKey(seq sequence) []byte {
+	q.keyBuffer = q.keyBuffer[:0] // Reset buffer length but keep capacity
+	q.keyBuffer = append(q.keyBuffer, transferPrimaryPrefix...)
+	q.keyBuffer = append(q.keyBuffer, seq.BigEndianBytes()...)
+	return q.keyBuffer
 }
 
 // FilterEvents implements event filtering with proper AND/OR semantics
@@ -499,6 +519,10 @@ func (q *StreamingQueryEngine) createAddressIterator(addr thor.Address, minSeq, 
 func (q *StreamingQueryEngine) createTopicIterator(topicIndex int, topic thor.Bytes32, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
 	lowerBound := eventTopicKey(topicIndex, topic, minSeq)
 	upperBound := eventTopicKey(topicIndex, topic, maxSeq.Next())
+
+	if lowerBound == nil || upperBound == nil {
+		return &StreamIterator{exhausted: true}
+	}
 
 	opts := &pebble.IterOptions{
 		LowerBound: lowerBound,

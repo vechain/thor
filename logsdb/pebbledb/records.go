@@ -8,13 +8,11 @@ package pebbledb
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/rlp"
-
 	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
-// EventRecord represents the stored event data (RLP encoded)
+// EventRecord represents the stored event data (binary encoded)
 type EventRecord struct {
 	BlockID     thor.Bytes32   `json:"blockID"`
 	BlockNumber uint32         `json:"blockNumber"`
@@ -25,11 +23,11 @@ type EventRecord struct {
 	ClauseIndex uint32         `json:"clauseIndex"`
 	LogIndex    uint32         `json:"logIndex"`
 	Address     thor.Address   `json:"address"`
-	Topics      []thor.Bytes32 `json:"topics"` // Variable length for RLP efficiency
+	Topics      []thor.Bytes32 `json:"topics"` // Variable length
 	Data        []byte         `json:"data"`
 }
 
-// TransferRecord represents the stored transfer data (RLP encoded)
+// TransferRecord represents the stored transfer data (binary encoded)
 type TransferRecord struct {
 	BlockID     thor.Bytes32 `json:"blockID"`
 	BlockNumber uint32       `json:"blockNumber"`
@@ -44,14 +42,19 @@ type TransferRecord struct {
 	Amount      *big.Int     `json:"amount"`
 }
 
-// RLPEncode encodes the EventRecord using RLP
-func (er *EventRecord) RLPEncode() ([]byte, error) {
-	return rlp.EncodeToBytes(er)
+// Encode encodes the EventRecord using binary format
+func (er *EventRecord) Encode() ([]byte, error) {
+	return EncodeEventRecord(er)
 }
 
-// RLPDecode decodes RLP data into EventRecord
-func (er *EventRecord) RLPDecode(data []byte) error {
-	return rlp.DecodeBytes(data, er)
+// Decode decodes binary data into EventRecord
+func (er *EventRecord) Decode(data []byte) error {
+	decoded, err := DecodeEventRecord(data)
+	if err != nil {
+		return err
+	}
+	*er = *decoded
+	return nil
 }
 
 // ToLogDBEvent converts EventRecord to logsdb.Event
@@ -79,7 +82,7 @@ func (er *EventRecord) ToLogDBEvent() *logsdb.Event {
 
 // NewEventRecord creates EventRecord from logsdb.Event
 func NewEventRecord(event *logsdb.Event) *EventRecord {
-	// Convert [5]*thor.Bytes32 to []thor.Bytes32 for RLP efficiency
+	// Convert [5]*thor.Bytes32 to []thor.Bytes32
 	var topics []thor.Bytes32
 	for _, topic := range event.Topics {
 		if topic != nil {
@@ -102,14 +105,19 @@ func NewEventRecord(event *logsdb.Event) *EventRecord {
 	}
 }
 
-// RLPEncode encodes the TransferRecord using RLP
-func (tr *TransferRecord) RLPEncode() ([]byte, error) {
-	return rlp.EncodeToBytes(tr)
+// Encode encodes the TransferRecord using binary format
+func (tr *TransferRecord) Encode() ([]byte, error) {
+	return EncodeTransferRecord(tr)
 }
 
-// RLPDecode decodes RLP data into TransferRecord
-func (tr *TransferRecord) RLPDecode(data []byte) error {
-	return rlp.DecodeBytes(data, tr)
+// Decode decodes binary data into TransferRecord
+func (tr *TransferRecord) Decode(data []byte) error {
+	decoded, err := DecodeTransferRecord(data)
+	if err != nil {
+		return err
+	}
+	*tr = *decoded
+	return nil
 }
 
 // ToLogDBTransfer converts TransferRecord to logsdb.Transfer
@@ -144,4 +152,35 @@ func NewTransferRecord(transfer *logsdb.Transfer) *TransferRecord {
 		Recipient:   transfer.Recipient,
 		Amount:      transfer.Amount,
 	}
+}
+
+// reset clears EventRecord for reuse in object pool
+func (er *EventRecord) reset() {
+	// Reset all fields but reuse slices if possible
+	er.BlockID = thor.Bytes32{}
+	er.BlockNumber = 0
+	er.BlockTime = 0
+	er.TxID = thor.Bytes32{}
+	er.TxIndex = 0
+	er.TxOrigin = thor.Address{}
+	er.ClauseIndex = 0
+	er.LogIndex = 0
+	er.Address = thor.Address{}
+	// Reset slice length but keep capacity for reuse
+	er.Topics = er.Topics[:0]
+	er.Data = er.Data[:0]
+}
+
+// reset clears TransferRecord for reuse in object pool  
+func (tr *TransferRecord) reset() {
+	tr.BlockID = thor.Bytes32{}
+	tr.BlockNumber = 0
+	tr.BlockTime = 0
+	tr.TxID = thor.Bytes32{}
+	tr.TxIndex = 0
+	tr.TxOrigin = thor.Address{}
+	tr.ClauseIndex = 0
+	tr.Sender = thor.Address{}
+	tr.Recipient = thor.Address{}
+	tr.Amount = nil
 }

@@ -667,7 +667,7 @@ func TestBackwardCompatibility(t *testing.T) {
 		Topics:      []thor.Bytes32{},
 		Data:        []byte("test"),
 	}
-	eventData, err := eventRecord.RLPEncode()
+	eventData, err := eventRecord.Encode()
 	require.NoError(t, err)
 	
 	err = pebbleDB.Set(eventPrimaryKey(seq), eventData, pebble.Sync)

@@ -108,7 +108,7 @@ func (w *PebbleDBWriter) writeEvent(seq sequence, blockID thor.Bytes32, blockNum
 	}
 
 	// Primary storage: E/<seq>
-	primaryData, err := eventRecord.RLPEncode()
+	primaryData, err := eventRecord.Encode()
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func (w *PebbleDBWriter) writeTransfer(seq sequence, blockID thor.Bytes32, block
 	}
 
 	// Primary storage: T/<seq>
-	primaryData, err := transferRecord.RLPEncode()
+	primaryData, err := transferRecord.Encode()
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func (w *PebbleDBWriter) WriteMigrationEvents(events []*logsdb.Event) error {
 		eventRecord := NewEventRecord(event)
 
 		// Primary storage
-		primaryData, err := eventRecord.RLPEncode()
+		primaryData, err := eventRecord.Encode()
 		if err != nil {
 			return err
 		}
@@ -397,7 +397,7 @@ func (w *PebbleDBWriter) WriteMigrationTransfers(transfers []*logsdb.Transfer) e
 		transferRecord := NewTransferRecord(transfer)
 
 		// Primary storage
-		primaryData, err := transferRecord.RLPEncode()
+		primaryData, err := transferRecord.Encode()
 		if err != nil {
 			return err
 		}

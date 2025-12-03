@@ -6,9 +6,26 @@
 package pebbledb
 
 import (
+	"sync"
+
 	"github.com/cockroachdb/pebble"
 
 	"github.com/vechain/thor/v2/logsdb"
+)
+
+// Object pools for reducing allocations during materialization
+var (
+	eventRecordPool = sync.Pool{
+		New: func() interface{} {
+			return &EventRecord{}
+		},
+	}
+	
+	transferRecordPool = sync.Pool{
+		New: func() interface{} {
+			return &TransferRecord{}
+		},
+	}
 )
 
 // materializeEvents loads actual event records from primary storage
@@ -16,8 +33,8 @@ func (q *StreamingQueryEngine) materializeEvents(sequences []sequence) ([]*logsd
 	results := make([]*logsdb.Event, 0, len(sequences))
 
 	for _, seq := range sequences {
-		// Primary key lookup: E/<seq>
-		eventKey := eventPrimaryKey(seq)
+		// Primary key lookup: E/<seq> - use reusable buffer
+		eventKey := q.buildEventPrimaryKey(seq)
 		value, closer, err := q.db.Get(eventKey)
 		if err != nil {
 			if err == pebble.ErrNotFound {
@@ -26,16 +43,24 @@ func (q *StreamingQueryEngine) materializeEvents(sequences []sequence) ([]*logsd
 			return nil, err
 		}
 
-		// Decode RLP data
-		var eventRecord EventRecord
-		if err := eventRecord.RLPDecode(value); err != nil {
+		// Get pooled EventRecord for decoding
+		eventRecord := eventRecordPool.Get().(*EventRecord)
+		// Reset the record to avoid stale data from previous use
+		eventRecord.reset()
+		
+		if err := eventRecord.Decode(value); err != nil {
 			closer.Close()
+			eventRecordPool.Put(eventRecord) // Return to pool even on error
 			continue // Skip corrupted records
 		}
 		closer.Close()
 
-		// Convert to LogDB format
+		// Convert to LogDB format (this still allocates a new logsdb.Event for safe return)
 		event := eventRecord.ToLogDBEvent()
+		
+		// Return EventRecord to pool for reuse
+		eventRecordPool.Put(eventRecord)
+		
 		results = append(results, event)
 	}
 
@@ -47,8 +72,8 @@ func (q *StreamingQueryEngine) materializeTransfers(sequences []sequence) ([]*lo
 	results := make([]*logsdb.Transfer, 0, len(sequences))
 
 	for _, seq := range sequences {
-		// Primary key lookup: T/<seq>
-		transferKey := transferPrimaryKey(seq)
+		// Primary key lookup: T/<seq> - use reusable buffer
+		transferKey := q.buildTransferPrimaryKey(seq)
 		value, closer, err := q.db.Get(transferKey)
 		if err != nil {
 			if err == pebble.ErrNotFound {
@@ -57,16 +82,24 @@ func (q *StreamingQueryEngine) materializeTransfers(sequences []sequence) ([]*lo
 			return nil, err
 		}
 
-		// Decode RLP data
-		var transferRecord TransferRecord
-		if err := transferRecord.RLPDecode(value); err != nil {
+		// Get pooled TransferRecord for decoding
+		transferRecord := transferRecordPool.Get().(*TransferRecord)
+		// Reset the record to avoid stale data from previous use
+		transferRecord.reset()
+		
+		if err := transferRecord.Decode(value); err != nil {
 			closer.Close()
+			transferRecordPool.Put(transferRecord) // Return to pool even on error
 			continue // Skip corrupted records
 		}
 		closer.Close()
 
-		// Convert to LogDB format
+		// Convert to LogDB format (this still allocates a new logsdb.Transfer for safe return)
 		transfer := transferRecord.ToLogDBTransfer()
+		
+		// Return TransferRecord to pool for reuse
+		transferRecordPool.Put(transferRecord)
+		
 		results = append(results, transfer)
 	}
 
