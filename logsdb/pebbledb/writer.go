@@ -115,6 +115,10 @@ func (w *PebbleDBWriter) writeEvent(seq sequence, blockID thor.Bytes32, blockNum
 	w.batch.Set(eventPrimaryKey(seq), primaryData, nil)
 	w.batchSize++
 
+	// Dense sequence index: ES/<seq>
+	w.batch.Set(eventSequenceKey(seq), []byte{}, nil)
+	w.batchSize++
+
 	// Address index: EA/<address>/<seq>
 	w.batch.Set(eventAddressKey(event.Address, seq), nil, nil)
 	w.batchSize++
@@ -159,6 +163,10 @@ func (w *PebbleDBWriter) writeTransfer(seq sequence, blockID thor.Bytes32, block
 		return err
 	}
 	w.batch.Set(transferPrimaryKey(seq), primaryData, nil)
+	w.batchSize++
+
+	// Dense sequence index: TSX/<seq>
+	w.batch.Set(transferSequenceKey(seq), []byte{}, nil)
 	w.batchSize++
 
 	// Transfer indexes
@@ -235,6 +243,28 @@ func (w *PebbleDBWriter) Truncate(blockNum uint32) error {
 	// Use range delete only for primary keys - precise bounds avoid deleting indexes
 	w.batch.DeleteRange(eventStartKey, eventEndKey, nil)
 	w.batch.DeleteRange(transferStartKey, transferEndKey, nil)
+
+	// Delete sequence indexes with correct exclusive upper bounds
+	
+	// ES/ deletion: [ES/<minSeq>, ES/0xFFFFFFFFFFFFFFFF)
+	esStartKey := eventSequenceKey(minSeq)
+	esEndKey := make([]byte, 2+8)
+	copy(esEndKey[:2], []byte("ES"))
+	// Set sequence bytes to maximum: 0xFFFFFFFFFFFFFFFF
+	for i := 2; i < len(esEndKey); i++ {
+		esEndKey[i] = 0xFF
+	}
+	w.batch.DeleteRange(esStartKey, esEndKey, nil)
+
+	// TSX/ deletion: [TSX/<minSeq>, TSX/0xFFFFFFFFFFFFFFFF)
+	tsxStartKey := transferSequenceKey(minSeq)
+	tsxEndKey := make([]byte, 3+8)
+	copy(tsxEndKey[:3], []byte("TSX"))
+	// Set sequence bytes to maximum: 0xFFFFFFFFFFFFFFFF
+	for i := 3; i < len(tsxEndKey); i++ {
+		tsxEndKey[i] = 0xFF
+	}
+	w.batch.DeleteRange(tsxStartKey, tsxEndKey, nil)
 
 	// Delete indexes using chunked prefix scan (Option A)
 	indexPrefixes := []string{
@@ -332,6 +362,10 @@ func (w *PebbleDBWriter) WriteMigrationEvents(events []*logsdb.Event) error {
 		w.batch.Set(eventPrimaryKey(seq), primaryData, nil)
 		w.batchSize++
 
+		// Dense sequence index: ES/<seq>
+		w.batch.Set(eventSequenceKey(seq), []byte{}, nil)
+		w.batchSize++
+
 		// Address index
 		w.batch.Set(eventAddressKey(event.Address, seq), nil, nil)
 		w.batchSize++
@@ -368,6 +402,10 @@ func (w *PebbleDBWriter) WriteMigrationTransfers(transfers []*logsdb.Transfer) e
 			return err
 		}
 		w.batch.Set(transferPrimaryKey(seq), primaryData, nil)
+		w.batchSize++
+
+		// Dense sequence index: TSX/<seq>
+		w.batch.Set(transferSequenceKey(seq), []byte{}, nil)
 		w.batchSize++
 
 		// Transfer indexes

@@ -125,10 +125,16 @@ func (q *StreamingQueryEngine) buildEventCriterionStreams(filter *logsdb.EventFi
 			}
 		}
 
-		// If no address/topics (range-only criterion), create primary range iterator
+		// If no address/topics (range-only criterion), use dense sequence index if available
 		if len(iterators) == 0 {
-			iter := q.createPrimaryRangeIteratorEvents(minSeq, maxSeq, true) // Always ASC
-			iterators = append(iterators, iter)
+			if q.hasSequenceIndexes() {
+				iter := q.createEventSequenceIterator(minSeq, maxSeq, true) // Always ASC
+				iterators = append(iterators, iter)
+			} else {
+				// Fallback to existing primary range iterator for backward compatibility
+				iter := q.createPrimaryRangeIteratorEvents(minSeq, maxSeq, true) // Always ASC
+				iterators = append(iterators, iter)
+			}
 		}
 
 		criterionStream := NewStreamIntersector(iterators, true) // Always ASC
@@ -188,8 +194,14 @@ func (q *StreamingQueryEngine) buildTransferCriterionStreams(filter *logsdb.Tran
 		}
 
 		if len(iterators) == 0 {
-			iter := q.createPrimaryRangeIteratorTransfers(minSeq, maxSeq, true)
-			iterators = append(iterators, iter)
+			if q.hasSequenceIndexes() {
+				iter := q.createTransferSequenceIterator(minSeq, maxSeq, true)
+				iterators = append(iterators, iter)
+			} else {
+				// Fallback to existing primary range iterator for backward compatibility
+				iter := q.createPrimaryRangeIteratorTransfers(minSeq, maxSeq, true)
+				iterators = append(iterators, iter)
+			}
 		}
 
 		criterionStream := NewStreamIntersector(iterators, true)
@@ -776,6 +788,79 @@ func (q *StreamingQueryEngine) closeTransferStreams(streams []*StreamIntersector
 			log.Printf("Error closing transfer stream: %v", err)
 		}
 	}
+}
+
+// Dense sequence index iterator creators
+
+// createEventSequenceIterator creates an iterator for ES/ dense sequence index
+func (q *StreamingQueryEngine) createEventSequenceIterator(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := eventSequenceKey(minSeq)
+	upperBound := eventSequenceKey(maxSeq.Next())
+
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating event sequence iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+
+	if ascending {
+		recordSeekGE()
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT()
+		iter.SeekLT(upperBound)
+	}
+
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+// createTransferSequenceIterator creates an iterator for TSX/ dense sequence index
+func (q *StreamingQueryEngine) createTransferSequenceIterator(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
+	lowerBound := transferSequenceKey(minSeq)
+	upperBound := transferSequenceKey(maxSeq.Next())
+
+	opts := &pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	}
+
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		log.Printf("Error creating transfer sequence iterator: %v", err)
+		return &StreamIterator{exhausted: true}
+	}
+
+	if ascending {
+		recordSeekGE()
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT()
+		iter.SeekLT(upperBound)
+	}
+
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+}
+
+// hasSequenceIndexes performs a minimal check for ES/ prefix existence
+func (q *StreamingQueryEngine) hasSequenceIndexes() bool {
+	opts := &pebble.IterOptions{
+		LowerBound: []byte("ES"),
+		UpperBound: []byte("ET0"), // Corrected upper bound - stops before ET0/ topic indexes
+	}
+
+	iter, err := q.db.NewIter(opts)
+	if err != nil {
+		return false
+	}
+	defer iter.Close()
+
+	iter.First()
+	return iter.Valid()
 }
 
 // Helper functions for fast path detection

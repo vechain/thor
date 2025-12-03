@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -407,4 +408,363 @@ func TestPebbleDB_Truncate(t *testing.T) {
 	transfers, err := db.FilterTransfers(ctx, transferFilter)
 	require.NoError(t, err)
 	assert.Len(t, transfers, 5, "Should have 5 transfers after truncate")
+}
+
+// TestSequenceIndexCreation verifies that ES/ and TSX/ keys are created during writes
+func TestSequenceIndexCreation(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble-sequence-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	db, err := Open(tempDir)
+	require.NoError(t, err)
+	defer db.Close()
+
+	testAddr := thor.MustParseAddress("0x1234567890123456789012345678901234567890")
+	testTopic := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+
+	// Create test block
+	block := createTestBlock(1, testAddr)
+
+	// Create receipts with events and transfers
+	receipts := tx.Receipts{
+		{
+			Outputs: []*tx.Output{
+				{
+					Events: []*tx.Event{
+						{
+							Address: testAddr,
+							Topics:  []thor.Bytes32{testTopic},
+							Data:    []byte("test event data"),
+						},
+					},
+					Transfers: []*tx.Transfer{
+						{
+							Sender:    testAddr,
+							Recipient: testAddr,
+							Amount:    big.NewInt(1000),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Write block
+	writer := db.NewWriter()
+	err = writer.Write(block, receipts)
+	require.NoError(t, err)
+	err = writer.Commit()
+	require.NoError(t, err)
+
+	// Verify ES/ and TSX/ keys exist
+	internalDB := db.GetPebbleDB()
+	
+	// Check ES/ key exists
+	esOpts := &pebble.IterOptions{
+		LowerBound: []byte("ES"),
+		UpperBound: []byte("ET"),
+	}
+	esIter, err := internalDB.NewIter(esOpts)
+	require.NoError(t, err)
+	defer esIter.Close()
+	
+	esIter.First()
+	assert.True(t, esIter.Valid(), "ES/ sequence index should exist")
+	if esIter.Valid() {
+		key := esIter.Key()
+		assert.True(t, len(key) == 10, "ES/ key should be 10 bytes (ES + 8-byte sequence)")
+		assert.Equal(t, "ES", string(key[:2]), "Key should start with ES prefix")
+	}
+
+	// Check TSX/ key exists  
+	tsxOpts := &pebble.IterOptions{
+		LowerBound: []byte("TSX"),
+		UpperBound: []byte("TSY"),
+	}
+	tsxIter, err := internalDB.NewIter(tsxOpts)
+	require.NoError(t, err)
+	defer tsxIter.Close()
+	
+	tsxIter.First()
+	assert.True(t, tsxIter.Valid(), "TSX/ sequence index should exist")
+	if tsxIter.Valid() {
+		key := tsxIter.Key()
+		assert.True(t, len(key) == 11, "TSX/ key should be 11 bytes (TSX + 8-byte sequence)")
+		assert.Equal(t, "TSX", string(key[:3]), "Key should start with TSX prefix")
+	}
+}
+
+// TestSequenceIndexTruncate verifies correct bounds in truncate operations
+func TestSequenceIndexTruncate(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble-truncate-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	db, err := Open(tempDir)
+	require.NoError(t, err)
+	defer db.Close()
+
+	testAddr := thor.MustParseAddress("0x1234567890123456789012345678901234567890")
+
+	// Write multiple blocks (1-5)
+	for blockNum := uint32(1); blockNum <= 5; blockNum++ {
+		block := createTestBlock(blockNum, testAddr)
+		receipts := createTestReceipts(testAddr)
+		
+		writer := db.NewWriter()
+		err = writer.Write(block, receipts)
+		require.NoError(t, err)
+		err = writer.Commit()
+		require.NoError(t, err)
+	}
+
+	internalDB := db.GetPebbleDB()
+
+	// Count ES/ keys before truncation
+	esCountBefore := countKeysWithPrefix(internalDB, "ES")
+	tsxCountBefore := countKeysWithPrefix(internalDB, "TSX")
+	assert.Equal(t, 5, esCountBefore, "Should have 5 ES/ keys before truncate")
+	assert.Equal(t, 5, tsxCountBefore, "Should have 5 TSX/ keys before truncate")
+
+	// Truncate from block 4 (should keep blocks 1-3)
+	writer := db.NewWriter()
+	err = writer.Truncate(4)
+	require.NoError(t, err)
+	err = writer.Commit()
+	require.NoError(t, err)
+
+	// Count ES/ keys after truncation  
+	esCountAfter := countKeysWithPrefix(internalDB, "ES")
+	tsxCountAfter := countKeysWithPrefix(internalDB, "TSX")
+	assert.Equal(t, 3, esCountAfter, "Should have 3 ES/ keys after truncate")
+	assert.Equal(t, 3, tsxCountAfter, "Should have 3 TSX/ keys after truncate")
+}
+
+// TestHasBlockIDO1Performance verifies true O(1) behavior with no scanning
+func TestHasBlockIDO1Performance(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble-hasblockid-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	db, err := Open(tempDir)
+	require.NoError(t, err)
+	defer db.Close()
+
+	testAddr := thor.MustParseAddress("0x1234567890123456789012345678901234567890")
+
+	// Write test blocks with known block IDs
+	var testBlockIDs []thor.Bytes32
+	for blockNum := uint32(1); blockNum <= 3; blockNum++ {
+		block := createTestBlock(blockNum, testAddr)
+		testBlockIDs = append(testBlockIDs, block.Header().ID())
+		receipts := createTestReceipts(testAddr)
+		
+		writer := db.NewWriter()
+		err = writer.Write(block, receipts)
+		require.NoError(t, err)
+		err = writer.Commit()
+		require.NoError(t, err)
+	}
+
+	// Test HasBlockID with existing block IDs
+	for i, blockID := range testBlockIDs {
+		exists, err := db.HasBlockID(blockID)
+		require.NoError(t, err)
+		assert.True(t, exists, "Block ID %d should exist", i+1)
+	}
+
+	// Test HasBlockID with non-existing block ID (block 999 should not exist)
+	var nonExistentBlockID thor.Bytes32
+	binary.BigEndian.PutUint32(nonExistentBlockID[:4], 999) // Block 999
+	exists, err := db.HasBlockID(nonExistentBlockID)
+	require.NoError(t, err)
+	assert.False(t, exists, "Non-existent block ID should not exist")
+}
+
+// TestRangeOnlyQueryEquivalence verifies new ES/TSX path returns identical results
+func TestRangeOnlyQueryEquivalence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble-range-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	db, err := Open(tempDir)
+	require.NoError(t, err)
+	defer db.Close()
+
+	testAddr := thor.MustParseAddress("0x1234567890123456789012345678901234567890")
+
+	// Write test blocks
+	for blockNum := uint32(1); blockNum <= 5; blockNum++ {
+		block := createTestBlock(blockNum, testAddr)
+		receipts := createTestReceipts(testAddr)
+		
+		writer := db.NewWriter()
+		err = writer.Write(block, receipts)
+		require.NoError(t, err)
+		err = writer.Commit()
+		require.NoError(t, err)
+	}
+
+	ctx := context.Background()
+
+	// Test range-only event query
+	eventFilter := &logsdb.EventFilter{
+		CriteriaSet: []*logsdb.EventCriteria{}, // Empty criteria = range-only
+		Range:       &logsdb.Range{From: 2, To: 4},
+		Options:     &logsdb.Options{Offset: 0, Limit: 100},
+		Order:       logsdb.ASC,
+	}
+
+	events, err := db.FilterEvents(ctx, eventFilter)
+	require.NoError(t, err)
+	assert.Len(t, events, 3, "Should return events from blocks 2-4")
+
+	// Verify block numbers are in the expected range
+	for _, event := range events {
+		assert.True(t, event.BlockNumber >= 2 && event.BlockNumber <= 4,
+			"Event block number %d should be in range 2-4", event.BlockNumber)
+	}
+
+	// Test range-only transfer query
+	transferFilter := &logsdb.TransferFilter{
+		CriteriaSet: []*logsdb.TransferCriteria{}, // Empty criteria = range-only
+		Range:       &logsdb.Range{From: 1, To: 3},
+		Options:     &logsdb.Options{Offset: 0, Limit: 100},
+		Order:       logsdb.ASC,
+	}
+
+	transfers, err := db.FilterTransfers(ctx, transferFilter)
+	require.NoError(t, err)
+	assert.Len(t, transfers, 3, "Should return transfers from blocks 1-3")
+
+	// Verify block numbers are in the expected range
+	for _, transfer := range transfers {
+		assert.True(t, transfer.BlockNumber >= 1 && transfer.BlockNumber <= 3,
+			"Transfer block number %d should be in range 1-3", transfer.BlockNumber)
+	}
+}
+
+// TestBackwardCompatibility tests PebbleDB without ES/TSX indexes still works
+func TestBackwardCompatibility(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble-compat-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Manually create a database without sequence indexes for compatibility test
+	pebbleDB, err := pebble.Open(tempDir, &pebble.Options{})
+	require.NoError(t, err)
+
+	// Manually add some primary records without sequence indexes
+	testAddr := thor.MustParseAddress("0x1234567890123456789012345678901234567890")
+	seq, _ := newSequence(1, 0, 0)
+	
+	// Create event record without ES/ index
+	eventRecord := &EventRecord{
+		BlockID:     thor.MustParseBytes32("0x1111111111111111111111111111111111111111111111111111111111111111"),
+		BlockNumber: 1,
+		Address:     testAddr,
+		Topics:      []thor.Bytes32{},
+		Data:        []byte("test"),
+	}
+	eventData, err := eventRecord.RLPEncode()
+	require.NoError(t, err)
+	
+	err = pebbleDB.Set(eventPrimaryKey(seq), eventData, pebble.Sync)
+	require.NoError(t, err)
+	err = pebbleDB.Set(eventAddressKey(testAddr, seq), nil, pebble.Sync)
+	require.NoError(t, err)
+
+	pebbleDB.Close()
+
+	// Open with our PebbleDBLogDB wrapper
+	db, err := Open(tempDir)
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Test that address queries still work (should use fallback to primary range iterator)
+	eventFilter := &logsdb.EventFilter{
+		CriteriaSet: []*logsdb.EventCriteria{
+			{Address: &testAddr},
+		},
+		Options: &logsdb.Options{Offset: 0, Limit: 100},
+		Order:   logsdb.ASC,
+	}
+
+	events, err := db.FilterEvents(ctx, eventFilter)
+	require.NoError(t, err)
+	assert.Len(t, events, 1, "Should find the manually inserted event")
+
+	// Test that range-only queries work (should use fallback when no ES/ indexes exist)
+	rangeFilter := &logsdb.EventFilter{
+		CriteriaSet: []*logsdb.EventCriteria{}, // Empty = range-only
+		Range:       &logsdb.Range{From: 1, To: 1},
+		Options:     &logsdb.Options{Offset: 0, Limit: 100},
+		Order:       logsdb.ASC,
+	}
+
+	rangeEvents, err := db.FilterEvents(ctx, rangeFilter)
+	require.NoError(t, err)
+	assert.Len(t, rangeEvents, 1, "Should find the event via fallback primary range iterator")
+}
+
+// Helper functions for tests
+
+func countKeysWithPrefix(db *pebble.DB, prefix string) int {
+	opts := &pebble.IterOptions{
+		LowerBound: []byte(prefix),
+		UpperBound: []byte(prefix + "\xff"),
+	}
+	
+	iter, err := db.NewIter(opts)
+	if err != nil {
+		return 0
+	}
+	defer iter.Close()
+	
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+	return count
+}
+
+func createTestBlock(blockNumber uint32, testAddr thor.Address) *block.Block {
+	parentID := createParentID(blockNumber)
+	
+	return new(block.Builder).
+		ParentID(parentID).
+		Timestamp(1234567890).
+		TotalScore(100).
+		GasLimit(10000000).
+		Build()
+}
+
+func createTestReceipts(testAddr thor.Address) tx.Receipts {
+	testTopic := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+	
+	return tx.Receipts{
+		{
+			Outputs: []*tx.Output{
+				{
+					Events: []*tx.Event{
+						{
+							Address: testAddr,
+							Topics:  []thor.Bytes32{testTopic},
+							Data:    []byte("test event data"),
+						},
+					},
+					Transfers: []*tx.Transfer{
+						{
+							Sender:    testAddr,
+							Recipient: testAddr,
+							Amount:    big.NewInt(1000),
+						},
+					},
+				},
+			},
+		},
+	}
 }

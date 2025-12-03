@@ -7,7 +7,7 @@ package sqlite3
 
 import (
 	"context"
-	"crypto/rand"
+	"github.com/vechain/thor/v2/test/datagen"
 	"math/big"
 	"testing"
 
@@ -30,29 +30,19 @@ func newTx(txType tx.Type) *tx.Transaction {
 	return trx.WithSignature(sig)
 }
 
-func randAddress() (addr thor.Address) {
-	rand.Read(addr[:])
-	return
-}
-
-func randBytes32() (b thor.Bytes32) {
-	rand.Read(b[:])
-	return
-}
-
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
 		Outputs: []*tx.Output{
 			{
 				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randBytes32()},
-					Data:    randBytes32().Bytes(),
+					Address: datagen.RandAddress(),
+					Topics:  []thor.Bytes32{datagen.RandomHash()},
+					Data:    datagen.RandomHash().Bytes(),
 				}},
 				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					Sender:    datagen.RandAddress(),
+					Recipient: datagen.RandAddress(),
+					Amount:    new(big.Int).SetBytes(datagen.RandomHash().Bytes()),
 				}},
 			},
 		},
@@ -64,9 +54,9 @@ func newEventOnlyReceipt() *tx.Receipt {
 		Outputs: []*tx.Output{
 			{
 				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randBytes32()},
-					Data:    randBytes32().Bytes(),
+					Address: datagen.RandAddress(),
+					Topics:  []thor.Bytes32{datagen.RandomHash()},
+					Data:    datagen.RandomHash().Bytes(),
 				}},
 			},
 		},
@@ -78,9 +68,9 @@ func newTransferOnlyReceipt() *tx.Receipt {
 		Outputs: []*tx.Output{
 			{
 				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					Sender:    datagen.RandAddress(),
+					Recipient: datagen.RandAddress(),
+					Amount:    new(big.Int).SetBytes(datagen.RandAddress().Bytes()),
 				}},
 			},
 		},

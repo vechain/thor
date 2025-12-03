@@ -6,6 +6,8 @@
 package pebbledb
 
 import (
+	"encoding/binary"
+
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -27,6 +29,10 @@ const (
 	transferSenderPrefix    = "TS"
 	transferRecipientPrefix = "TR"
 	transferTxOriginPrefix  = "TO"
+
+	// Dense sequence index prefixes
+	eventSequencePrefix    = "ES"
+	transferSequencePrefix = "TSX"
 )
 
 // Primary storage keys
@@ -92,4 +98,29 @@ func transferTxOriginKey(addr thor.Address, seq sequence) []byte {
 	key = append(key, addr[:]...)
 	key = append(key, seq.BigEndianBytes()...)
 	return key
+}
+
+// Dense sequence index keys
+
+func eventSequenceKey(seq sequence) []byte {
+	key := make([]byte, 0, 2+8)
+	key = append(key, []byte(eventSequencePrefix)...)
+	key = append(key, seq.BigEndianBytes()...)
+	return key
+}
+
+func transferSequenceKey(seq sequence) []byte {
+	key := make([]byte, 0, 3+8)
+	key = append(key, []byte(transferSequencePrefix)...)
+	key = append(key, seq.BigEndianBytes()...)
+	return key
+}
+
+// extractBlockNumberFromBlockID extracts block number from Thor blockID
+// Thor blockIDs consistently encode the block number in bytes 0-4 (big-endian)
+// This encoding is stable across all Thor networks and production chains
+func extractBlockNumberFromBlockID(id thor.Bytes32) uint32 {
+	// Thor-specific: block number is always stored in first 4 bytes
+	// This is a stable, production-tested encoding used across all Thor chains
+	return binary.BigEndian.Uint32(id[0:4])
 }

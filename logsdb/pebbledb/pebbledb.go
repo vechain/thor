@@ -114,6 +114,11 @@ func (p *PebbleDBLogDB) Path() string {
 	return p.path
 }
 
+// GetPebbleDB returns the internal pebble.DB for testing purposes
+func (p *PebbleDBLogDB) GetPebbleDB() *pebble.DB {
+	return p.db
+}
+
 // NewestBlockID returns the newest written block ID
 func (p *PebbleDBLogDB) NewestBlockID() (thor.Bytes32, error) {
 	// Iterate in reverse order over event primary keys to find the latest
@@ -186,15 +191,22 @@ func (p *PebbleDBLogDB) NewestBlockID() (thor.Bytes32, error) {
 	return thor.Bytes32{}, nil
 }
 
-// HasBlockID checks if a block ID exists in the database
+// HasBlockID checks if a block ID exists using O(1) sequence index lookup
 func (p *PebbleDBLogDB) HasBlockID(blockID thor.Bytes32) (bool, error) {
-	// Strategy: Check both events and transfers for any record with this BlockID
-	// This is not optimized but is correct - in practice, could add BlockID index
+	blockNum := extractBlockNumberFromBlockID(blockID)
+	seqStart, err := newSequence(blockNum, 0, 0)
+	if err != nil {
+		return false, err
+	}
+	seqEnd, err := newSequence(blockNum+1, 0, 0)
+	if err != nil {
+		return false, err
+	}
 
-	// Check events first
+	// Check events using ES/ sequence index
 	eventOpts := &pebble.IterOptions{
-		LowerBound: []byte(eventPrimaryPrefix),
-		UpperBound: []byte(eventPrimaryPrefix + "\xff"),
+		LowerBound: eventSequenceKey(seqStart),
+		UpperBound: eventSequenceKey(seqEnd),
 	}
 
 	eventIter, err := p.db.NewIter(eventOpts)
@@ -203,28 +215,15 @@ func (p *PebbleDBLogDB) HasBlockID(blockID thor.Bytes32) (bool, error) {
 	}
 	defer eventIter.Close()
 
-	for eventIter.First(); eventIter.Valid(); eventIter.Next() {
-		value, closer, err := p.db.Get(eventIter.Key())
-		if err != nil {
-			if err == pebble.ErrNotFound {
-				continue
-			}
-			return false, err
-		}
-
-		var eventRecord EventRecord
-		decodeErr := eventRecord.RLPDecode(value)
-		closer.Close()
-
-		if decodeErr == nil && eventRecord.BlockID == blockID {
-			return true, nil
-		}
+	eventIter.SeekGE(eventSequenceKey(seqStart))
+	if eventIter.Valid() && sequenceFromKey(eventIter.Key()) < seqEnd {
+		return true, nil
 	}
 
-	// Check transfers
+	// Check transfers using TSX/ sequence index
 	transferOpts := &pebble.IterOptions{
-		LowerBound: []byte(transferPrimaryPrefix),
-		UpperBound: []byte(transferPrimaryPrefix + "\xff"),
+		LowerBound: transferSequenceKey(seqStart),
+		UpperBound: transferSequenceKey(seqEnd),
 	}
 
 	transferIter, err := p.db.NewIter(transferOpts)
@@ -233,22 +232,9 @@ func (p *PebbleDBLogDB) HasBlockID(blockID thor.Bytes32) (bool, error) {
 	}
 	defer transferIter.Close()
 
-	for transferIter.First(); transferIter.Valid(); transferIter.Next() {
-		value, closer, err := p.db.Get(transferIter.Key())
-		if err != nil {
-			if err == pebble.ErrNotFound {
-				continue
-			}
-			return false, err
-		}
-
-		var transferRecord TransferRecord
-		decodeErr := transferRecord.RLPDecode(value)
-		closer.Close()
-
-		if decodeErr == nil && transferRecord.BlockID == blockID {
-			return true, nil
-		}
+	transferIter.SeekGE(transferSequenceKey(seqStart))
+	if transferIter.Valid() && sequenceFromKey(transferIter.Key()) < seqEnd {
+		return true, nil
 	}
 
 	return false, nil

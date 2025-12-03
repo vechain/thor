@@ -7,6 +7,7 @@ package api
 
 import (
 	"crypto/rand"
+	"github.com/vechain/thor/v2/test/datagen"
 	"math/big"
 	"testing"
 
@@ -62,7 +63,7 @@ func TestConvertReceiptWhenTxHasNoClauseTo(t *testing.T) {
 
 func TestConvertReceipt(t *testing.T) {
 	value := big.NewInt(100)
-	addr := randAddress()
+	addr := datagen.RandAddress()
 
 	txs := []*tx.Transaction{
 		newTx(tx.NewClause(&addr).WithValue(value), tx.TypeLegacy),
@@ -90,24 +91,19 @@ func TestConvertReceipt(t *testing.T) {
 }
 
 // Utilities functions
-func randAddress() (addr thor.Address) {
-	rand.Read(addr[:])
-	return
-}
-
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
 		Outputs: []*tx.Output{
 			{
 				Events: tx.Events{{
-					Address: randAddress(),
+					Address: datagen.RandAddress(),
 					Topics:  []thor.Bytes32{randomBytes32()},
 					Data:    randomBytes32().Bytes(),
 				}},
 				Transfers: tx.Transfers{{
-					Sender:    randAddress(),
-					Recipient: randAddress(),
-					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+					Sender:    datagen.RandAddress(),
+					Recipient: datagen.RandAddress(),
+					Amount:    new(big.Int).SetBytes(datagen.RandAddress().Bytes()),
 				}},
 			},
 		},
