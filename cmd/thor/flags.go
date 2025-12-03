@@ -90,7 +90,7 @@ var (
 	}
 	apiSlowQueriesThresholdFlag = cli.Uint64Flag{
 		Name:  "api-slow-queries-threshold",
-		Value: 500,
+		Value: 0,
 		Usage: "all queries with execution time(ms) above threshold will be logged",
 	}
 	apiLog5xxErrorsFlag = cli.BoolFlag{
