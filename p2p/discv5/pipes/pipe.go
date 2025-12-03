@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,20 +14,34 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package netutil
+package pipes
 
-// IsTemporaryError checks whether the given error should be considered temporary.
-func IsTemporaryError(err error) bool {
-	tempErr, ok := err.(interface {
-		Temporary() bool
-	})
-	return ok && tempErr.Temporary() || isPacketTooBig(err)
-}
+import "net"
 
-// IsTimeout checks whether the given error is a timeout.
-func IsTimeout(err error) bool {
-	timeoutErr, ok := err.(interface {
-		Timeout() bool
-	})
-	return ok && timeoutErr.Timeout()
+// TCPPipe creates an in process full duplex pipe based on a localhost TCP socket.
+func TCPPipe() (net.Conn, net.Conn, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer l.Close()
+
+	var aconn net.Conn
+	aerr := make(chan error, 1)
+	go func() {
+		var err error
+		aconn, err = l.Accept()
+		aerr <- err
+	}()
+
+	dconn, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		<-aerr
+		return nil, nil, err
+	}
+	if err := <-aerr; err != nil {
+		dconn.Close()
+		return nil, nil, err
+	}
+	return aconn, dconn, nil
 }

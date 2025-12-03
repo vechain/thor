@@ -103,6 +103,8 @@ func TestNewThorP2P(t *testing.T) {
 				tc.allowedPeers,
 				tc.cachedPeers,
 				tc.bootstrapNodes,
+				true,
+				false,
 			)
 
 			assert.Equal(t, thor.p2pSrv.Options().KnownNodes, tc.expectedKnownNodes)

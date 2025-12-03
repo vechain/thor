@@ -398,6 +398,13 @@ type sharedUDPConn struct {
 	unhandled chan discover.ReadPacket
 }
 
+func NewSharedUDPConn(conn *net.UDPConn, unhandled chan discover.ReadPacket) sharedUDPConn {
+	return sharedUDPConn{
+		UDPConn:   conn,
+		unhandled: unhandled,
+	}
+}
+
 // ReadFromUDP implements discv5.conn
 func (s *sharedUDPConn) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) {
 	packet, ok := <-s.unhandled

@@ -41,6 +41,8 @@ func New(
 	allowedPeers []*discover.Node,
 	cachedPeers []*discover.Node,
 	bootstrapNodes []*discover.Node,
+	enableTempDiscV5 bool,
+	enableDiscV5 bool,
 ) *P2P {
 	// known peers will be loaded/stored from/in this file
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
@@ -56,11 +58,14 @@ func New(
 		DiscoveryNodes:      fallbackDiscoveryNodes,
 		RemoteDiscoveryList: remoteDiscoveryNodesList,
 		NAT:                 nat,
+		DiscV5:              enableDiscV5,
+		TempDiscV5:          enableTempDiscV5,
 	}
 
 	// allowed peers flag will only allow p2psrv to connect to the designated peers
 	if len(allowedPeers) > 0 {
-		opts.NoDiscovery = true // disable discovery
+		opts.TempDiscV5 = false // disable discovery
+		opts.DiscV5 = false
 		opts.DiscoveryNodes = nil
 		opts.KnownNodes = allowedPeers
 	} else {

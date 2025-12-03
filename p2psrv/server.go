@@ -13,9 +13,12 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/vechain/thor/v2/common/mclock"
 	"github.com/vechain/thor/v2/p2p"
 	"github.com/vechain/thor/v2/p2p/discover"
+	discv5 "github.com/vechain/thor/v2/p2p/discv5"
+	discv5discover "github.com/vechain/thor/v2/p2p/discv5/discover"
+	"github.com/vechain/thor/v2/p2p/discv5/enode"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 
@@ -30,13 +33,15 @@ var logger = log.WithContext("pkg", "p2psrv")
 type Server struct {
 	opts            *Options
 	srv             *p2p.Server
-	discv5          *tempdiscv5.Network
+	tempdiscv5      *tempdiscv5.Network
+	discv5          *discv5discover.UDPv5
 	goes            co.Goes
 	done            chan struct{}
 	bootstrapNodes  []*tempdiscv5.Node
 	knownNodes      *cache.PrioCache
 	discoveredNodes *cache.RandCache
 	dialingNodes    *nodeMap
+	discv5NewNodes  chan *enode.Node
 }
 
 // New create a p2p server.
@@ -106,25 +111,67 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error 
 		s.srv.Protocols = append(s.srv.Protocols, cpy)
 	}
 
+	for _, node := range s.opts.DiscoveryNodes {
+		s.bootstrapNodes = append(s.bootstrapNodes, tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
+	}
+	// known nodes are also acting as bootstrap servers
+	for _, node := range s.opts.KnownNodes {
+		s.bootstrapNodes = append(s.bootstrapNodes, tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
+	}
+
+	var (
+		conn *net.UDPConn
+		//realaddr  *net.UDPAddr
+		unhandled chan discv5discover.ReadPacket
+	)
+
+	// borrowed from ethereum/p2p.Server.Start
+	addr, err := net.ResolveUDPAddr("udp", s.opts.ListenAddr)
+	if err != nil {
+		return err
+	}
+	conn, err = net.ListenUDP("udp", addr)
+	if err != nil {
+		return err
+	}
+
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	if !s.opts.NoDiscovery {
-		if err := s.listenDiscV5(); err != nil {
+
+	if s.opts.DiscV5 {
+		unhandled = make(chan discv5discover.ReadPacket)
+		var lconn discv5discover.UDPConn
+		if s.opts.TempDiscV5 {
+			conn := discv5.NewSharedUDPConn(conn, unhandled)
+			lconn = &conn
+		} else {
+			lconn = conn
+		}
+
+		s.discv5NewNodes = make(chan *enode.Node, 1)
+		if err := s.listenDiscV5(lconn, unhandled); err != nil {
+			return err
+		}
+	}
+
+	if s.opts.TempDiscV5 {
+		if err := s.listenTempDiscV5(conn); err != nil {
 			return err
 		}
 		logger.Debug("registering topic", "topic", topic)
 		s.goes.Go(func() {
-			s.discv5.RegisterTopic(topic, s.done)
+			s.tempdiscv5.RegisterTopic(topic, s.done)
 		})
 
 		logger.Debug("searching topic", "topic", topic)
-		s.goes.Go(func() {
-			s.discoverLoop(topic)
-		})
 
 		s.goes.Go(s.fetchBootstrap)
 	}
+
+	s.goes.Go(func() {
+		s.discoverLoop(topic)
+	})
 
 	logger.Debug("start up", "self", s.Self())
 
@@ -134,8 +181,8 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error 
 
 // Stop stop the server.
 func (s *Server) Stop() {
-	if s.discv5 != nil {
-		s.discv5.Close()
+	if s.tempdiscv5 != nil {
+		s.tempdiscv5.Close()
 	}
 	s.srv.Stop()
 	close(s.done)
@@ -191,16 +238,7 @@ func (s *Server) TryDial(node *discover.Node) error {
 	return err
 }
 
-func (s *Server) listenDiscV5() (err error) {
-	// borrowed from ethereum/p2p.Server.Start
-	addr, err := net.ResolveUDPAddr("udp", s.opts.ListenAddr)
-	if err != nil {
-		return err
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
+func (s *Server) listenTempDiscV5(conn *net.UDPConn) (err error) {
 
 	realaddr := conn.LocalAddr().(*net.UDPAddr)
 	if s.opts.NAT != nil {
@@ -223,34 +261,66 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
-	for _, node := range s.opts.DiscoveryNodes {
-		s.bootstrapNodes = append(s.bootstrapNodes, tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
-	}
-	// known nodes are also acting as bootstrap servers
-	for _, node := range s.opts.KnownNodes {
-		s.bootstrapNodes = append(s.bootstrapNodes, tempdiscv5.NewNode(tempdiscv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
-	}
-
 	if err := network.SetFallbackNodes(s.bootstrapNodes); err != nil {
 		return err
 	}
+	s.tempdiscv5 = network
+	return nil
+}
+
+func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5discover.ReadPacket) (err error) {
+	db, err := enode.OpenDB("")
+	if err != nil {
+		return err
+	}
+	localNode := enode.NewLocalNode(db, s.opts.PrivateKey)
+	bootnodes := make([]*enode.Node, len(s.bootstrapNodes))
+	for index, node := range s.bootstrapNodes {
+		pubkey, err := node.ID.Pubkey()
+		if err != nil {
+			return err
+		}
+		bootnodes[index] = enode.NewV4(pubkey, node.IP, int(node.TCP), int(node.UDP))
+	}
+	network, err := discv5discover.ListenV5(conn, localNode, discv5discover.Config{
+		PrivateKey:              s.opts.PrivateKey,
+		NetRestrict:             s.opts.NetRestrict,
+		Unhandled:               unhandled,
+		V5RespTimeout:           700 * time.Millisecond,
+		Bootnodes:               bootnodes,
+		PingInterval:            3 * time.Second,
+		RefreshInterval:         30 * time.Minute,
+		NoFindnodeLivenessCheck: false,
+		V5ProtocolID:            nil, // if nil will use default
+		ValidSchemes:            enode.ValidSchemes,
+		Clock:                   mclock.System{},
+	}, s.discv5NewNodes)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			network.Close()
+		}
+	}()
+
 	s.discv5 = network
 	return nil
 }
 
 func (s *Server) discoverLoop(topic tempdiscv5.Topic) {
-	if s.discv5 == nil {
-		return
-	}
-
 	setPeriod := make(chan time.Duration, 1)
 	setPeriod <- time.Millisecond * 100
 	discNodes := make(chan *tempdiscv5.Node, 100)
 	discLookups := make(chan bool, 100)
 
-	s.goes.Go(func() {
-		s.discv5.SearchTopic(topic, setPeriod, discNodes, discLookups)
-	})
+	if s.tempdiscv5 != nil {
+		s.goes.Go(func() {
+			s.tempdiscv5.SearchTopic(topic, setPeriod, discNodes, discLookups)
+		})
+	} else if s.discv5 == nil {
+		return
+	}
 
 	var (
 		lookupCount  = 0
@@ -278,7 +348,16 @@ func (s *Server) discoverLoop(topic tempdiscv5.Topic) {
 				s.discoveredNodes.Set(node.ID, node)
 				logger.Trace("discovered node", "node", node)
 			}
+		case v5node := <-s.discv5NewNodes:
+			node := discover.NewNode(discover.NodeID(v5node.ID()), v5node.IP(), uint16(v5node.UDP()), uint16(v5node.TCP()))
+			if _, found := s.discoveredNodes.Get(node.ID); !found {
+				metricDiscoveredNodes().Add(1)
+				s.discoveredNodes.Set(node.ID, node)
+				logger.Trace("discovered node", "node", node)
+			}
+
 		case <-s.done:
+			log.Debug("Discover loop closed")
 			close(setPeriod)
 			return
 		}
@@ -373,7 +452,7 @@ func (s *Server) fetchBootstrap() {
 
 		bootnodes := slices.Clone(s.bootstrapNodes)
 		bootnodes = append(bootnodes, remoteNodes...)
-		if err := s.discv5.SetFallbackNodes(bootnodes); err != nil {
+		if err := s.tempdiscv5.SetFallbackNodes(bootnodes); err != nil {
 			return err
 		}
 		return nil
