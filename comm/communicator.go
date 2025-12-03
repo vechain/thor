@@ -17,7 +17,6 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2p"
@@ -40,7 +39,7 @@ type Communicator struct {
 	newBlockFeed   event.Feed
 	announcementCh chan *announcement
 	feedScope      event.SubscriptionScope
-	goes           co.Goes
+	goes           sync.WaitGroup
 	onceSynced     sync.Once
 }
 

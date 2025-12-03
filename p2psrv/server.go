@@ -11,6 +11,7 @@ import (
 	"math"
 	"net"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -20,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/p2p/nat"
 
 	"github.com/vechain/thor/v2/cache"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
 )
 
@@ -31,7 +31,7 @@ type Server struct {
 	opts            *Options
 	srv             *p2p.Server
 	discv5          *discv5.Network
-	goes            co.Goes
+	goes            sync.WaitGroup
 	done            chan struct{}
 	bootstrapNodes  []*discv5.Node
 	knownNodes      *cache.PrioCache
