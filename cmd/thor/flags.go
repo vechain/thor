@@ -78,6 +78,15 @@ var (
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
 	}
+	apiSlowQueriesThresholdFlag = cli.Uint64Flag{
+		Name:  "api-slow-queries-threshold",
+		Value: 0,
+		Usage: "all queries with execution time(ms) above threshold will be logged",
+	}
+	apiLog5xxErrorsFlag = cli.BoolFlag{
+		Name:  "api-log-5xx-errors",
+		Usage: "log all API requests resulting in 5xx status codes",
+	}
 	apiTxpoolFlag = cli.BoolFlag{
 		Name:  "api-enable-txpool",
 		Usage: "enable txpool REST API endpoints",

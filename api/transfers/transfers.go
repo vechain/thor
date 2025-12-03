@@ -19,6 +19,8 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 )
 
+const MaxCriteriaCount = 10
+
 type Transfers struct {
 	repo  *chain.Repository
 	db    *logdb.LogDB
@@ -75,6 +77,13 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		if criterion == nil {
 			return restutil.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
 		}
+	}
+	if len(filter.CriteriaSet) > MaxCriteriaCount {
+		return restutil.BadRequest(fmt.Errorf(
+			"number of criteria in criteriaSet: %d cannot be greater than: %d",
+			len(filter.CriteriaSet),
+			MaxCriteriaCount),
+		)
 	}
 	if filter.Options == nil {
 		filter.Options = &api.Options{}

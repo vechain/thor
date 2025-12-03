@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vechain/thor/v2/thor"
+
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -180,6 +182,26 @@ func testTransferBadRequest(t *testing.T) {
 	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", badBody)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
+
+	criteriaSet := make([]*logdb.TransferCriteria, 11)
+	origin := thor.BytesToAddress([]byte("address"))
+	for i := range 11 {
+		criteriaSet[i] = &logdb.TransferCriteria{
+			TxOrigin: &origin,
+		}
+	}
+
+	emptyFilter := api.TransferFilter{
+		CriteriaSet: criteriaSet,
+		Range:       nil,
+		Options:     &api.Options{Limit: ptr(6)},
+		Order:       logdb.DESC,
+	}
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "number of criteria in criteriaSet: 11 cannot be greater than: 10\n", string(res))
 }
 
 func testTransferWithEmptyDb(t *testing.T) {
