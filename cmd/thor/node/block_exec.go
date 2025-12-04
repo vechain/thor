@@ -211,7 +211,7 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 	if ctx.packing {
 		blockType = "proposed"
 	}
-	metricBlockProcessedTxs().SetWithLabel(int64(len(ctx.receipts)), map[string]string{"type": blockType})
+	metricBlockProcessedTxs().AddWithLabel(int64(len(ctx.receipts)), map[string]string{"type": blockType})
 	metricBlockProcessedGas().AddWithLabel(int64(ctx.newBlock.Header().GasUsed()), map[string]string{"type": blockType})
 	metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 
