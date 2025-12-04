@@ -10,21 +10,20 @@ import (
 	"testing"
 	"time"
 
-	comm2 "github.com/vechain/thor/v2/comm"
-	"github.com/vechain/thor/v2/logdb"
-
-	bft2 "github.com/vechain/thor/v2/bft"
-	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/txpool"
-
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/logsdb/sqlite3"
+	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
+
+	bft2 "github.com/vechain/thor/v2/bft"
+	comm2 "github.com/vechain/thor/v2/comm"
 )
 
 const (
@@ -56,7 +55,7 @@ func getFlowAndNode(t *testing.T, forkConfig *thor.ForkConfig) (*packer.Flow, *N
 	bft, err := bft2.NewEngine(repo, db, forkConfig, a1.Address)
 	assert.NoError(t, err)
 
-	logdb, err := logdb.NewMem()
+	logdb, err := sqlite3.NewMem()
 	assert.NoError(t, err)
 
 	comm := comm2.New(repo, pool)

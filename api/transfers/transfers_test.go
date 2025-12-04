@@ -19,7 +19,8 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
+	"github.com/vechain/thor/v2/logsdb/sqlite3"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thorclient"
@@ -63,10 +64,10 @@ func TestOption(t *testing.T) {
 
 	tclient = thorclient.New(ts.URL)
 	filter := api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		CriteriaSet: make([]*logsdb.TransferCriteria, 0),
 		Range:       nil,
 		Options:     &api.Options{Limit: ptr(6)},
-		Order:       logdb.DESC,
+		Order:       logsdb.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
@@ -127,10 +128,10 @@ func TestOptionalData(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := api.TransferFilter{
-				CriteriaSet: make([]*logdb.TransferCriteria, 0),
+				CriteriaSet: make([]*logsdb.TransferCriteria, 0),
 				Range:       nil,
 				Options:     &api.Options{Limit: ptr(5), IncludeIndexes: tc.includeIndexes},
-				Order:       logdb.DESC,
+				Order:       logsdb.DESC,
 			}
 
 			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
@@ -184,10 +185,10 @@ func testTransferBadRequest(t *testing.T) {
 
 func testTransferWithEmptyDb(t *testing.T) {
 	emptyFilter := api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		CriteriaSet: make([]*logsdb.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       logsdb.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
@@ -203,10 +204,10 @@ func testTransferWithEmptyDb(t *testing.T) {
 
 func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 	emptyFilter := api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		CriteriaSet: make([]*logsdb.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       logsdb.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
@@ -224,7 +225,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 }
 
 // Init functions
-func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
+func insertBlocks(t *testing.T, db logsdb.LogsDB, n int) {
 	b := new(block.Builder).Build()
 	for range n {
 		b = new(block.Builder).
@@ -243,7 +244,7 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 	}
 }
 
-func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
+func initTransferServer(t *testing.T, logDb logsdb.LogsDB, limit uint64) {
 	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
@@ -253,8 +254,8 @@ func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
 	ts = httptest.NewServer(router)
 }
 
-func createDb(t *testing.T) *logdb.LogDB {
-	logDb, err := logdb.NewMem()
+func createDb(t *testing.T) logsdb.LogsDB {
+	logDb, err := sqlite3.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}

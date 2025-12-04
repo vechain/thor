@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package logdb
+package logsdb
 
 import (
 	"fmt"
@@ -24,8 +24,8 @@ var (
 	})
 )
 
-func metricsHandleEventsFilter(filter *EventFilter) {
-	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "event")
+func MetricsHandleEventsFilter(filter *EventFilter) {
+	MetricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "event")
 
 	for _, c := range filter.CriteriaSet {
 		paramsUsed := make([]string, 0)
@@ -41,7 +41,7 @@ func metricsHandleEventsFilter(filter *EventFilter) {
 	}
 }
 
-func metricsHandleCommonFilter(options *Options, order Order, criteriaLen int, queryType string) {
+func MetricsHandleCommonFilter(options *Options, order Order, criteriaLen int, queryType string) {
 	orderStr := "asc"
 	if order == DESC {
 		orderStr = "desc"

@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package logdb
+package sqlite3
 
 import (
 	"context"
@@ -14,14 +14,11 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 
 	"github.com/mattn/go-sqlite3"
-)
-
-const (
-	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
 )
 
 type LogDB struct {
@@ -137,7 +134,7 @@ func (db *LogDB) Path() string {
 	return db.path
 }
 
-func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
+func (db *LogDB) FilterEvents(ctx context.Context, filter *logsdb.EventFilter) ([]*logsdb.Event, error) {
 	const query = `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
 FROM (%v) e
 	LEFT JOIN ref r0 ON e.blockID = r0.id
@@ -154,7 +151,7 @@ FROM (%v) e
 		return db.queryEvents(ctx, fmt.Sprintf(query, "event"))
 	}
 
-	metricsHandleEventsFilter(filter)
+	logsdb.MetricsHandleEventsFilter(filter)
 
 	var (
 		subQuery = "SELECT seq FROM event WHERE 1"
@@ -163,14 +160,14 @@ FROM (%v) e
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		from, err := newSequence(filter.Range.From, 0, 0)
+		from, err := logsdb.NewSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
+			to, err := logsdb.NewSequence(filter.Range.To, logsdb.TxIndexMask, logsdb.LogIndexMask)
 			if err != nil {
 				return nil, err
 			}
@@ -182,7 +179,7 @@ FROM (%v) e
 		subQuery += " AND ("
 
 		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.toWhereCondition()
+			cond, cargs := eventCriteriaToWhereCondition(c)
 			if i > 0 {
 				subQuery += " OR"
 			}
@@ -194,7 +191,7 @@ FROM (%v) e
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
-		if filter.Order == DESC {
+		if filter.Order == logsdb.DESC {
 			subQuery += " ORDER BY seq DESC "
 		} else {
 			subQuery += " ORDER BY seq ASC "
@@ -208,7 +205,7 @@ FROM (%v) e
 	eventQuery := fmt.Sprintf(query, subQuery)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
-		if filter.Order == DESC {
+		if filter.Order == logsdb.DESC {
 			eventQuery += " ORDER BY seq DESC "
 		} else {
 			eventQuery += " ORDER BY seq ASC "
@@ -217,7 +214,7 @@ FROM (%v) e
 	return db.queryEvents(ctx, eventQuery, args...)
 }
 
-func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([]*Transfer, error) {
+func (db *LogDB) FilterTransfers(ctx context.Context, filter *logsdb.TransferFilter) ([]*logsdb.Transfer, error) {
 	const query = `SELECT t.seq, r0.data, t.blockTime, r1.data, r2.data, t.clauseIndex, r3.data, r4.data, t.amount
 FROM (%v) t 
 	LEFT JOIN ref r0 ON t.blockID = r0.id
@@ -230,7 +227,7 @@ FROM (%v) t
 		return db.queryTransfers(ctx, fmt.Sprintf(query, "transfer"))
 	}
 
-	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
+	logsdb.MetricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "transfer")
 
 	var (
 		subQuery = "SELECT seq FROM transfer WHERE 1"
@@ -239,14 +236,14 @@ FROM (%v) t
 
 	if filter.Range != nil {
 		subQuery += " AND seq >= ?"
-		from, err := newSequence(filter.Range.From, 0, 0)
+		from, err := logsdb.NewSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, from)
 		if filter.Range.To >= filter.Range.From {
 			subQuery += " AND seq <= ?"
-			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
+			to, err := logsdb.NewSequence(filter.Range.To, logsdb.TxIndexMask, logsdb.LogIndexMask)
 			if err != nil {
 				return nil, err
 			}
@@ -257,7 +254,7 @@ FROM (%v) t
 	if len(filter.CriteriaSet) > 0 {
 		subQuery += " AND ("
 		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.toWhereCondition()
+			cond, cargs := transferCriteriaToWhereCondition(c)
 			if i > 0 {
 				subQuery += " OR"
 			}
@@ -269,7 +266,7 @@ FROM (%v) t
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
-		if filter.Order == DESC {
+		if filter.Order == logsdb.DESC {
 			subQuery += " ORDER BY seq DESC"
 		} else {
 			subQuery += " ORDER BY seq ASC"
@@ -282,7 +279,7 @@ FROM (%v) t
 	transferQuery := fmt.Sprintf(query, subQuery)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
-		if filter.Order == DESC {
+		if filter.Order == logsdb.DESC {
 			transferQuery += " ORDER BY seq DESC "
 		} else {
 			transferQuery += " ORDER BY seq ASC "
@@ -291,14 +288,14 @@ FROM (%v) t
 	return db.queryTransfers(ctx, transferQuery, args...)
 }
 
-func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*Event, error) {
+func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*logsdb.Event, error) {
 	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 
-	var events []*Event
+	var events []*logsdb.Event
 	for rows.Next() {
 		select {
 		case <-ctx.Done():
@@ -306,7 +303,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 		default:
 		}
 		var (
-			seq         sequence
+			seq         logsdb.Sequence
 			blockID     []byte
 			blockTime   uint64
 			txID        []byte
@@ -333,7 +330,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 		); err != nil {
 			return nil, err
 		}
-		event := &Event{
+		event := &logsdb.Event{
 			BlockNumber: seq.BlockNumber(),
 			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
@@ -359,13 +356,13 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 	return events, nil
 }
 
-func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) ([]*Transfer, error) {
+func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) ([]*logsdb.Transfer, error) {
 	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var transfers []*Transfer
+	var transfers []*logsdb.Transfer
 	for rows.Next() {
 		select {
 		case <-ctx.Done():
@@ -373,7 +370,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) 
 		default:
 		}
 		var (
-			seq         sequence
+			seq         logsdb.Sequence
 			blockID     []byte
 			blockTime   uint64
 			txID        []byte
@@ -396,7 +393,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) 
 		); err != nil {
 			return nil, err
 		}
-		trans := &Transfer{
+		trans := &logsdb.Transfer{
 			BlockNumber: seq.BlockNumber(),
 			LogIndex:    seq.LogIndex(),
 			BlockID:     thor.BytesToBytes32(blockID),
@@ -441,7 +438,7 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 		UNION
 		SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1))`
 
-	seq, err := newSequence(block.Number(id), 0, 0)
+	seq, err := logsdb.NewSequence(block.Number(id), 0, 0)
 	if err != nil {
 		return false, err
 	}
@@ -455,12 +452,12 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 }
 
 // NewWriter creates a log writer.
-func (db *LogDB) NewWriter() *Writer {
+func (db *LogDB) NewWriter() logsdb.Writer {
 	return &Writer{conn: db.wconn, stmtCache: db.stmtCache}
 }
 
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
-func (db *LogDB) NewWriterSyncOff() *Writer {
+func (db *LogDB) NewWriterSyncOff() logsdb.Writer {
 	return &Writer{conn: db.wconnSyncOff, stmtCache: db.stmtCache}
 }
 
@@ -469,18 +466,6 @@ func topicValue(topics []thor.Bytes32, i int) []byte {
 		return removeLeadingZeros(topics[i][:])
 	}
 	return nil
-}
-
-func removeLeadingZeros(bytes []byte) []byte {
-	i := 0
-	// increase i until it reaches the first non-zero byte
-	for ; i < len(bytes) && bytes[i] == 0; i++ {
-	}
-	// ensure at least 1 byte exists
-	if i == len(bytes) {
-		return []byte{0}
-	}
-	return bytes[i:]
 }
 
 // Writer is the transactional log writer.
@@ -494,7 +479,7 @@ type Writer struct {
 
 // Truncate truncates the database by deleting logs after blockNum (included).
 func (w *Writer) Truncate(blockNum uint32) error {
-	seq, err := newSequence(blockNum, 0, 0)
+	seq, err := logsdb.NewSequence(blockNum, 0, 0)
 	if err != nil {
 		return err
 	}
@@ -590,7 +575,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					eventData = ev.Data
 				}
 
-				seq, err := newSequence(blockNum, uint32(txIndex), eventCount)
+				seq, err := logsdb.NewSequence(blockNum, uint32(txIndex), eventCount)
 				if err != nil {
 					return err
 				}
@@ -630,7 +615,7 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					refIDQuery + "," +
 					refIDQuery + ")"
 
-				seq, err := newSequence(blockNum, uint32(txIndex), transferCount)
+				seq, err := logsdb.NewSequence(blockNum, uint32(txIndex), transferCount)
 				if err != nil {
 					return err
 				}

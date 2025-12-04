@@ -24,7 +24,7 @@ import (
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb/sqlite3"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/thor"
@@ -109,7 +109,7 @@ func testNode(t *testing.T) (*Node, error) {
 	// create test db
 	db := muxdb.NewMem()
 
-	memLogdb, err := logdb.NewMem()
+	memLogdb, err := sqlite3.NewMem()
 	require.NoError(t, err)
 
 	// Initialize the test chain and dependencies

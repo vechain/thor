@@ -9,14 +9,14 @@ import (
 	"errors"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
 type filterConfig struct {
 	evRange *api.Range
 	opts    *api.Options
-	order   logdb.Order
+	order   logsdb.Order
 }
 
 // FilterOption configures event filtering behavior.
@@ -55,7 +55,7 @@ func FilterPagination(offset, limit uint64) FilterOption {
 }
 
 // FilterOrder sets the sort order for returned events.
-func FilterOrder(order logdb.Order) FilterOption {
+func FilterOrder(order logsdb.Order) FilterOption {
 	return func(c *filterConfig) {
 		c.order = order
 	}
