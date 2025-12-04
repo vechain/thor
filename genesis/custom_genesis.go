@@ -22,6 +22,7 @@ type CustomGenesis struct {
 	ExtraData  string           `json:"extraData"`
 	Accounts   []Account        `json:"accounts"`
 	Authority  []Authority      `json:"authority"`
+	Stakers    []Validator      `json:"stakers"`
 	Params     Params           `json:"params"`
 	Executor   Executor         `json:"executor"`
 	ForkConfig *thor.ForkConfig `json:"forkConfig"`
@@ -44,6 +45,11 @@ type Authority struct {
 	Identity        thor.Bytes32 `json:"identity"`
 }
 
+type Validator struct {
+	Master   thor.Address `json:"master"`
+	Endorser thor.Address `json:"endorser"`
+}
+
 // Executor is the params for executor info
 type Executor struct {
 	Approvers []Approver `json:"approvers"`
@@ -62,6 +68,9 @@ type Params struct {
 	ProposerEndorsement *HexOrDecimal256 `json:"proposerEndorsement"`
 	ExecutorAddress     *thor.Address    `json:"executorAddress"`
 	MaxBlockProposers   *uint64          `json:"maxBlockProposers"`
+	DelegatorContract   *thor.Address    `json:"delegatorContract"`
+	CurveFactor         *uint64          `json:"curveFactor"`
+	StakerSwitches      *uint8           `json:"stakerSwitches"`
 }
 
 // HexOrDecimal256 marshals big.Int as hex or decimal.

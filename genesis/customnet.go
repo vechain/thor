@@ -79,11 +79,6 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					return err
 				}
 			}
-			if isHayabusaGenesis(gen) {
-				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
-					return err
-				}
-			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
@@ -124,7 +119,6 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					}
 				}
 			}
-
 			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 		})
 
@@ -178,7 +172,25 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 	}
 
-	if len(gen.Authority) == 0 {
+	if d := gen.Params.DelegatorContract; d != nil {
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyDelegatorContractAddress, new(big.Int).SetBytes((*d)[:]))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if f := gen.Params.CurveFactor; f != nil {
+		if *f == uint64(0) {
+			return nil, errors.New("curveFactor must be a non-negative integer")
+		}
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyCurveFactor, new(big.Int).SetUint64(*f))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if s := gen.Params.StakerSwitches; s != nil {
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyStakerSwitches, new(big.Int).SetUint64(uint64(*s)))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if len(gen.Authority) == 0 && !isPoSActiveGenesis(gen) {
 		return nil, errors.New("at least one authority node")
 	}
 	// add initial authority nodes
@@ -195,16 +207,15 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		}
 	}
 
-	if isHayabusaGenesis(gen) {
-		// auth nodes are now validators
-		for _, authority := range gen.Authority {
-			data = mustEncodeInput(builtin.Staker.ABI, "addValidation", authority.MasterAddress, thor.HighStakingPeriod())
-			builder.Call(tx.NewClause(&builtin.Staker.Address).WithData(data).WithValue(staker.MinStake), authority.EndorsorAddress)
+	if gen.ForkConfig.HAYABUSA == 0 && len(gen.Stakers) > 0 {
+		for _, val := range gen.Stakers {
+			data = mustEncodeInput(builtin.Staker.ABI, "addValidation", val.Master, thor.HighStakingPeriod())
+			builder.Call(tx.NewClause(&builtin.Staker.Address).WithData(data).WithValue(staker.MinStake), val.Endorser)
 		}
 	}
 
 	builder.PostCallState(func(state *state.State) error {
-		if isHayabusaGenesis(gen) {
+		if isPoSActiveGenesis(gen) {
 			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
 			_, err := stk.Housekeep(0)
 			if err != nil {
@@ -227,6 +238,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	return &Genesis{builder, id, "customnet"}, nil
 }
 
-func isHayabusaGenesis(gen *CustomGenesis) bool {
-	return gen.ForkConfig.HAYABUSA == 0 && gen.Config != nil && gen.Config.HayabusaTP != nil && *gen.Config.HayabusaTP == 0
+// config is already applied in NewCustomNet
+func isPoSActiveGenesis(gen *CustomGenesis) bool {
+	return gen.ForkConfig.HAYABUSA == 0 && thor.HayabusaTP() == 0
 }
