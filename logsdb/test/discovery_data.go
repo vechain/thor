@@ -318,7 +318,7 @@ func queryAddressSample(db *sql.DB) (hot, medium, sparse []string, err error) {
 		// Fast mode: Use index-friendly range sampling
 		queryDescription = "index-friendly address discovery (multiple ranges)"
 		logf("  -> Executing %s...", queryDescription)
-		
+
 		query = `
 			SELECT LOWER('0x' || HEX(r.data)) as address, COUNT(*) as cnt 
 			FROM event e
@@ -338,7 +338,7 @@ func queryAddressSample(db *sql.DB) (hot, medium, sparse []string, err error) {
 		// Full mode: Use modulo sampling (original behavior)
 		queryDescription = "sampling-based address discovery (rowid % 97 = 0)"
 		logf("  -> Executing %s...", queryDescription)
-		
+
 		query = `
 			SELECT LOWER('0x' || HEX(r.data)) as address, COUNT(*) as cnt 
 			FROM event e
@@ -397,7 +397,7 @@ func queryAddressSample(db *sql.DB) (hot, medium, sparse []string, err error) {
 	// Fast mode fallback: if insufficient addresses found, try reduced modulo sampling
 	if *DiscoveryMode == "fast" && totalAddresses < 10 {
 		alwaysLogf("  -> Fast mode found only %d addresses, falling back to reduced modulo sampling...", totalAddresses)
-		
+
 		fallbackQuery := `
 			SELECT LOWER('0x' || HEX(r.data)) as address, COUNT(*) as cnt 
 			FROM event e
@@ -406,7 +406,7 @@ func queryAddressSample(db *sql.DB) (hot, medium, sparse []string, err error) {
 			GROUP BY e.address 
 			ORDER BY cnt DESC 
 			LIMIT 5000`
-		
+
 		fallbackStart := time.Now()
 		fallbackRows, err := db.Query(fallbackQuery)
 		if err != nil {
@@ -684,7 +684,7 @@ func randomizePatterns(patterns []EventPattern, maxCount int) []EventPattern {
 
 	indices := rand.Perm(len(patterns))
 	result := make([]EventPattern, maxCount)
-	for i := 0; i < maxCount; i++ {
+	for i := range maxCount {
 		result[i] = patterns[indices[i]]
 	}
 	return result
@@ -794,7 +794,7 @@ func randomizeSlice(slice []string, maxCount int) []string {
 
 	indices := rand.Perm(len(slice))
 	result := make([]string, maxCount)
-	for i := 0; i < maxCount; i++ {
+	for i := range maxCount {
 		result[i] = slice[indices[i]]
 	}
 	return result

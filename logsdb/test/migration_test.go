@@ -64,7 +64,7 @@ func TestMigration_SmallDataset(t *testing.T) {
 	expectedEvents := 0
 	expectedTransfers := 0
 
-	for i := 0; i < blockCount; i++ {
+	for i := range blockCount {
 		blk := new(block.Builder).Build()
 
 		// Create receipts with varying content

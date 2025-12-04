@@ -171,7 +171,7 @@ func (er *EventRecord) reset() {
 	er.Data = er.Data[:0]
 }
 
-// reset clears TransferRecord for reuse in object pool  
+// reset clears TransferRecord for reuse in object pool
 func (tr *TransferRecord) reset() {
 	tr.BlockID = thor.Bytes32{}
 	tr.BlockNumber = 0

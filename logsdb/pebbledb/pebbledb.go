@@ -28,10 +28,10 @@ type PebbleDBLogDB struct {
 // ErrorOnlyLogger implements pebble.Logger to reduce noise
 type ErrorOnlyLogger struct{}
 
-func (l ErrorOnlyLogger) Infof(format string, args ...interface{})  {}
-func (l ErrorOnlyLogger) Warnf(format string, args ...interface{})  {}
-func (l ErrorOnlyLogger) Fatalf(format string, args ...interface{}) {}
-func (l ErrorOnlyLogger) Errorf(format string, args ...interface{}) {
+func (l ErrorOnlyLogger) Infof(format string, args ...any)  {}
+func (l ErrorOnlyLogger) Warnf(format string, args ...any)  {}
+func (l ErrorOnlyLogger) Fatalf(format string, args ...any) {}
+func (l ErrorOnlyLogger) Errorf(format string, args ...any) {
 	log.Printf("PEBBLE ERROR: "+format, args...)
 }
 

@@ -49,10 +49,9 @@ func BenchmarkPebbleDB_FilterEvents_SingleAddress(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -79,10 +78,9 @@ func BenchmarkPebbleDB_FilterEvents_SingleTopic(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -111,10 +109,9 @@ func BenchmarkPebbleDB_FilterEvents_AddressAndTopic(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -146,10 +143,9 @@ func BenchmarkPebbleDB_FilterEvents_MultiCriteriaOR(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -176,10 +172,9 @@ func BenchmarkPebbleDB_FilterEvents_DESC_Order(b *testing.B) {
 		Order:   logsdb.DESC, // Test DESC order performance
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -206,10 +201,9 @@ func BenchmarkPebbleDB_FilterTransfers(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterTransfers(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterTransfers failed: %v", err)
@@ -237,7 +231,7 @@ func BenchmarkPebbleDB_Write(b *testing.B) {
 	blocks := make([]*block.Block, b.N)
 	receipts := make([]tx.Receipts, b.N)
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		blocks[i] = new(block.Builder).
 			ParentID(createParentIDForBench(i + 1)).
 			Timestamp(uint64(1234567890 + i)).
@@ -269,13 +263,12 @@ func BenchmarkPebbleDB_Write(b *testing.B) {
 		receipts[i] = tx.Receipts{receipt}
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	writer := db.NewWriter()
 	defer writer.Rollback()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		err := writer.Write(blocks[i], receipts[i])
 		if err != nil {
 			b.Fatalf("Write failed: %v", err)
@@ -321,10 +314,9 @@ func BenchmarkPebbleDB_MemoryUsage(b *testing.B) {
 	runtime.GC()
 	runtime.ReadMemStats(&memBefore)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -445,10 +437,9 @@ func BenchmarkPebbleDB_AddressOnly_LargeRange(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -484,10 +475,9 @@ func BenchmarkPebbleDB_TopicOnly_LargeRange(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -532,10 +522,9 @@ func BenchmarkPebbleDB_MultiTopic_AND(b *testing.B) {
 		Order:   logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -562,7 +551,7 @@ func BenchmarkPebbleDB_MassiveOR(b *testing.B) {
 
 	// Create 40 different criteria to stress test the union
 	criteriaSet := make([]*logsdb.EventCriteria, 40)
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		// Generate different addresses to ensure variety
 		addr := make([]byte, 8)
 		addr[0] = byte(i)      //nolint Make each address different
@@ -581,10 +570,9 @@ func BenchmarkPebbleDB_MassiveOR(b *testing.B) {
 		Order:       logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -616,10 +604,9 @@ func BenchmarkPebbleDB_EmptyCriteriaSet_Events(b *testing.B) {
 		Order:       logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterEvents(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterEvents failed: %v", err)
@@ -652,10 +639,9 @@ func BenchmarkPebbleDB_EmptyCriteriaSet_Transfers(b *testing.B) {
 		Order:       logsdb.ASC,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		results, err := db.FilterTransfers(ctx, filter)
 		if err != nil {
 			b.Fatalf("FilterTransfers failed: %v", err)

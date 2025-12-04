@@ -81,7 +81,7 @@ func TestEventRecord_RoundTrip_Binary(t *testing.T) {
 				TxID:        thor.MustParseBytes32("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"),
 				TxIndex:     65535, // max uint16
 				TxOrigin:    thor.MustParseAddress("0xdddddddddddddddddddddddddddddddddddddddd"),
-				ClauseIndex: 65535, // max uint16
+				ClauseIndex: 65535,      // max uint16
 				LogIndex:    4294967295, // max uint32
 				Address:     thor.MustParseAddress("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
 				Topics: []thor.Bytes32{
@@ -156,12 +156,12 @@ func TestTransferRecord_RoundTrip_Binary(t *testing.T) {
 			name: "max values transfer",
 			record: &TransferRecord{
 				BlockID:     thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-				BlockNumber: 4294967295, // max uint32
+				BlockNumber: 4294967295,           // max uint32
 				BlockTime:   18446744073709551615, // max uint64
 				TxID:        thor.MustParseBytes32("0x0000000000000000000000000000000000000000000000000000000000000000"),
 				TxIndex:     65535, // max uint16
 				TxOrigin:    thor.MustParseAddress("0x0000000000000000000000000000000000000000"),
-				ClauseIndex: 65535, // max uint16
+				ClauseIndex: 65535,      // max uint16
 				LogIndex:    4294967295, // max uint32
 				Sender:      thor.MustParseAddress("0xffffffffffffffffffffffffffffffffffffffff"),
 				Recipient:   thor.MustParseAddress("0x1111111111111111111111111111111111111111"),
@@ -265,13 +265,13 @@ func TestEncoding_ErrorCases(t *testing.T) {
 		// Add valid field mask
 		fieldMask := EventRequiredFields
 		corrupted = append(corrupted, byte(fieldMask>>24), byte(fieldMask>>16), byte(fieldMask>>8), byte(fieldMask))
-		
+
 		// Add valid fixed fields (128 bytes for common + address fields)
 		corrupted = append(corrupted, make([]byte, 128)...)
-		
+
 		// Add invalid topics count > 5
 		corrupted = append(corrupted, 6) // Invalid topics count
-		
+
 		_, err := DecodeEventRecord(corrupted)
 		assert.Error(t, err)
 		// This should trigger the invalid topics count error
@@ -373,8 +373,7 @@ func BenchmarkEncodeEventRecord_Binary(b *testing.B) {
 		Data: []byte("benchmark test data for encoding performance"),
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := EncodeEventRecord(record)
 		if err != nil {
 			b.Fatal(err)
@@ -405,8 +404,7 @@ func BenchmarkDecodeEventRecord_Binary(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := DecodeEventRecord(encoded)
 		if err != nil {
 			b.Fatal(err)
@@ -429,8 +427,7 @@ func BenchmarkEncodeTransferRecord_Binary(b *testing.B) {
 		Amount:      big.NewInt(1000000000000000000),
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := EncodeTransferRecord(record)
 		if err != nil {
 			b.Fatal(err)

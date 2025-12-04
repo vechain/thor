@@ -417,7 +417,7 @@ func readTopicsSection(b []byte, offset int, r *EventRecord) (newOffset int, err
 		return 0, ErrCorruptEncoding
 	}
 
-	topicsCount := uint8(b[offset])
+	topicsCount := b[offset]
 	offset++
 
 	if topicsCount > 5 {
@@ -436,7 +436,7 @@ func readTopicsSection(b []byte, offset int, r *EventRecord) (newOffset int, err
 		} else {
 			r.Topics = make([]thor.Bytes32, topicsCount)
 		}
-		for i := uint8(0); i < topicsCount; i++ {
+		for i := range topicsCount {
 			copy(r.Topics[i][:], b[offset:offset+32])
 			offset += 32
 		}

@@ -7,7 +7,6 @@ package api
 
 import (
 	"crypto/rand"
-	"github.com/vechain/thor/v2/test/datagen"
 	"math/big"
 	"testing"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )

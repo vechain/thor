@@ -16,7 +16,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-
 // Global benchmark discovery data with sync.Once
 var (
 	benchmarkDiscoveryOnce sync.Once
@@ -96,7 +95,7 @@ func BenchmarkAPI_Events_AddressOnly_Hot(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -120,7 +119,7 @@ func BenchmarkAPI_Events_AddressOnly_Hot(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -158,7 +157,7 @@ func BenchmarkAPI_Events_AddressOnly_Sparse(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -182,7 +181,7 @@ func BenchmarkAPI_Events_AddressOnly_Sparse(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -220,7 +219,7 @@ func BenchmarkAPI_Events_TopicOnly_Hot(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -244,7 +243,7 @@ func BenchmarkAPI_Events_TopicOnly_Hot(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -311,7 +310,7 @@ func BenchmarkAPI_Events_MultiTopic_TwoTopics(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -336,7 +335,7 @@ func BenchmarkAPI_Events_MultiTopic_TwoTopics(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -368,7 +367,7 @@ func BenchmarkAPI_Events_Range_Large(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -393,7 +392,7 @@ func BenchmarkAPI_Events_Range_Large(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -425,7 +424,7 @@ func BenchmarkAPI_Events_Range_Narrow(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -450,7 +449,7 @@ func BenchmarkAPI_Events_Range_Narrow(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -488,7 +487,7 @@ func BenchmarkAPI_Events_LimitMedium(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -512,7 +511,7 @@ func BenchmarkAPI_Events_LimitMedium(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -555,7 +554,7 @@ func BenchmarkAPI_Events_MultiClause_OR(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -580,7 +579,7 @@ func BenchmarkAPI_Events_MultiClause_OR(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterEvents(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -618,7 +617,7 @@ func BenchmarkAPI_Transfers_SenderOnly(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterTransfers(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -642,7 +641,7 @@ func BenchmarkAPI_Transfers_SenderOnly(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterTransfers(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -680,7 +679,7 @@ func BenchmarkAPI_Transfers_RecipientOnly(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterTransfers(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -704,7 +703,7 @@ func BenchmarkAPI_Transfers_RecipientOnly(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterTransfers(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -752,7 +751,7 @@ func BenchmarkAPI_Transfers_Range(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterTransfers(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)
@@ -780,7 +779,7 @@ func BenchmarkAPI_Transfers_Range(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := db.FilterTransfers(context.Background(), filter)
 			if err != nil {
 				b.Fatal(err)

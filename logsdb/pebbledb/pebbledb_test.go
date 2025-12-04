@@ -459,7 +459,7 @@ func TestSequenceIndexCreation(t *testing.T) {
 
 	// Verify ES/ and TSX/ keys exist
 	internalDB := db.GetPebbleDB()
-	
+
 	// Check ES/ key exists
 	esOpts := &pebble.IterOptions{
 		LowerBound: []byte("ES"),
@@ -468,7 +468,7 @@ func TestSequenceIndexCreation(t *testing.T) {
 	esIter, err := internalDB.NewIter(esOpts)
 	require.NoError(t, err)
 	defer esIter.Close()
-	
+
 	esIter.First()
 	assert.True(t, esIter.Valid(), "ES/ sequence index should exist")
 	if esIter.Valid() {
@@ -477,7 +477,7 @@ func TestSequenceIndexCreation(t *testing.T) {
 		assert.Equal(t, "ES", string(key[:2]), "Key should start with ES prefix")
 	}
 
-	// Check TSX/ key exists  
+	// Check TSX/ key exists
 	tsxOpts := &pebble.IterOptions{
 		LowerBound: []byte("TSX"),
 		UpperBound: []byte("TSY"),
@@ -485,7 +485,7 @@ func TestSequenceIndexCreation(t *testing.T) {
 	tsxIter, err := internalDB.NewIter(tsxOpts)
 	require.NoError(t, err)
 	defer tsxIter.Close()
-	
+
 	tsxIter.First()
 	assert.True(t, tsxIter.Valid(), "TSX/ sequence index should exist")
 	if tsxIter.Valid() {
@@ -511,7 +511,7 @@ func TestSequenceIndexTruncate(t *testing.T) {
 	for blockNum := uint32(1); blockNum <= 5; blockNum++ {
 		block := createTestBlock(blockNum, testAddr)
 		receipts := createTestReceipts(testAddr)
-		
+
 		writer := db.NewWriter()
 		err = writer.Write(block, receipts)
 		require.NoError(t, err)
@@ -534,7 +534,7 @@ func TestSequenceIndexTruncate(t *testing.T) {
 	err = writer.Commit()
 	require.NoError(t, err)
 
-	// Count ES/ keys after truncation  
+	// Count ES/ keys after truncation
 	esCountAfter := countKeysWithPrefix(internalDB, "ES")
 	tsxCountAfter := countKeysWithPrefix(internalDB, "TSX")
 	assert.Equal(t, 3, esCountAfter, "Should have 3 ES/ keys after truncate")
@@ -559,7 +559,7 @@ func TestHasBlockIDO1Performance(t *testing.T) {
 		block := createTestBlock(blockNum, testAddr)
 		testBlockIDs = append(testBlockIDs, block.Header().ID())
 		receipts := createTestReceipts(testAddr)
-		
+
 		writer := db.NewWriter()
 		err = writer.Write(block, receipts)
 		require.NoError(t, err)
@@ -598,7 +598,7 @@ func TestRangeOnlyQueryEquivalence(t *testing.T) {
 	for blockNum := uint32(1); blockNum <= 5; blockNum++ {
 		block := createTestBlock(blockNum, testAddr)
 		receipts := createTestReceipts(testAddr)
-		
+
 		writer := db.NewWriter()
 		err = writer.Write(block, receipts)
 		require.NoError(t, err)
@@ -658,7 +658,7 @@ func TestBackwardCompatibility(t *testing.T) {
 	// Manually add some primary records without sequence indexes
 	testAddr := thor.MustParseAddress("0x1234567890123456789012345678901234567890")
 	seq, _ := newSequence(1, 0, 0)
-	
+
 	// Create event record without ES/ index
 	eventRecord := &EventRecord{
 		BlockID:     thor.MustParseBytes32("0x1111111111111111111111111111111111111111111111111111111111111111"),
@@ -669,7 +669,7 @@ func TestBackwardCompatibility(t *testing.T) {
 	}
 	eventData, err := eventRecord.Encode()
 	require.NoError(t, err)
-	
+
 	err = pebbleDB.Set(eventPrimaryKey(seq), eventData, pebble.Sync)
 	require.NoError(t, err)
 	err = pebbleDB.Set(eventAddressKey(testAddr, seq), nil, pebble.Sync)
@@ -717,13 +717,13 @@ func countKeysWithPrefix(db *pebble.DB, prefix string) int {
 		LowerBound: []byte(prefix),
 		UpperBound: []byte(prefix + "\xff"),
 	}
-	
+
 	iter, err := db.NewIter(opts)
 	if err != nil {
 		return 0
 	}
 	defer iter.Close()
-	
+
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {
 		count++
@@ -733,7 +733,7 @@ func countKeysWithPrefix(db *pebble.DB, prefix string) int {
 
 func createTestBlock(blockNumber uint32, testAddr thor.Address) *block.Block {
 	parentID := createParentID(blockNumber)
-	
+
 	return new(block.Builder).
 		ParentID(parentID).
 		Timestamp(1234567890).
@@ -744,7 +744,7 @@ func createTestBlock(blockNumber uint32, testAddr thor.Address) *block.Block {
 
 func createTestReceipts(testAddr thor.Address) tx.Receipts {
 	testTopic := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
-	
+
 	return tx.Receipts{
 		{
 			Outputs: []*tx.Output{

@@ -7,7 +7,6 @@ package sqlite3
 
 import (
 	"context"
-	"github.com/vechain/thor/v2/test/datagen"
 	"math/big"
 	"testing"
 
@@ -17,6 +16,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/logsdb"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )

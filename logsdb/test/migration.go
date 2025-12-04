@@ -54,23 +54,6 @@ func (s sequence) LogIndex() uint32 {
 	return uint32(s & logIndexMask)
 }
 
-// newSequence creates a new sequence from block number, tx index, and log index
-func newSequence(blockNum uint32, txIndex uint32, logIndex uint32) (sequence, error) {
-	if blockNum > blockNumMask {
-		return 0, fmt.Errorf("block number out of range: uint28")
-	}
-	if txIndex > txIndexMask {
-		return 0, fmt.Errorf("tx index out of range: uint15")
-	}
-	if logIndex > logIndexMask {
-		return 0, fmt.Errorf("log index out of range: uint20")
-	}
-
-	return (sequence(blockNum) << (txIndexBits + logIndexBits)) |
-		(sequence(txIndex) << logIndexBits) |
-		sequence(logIndex), nil
-}
-
 // MigrationStats tracks migration progress and performance metrics
 type MigrationStats struct {
 	EventsProcessed    int64         `json:"eventsProcessed"`    // Total events migrated
@@ -187,6 +170,14 @@ func MigrateSQLiteToPebbleCursorBased(sqlitePath, pebblePath string, opts *Migra
 		return nil, fmt.Errorf("failed to migrate transfers: %w", err)
 	}
 	stats.TransfersProcessed = transfersProcessed
+
+	// Force sync database when WAL is disabled (bulk load mode)
+	if opts.ProgressLog {
+		fmt.Printf("[%s] Syncing database...\n", time.Now().Format("15:04:05"))
+	}
+	if err := pebbleDB.GetPebbleDB().Flush(); err != nil {
+		return nil, fmt.Errorf("failed to flush database: %w", err)
+	}
 
 	// Migrate metadata
 	if opts.ProgressLog {

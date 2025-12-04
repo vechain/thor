@@ -50,12 +50,12 @@ func (h *SequenceHeap) Swap(i, j int) {
 }
 
 // Push implements heap.Interface
-func (h *SequenceHeap) Push(x interface{}) {
+func (h *SequenceHeap) Push(x any) {
 	h.items = append(h.items, x.(HeapItem))
 }
 
 // Pop implements heap.Interface
-func (h *SequenceHeap) Pop() interface{} {
+func (h *SequenceHeap) Pop() any {
 	old := h.items
 	n := len(old)
 	item := old[n-1]

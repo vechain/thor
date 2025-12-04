@@ -120,7 +120,10 @@ func BenchmarkComparative_FilterEvents(b *testing.B) {
 		{"EventLimit", &logsdb.EventFilter{Order: logsdb.ASC, Options: &logsdb.Options{Offset: 0, Limit: 500000}}},
 		{"EventLimitDesc", &logsdb.EventFilter{Order: logsdb.DESC, Options: &logsdb.Options{Offset: 0, Limit: 500000}}},
 		{"EventRange", &logsdb.EventFilter{Range: &logsdb.Range{From: 500000, To: 1_000_000}, Options: &logsdb.Options{Offset: 0, Limit: 500000}}},
-		{"EventRangeDesc", &logsdb.EventFilter{Range: &logsdb.Range{From: 500000, To: 1_000_000}, Options: &logsdb.Options{Offset: 0, Limit: 500000}, Order: logsdb.DESC}},
+		{
+			"EventRangeDesc",
+			&logsdb.EventFilter{Range: &logsdb.Range{From: 500000, To: 1_000_000}, Options: &logsdb.Options{Offset: 0, Limit: 500000}, Order: logsdb.DESC},
+		},
 
 		// Complex multi-criteria tests (challenging for query optimization)
 		{"AddressAndTopic0", &logsdb.EventFilter{CriteriaSet: addressAndTopic0Criteria, Options: &logsdb.Options{Offset: 0, Limit: 500000}}},
@@ -178,7 +181,7 @@ func BenchmarkComparative_FilterEvents(b *testing.B) {
 			defer db.Close()
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := db.FilterEvents(context.Background(), tt.arg)
 				if err != nil {
 					b.Fatal(err)
@@ -191,7 +194,7 @@ func BenchmarkComparative_FilterEvents(b *testing.B) {
 			defer db.Close()
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := db.FilterEvents(context.Background(), tt.arg)
 				if err != nil {
 					b.Fatal(err)
@@ -218,7 +221,10 @@ func BenchmarkComparative_FilterTransfers(b *testing.B) {
 			&logsdb.TransferFilter{Order: logsdb.DESC, CriteriaSet: transferCriteria, Options: &logsdb.Options{Offset: 0, Limit: 500_000}},
 		},
 		{"Ranged500K", &logsdb.TransferFilter{Range: &logsdb.Range{From: 500_000, To: 1_000_000}, Options: &logsdb.Options{Offset: 0, Limit: 500000}}},
-		{"Ranged500KDesc", &logsdb.TransferFilter{Range: &logsdb.Range{From: 500_000, To: 1_000_000}, Options: &logsdb.Options{Offset: 0, Limit: 500000}, Order: logsdb.DESC}},
+		{
+			"Ranged500KDesc",
+			&logsdb.TransferFilter{Range: &logsdb.Range{From: 500_000, To: 1_000_000}, Options: &logsdb.Options{Offset: 0, Limit: 500000}, Order: logsdb.DESC},
+		},
 	}
 
 	for _, tt := range tests {
@@ -227,7 +233,7 @@ func BenchmarkComparative_FilterTransfers(b *testing.B) {
 			defer db.Close()
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := db.FilterTransfers(context.Background(), tt.arg)
 				if err != nil {
 					b.Fatal(err)
@@ -240,7 +246,7 @@ func BenchmarkComparative_FilterTransfers(b *testing.B) {
 			defer db.Close()
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := db.FilterTransfers(context.Background(), tt.arg)
 				if err != nil {
 					b.Fatal(err)
@@ -269,7 +275,7 @@ func BenchmarkComparative_HasBlockID(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			for _, blockID := range blockIDs {
 				_, err := db.HasBlockID(blockID)
 				if err != nil {
@@ -296,7 +302,7 @@ func BenchmarkComparative_HasBlockID(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			for _, blockID := range blockIDs {
 				_, err := db.HasBlockID(blockID)
 				if err != nil {
@@ -312,7 +318,7 @@ func BenchmarkComparative_WriteBlocks(b *testing.B) {
 	writeCount := 1000
 
 	b.Run("SQLite", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			b.StopTimer()
 			db, cleanup := createTempSQLiteDB(b)
 			b.StartTimer()
@@ -320,7 +326,7 @@ func BenchmarkComparative_WriteBlocks(b *testing.B) {
 			writer := db.NewWriter()
 			blk := new(block.Builder).Build()
 
-			for j := 0; j < writeCount; j++ {
+			for range writeCount {
 				blk = new(block.Builder).
 					ParentID(blk.Header().ID()).
 					Transaction(newTx(tx.TypeLegacy)).
@@ -346,7 +352,7 @@ func BenchmarkComparative_WriteBlocks(b *testing.B) {
 	})
 
 	b.Run("Pebble", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			b.StopTimer()
 			db, cleanup := createTempPebbleDB(b)
 			b.StartTimer()
@@ -354,7 +360,7 @@ func BenchmarkComparative_WriteBlocks(b *testing.B) {
 			writer := db.NewWriter()
 			blk := new(block.Builder).Build()
 
-			for j := 0; j < writeCount; j++ {
+			for range writeCount {
 				blk = new(block.Builder).
 					ParentID(blk.Header().ID()).
 					Transaction(newTx(tx.TypeLegacy)).
@@ -398,7 +404,7 @@ func BenchmarkMigration(b *testing.B) {
 			}
 		}
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			b.StopTimer()
 			// Use provided pebblePath or create temp directory
 			var pebbleDir string

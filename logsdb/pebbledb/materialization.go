@@ -16,13 +16,13 @@ import (
 // Object pools for reducing allocations during materialization
 var (
 	eventRecordPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return &EventRecord{}
 		},
 	}
-	
+
 	transferRecordPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return &TransferRecord{}
 		},
 	}
@@ -47,20 +47,20 @@ func (q *StreamingQueryEngine) materializeEvents(sequences []sequence) ([]*logsd
 		eventRecord := eventRecordPool.Get().(*EventRecord)
 		// Reset the record to avoid stale data from previous use
 		eventRecord.reset()
-		
+
 		if err := eventRecord.Decode(value); err != nil {
 			closer.Close()
 			eventRecordPool.Put(eventRecord) // Return to pool even on error
-			continue // Skip corrupted records
+			continue                         // Skip corrupted records
 		}
 		closer.Close()
 
 		// Convert to LogDB format (this still allocates a new logsdb.Event for safe return)
 		event := eventRecord.ToLogDBEvent()
-		
+
 		// Return EventRecord to pool for reuse
 		eventRecordPool.Put(eventRecord)
-		
+
 		results = append(results, event)
 	}
 
@@ -86,20 +86,20 @@ func (q *StreamingQueryEngine) materializeTransfers(sequences []sequence) ([]*lo
 		transferRecord := transferRecordPool.Get().(*TransferRecord)
 		// Reset the record to avoid stale data from previous use
 		transferRecord.reset()
-		
+
 		if err := transferRecord.Decode(value); err != nil {
 			closer.Close()
 			transferRecordPool.Put(transferRecord) // Return to pool even on error
-			continue // Skip corrupted records
+			continue                               // Skip corrupted records
 		}
 		closer.Close()
 
 		// Convert to LogDB format (this still allocates a new logsdb.Transfer for safe return)
 		transfer := transferRecord.ToLogDBTransfer()
-		
+
 		// Return TransferRecord to pool for reuse
 		transferRecordPool.Put(transferRecord)
-		
+
 		results = append(results, transfer)
 	}
 

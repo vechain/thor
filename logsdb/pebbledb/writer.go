@@ -245,7 +245,7 @@ func (w *PebbleDBWriter) Truncate(blockNum uint32) error {
 	w.batch.DeleteRange(transferStartKey, transferEndKey, nil)
 
 	// Delete sequence indexes with correct exclusive upper bounds
-	
+
 	// ES/ deletion: [ES/<minSeq>, ES/0xFFFFFFFFFFFFFFFF)
 	esStartKey := eventSequenceKey(minSeq)
 	esEndKey := make([]byte, 2+8)

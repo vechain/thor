@@ -64,7 +64,7 @@ func createRichReceipt(eventCount, transferCount int) *tx.Receipt {
 
 	// Create events
 	events := make(tx.Events, eventCount)
-	for i := 0; i < eventCount; i++ {
+	for i := range eventCount {
 		events[i] = &tx.Event{
 			Address: datagen.RandAddress(),
 			Topics:  []thor.Bytes32{datagen.RandomHash(), datagen.RandomHash()},
@@ -74,7 +74,7 @@ func createRichReceipt(eventCount, transferCount int) *tx.Receipt {
 
 	// Create transfers
 	transfers := make(tx.Transfers, transferCount)
-	for i := 0; i < transferCount; i++ {
+	for i := range transferCount {
 		transfers[i] = &tx.Transfer{
 			Sender:    datagen.RandAddress(),
 			Recipient: datagen.RandAddress(),

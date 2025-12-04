@@ -22,7 +22,6 @@ type StreamingQueryEngine struct {
 	keyBuffer []byte
 }
 
-
 // NewStreamingQueryEngine creates a new query engine
 func NewStreamingQueryEngine(db *pebble.DB) *StreamingQueryEngine {
 	return &StreamingQueryEngine{
@@ -275,7 +274,7 @@ func (q *StreamingQueryEngine) executeEventStreaming(
 		} else { // DESC
 			// Collect offset+limit in ASC order, FilterEvents will handle reversal
 			maxItems := int(options.Offset + options.Limit)
-			for i := 0; i < maxItems; i++ {
+			for range maxItems {
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -325,7 +324,7 @@ func (q *StreamingQueryEngine) executeEventStreaming(
 		} else { // DESC
 			// Collect offset+limit in ASC order, FilterEvents will handle reversal
 			maxItems := int(options.Offset + options.Limit)
-			for i := 0; i < maxItems; i++ {
+			for range maxItems {
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -388,7 +387,7 @@ func (q *StreamingQueryEngine) executeTransferStreaming(
 		} else { // DESC
 			// Collect offset+limit in ASC order, FilterTransfers will handle reversal
 			maxItems := int(options.Offset + options.Limit)
-			for i := 0; i < maxItems; i++ {
+			for range maxItems {
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -438,7 +437,7 @@ func (q *StreamingQueryEngine) executeTransferStreaming(
 		} else { // DESC
 			// Collect offset+limit in ASC order, FilterTransfers will handle reversal
 			maxItems := int(options.Offset + options.Limit)
-			for i := 0; i < maxItems; i++ {
+			for range maxItems {
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -470,10 +469,7 @@ func (q *StreamingQueryEngine) reverseAndApplyLimits(sequences []sequence, offse
 		return []sequence{}
 	}
 
-	end := start + int(limit)
-	if end > len(sequences) {
-		end = len(sequences)
-	}
+	end := min(start+int(limit), len(sequences))
 
 	return sequences[start:end]
 }
@@ -490,6 +486,17 @@ func sequenceRangeFromRange(r *logsdb.Range) (sequence, sequence) {
 
 // Iterator creation methods
 
+// performIteratorSeek performs initial seek based on direction
+func performIteratorSeek(iter *pebble.Iterator, lowerBound, upperBound []byte, ascending bool) {
+	if ascending {
+		recordSeekGE() // Existing debug metrics
+		iter.SeekGE(lowerBound)
+	} else {
+		recordSeekLT() // Existing debug metrics
+		iter.SeekLT(upperBound)
+	}
+}
+
 func (q *StreamingQueryEngine) createAddressIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
 	lowerBound := eventAddressKey(addr, minSeq)
 	upperBound := eventAddressKey(addr, maxSeq.Next())
@@ -502,18 +509,12 @@ func (q *StreamingQueryEngine) createAddressIterator(addr thor.Address, minSeq, 
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating address iterator: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 func (q *StreamingQueryEngine) createTopicIterator(topicIndex int, topic thor.Bytes32, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
@@ -521,7 +522,7 @@ func (q *StreamingQueryEngine) createTopicIterator(topicIndex int, topic thor.By
 	upperBound := eventTopicKey(topicIndex, topic, maxSeq.Next())
 
 	if lowerBound == nil || upperBound == nil {
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
 	opts := &pebble.IterOptions{
@@ -532,18 +533,12 @@ func (q *StreamingQueryEngine) createTopicIterator(topicIndex int, topic thor.By
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating topic iterator: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 func (q *StreamingQueryEngine) createTransferSenderIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
@@ -558,18 +553,12 @@ func (q *StreamingQueryEngine) createTransferSenderIterator(addr thor.Address, m
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating transfer sender iterator: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 func (q *StreamingQueryEngine) createTransferRecipientIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
@@ -584,18 +573,12 @@ func (q *StreamingQueryEngine) createTransferRecipientIterator(addr thor.Address
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating transfer recipient iterator: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 func (q *StreamingQueryEngine) createTransferTxOriginIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
@@ -610,18 +593,12 @@ func (q *StreamingQueryEngine) createTransferTxOriginIterator(addr thor.Address,
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating transfer tx origin iterator: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 func (q *StreamingQueryEngine) createPrimaryRangeIteratorEvents(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
@@ -643,18 +620,12 @@ func (q *StreamingQueryEngine) createPrimaryRangeIteratorEvents(minSeq, maxSeq s
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating primary range iterator for events: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewEventPrimaryStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewEventPrimaryStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 func (q *StreamingQueryEngine) createPrimaryRangeIteratorTransfers(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
@@ -676,124 +647,31 @@ func (q *StreamingQueryEngine) createPrimaryRangeIteratorTransfers(minSeq, maxSe
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating primary range iterator for transfers: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewTransferPrimaryStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewTransferPrimaryStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 // Fast path range iterator constructors
 
 func (q *StreamingQueryEngine) createAddressRangeIterator(addr thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
-	lowerBound := eventAddressKey(addr, minSeq)        // EA/<addr>/<minSeq>
-	upperBound := eventAddressKey(addr, maxSeq.Next()) // EA/<addr>/<maxSeq+1>
-
-	opts := &pebble.IterOptions{
-		LowerBound: lowerBound,
-		UpperBound: upperBound,
-	}
-
-	iter, err := q.db.NewIter(opts)
-	if err != nil {
-		log.Printf("Error creating address range iterator: %v", err)
-		return &StreamIterator{exhausted: true}
-	}
-
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
-
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	// Use same implementation as createAddressIterator
+	return q.createAddressIterator(addr, minSeq, maxSeq, ascending)
 }
 
 func (q *StreamingQueryEngine) createSenderRangeIterator(sender thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
-	lowerBound := transferSenderKey(sender, minSeq)        // TS/<sender>/<minSeq>
-	upperBound := transferSenderKey(sender, maxSeq.Next()) // TS/<sender>/<maxSeq+1>
-
-	opts := &pebble.IterOptions{
-		LowerBound: lowerBound,
-		UpperBound: upperBound,
-	}
-
-	iter, err := q.db.NewIter(opts)
-	if err != nil {
-		log.Printf("Error creating sender range iterator: %v", err)
-		return &StreamIterator{exhausted: true}
-	}
-
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
-
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return q.createTransferSenderIterator(sender, minSeq, maxSeq, ascending)
 }
 
 func (q *StreamingQueryEngine) createRecipientRangeIterator(recipient thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
-	lowerBound := transferRecipientKey(recipient, minSeq)        // TR/<recipient>/<minSeq>
-	upperBound := transferRecipientKey(recipient, maxSeq.Next()) // TR/<recipient>/<maxSeq+1>
-
-	opts := &pebble.IterOptions{
-		LowerBound: lowerBound,
-		UpperBound: upperBound,
-	}
-
-	iter, err := q.db.NewIter(opts)
-	if err != nil {
-		log.Printf("Error creating recipient range iterator: %v", err)
-		return &StreamIterator{exhausted: true}
-	}
-
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
-
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return q.createTransferRecipientIterator(recipient, minSeq, maxSeq, ascending)
 }
 
 func (q *StreamingQueryEngine) createTxOriginRangeIterator(txOrigin thor.Address, minSeq, maxSeq sequence, ascending bool) *StreamIterator {
-	lowerBound := transferTxOriginKey(txOrigin, minSeq)        // TO/<txorigin>/<minSeq>
-	upperBound := transferTxOriginKey(txOrigin, maxSeq.Next()) // TO/<txorigin>/<maxSeq+1>
-
-	opts := &pebble.IterOptions{
-		LowerBound: lowerBound,
-		UpperBound: upperBound,
-	}
-
-	iter, err := q.db.NewIter(opts)
-	if err != nil {
-		log.Printf("Error creating txorigin range iterator: %v", err)
-		return &StreamIterator{exhausted: true}
-	}
-
-	if ascending {
-		recordSeekGE() // Debug metrics
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT() // Debug metrics
-		iter.SeekLT(upperBound)
-	}
-
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return q.createTransferTxOriginIterator(txOrigin, minSeq, maxSeq, ascending)
 }
 
 // Cleanup methods
@@ -819,7 +697,14 @@ func (q *StreamingQueryEngine) closeTransferStreams(streams []*StreamIntersector
 // createEventSequenceIterator creates an iterator for ES/ dense sequence index
 func (q *StreamingQueryEngine) createEventSequenceIterator(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
 	lowerBound := eventSequenceKey(minSeq)
-	upperBound := eventSequenceKey(maxSeq.Next())
+
+	var upperBound []byte
+	if maxSeq == MaxSequenceValue {
+		// Use prefix upper bound instead of trying to increment max value
+		upperBound = []byte("ET") // Next prefix after "ES"
+	} else {
+		upperBound = eventSequenceKey(maxSeq.Next())
+	}
 
 	opts := &pebble.IterOptions{
 		LowerBound: lowerBound,
@@ -829,24 +714,25 @@ func (q *StreamingQueryEngine) createEventSequenceIterator(minSeq, maxSeq sequen
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating event sequence iterator: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE()
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT()
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 // createTransferSequenceIterator creates an iterator for TSX/ dense sequence index
 func (q *StreamingQueryEngine) createTransferSequenceIterator(minSeq, maxSeq sequence, ascending bool) *StreamIterator {
 	lowerBound := transferSequenceKey(minSeq)
-	upperBound := transferSequenceKey(maxSeq.Next())
+
+	var upperBound []byte
+	if maxSeq == MaxSequenceValue {
+		// Use prefix upper bound instead of trying to increment max value
+		upperBound = []byte("U") // Next prefix after "TSX"
+	} else {
+		upperBound = transferSequenceKey(maxSeq.Next())
+	}
 
 	opts := &pebble.IterOptions{
 		LowerBound: lowerBound,
@@ -856,18 +742,12 @@ func (q *StreamingQueryEngine) createTransferSequenceIterator(minSeq, maxSeq seq
 	iter, err := q.db.NewIter(opts)
 	if err != nil {
 		log.Printf("Error creating transfer sequence iterator: %v", err)
-		return &StreamIterator{exhausted: true}
+		return NewExhaustedStreamIterator()
 	}
 
-	if ascending {
-		recordSeekGE()
-		iter.SeekGE(lowerBound)
-	} else {
-		recordSeekLT()
-		iter.SeekLT(upperBound)
-	}
+	performIteratorSeek(iter, lowerBound, upperBound, ascending)
 
-	return NewStreamIterator(iter, minSeq, maxSeq, ascending)
+	return NewStreamIterator(iter, minSeq, maxSeq, ascending, lowerBound, upperBound)
 }
 
 // hasSequenceIndexes performs a minimal check for ES/ prefix existence

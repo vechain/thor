@@ -11,23 +11,15 @@ import (
 )
 
 // logf logs a formatted message with timestamp if verbose mode is enabled
-func logf(format string, args ...interface{}) {
+func logf(format string, args ...any) {
 	if *Verbose {
 		timestamp := time.Now().Format("15:04:05.000")
-		fmt.Printf("[%s] "+format+"\n", append([]interface{}{timestamp}, args...)...)
-	}
-}
-
-// logln logs a message with timestamp if verbose mode is enabled
-func logln(msg string) {
-	if *Verbose {
-		timestamp := time.Now().Format("15:04:05.000")
-		fmt.Printf("[%s] %s\n", timestamp, msg)
+		fmt.Printf("[%s] "+format+"\n", append([]any{timestamp}, args...)...)
 	}
 }
 
 // alwaysLogf always logs (used for important messages)
-func alwaysLogf(format string, args ...interface{}) {
+func alwaysLogf(format string, args ...any) {
 	timestamp := time.Now().Format("15:04:05.000")
-	fmt.Printf("[%s] "+format+"\n", append([]interface{}{timestamp}, args...)...)
+	fmt.Printf("[%s] "+format+"\n", append([]any{timestamp}, args...)...)
 }

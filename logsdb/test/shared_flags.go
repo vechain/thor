@@ -9,8 +9,8 @@ import "flag"
 
 // Shared flag definitions to prevent redefinition conflicts
 var (
-	SqliteDbPath   = flag.String("sqliteDbPath", "", "Path to the SQLite database file (used for both benchmarks and discovery)")
-	PebblePath     = flag.String("pebblePath", "", "Path to the Pebble database directory")
-	DiscoveryMode  = flag.String("discoveryMode", "fast", "Discovery mode: fast (range-based sampling) or full (complete statistical sampling)")
-	Verbose        = flag.Bool("verbose", false, "Enable verbose logging output")
+	SqliteDbPath  = flag.String("sqliteDbPath", "", "Path to the SQLite database file (used for both benchmarks and discovery)")
+	PebblePath    = flag.String("pebblePath", "", "Path to the Pebble database directory")
+	DiscoveryMode = flag.String("discoveryMode", "fast", "Discovery mode: fast (range-based sampling) or full (complete statistical sampling)")
+	Verbose       = flag.Bool("verbose", false, "Enable verbose logging output")
 )
