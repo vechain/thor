@@ -523,6 +523,7 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	}
 	log.Warn("Node", "node", req.node.IPAddr())
 	if !tab.addIP(b, req.node.IPAddr()) {
+		log.Warn("Node was NOT added 526")
 		// Can't add: IP limit reached.
 		return false
 	}
