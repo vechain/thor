@@ -6,11 +6,10 @@
 package txpool
 
 import (
+	"errors"
 	"math/big"
 	"slices"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"

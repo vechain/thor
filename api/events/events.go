@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
@@ -54,7 +53,7 @@ func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*api.Filter
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	var filter api.EventFilter
 	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "body"))
+		return restutil.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	if err := filter.Options.Validate(e.limit); err != nil {
 		return restutil.Forbidden(err)

@@ -6,13 +6,13 @@
 package httpserver
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/metrics"
@@ -21,7 +21,7 @@ import (
 func StartMetricsServer(addr string) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen metrics API addr [%v]", addr)
+		return "", nil, fmt.Errorf("listen metrics API addr [%v]: %w", addr, err)
 	}
 
 	router := mux.NewRouter()

@@ -7,6 +7,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -15,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
@@ -69,17 +69,17 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	hexAddr := mux.Vars(req)["address"]
 	addr, err := thor.ParseAddress(hexAddr)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "address"))
+		return restutil.BadRequest(fmt.Errorf("address: %w", err))
 	}
 	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 
 	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -115,17 +115,17 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "address"))
+		return restutil.BadRequest(fmt.Errorf("address: %w", err))
 	}
 	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 
 	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -148,21 +148,21 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, state *state.
 func (a *Accounts) parseStorageRequest(routerVars map[string]string, queryParams url.Values) (thor.Address, thor.Bytes32, *state.State, error) {
 	addr, err := thor.ParseAddress(routerVars["address"])
 	if err != nil {
-		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "address"))
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(fmt.Errorf("address: %w", err))
 	}
 	key, err := thor.ParseBytes32(routerVars["key"])
 	if err != nil {
-		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "key"))
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(fmt.Errorf("key: %w", err))
 	}
 	revision, err := restutil.ParseRevision(queryParams.Get("revision"), false)
 	if err != nil {
-		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 
 	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "revision"))
+			return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return thor.Address{}, thor.Bytes32{}, nil, err
 	}
@@ -208,16 +208,16 @@ func (a *Accounts) handleGetRawStorage(w http.ResponseWriter, req *http.Request)
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
 	callData := &api.CallData{}
 	if err := restutil.ParseJSON(req.Body, &callData); err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "body"))
+		return restutil.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -225,7 +225,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if mux.Vars(req)["address"] != "" {
 		address, err := thor.ParseAddress(mux.Vars(req)["address"])
 		if err != nil {
-			return restutil.BadRequest(errors.WithMessage(err, "address"))
+			return restutil.BadRequest(fmt.Errorf("address: %w", err))
 		}
 		addr = &address
 	}
@@ -251,7 +251,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
 	var batchCallData api.BatchCallData
 	if err := restutil.ParseJSON(req.Body, &batchCallData); err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "body"))
+		return restutil.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	// reject null element in clauses, {} will be unmarshaled to default value and will be accepted/handled by the runtime
 	for i, clause := range batchCallData.Clauses {
@@ -261,12 +261,12 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	}
 	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
-			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -369,7 +369,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx 
 	if len(batchCallData.BlockRef) > 0 {
 		blockRef, err := hexutil.Decode(batchCallData.BlockRef)
 		if err != nil {
-			return nil, 0, nil, errors.WithMessage(err, "blockRef")
+			return nil, 0, nil, fmt.Errorf("blockRef: %w", err)
 		}
 		if len(blockRef) != 8 {
 			return nil, 0, nil, errors.New("blockRef: invalid length")
@@ -391,7 +391,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx 
 		if c.Data != "" {
 			data, err = hexutil.Decode(c.Data)
 			if err != nil {
-				err = restutil.BadRequest(errors.WithMessage(err, fmt.Sprintf("data[%d]", i)))
+				err = restutil.BadRequest(fmt.Errorf("data[%d]: %w", i, err))
 				return
 			}
 		}

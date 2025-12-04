@@ -8,6 +8,7 @@ package debug
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -18,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
@@ -184,7 +184,7 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) error {
 	var opt api.TraceClauseOption
 	if err := restutil.ParseJSON(req.Body, &opt); err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "body"))
+		return restutil.BadRequest(fmt.Errorf("body: %w", err))
 	}
 
 	tracer, err := d.createTracer(opt.Name, opt.Config)
@@ -206,16 +206,16 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error {
 	var opt api.TraceCallOption
 	if err := restutil.ParseJSON(req.Body, &opt); err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "body"))
+		return restutil.BadRequest(fmt.Errorf("body: %w", err))
 	}
 	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 	}
 	summary, st, err := restutil.GetSummaryAndState(revision, d.repo, d.bft, d.stater, d.forkConfig)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
-			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+			return restutil.BadRequest(fmt.Errorf("revision: %w", err))
 		}
 		return err
 	}
@@ -358,11 +358,11 @@ func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*api.StorageRan
 func (d *Debug) handleDebugStorage(w http.ResponseWriter, req *http.Request) error {
 	var opt api.StorageRangeOption
 	if err := restutil.ParseJSON(req.Body, &opt); err != nil {
-		return restutil.BadRequest(errors.WithMessage(err, "body"))
+		return restutil.BadRequest(fmt.Errorf("body: %w", err))
 	}
 
 	if opt.MaxResult > defaultMaxStorageResult {
-		return restutil.BadRequest(errors.Errorf("maxResult: exceeds limit of %d", defaultMaxStorageResult))
+		return restutil.BadRequest(fmt.Errorf("maxResult: exceeds limit of %d", defaultMaxStorageResult))
 	}
 
 	if opt.MaxResult == 0 {
@@ -398,7 +398,7 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 	if len(parts) == 2 {
 		txID, err = thor.ParseBytes32(parts[0])
 		if err != nil {
-			return nil, thor.Bytes32{}, 0, restutil.BadRequest(errors.WithMessage(err, "target([0]"))
+			return nil, thor.Bytes32{}, 0, restutil.BadRequest(fmt.Errorf("target([0]: %w", err))
 		}
 		bestChain := d.repo.NewBestChain()
 		txMeta, err := bestChain.GetTransactionMeta(txID)
@@ -415,7 +415,7 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 	} else {
 		blockID, err := thor.ParseBytes32(parts[0])
 		if err != nil {
-			return nil, thor.Bytes32{}, 0, restutil.BadRequest(errors.WithMessage(err, "target[0]"))
+			return nil, thor.Bytes32{}, 0, restutil.BadRequest(fmt.Errorf("target[0]: %w", err))
 		}
 		block, err = d.repo.GetBlock(blockID)
 		if err != nil {
@@ -424,7 +424,7 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 		if len(parts[1]) == 64 || len(parts[1]) == 66 {
 			txID, err = thor.ParseBytes32(parts[1])
 			if err != nil {
-				return nil, thor.Bytes32{}, 0, restutil.BadRequest(errors.WithMessage(err, "target[1]"))
+				return nil, thor.Bytes32{}, 0, restutil.BadRequest(fmt.Errorf("target[1]: %w", err))
 			}
 
 			var found bool
@@ -440,7 +440,7 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 		} else {
 			i, err := strconv.ParseUint(parts[1], 0, 0)
 			if err != nil {
-				return nil, thor.Bytes32{}, 0, restutil.BadRequest(errors.WithMessage(err, "target[1]"))
+				return nil, thor.Bytes32{}, 0, restutil.BadRequest(fmt.Errorf("target[1]: %w", err))
 			}
 			if i >= uint64(len(block.Transactions())) {
 				return nil, thor.Bytes32{}, 0, restutil.Forbidden(errors.New("tx index out of range"))
@@ -451,7 +451,7 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 
 	i, err := strconv.ParseUint(parts[len(parts)-1], 0, 0)
 	if err != nil {
-		return nil, thor.Bytes32{}, 0, restutil.BadRequest(errors.WithMessage(err, fmt.Sprintf("target[%d]", len(parts)-1)))
+		return nil, thor.Bytes32{}, 0, restutil.BadRequest(fmt.Errorf("target[%d]: %w", len(parts)-1, err))
 	} else if i > math.MaxUint32 {
 		return nil, thor.Bytes32{}, 0, restutil.BadRequest(fmt.Errorf("invalid target[%d]", len(parts)-1))
 	}
@@ -495,7 +495,7 @@ func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.Transacti
 	if len(opt.BlockRef) > 0 {
 		blockRef, err := hexutil.Decode(opt.BlockRef)
 		if err != nil {
-			return nil, 0, nil, errors.WithMessage(err, "blockRef")
+			return nil, 0, nil, fmt.Errorf("blockRef: %w", err)
 		}
 		if len(blockRef) != 8 {
 			return nil, 0, nil, errors.New("blockRef: invalid length")
@@ -517,7 +517,7 @@ func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.Transacti
 	if opt.Data != "" {
 		data, err = hexutil.Decode(opt.Data)
 		if err != nil {
-			return nil, 0, nil, restutil.BadRequest(errors.WithMessage(err, "data"))
+			return nil, 0, nil, restutil.BadRequest(fmt.Errorf("data: %w", err))
 		}
 	}
 

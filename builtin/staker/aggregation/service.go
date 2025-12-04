@@ -6,7 +6,7 @@
 package aggregation
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
@@ -32,7 +32,7 @@ func New(sctx *solidity.Context) *Service {
 func (s *Service) GetAggregation(validator thor.Address) (*Aggregation, error) {
 	agg, err := s.aggregationStorage.Get(validator)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get validator aggregation")
+		return nil, fmt.Errorf("failed to get validator aggregation: %w", err)
 	}
 
 	if agg == nil {

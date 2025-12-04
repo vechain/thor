@@ -7,10 +7,11 @@ package validation
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin/solidity"
 	"github.com/vechain/thor/v2/builtin/staker/globalstats"
@@ -197,7 +198,7 @@ func (s *Service) SetBeneficiary(validator thor.Address, validation *Validation,
 		validation.Beneficiary = &beneficiary
 	}
 	if err := s.repo.updateValidation(validator, validation); err != nil {
-		return errors.Wrap(err, "failed to set beneficiary")
+		return fmt.Errorf("failed to set beneficiary: %w", err)
 	}
 	return nil
 }
@@ -333,7 +334,7 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32, maxTry i
 
 		if existing.IsZero() {
 			if err = s.repo.setExit(start, validator); err != nil {
-				return 0, errors.Wrap(err, "failed to set exit epoch")
+				return 0, fmt.Errorf("failed to set exit epoch: %w", err)
 			}
 			return start, nil
 		}
@@ -347,7 +348,7 @@ func (s *Service) SetExitBlock(validator thor.Address, minBlock uint32, maxTry i
 func (s *Service) GetExitEpoch(block uint32) (thor.Address, error) {
 	validator, err := s.repo.getExit(block)
 	if err != nil {
-		return thor.Address{}, errors.Wrap(err, "failed to get exit epoch")
+		return thor.Address{}, fmt.Errorf("failed to get exit epoch: %w", err)
 	}
 	return validator, nil
 }
@@ -438,7 +439,7 @@ func (s *Service) Renew(validator thor.Address, delegationWeight uint64) (*globa
 		return nil, err
 	}
 	if err = s.repo.updateValidation(validator, validation); err != nil {
-		return nil, errors.Wrap(err, "failed to renew validator")
+		return nil, fmt.Errorf("failed to renew validator: %w", err)
 	}
 
 	return delta, nil
@@ -455,7 +456,7 @@ func (s *Service) GetValidation(validator thor.Address) (*Validation, error) {
 func (s *Service) GetExistingValidation(validator thor.Address) (*Validation, error) {
 	v, err := s.GetValidation(validator)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get validator")
+		return nil, fmt.Errorf("failed to get validator: %w", err)
 	}
 
 	if v == nil {

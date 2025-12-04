@@ -7,6 +7,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
-	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/vechain/thor/v2/api/doc"
@@ -258,7 +258,7 @@ func defaultAction(ctx *cli.Context) error {
 	txpoolOpt := defaultTxPoolOptions
 	txpoolOpt.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
 	if err != nil {
-		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+		return fmt.Errorf("parse txpool-limit-per-account flag: %w", err)
 	}
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt, forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
@@ -289,7 +289,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
 	if err != nil {
-		return errors.Wrap(err, "init bft engine")
+		return fmt.Errorf("init bft engine: %w", err)
 	}
 
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
@@ -472,11 +472,11 @@ func soloAction(ctx *cli.Context) error {
 		txPoolOption := defaultTxPoolOptions
 		txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
 		if err != nil {
-			return errors.Wrap(err, "parse txpool-limit flag")
+			return fmt.Errorf("parse txpool-limit flag: %w", err)
 		}
 		txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
 		if err != nil {
-			return errors.Wrap(err, "parse txpool-limit-per-account flag")
+			return fmt.Errorf("parse txpool-limit-per-account flag: %w", err)
 		}
 
 		txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
@@ -542,7 +542,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		}
 
 		if err := json.Unmarshal(keyjson, &map[string]any{}); err != nil {
-			return errors.WithMessage(err, "unmarshal")
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		password, err := readPasswordFromNewTTY("Enter passphrase: ")
 		if err != nil {
@@ -551,7 +551,7 @@ func masterKeyAction(ctx *cli.Context) error {
 
 		key, err := keystore.DecryptKey(keyjson, password)
 		if err != nil {
-			return errors.WithMessage(err, "decrypt")
+			return fmt.Errorf("decrypt: %w", err)
 		}
 
 		if err := crypto.SaveECDSA(keyPath, key.PrivateKey); err != nil {

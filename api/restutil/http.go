@@ -7,10 +7,9 @@ package restutil
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
-
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"

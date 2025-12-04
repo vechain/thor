@@ -7,10 +7,10 @@ package tx
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/thor"
 )
