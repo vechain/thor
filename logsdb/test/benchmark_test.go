@@ -15,6 +15,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/logsdb"
+	"github.com/vechain/thor/v2/logsdb/migrate"
 	"github.com/vechain/thor/v2/logsdb/pebbledb"
 	"github.com/vechain/thor/v2/logsdb/sqlite3"
 	"github.com/vechain/thor/v2/thor"
@@ -424,7 +425,7 @@ func BenchmarkMigration(b *testing.B) {
 			b.StartTimer()
 
 			// Run migration
-			stats, err := MigrateSQLiteToPebble(*SqliteDbPath, pebbleDir, &MigrationOptions{
+			stats, err := migrate.MigrateSQLiteToPebble(*SqliteDbPath, pebbleDir, &migrate.MigrationOptions{
 				BatchSize:   10000,
 				ProgressLog: false,
 				VerifyData:  false,
