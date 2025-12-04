@@ -71,6 +71,7 @@ type Params struct {
 	DelegatorContract   *thor.Address    `json:"delegatorContract"`
 	CurveFactor         *uint64          `json:"curveFactor"`
 	StakerSwitches      *uint8           `json:"stakerSwitches"`
+	RewardPercentage    *uint8           `json:"validatorRewardPercentage"`
 }
 
 // HexOrDecimal256 marshals big.Int as hex or decimal.

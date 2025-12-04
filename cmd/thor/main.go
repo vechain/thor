@@ -383,8 +383,7 @@ func soloAction(ctx *cli.Context) error {
 
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
-		forkConfig = &thor.SoloFork
-		gene = genesis.NewDevnet()
+		gene, forkConfig = genesis.NewDevnet()
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {
