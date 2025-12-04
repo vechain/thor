@@ -19,6 +19,7 @@ import (
 	discv5 "github.com/vechain/thor/v2/p2p/discv5"
 	discv5discover "github.com/vechain/thor/v2/p2p/discv5/discover"
 	"github.com/vechain/thor/v2/p2p/discv5/enode"
+	"github.com/vechain/thor/v2/p2p/enr"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 
@@ -150,7 +151,8 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error 
 		}
 
 		s.discv5NewNodes = make(chan *enode.Node, 1)
-		if err := s.listenDiscV5(lconn, unhandled); err != nil {
+		laddr := conn.LocalAddr().(*net.UDPAddr)
+		if err := s.listenDiscV5(lconn, unhandled, laddr.Port); err != nil {
 			return err
 		}
 	}
@@ -268,12 +270,19 @@ func (s *Server) listenTempDiscV5(conn *net.UDPConn) (err error) {
 	return nil
 }
 
-func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5discover.ReadPacket) (err error) {
+func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5discover.ReadPacket, port int) (err error) {
 	db, err := enode.OpenDB("")
 	if err != nil {
 		return err
 	}
 	localNode := enode.NewLocalNode(db, s.opts.PrivateKey)
+	externalIP, err := s.srv.Config.NAT.ExternalIP()
+	if err != nil {
+		return err
+	}
+	localNode.SetStaticIP(externalIP)
+	localNode.SetFallbackUDP(port)
+	localNode.Set(enr.TCP(port))
 	bootnodes := make([]*enode.Node, len(s.bootstrapNodes))
 	for index, node := range s.bootstrapNodes {
 		pubkey, err := node.ID.Pubkey()
@@ -353,7 +362,7 @@ func (s *Server) discoverLoop(topic tempdiscv5.Topic) {
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
 				metricDiscoveredNodes().Add(1)
 				s.discoveredNodes.Set(node.ID, node)
-				logger.Trace("discovered node", "node", node)
+				logger.Trace("discovered node", "IP", node.IP, "UDP", node.UDP, "TCP", node.TCP)
 			}
 
 		case <-s.done:

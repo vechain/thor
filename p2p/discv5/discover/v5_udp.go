@@ -823,6 +823,7 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 		if t.handleCallResponse(fromID, fromAddr, p) {
 			toAddr := netip.AddrPortFrom(netutil.IPToAddr(p.ToIP), p.ToPort)
 			t.localNode.UDPEndpointStatement(fromAddr, toAddr)
+			log.Debug("Updated local node")
 		}
 	case *v5wire.Findnode:
 		t.handleFindnode(p, fromID, fromAddr)
