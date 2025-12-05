@@ -8,6 +8,7 @@ package pruner
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/vechain/thor/v2/block"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -39,7 +39,7 @@ type Pruner struct {
 	ctx      context.Context
 	commiter bft.Committer
 	cancel   func()
-	goes     co.Goes
+	goes     sync.WaitGroup
 }
 
 // New creates and starts the pruner.

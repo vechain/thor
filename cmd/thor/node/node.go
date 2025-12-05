@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -118,7 +117,7 @@ func (n *Node) Run(ctx context.Context) error {
 	defer db.Close()
 	txStash := newTxStash(db, 1000)
 
-	var goes co.Goes
+	var goes sync.WaitGroup
 	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
 	goes.Go(func() { n.houseKeeping(ctx) })
 	goes.Go(func() { n.txStashLoop(ctx, txStash) })
