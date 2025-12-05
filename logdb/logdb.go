@@ -12,6 +12,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"sync/atomic"
+
+	"github.com/vechain/thor/v2/log"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
@@ -21,16 +24,18 @@ import (
 )
 
 const (
-	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
+	refIDQuery  = "(SELECT id FROM ref WHERE data=?)"
+	journalSize = 52428800 // 50MB
 )
 
 type LogDB struct {
-	path          string
-	driverVersion string
-	db            *sql.DB
-	wconn         *sql.Conn
-	wconnSyncOff  *sql.Conn
-	stmtCache     *stmtCache
+	path              string
+	driverVersion     string
+	db                *sql.DB
+	wconn             *sql.Conn
+	wconnSyncOff      *sql.Conn
+	stmtCache         *stmtCache
+	checkpointCounter int64
 }
 
 // New create or open log db at given path.
@@ -60,6 +65,14 @@ func New(path string) (logDB *LogDB, err error) {
 	}
 
 	if _, err := wconn2.ExecContext(context.Background(), "pragma synchronous=off"); err != nil {
+		return nil, err
+	}
+
+	if _, err := wconn1.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", journalSize)); err != nil {
+		return nil, err
+	}
+
+	if _, err := wconn1.ExecContext(context.Background(), "PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
 		return nil, err
 	}
 
@@ -292,7 +305,12 @@ FROM (%v) t
 }
 
 func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*Event, error) {
-	rows, err := db.db.QueryContext(ctx, query, args...)
+	stmt, err := db.stmtCache.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +378,12 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 }
 
 func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) ([]*Transfer, error) {
-	rows, err := db.db.QueryContext(ctx, query, args...)
+	stmt, err := db.stmtCache.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +479,7 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 
 // NewWriter creates a log writer.
 func (db *LogDB) NewWriter() *Writer {
-	return &Writer{conn: db.wconn, stmtCache: db.stmtCache}
+	return &Writer{conn: db.wconn, stmtCache: db.stmtCache, checkpointCount: &db.checkpointCounter}
 }
 
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
@@ -490,6 +513,7 @@ type Writer struct {
 
 	tx               *sql.Tx
 	uncommittedCount int
+	checkpointCount  *int64
 }
 
 // Truncate truncates the database by deleting logs after blockNum (included).
@@ -664,10 +688,33 @@ func (w *Writer) Commit() (err error) {
 	defer func() {
 		if err == nil {
 			w.tx = nil
+			count := int64(w.uncommittedCount)
 			w.uncommittedCount = 0
+			if w.checkpointCount == nil {
+				w.checkpointCount = new(int64)
+			}
+			newCount := atomic.AddInt64(w.checkpointCount, count)
+
+			shouldCheckpoint := newCount >= 500
+
+			if shouldCheckpoint {
+				go func() {
+					err := w.checkpointWAL()
+					if err != nil {
+						log.Warn("failed to checkpoint wal file", "err", err)
+					} else {
+						atomic.StoreInt64(w.checkpointCount, 0)
+					}
+				}()
+			}
 		}
 	}()
 	return w.tx.Commit()
+}
+
+func (w *Writer) checkpointWAL() error {
+	_, err := w.conn.ExecContext(context.Background(), "PRAGMA wal_checkpoint(TRUNCATE)")
+	return err
 }
 
 // Rollback rollback all uncommitted logs.
