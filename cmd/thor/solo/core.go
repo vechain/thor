@@ -19,7 +19,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -31,7 +31,7 @@ type Core struct {
 	repo       *chain.Repository
 	stater     *state.Stater
 	packer     *packer.Packer
-	logDB      *logdb.LogDB
+	logDB      logsdb.LogsDB
 	bandwidth  bandwidth.Bandwidth
 	options    Options
 	forkConfig *thor.ForkConfig
@@ -41,7 +41,7 @@ type Core struct {
 func NewCore(
 	repo *chain.Repository,
 	stater *state.Stater,
-	logDB *logdb.LogDB,
+	logDB logsdb.LogsDB,
 	options Options,
 	forkConfig *thor.ForkConfig,
 ) *Core {

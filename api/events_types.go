@@ -13,7 +13,7 @@ import (
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -25,8 +25,8 @@ type FilteredEvent struct {
 	Meta    LogMeta         `json:"meta"`
 }
 
-// Convert a logdb.Event into a json format Event
-func ConvertEvent(event *logdb.Event, addIndexes bool) *FilteredEvent {
+// Convert a logsdb.Event into a json format Event
+func ConvertEvent(event *logsdb.Event, addIndexes bool) *FilteredEvent {
 	fe := &FilteredEvent{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
@@ -91,17 +91,17 @@ type EventFilter struct {
 	CriteriaSet []*EventCriteria `json:"criteriaSet,omitempty"`
 	Range       *Range           `json:"range,omitempty"`
 	Options     *Options         `json:"options,omitempty"`
-	Order       logdb.Order      `json:"order,omitempty"`
+	Order       logsdb.Order     `json:"order,omitempty"`
 }
 
-func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
+func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logsdb.EventFilter, error) {
 	rng, err := ConvertRange(chain, filter.Range)
 	if err != nil {
 		return nil, err
 	}
-	f := &logdb.EventFilter{
+	f := &logsdb.EventFilter{
 		Range: rng,
-		Options: &logdb.Options{
+		Options: &logsdb.Options{
 			Offset: filter.Options.Offset,
 			// validated or default value set at the API level
 			Limit: *filter.Options.Limit,
@@ -109,7 +109,7 @@ func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFi
 		Order: filter.Order,
 	}
 	if len(filter.CriteriaSet) > 0 {
-		f.CriteriaSet = make([]*logdb.EventCriteria, len(filter.CriteriaSet))
+		f.CriteriaSet = make([]*logsdb.EventCriteria, len(filter.CriteriaSet))
 		for i, criterion := range filter.CriteriaSet {
 			var topics [5]*thor.Bytes32
 			topics[0] = criterion.Topic0
@@ -117,7 +117,7 @@ func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFi
 			topics[2] = criterion.Topic2
 			topics[3] = criterion.Topic3
 			topics[4] = criterion.Topic4
-			f.CriteriaSet[i] = &logdb.EventCriteria{
+			f.CriteriaSet[i] = &logsdb.EventCriteria{
 				Address: criterion.Address,
 				Topics:  topics,
 			}
@@ -159,12 +159,12 @@ func (r *Range) Validate() error {
 	return nil
 }
 
-var emptyRange = logdb.Range{
-	From: logdb.MaxBlockNumber,
-	To:   logdb.MaxBlockNumber,
+var emptyRange = logsdb.Range{
+	From: logsdb.MaxBlockNumber,
+	To:   logsdb.MaxBlockNumber,
 }
 
-func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
+func ConvertRange(chain *chain.Chain, r *Range) (*logsdb.Range, error) {
 	if r == nil {
 		return nil, nil
 	}
@@ -201,14 +201,14 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			}
 		}
 
-		return &logdb.Range{
+		return &logsdb.Range{
 			From: fromHeader.Number(),
 			To:   toHeader.Number(),
 		}, nil
 	}
 
 	// Units are block numbers - numbers will have a max ceiling at logdb.MaxBlockNumber
-	if r.From != nil && *r.From > logdb.MaxBlockNumber {
+	if r.From != nil && *r.From > logsdb.MaxBlockNumber {
 		return &emptyRange, nil
 	}
 
@@ -217,12 +217,12 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		from = uint32(*r.From)
 	}
 
-	to := uint32(logdb.MaxBlockNumber)
-	if r.To != nil && *r.To < logdb.MaxBlockNumber {
+	to := uint32(logsdb.MaxBlockNumber)
+	if r.To != nil && *r.To < logsdb.MaxBlockNumber {
 		to = uint32(*r.To)
 	}
 
-	return &logdb.Range{
+	return &logsdb.Range{
 		From: from,
 		To:   to,
 	}, nil

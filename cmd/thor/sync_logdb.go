@@ -20,12 +20,12 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
-func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
+func syncLogDB(ctx context.Context, repo *chain.Repository, logDB logsdb.LogsDB, verify bool) error {
 	startPos, err := seekLogDBSyncPosition(repo, logDB)
 	if err != nil {
 		return errors.Wrap(err, "seek log db sync position")
@@ -110,7 +110,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	return pumpErr
 }
 
-func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
+func seekLogDBSyncPosition(repo *chain.Repository, logDB logsdb.LogsDB) (uint32, error) {
 	best := repo.BestBlockSummary().Header
 	if best.Number() == 0 {
 		return 0, nil
@@ -157,7 +157,7 @@ func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, 
 	return block.Number(header.ID()) + 1, nil
 }
 
-func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB *logdb.LogDB) error {
+func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB logsdb.LogsDB) error {
 	fmt.Println(">> Verifying log db <<")
 	pb := pb.New64(int64(endBlockNum)).
 		Set64(0).
@@ -169,10 +169,10 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 
 	var (
 		best        = repo.BestBlockSummary()
-		evLogs      []*logdb.Event
-		trLogs      []*logdb.Transfer
+		evLogs      []*logsdb.Event
+		trLogs      []*logsdb.Transfer
 		logLimit    = uint32(0)
-		splitEvLogs = func(id thor.Bytes32) (logs []*logdb.Event) {
+		splitEvLogs = func(id thor.Bytes32) (logs []*logsdb.Event) {
 			if len(evLogs) == 0 {
 				return
 			}
@@ -189,7 +189,7 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 			evLogs = nil
 			return
 		}
-		splitTrLogs = func(id thor.Bytes32) (logs []*logdb.Transfer) {
+		splitTrLogs = func(id thor.Bytes32) (logs []*logsdb.Transfer) {
 			if len(trLogs) == 0 {
 				return
 			}
@@ -230,8 +230,8 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 		if num > logLimit {
 			var err error
 			logLimit += logStep
-			evLogs, err = logDB.FilterEvents(context.TODO(), &logdb.EventFilter{
-				Range: &logdb.Range{
+			evLogs, err = logDB.FilterEvents(context.TODO(), &logsdb.EventFilter{
+				Range: &logsdb.Range{
 					From: num,
 					To:   logLimit,
 				},
@@ -239,8 +239,8 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 			if err != nil {
 				return err
 			}
-			trLogs, err = logDB.FilterTransfers(context.TODO(), &logdb.TransferFilter{
-				Range: &logdb.Range{
+			trLogs, err = logDB.FilterTransfers(context.TODO(), &logsdb.TransferFilter{
+				Range: &logsdb.Range{
 					From: num,
 					To:   logLimit,
 				},
@@ -274,8 +274,8 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 func verifyLogDBPerBlock(
 	block *block.Block,
 	receipts tx.Receipts,
-	eventLogs []*logdb.Event,
-	transferLogs []*logdb.Transfer,
+	eventLogs []*logsdb.Event,
+	transferLogs []*logsdb.Transfer,
 ) error {
 	convertTopics := func(topics []thor.Bytes32) (r [5]*thor.Bytes32) {
 		for i, t := range topics {
@@ -291,8 +291,8 @@ func verifyLogDBPerBlock(
 	evCount := 0
 	trCount := 0
 
-	var expectedEvLogs []*logdb.Event
-	var expectedTrLogs []*logdb.Transfer
+	var expectedEvLogs []*logsdb.Event
+	var expectedTrLogs []*logsdb.Transfer
 	txs := block.Transactions()
 
 	evCount = 0
@@ -307,7 +307,7 @@ func verifyLogDBPerBlock(
 				if len(ev.Data) > 0 {
 					data = ev.Data
 				}
-				expectedEvLogs = append(expectedEvLogs, &logdb.Event{
+				expectedEvLogs = append(expectedEvLogs, &logsdb.Event{
 					BlockNumber: n,
 					LogIndex:    uint32(evCount),
 					BlockID:     id,
@@ -323,7 +323,7 @@ func verifyLogDBPerBlock(
 				evCount++
 			}
 			for _, tr := range output.Transfers {
-				expectedTrLogs = append(expectedTrLogs, &logdb.Transfer{
+				expectedTrLogs = append(expectedTrLogs, &logsdb.Transfer{
 					BlockNumber: n,
 					LogIndex:    uint32(trCount),
 					BlockID:     id,
@@ -354,7 +354,7 @@ func verifyLogDBPerBlock(
 }
 
 // equalEvents performs a statically typed comparison of two Event slices
-func equalEvents(a, b []*logdb.Event) bool {
+func equalEvents(a, b []*logsdb.Event) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -367,7 +367,7 @@ func equalEvents(a, b []*logdb.Event) bool {
 }
 
 // equalEvent performs a statically typed comparison of two Event pointers
-func equalEvent(a, b *logdb.Event) bool {
+func equalEvent(a, b *logsdb.Event) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
@@ -423,7 +423,7 @@ func equalTopics(a, b [5]*thor.Bytes32) bool {
 }
 
 // equalTransfers performs a statically typed comparison of two Transfer slices
-func equalTransfers(a, b []*logdb.Transfer) bool {
+func equalTransfers(a, b []*logsdb.Transfer) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -437,7 +437,7 @@ func equalTransfers(a, b []*logdb.Transfer) bool {
 
 // equalTransfer performs a statically typed comparison of two Transfer pointers
 // and treats nil Amount as zero for semantic equality.
-func equalTransfer(a, b *logdb.Transfer) bool {
+func equalTransfer(a, b *logsdb.Transfer) bool {
 	if a == nil || b == nil {
 		return a == b
 	}

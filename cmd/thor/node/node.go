@@ -22,7 +22,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/log"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logsdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
@@ -52,7 +52,7 @@ type Node struct {
 	repo        *chain.Repository
 	bft         bft.Committer
 	stater      *state.Stater
-	logDB       *logdb.LogDB
+	logDB       logsdb.LogsDB
 	txPool      txpool.Pool
 	txStashPath string
 	comm        Communicator
@@ -73,7 +73,7 @@ func New(
 	repo *chain.Repository,
 	bft bft.Committer,
 	stater *state.Stater,
-	logDB *logdb.LogDB,
+	logDB logsdb.LogsDB,
 	txPool txpool.Pool,
 	txStashPath string,
 	communicator Communicator,
