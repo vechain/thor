@@ -7,6 +7,7 @@ package comm
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -24,6 +25,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 	log := peer.logger.New("msg", proto.MsgName(msg.Code))
 	log.Trace("received RPC call")
 	defer func() {
+		metricHandleRPCCounter().AddWithLabel(1, map[string]string{"method": proto.MsgName(msg.Code), "error": strconv.FormatBool(err == nil)})
 		if err != nil {
 			log.Debug("failed to handle RPC call", "err", err)
 		}
