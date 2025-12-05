@@ -876,7 +876,7 @@ func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 
-	gen := genesis.NewDevnet()
+	gen, forkConfig := genesis.NewDevnet()
 	genesisBlock, _, _, err := gen.Build(stater)
 	if err != nil {
 		t.Fatal(err)
@@ -887,9 +887,7 @@ func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mockForkConfig := thor.ForkConfig{}
-
-	consensus := New(repo, stater, &mockForkConfig)
+	consensus := New(repo, stater, forkConfig)
 
 	builder := new(block.Builder).
 		ParentID(genesisBlock.Header().ID()).
