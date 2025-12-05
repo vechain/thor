@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/vechain/thor/v2/api/restutil"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -25,7 +24,7 @@ type OnDemandTxPool struct {
 
 	txFeed event.Feed
 	scope  event.SubscriptionScope
-	goes   co.Goes
+	goes   sync.WaitGroup
 
 	mu sync.Mutex
 }
