@@ -28,7 +28,7 @@ import (
 
 func TestValidateBlockBody(t *testing.T) {
 	db := muxdb.NewMem()
-	gen := genesis.NewDevnet()
+	gen, _ := genesis.NewDevnet()
 	stater := state.NewStater(db)
 
 	parent, _, _, err := gen.Build(stater)
@@ -97,7 +97,7 @@ func TestValidateBlockBody(t *testing.T) {
 
 func TestValidateBlock(t *testing.T) {
 	db := muxdb.NewMem()
-	gen := genesis.NewDevnet()
+	gen, _ := genesis.NewDevnet()
 	stater := state.NewStater(db)
 
 	genesisBlock, _, _, err := gen.Build(stater)
@@ -163,7 +163,7 @@ func TestValidateBlock(t *testing.T) {
 
 func TestValidate_NegativeCases(t *testing.T) {
 	db := muxdb.NewMem()
-	gen := genesis.NewDevnet()
+	gen, _ := genesis.NewDevnet()
 	stater := state.NewStater(db)
 
 	genesisBlock, _, _, err := gen.Build(stater)

@@ -538,7 +538,7 @@ func TestWashTxs(t *testing.T) {
 func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	now := uint64(time.Now().Unix() - time.Now().Unix()%10 - 10)
 	db := muxdb.NewMem()
-	builder := genesis.NewDevnet()
+	builder, _ := genesis.NewDevnet()
 
 	b0, _, _, err := builder.Build(state.NewStater(db))
 	assert.Nil(t, err)
@@ -622,7 +622,7 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	now := uint64(time.Now().Unix() - time.Now().Unix()%10 - 10)
 	db := muxdb.NewMem()
-	builder := genesis.NewDevnet()
+	builder, _ := genesis.NewDevnet()
 
 	b0, _, _, err := builder.Build(state.NewStater(db))
 	assert.Nil(t, err)
@@ -727,7 +727,7 @@ func TestFillPool(t *testing.T) {
 func TestFillPoolWithMixedTxs(t *testing.T) {
 	now := uint64(time.Now().Unix() - time.Now().Unix()%10 - 10)
 	db := muxdb.NewMem()
-	builder := genesis.NewDevnet()
+	builder, _ := genesis.NewDevnet()
 
 	b0, _, _, err := builder.Build(state.NewStater(db))
 	assert.Nil(t, err)
