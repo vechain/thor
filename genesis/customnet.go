@@ -20,8 +20,13 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// NewCustomNet create custom network genesis.
+// NewCustomNet create custom network genesis block
 func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
+	return NewCustomNetWithName(gen, "customnet")
+}
+
+// NewCustomNetWithName create custom network genesis block with given name
+func NewCustomNetWithName(gen *CustomGenesis, name string) (*Genesis, error) {
 	if gen.Config != nil {
 		// value of 0 does not update thor config
 		if gen.Config.BlockInterval == 1 {
@@ -79,11 +84,6 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					return err
 				}
 			}
-			if isHayabusaGenesis(gen) {
-				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
-					return err
-				}
-			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
@@ -124,8 +124,23 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					}
 				}
 			}
+			if err := builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply); err != nil {
+				return err
+			}
 
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			if gen.ForkConfig.HAYABUSA == 0 && len(gen.Stakers) > 0 {
+				stkr := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
+				for _, val := range gen.Stakers {
+					if err := transferToStaker(state, val.Endorser, staker.MinStake); err != nil {
+						return err
+					}
+					if err := stkr.AddValidation(val.Master, val.Endorser, thor.HighStakingPeriod(), staker.MinStakeVET); err != nil {
+						return err
+					}
+				}
+			}
+
+			return nil
 		})
 
 	///// initialize builtin contracts
@@ -178,7 +193,33 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 	}
 
-	if len(gen.Authority) == 0 {
+	if d := gen.Params.DelegatorContract; d != nil {
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyDelegatorContractAddress, new(big.Int).SetBytes((*d)[:]))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if f := gen.Params.CurveFactor; f != nil {
+		if *f == uint64(0) {
+			return nil, errors.New("curveFactor must be a non-negative integer")
+		}
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyCurveFactor, new(big.Int).SetUint64(*f))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if s := gen.Params.StakerSwitches; s != nil {
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyStakerSwitches, new(big.Int).SetUint64(uint64(*s)))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if p := gen.Params.RewardPercentage; p != nil {
+		if *p > 100 || *p == 0 {
+			return nil, errors.New("validatorRewardPercentage must be between 1 and 100")
+		}
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyValidatorRewardPercentage, new(big.Int).SetUint64(uint64(*p)))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if len(gen.Authority) == 0 && !isPoSActiveGenesis(gen) {
 		return nil, errors.New("at least one authority node")
 	}
 	// add initial authority nodes
@@ -195,16 +236,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		}
 	}
 
-	if isHayabusaGenesis(gen) {
-		// auth nodes are now validators
-		for _, authority := range gen.Authority {
-			data = mustEncodeInput(builtin.Staker.ABI, "addValidation", authority.MasterAddress, thor.HighStakingPeriod())
-			builder.Call(tx.NewClause(&builtin.Staker.Address).WithData(data).WithValue(staker.MinStake), authority.EndorsorAddress)
-		}
-	}
-
 	builder.PostCallState(func(state *state.State) error {
-		if isHayabusaGenesis(gen) {
+		if isPoSActiveGenesis(gen) {
 			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
 			_, err := stk.Housekeep(0)
 			if err != nil {
@@ -224,9 +257,40 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	if err != nil {
 		panic(err)
 	}
-	return &Genesis{builder, id, "customnet"}, nil
+	return &Genesis{builder, id, name}, nil
 }
 
-func isHayabusaGenesis(gen *CustomGenesis) bool {
-	return gen.ForkConfig.HAYABUSA == 0 && gen.Config != nil && gen.Config.HayabusaTP != nil && *gen.Config.HayabusaTP == 0
+// config is already applied in NewCustomNet
+func isPoSActiveGenesis(gen *CustomGenesis) bool {
+	return gen.ForkConfig.HAYABUSA == 0 && thor.HayabusaTP() == 0
+}
+
+func transferToStaker(state *state.State, from thor.Address, amount *big.Int) error {
+	fromBalance, err := state.GetBalance(from)
+	if err != nil {
+		return err
+	}
+
+	if fromBalance.Cmp(amount) < 0 {
+		return fmt.Errorf("insufficient balance for %s", from)
+	}
+
+	toBalance, err := state.GetBalance(builtin.Staker.Address)
+	if err != nil {
+		return err
+	}
+
+	newBalance := new(big.Int).Add(toBalance, amount)
+
+	if err := state.SetBalance(from, new(big.Int).Sub(fromBalance, amount)); err != nil {
+		return err
+	}
+
+	if err := state.SetBalance(builtin.Staker.Address, newBalance); err != nil {
+		return err
+	}
+
+	// update the effectiveVET tracking
+	state.SetStorage(builtin.Staker.Address, thor.Bytes32{}, thor.BytesToBytes32(newBalance.Bytes()))
+	return nil
 }

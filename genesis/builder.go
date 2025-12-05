@@ -114,7 +114,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 			return nil, nil, nil, errors.Wrap(err, "call")
 		}
 		if out.VMErr != nil {
-			return nil, nil, nil, errors.Wrap(out.VMErr, "vm")
+			return nil, nil, nil, errors.Wrapf(out.VMErr, "calls to %s failed", call.clause.To())
 		}
 		events = append(events, out.Events...)
 		transfers = append(transfers, out.Transfers...)

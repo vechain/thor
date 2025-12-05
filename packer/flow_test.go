@@ -61,7 +61,7 @@ func TestAdopt(t *testing.T) {
 	// Setup environment
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 
 	// Build genesis block
 	b, _, _, _ := g.Build(stater)
@@ -73,7 +73,7 @@ func TestAdopt(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &thor.NoFork, 0)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, forkConfig, 0)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
@@ -170,20 +170,15 @@ func TestAdoptTypedTxs(t *testing.T) {
 
 func TestPack(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 
 	stater := state.NewStater(db)
 	parent, _, _, _ := g.Build(stater)
 
 	repo, _ := chain.NewRepository(db, parent)
 
-	forkConfig := thor.NoFork
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 0
-	forkConfig.FINALITY = 0
-
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 
@@ -201,7 +196,7 @@ func TestPack(t *testing.T) {
 
 func TestPackAfterGalacticaFork(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 
 	stater := state.NewStater(db)
 	parent, _, _, _ := g.Build(stater)
@@ -441,8 +436,8 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 
 func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	config := genesis.DevConfig{
-		ForkConfig:      &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32},
-		KeyBaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
+		ForkConfig:   &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32},
+		BaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
 	}
 	chain, err := testchain.NewIntegrationTestChain(config, 180)
 	assert.NoError(t, err)

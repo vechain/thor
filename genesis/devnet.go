@@ -12,21 +12,19 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/builtin/params"
-	"github.com/vechain/thor/v2/builtin/staker"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
 // Config for the devnet network, to be extended by our needs
 type DevConfig struct {
-	ForkConfig      *thor.ForkConfig
-	KeyBaseGasPrice *big.Int
-	LaunchTime      uint64
-	Config          *thor.Config
+	ForkConfig   *thor.ForkConfig
+	BaseGasPrice *big.Int
+	LaunchTime   uint64
+	Config       *thor.Config
 }
+
+// DefaultHayabusaTP is the default Hayabusa transition period (0 = immediate PoS).
+var DefaultHayabusaTP = uint32(0)
 
 // SoloConfig is the default configuration for solo/dev mode.
 // Uses short staking periods for faster testing.
@@ -37,9 +35,6 @@ var SoloConfig = thor.Config{
 	CooldownPeriod:      12,
 	HayabusaTP:          &DefaultHayabusaTP,
 }
-
-// DefaultHayabusaTP is the default Hayabusa transition period (0 = immediate PoS).
-var DefaultHayabusaTP = uint32(0)
 
 const (
 	// DefaultDevnetLaunchTime is the default genesis timestamp for devnet.
@@ -89,123 +84,65 @@ func DevAccounts() []DevAccount {
 	return accs
 }
 
-func NewDevnet() *Genesis {
+func NewDevnet() (*Genesis, *thor.ForkConfig) {
 	forkConfig := thor.SoloFork
 	return NewDevnetWithConfig(DevConfig{
 		ForkConfig: &forkConfig,
 		Config:     &SoloConfig,
-	})
+	}), &forkConfig
 }
 
 func NewDevnetWithConfig(config DevConfig) *Genesis {
-	if config.ForkConfig == nil {
-		forkConfig := thor.SoloFork
-		config.ForkConfig = &forkConfig
+	var gene CustomGenesis
+
+	if config.ForkConfig != nil {
+		gene.ForkConfig = config.ForkConfig
+	} else {
+		fc := thor.SoloFork
+		gene.ForkConfig = &fc
 	}
 
-	if config.Config != nil && !thor.IsConfigLocked() {
-		thor.SetConfig(*config.Config)
+	if config.LaunchTime != 0 {
+		gene.LaunchTime = config.LaunchTime
+	} else {
+		gene.LaunchTime = DefaultDevnetLaunchTime
 	}
 
-	launchTime := config.LaunchTime
-	if launchTime == 0 {
-		launchTime = DefaultDevnetLaunchTime
+	if config.Config != nil {
+		gene.Config = config.Config
 	}
 
-	executor := DevAccounts()[0].Address
-	soloBlockSigner := DevAccounts()[0]
-	if config.KeyBaseGasPrice == nil {
-		config.KeyBaseGasPrice = thor.InitialBaseGasPrice
+	if config.BaseGasPrice != nil {
+		gene.Params.BaseGasPrice = (*HexOrDecimal256)(config.BaseGasPrice)
 	}
 
-	isHayabusa := isHayabusaDevnet(&config)
+	gene.Params.ExecutorAddress = &DevAccounts()[0].Address
 
-	builder := new(Builder).
-		GasLimit(thor.InitialGasLimit).
-		Timestamp(launchTime).
-		ForkConfig(config.ForkConfig).
-		State(func(state *state.State) error {
-			// setup builtin contracts
-			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if isHayabusa {
-				if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
-					return err
-				}
-			}
-
-			tokenSupply := &big.Int{}
-			energySupply := &big.Int{}
-			for _, a := range DevAccounts() {
-				bal, _ := new(big.Int).SetString(InitialDevAccountBalance, 10)
-				if err := state.SetBalance(a.Address, bal); err != nil {
-					return err
-				}
-				if err := state.SetEnergy(a.Address, bal, launchTime); err != nil {
-					return err
-				}
-				tokenSupply.Add(tokenSupply, bal)
-				energySupply.Add(energySupply, bal)
-			}
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
-		}).
-		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
-			thor.Address{}).
-		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
-			executor).
-		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, config.KeyBaseGasPrice)),
-			executor).
-		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
-			executor).
-		Call(
-			tx.NewClause(&builtin.Authority.Address).
-				WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
-			executor)
-
-	if isHayabusa {
-		data := mustEncodeInput(builtin.Staker.ABI, "addValidation", soloBlockSigner.Address, thor.HighStakingPeriod())
-		builder.Call(tx.NewClause(&builtin.Staker.Address).WithData(data).WithValue(staker.MinStake), soloBlockSigner.Address)
-
-		builder.PostCallState(func(state *state.State) error {
-			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
-			_, err := stk.Housekeep(0)
-			return err
+	bal, _ := new(big.Int).SetString(InitialDevAccountBalance, 10)
+	for _, a := range DevAccounts() {
+		gene.Accounts = append(gene.Accounts, Account{
+			Address: a.Address,
+			Balance: (*HexOrDecimal256)(bal),
+			Energy:  (*HexOrDecimal256)(bal),
 		})
 	}
 
-	id, err := builder.ComputeID()
+	if gene.ForkConfig.HAYABUSA == 0 {
+		gene.Stakers = append(gene.Stakers, Validator{
+			Master:   DevAccounts()[0].Address,
+			Endorser: DevAccounts()[0].Address,
+		})
+	} else {
+		gene.Authority = append(gene.Authority, Authority{
+			MasterAddress:   DevAccounts()[0].Address,
+			EndorsorAddress: DevAccounts()[0].Address,
+			Identity:        thor.BytesToBytes32([]byte("Solo Block Signer")),
+		})
+	}
+
+	genesis, err := NewCustomNetWithName(&gene, "devnet")
 	if err != nil {
 		panic(err)
 	}
-
-	return &Genesis{builder, id, "devnet"}
-}
-
-// isHayabusaDevnet returns true if Hayabusa PoS should be fully active from genesis.
-// This occurs when HAYABUSA fork is at block 0 and HayabusaTP (transition period) is 0,
-// meaning PoS is immediately active without a transition period.
-func isHayabusaDevnet(config *DevConfig) bool {
-	if config.ForkConfig == nil || config.Config == nil || config.Config.HayabusaTP == nil {
-		return false
-	}
-	return config.ForkConfig.HAYABUSA == 0 && *config.Config.HayabusaTP == 0
+	return genesis
 }

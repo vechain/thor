@@ -18,7 +18,6 @@ import (
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -33,8 +32,6 @@ var (
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
-
-	logger = log.WithContext("pkg", "runtime")
 )
 
 func init() {
@@ -137,7 +134,6 @@ func New(
 
 	// Prepare the transition period
 	if forkConfig.HAYABUSA == ctx.Number {
-		logger.Info("HAYABUSA fork, setting up staker contract")
 		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
