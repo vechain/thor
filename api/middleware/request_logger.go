@@ -7,6 +7,7 @@ package middleware
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/vechain/thor/v2/log"
 )
+
+var maxBytesErr *http.MaxBytesError
 
 // RequestLoggerMiddleware returns a middleware to ensure requests are syphoned into the writer
 func RequestLoggerMiddleware(
@@ -41,7 +44,7 @@ func RequestLoggerMiddleware(
 				if err != nil {
 					// body limit middleware is applied before this middleware to protect against malicious requests
 					// so we need to take care of the body read error here
-					if err.Error() == "http: request body too large" {
+					if errors.As(err, &maxBytesErr) {
 						logRequest(logger, "Body too large request", 0, r.URL.String(), r.Method, nil, http.StatusRequestEntityTooLarge)
 						w.WriteHeader(http.StatusRequestEntityTooLarge)
 						w.Write([]byte("http: request body too large"))
