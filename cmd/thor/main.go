@@ -308,7 +308,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL)
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL, false)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err
@@ -379,11 +379,13 @@ func soloAction(ctx *cli.Context) error {
 	var (
 		gene       *genesis.Genesis
 		forkConfig *thor.ForkConfig
+		isDevnet   bool
 	)
 
 	flagGenesis := ctx.String(genesisFlag.Name)
 	if flagGenesis == "" {
 		gene, forkConfig = genesis.NewDevnet()
+		isDevnet = true
 	} else {
 		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {
@@ -500,7 +502,7 @@ func soloAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL)
+	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
 		pruner := pruner.New(mainDB, repo, bftMockedEngine)
