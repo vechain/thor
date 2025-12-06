@@ -83,10 +83,10 @@ func (s *Staker) TransitionPeriodBalanceCheck(fc *thor.ForkConfig, currentBlock 
 		if validation == nil {
 			return false, nil
 		}
-		if validation.Endorser != endorser {
+		if validation.Endorser() != endorser {
 			return false, nil // endorser mismatch
 		}
-		queuedVET := big.NewInt(0).SetUint64(validation.QueuedVET)
+		queuedVET := big.NewInt(0).SetUint64(validation.QueuedVET())
 		queuedVET.Mul(queuedVET, bigE18) // convert to wei
 
 		return queuedVET.Cmp(endorsement) >= 0, nil

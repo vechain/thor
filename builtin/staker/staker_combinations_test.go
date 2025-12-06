@@ -37,12 +37,12 @@ func TestMultipleDelegations(t *testing.T) {
 	for i, delegationID := range delegationIDs {
 		delegation := staker.GetDelegation(delegationID)
 		assert.NotNil(t, delegation, "delegation %d should exist", i)
-		assert.Equal(t, validator, delegation.Validation, "delegation %d should point to correct validator", i)
+		assert.Equal(t, validator, delegation.Validation(), "delegation %d should point to correct validator", i)
 
 		expectedAmount := uint64(1000 + i*100)
 		expectedMultiplier := uint8(100 + i*10)
-		assert.Equal(t, expectedAmount, delegation.Stake, "delegation %d stake should be correct", i)
-		assert.Equal(t, expectedMultiplier, delegation.Multiplier, "delegation %d multiplier should be correct", i)
+		assert.Equal(t, expectedAmount, delegation.Stake(), "delegation %d stake should be correct", i)
+		assert.Equal(t, expectedMultiplier, delegation.Multiplier(), "delegation %d multiplier should be correct", i)
 	}
 
 	staker.Housekeep(thor.MediumStakingPeriod())
@@ -77,8 +77,8 @@ func TestMultipleDelegationsSignalingExit(t *testing.T) {
 	// Verify all delegations are signaled for exit
 	for i, delegationID := range delegationIDs {
 		delegation := staker.GetDelegation(delegationID)
-		assert.NotNil(t, delegation.LastIteration, "delegation %d should be signaled for exit", i)
-		assert.Equal(t, uint64(1000+i*100), delegation.Stake, "delegation %d should retain stake", i)
+		assert.NotNil(t, delegation.LastIteration(), "delegation %d should be signaled for exit", i)
+		assert.Equal(t, uint64(1000+i*100), delegation.Stake(), "delegation %d should retain stake", i)
 	}
 }
 
@@ -108,10 +108,10 @@ func TestValidatorAndDelegationOperations(t *testing.T) {
 	assert.NotNil(t, delegationID2, "should be able to add delegation to validator2")
 
 	// Transaction 3: Signal validator1 exit
-	staker.SignalExit(validator1, val1.Endorser, thor.MediumStakingPeriod()+20)
+	staker.SignalExit(validator1, val1.Endorser(), thor.MediumStakingPeriod()+20)
 
 	// Transaction 4: Increase stake for validator2
-	staker.IncreaseStake(validator2, val2.Endorser, 500)
+	staker.IncreaseStake(validator2, val2.Endorser(), 500)
 
 	staker.Housekeep(thor.MediumStakingPeriod())
 
@@ -120,10 +120,10 @@ func TestValidatorAndDelegationOperations(t *testing.T) {
 	val2Final := staker.GetValidation(validator2)
 
 	// Validator1 should have exit block set
-	assert.NotNil(t, val1Final.ExitBlock, "validator1 should have exit block set")
+	assert.NotNil(t, val1Final.ExitBlock(), "validator1 should have exit block set")
 
 	// Validator2 should have increased stake
-	assert.Greater(t, val2Final.LockedVET, val2.LockedVET, "validator2 should have increased stake")
+	assert.Greater(t, val2Final.LockedVET(), val2.LockedVET(), "validator2 should have increased stake")
 
 	// Verify delegations exist
 	del1 := staker.GetDelegation(delegationID1)
@@ -156,13 +156,13 @@ func TestHousekeepAndOperations(t *testing.T) {
 	del3 := staker.GetDelegation(delegation3)
 
 	// Delegation1 should be signaled for exit
-	assert.NotNil(t, del1.LastIteration, "delegation1 should be signaled for exit")
+	assert.NotNil(t, del1.LastIteration(), "delegation1 should be signaled for exit")
 
 	// Delegation2 should remain active
-	assert.Nil(t, del2.LastIteration, "delegation2 should remain active")
+	assert.Nil(t, del2.LastIteration(), "delegation2 should remain active")
 
 	// Delegation3 should be active
-	assert.Nil(t, del3.LastIteration, "delegation3 should be active")
+	assert.Nil(t, del3.LastIteration(), "delegation3 should be active")
 }
 
 func TestStakeOperations(t *testing.T) {
@@ -179,10 +179,10 @@ func TestStakeOperations(t *testing.T) {
 	staker.Housekeep(thor.MediumStakingPeriod())
 
 	// Transaction 1: Increase validator stake
-	staker.IncreaseStake(validator, val.Endorser, 500)
+	staker.IncreaseStake(validator, val.Endorser(), 500)
 
 	// Transaction 2: Decrease validator stake
-	staker.DecreaseStake(validator, val.Endorser, 200)
+	staker.DecreaseStake(validator, val.Endorser(), 200)
 
 	// Transaction 3: Signal delegation1 exit
 	staker.SignalDelegationExit(delegation1, thor.MediumStakingPeriod()+20)
@@ -197,16 +197,16 @@ func TestStakeOperations(t *testing.T) {
 	del1 := staker.GetDelegation(delegation1)
 	del2 := staker.GetDelegation(delegation2)
 
-	assert.Greater(t, valFinal.LockedVET, val.LockedVET, "validator should have net stake increase")
+	assert.Greater(t, valFinal.LockedVET(), val.LockedVET(), "validator should have net stake increase")
 
 	// Delegation1 should be signaled for exit
-	assert.NotNil(t, del1.LastIteration, "delegation1 should be signaled for exit")
+	assert.NotNil(t, del1.LastIteration(), "delegation1 should be signaled for exit")
 
 	// Delegation1 should be withdrawn
-	assert.Equal(t, uint64(0), del1.Stake, "delegation1 should be withdrawn")
+	assert.Equal(t, uint64(0), del1.Stake(), "delegation1 should be withdrawn")
 
 	// Delegation2 should be signaled for exit
-	assert.Nil(t, del2.LastIteration, "delegation2 should be active")
+	assert.Nil(t, del2.LastIteration(), "delegation2 should be active")
 }
 
 func TestValidatorExits(t *testing.T) {
@@ -238,11 +238,11 @@ func TestValidatorExits(t *testing.T) {
 
 	// Transaction 1: Signal validator1 exit
 	val1 := staker.GetValidation(validator1)
-	staker.SignalExit(validator1, val1.Endorser, thor.MediumStakingPeriod()+20)
+	staker.SignalExit(validator1, val1.Endorser(), thor.MediumStakingPeriod()+20)
 
 	// Transaction 2: Signal validator2 exit
 	val2 := staker.GetValidation(validator2)
-	staker.SignalExit(validator2, val2.Endorser, thor.MediumStakingPeriod()+20)
+	staker.SignalExit(validator2, val2.Endorser(), thor.MediumStakingPeriod()+20)
 
 	// Transaction 3: Signal exit for some delegations
 	for i := range 3 {
@@ -269,11 +269,11 @@ func TestValidatorExits(t *testing.T) {
 	val3Final := staker.GetValidation(validator3)
 
 	// Validators 1 and 2 should have exit blocks set
-	assert.NotNil(t, val1Final.ExitBlock, "validator1 should have exit block set")
-	assert.NotNil(t, val2Final.ExitBlock, "validator2 should have exit block set")
+	assert.NotNil(t, val1Final.ExitBlock(), "validator1 should have exit block set")
+	assert.NotNil(t, val2Final.ExitBlock(), "validator2 should have exit block set")
 
 	// Validator3 should still be active
-	assert.Equal(t, validation.StatusActive, val3Final.Status, "validator3 should still be active")
+	assert.Equal(t, validation.StatusActive, val3Final.Status(), "validator3 should still be active")
 }
 
 func TestExitedValidatorNegativeCases(t *testing.T) {
@@ -294,13 +294,13 @@ func TestExitedValidatorNegativeCases(t *testing.T) {
 	staker.WithdrawDelegationErrors(delegation1, thor.MediumStakingPeriod()+20, "delegation is not eligible for withdraw")
 
 	// Transaction 3: Signal validator exit
-	staker.SignalExit(validator, val.Endorser, thor.MediumStakingPeriod()+20)
+	staker.SignalExit(validator, val.Endorser(), thor.MediumStakingPeriod()+20)
 
 	// Transaction 4: Try to add delegation (should fail because validator is exiting)
 	staker.AddDelegationErrors(validator, 500, 100, 10, "cannot add delegation to exiting validator")
 
 	// Transaction 5: Try to increase stake (should fail because validator is exiting)
-	staker.IncreaseStakeErrors(validator, val.Endorser, 300, "validator has signaled exit, cannot increase stake")
+	staker.IncreaseStakeErrors(validator, val.Endorser(), 300, "validator has signaled exit, cannot increase stake")
 }
 
 func TestSequentialStressTest(t *testing.T) {
@@ -332,9 +332,9 @@ func TestSequentialStressTest(t *testing.T) {
 
 		if i%2 == 0 {
 			// Increase stake
-			staker.IncreaseStake(validator, val.Endorser, 100)
+			staker.IncreaseStake(validator, val.Endorser(), 100)
 		} else {
-			staker.DecreaseStake(validator, val.Endorser, 50)
+			staker.DecreaseStake(validator, val.Endorser(), 50)
 		}
 	}
 
@@ -405,7 +405,7 @@ func TestSequentialComplexScenario(t *testing.T) {
 
 	// Transaction 1: Signal exit for validator1
 	val1 := staker.GetValidation(validator1)
-	staker.SignalExit(validator1, val1.Endorser, thor.MediumStakingPeriod()+20)
+	staker.SignalExit(validator1, val1.Endorser(), thor.MediumStakingPeriod()+20)
 
 	// Transaction 2: Signal exit for some delegations
 	staker.SignalDelegationExit(del2v1, thor.MediumStakingPeriod()+20)
@@ -441,15 +441,15 @@ func TestSequentialComplexScenario(t *testing.T) {
 	del1v3Final := staker.GetDelegation(del1v3)
 
 	// Validator1 delegations
-	assert.Nil(t, del1v1Final.LastIteration, "del1v1 should not be signaled for exit")
-	assert.NotNil(t, del2v1Final.LastIteration, "del2v1 should be signaled for exit")
+	assert.Nil(t, del1v1Final.LastIteration(), "del1v1 should not be signaled for exit")
+	assert.NotNil(t, del2v1Final.LastIteration(), "del2v1 should be signaled for exit")
 
 	// Validator2 delegations
-	assert.NotNil(t, del1v2Final.LastIteration, "del1v2 should be signaled for exit")
-	assert.Equal(t, uint64(0), del1v2Final.Stake, "del1v2 should be withdrawn")
-	assert.Nil(t, del2v2Final.LastIteration, "del2v2 should not be signaled for exit")
+	assert.NotNil(t, del1v2Final.LastIteration(), "del1v2 should be signaled for exit")
+	assert.Equal(t, uint64(0), del1v2Final.Stake(), "del1v2 should be withdrawn")
+	assert.Nil(t, del2v2Final.LastIteration(), "del2v2 should not be signaled for exit")
 
 	// Validator3 delegations
-	assert.Nil(t, del1v3Final.LastIteration, "del1v3 should not be signaled for exit")
-	assert.Equal(t, uint64(3000), del1v3Final.Stake, "del1v3 should retain stake")
+	assert.Nil(t, del1v3Final.LastIteration(), "del1v3 should not be signaled for exit")
+	assert.Equal(t, uint64(3000), del1v3Final.Stake(), "del1v3 should retain stake")
 }

@@ -343,7 +343,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 				if validator == nil {
 					return nil, errors.New("validator not found")
 				}
-				weight = validator.Weight
+				weight = validator.Weight()
 			}
 			// If PoS is not active or error occurred, weight remains 0
 			js.AddBlock(signer, h.COM(), weight)
