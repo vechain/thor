@@ -5,6 +5,8 @@
 
 package thor
 
+import "sync/atomic"
+
 // Config is the configurable parameters of the thor. Most of the parameters will have default values and
 // will be 'locked' for production networks. For testing purposes or custom networks, the parameters can be updated.
 
@@ -22,7 +24,7 @@ var (
 	cooldownPeriod      uint32 = 8640      // 8640 blocks, 1 day
 	hayabusaTP          uint32 = 8640 * 7  // 7 days
 
-	locked bool
+	locked atomic.Bool
 )
 
 type Config struct {
@@ -44,7 +46,7 @@ type Config struct {
 // If the config is not set, the default values will be used.
 // If the config is locked, will panic.
 func SetConfig(cfg Config) {
-	if locked {
+	if locked.Load() {
 		panic("config is locked, cannot be set")
 	}
 
@@ -91,10 +93,10 @@ func SetConfig(cfg Config) {
 
 // LockConfig locks the config, preventing any further changes.
 // Required for mainnet and testnet.
-func LockConfig() { locked = true }
+func LockConfig() { locked.Store(true) }
 
 // IsConfigLocked returns true if the config is locked.
-func IsConfigLocked() bool { return locked }
+func IsConfigLocked() bool { return locked.Load() }
 
 // default value is 10 seconds
 func BlockInterval() uint64 { return blockInterval }

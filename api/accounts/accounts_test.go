@@ -648,12 +648,12 @@ func TestGetRawStorage(t *testing.T) {
 }
 
 func TestRawStorageStaker(t *testing.T) {
-	gene := genesis.NewDevnet()
+	gene, forkConfig := genesis.NewDevnet()
 	thorChain, err := testchain.NewIntegrationTestChainWithGenesis(gene, &thor.SoloFork, thor.EpochLength())
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), &thor.SoloFork, nil, true).
+	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), forkConfig, nil, true).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)

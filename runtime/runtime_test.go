@@ -580,7 +580,7 @@ func TestEVMFunction(t *testing.T) {
 
 func TestPreForkOpCode(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	stater := state.NewStater(db)
 	b0, _, _, _ := g.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
@@ -627,7 +627,7 @@ func TestPreForkOpCode(t *testing.T) {
 func TestCall(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -635,7 +635,7 @@ func TestCall(t *testing.T) {
 
 	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, forkConfig)
 
 	method, _ := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()
@@ -722,14 +722,14 @@ func GetMockFailedTx(txType tx.Type) *tx.Transaction {
 func TestGetValues(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
 	repo, _ := chain.NewRepository(db, b0)
 
 	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, forkConfig)
 
 	runtimeChain := rt.Chain()
 	runtimeState := rt.State()
@@ -745,7 +745,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -760,7 +760,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 	for _, txType := range []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee} {
 		tx := GetMockFailedTx(txType)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, forkConfig)
 
 		_, err := rt.ExecuteTransaction(tx)
 
@@ -942,7 +942,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 func TestNoRewards(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 	repo, _ := chain.NewRepository(db, b0)
@@ -1008,7 +1008,7 @@ func TestExecuteTransactionPreHayabusa(t *testing.T) {
 
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -1026,7 +1026,7 @@ func TestExecuteTransactionPreHayabusa(t *testing.T) {
 
 	tx := GetMockTx(repo, t)
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, &thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, forkConfig)
 
 	receipt, err := rt.ExecuteTransaction(tx)
 	if err != nil {
@@ -1048,7 +1048,7 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
