@@ -29,7 +29,7 @@ func TestDevAccounts(t *testing.T) {
 
 // TestNewDevnet checks if NewDevnet function returns a correctly initialized Genesis object
 func TestNewDevnet(t *testing.T) {
-	genesisObj := NewDevnet()
+	genesisObj, _ := NewDevnet()
 
 	assert.NotNil(t, genesisObj, "NewDevnet should return a non-nil Genesis object")
 	assert.NotEqual(t, thor.Bytes32{}, genesisObj.ID(), "Genesis ID should be valid")
@@ -37,6 +37,7 @@ func TestNewDevnet(t *testing.T) {
 }
 
 func TestNewDevnet_SoloConfig(t *testing.T) {
-	id := NewDevnet().ID()
-	assert.Equal(t, thor.MustParseBytes32("0x00000000a4f3c0cf9218d99644321582025ea4e4664cb8001d14735e68ccd75f"), id)
+	genesisObj, _ := NewDevnet()
+	id := genesisObj.ID()
+	assert.Equal(t, thor.MustParseBytes32("0x00000000bb55405beed90df9fea5acdb1cb7caba61b0d7513395f42efd30e558"), id)
 }
