@@ -358,15 +358,17 @@ func (s *Server) discoverLoop(topic tempdiscv5.Topic) {
 				logger.Trace("discovered node", "node", node)
 			}
 		case v5node := <-s.discv5NewNodes:
-			node := discover.NewNode(discover.NodeID(v5node.ID()), v5node.IP(), uint16(v5node.UDP()), uint16(v5node.TCP()))
+			// TODO: as thor uses the same port for discovery and rpc (udp/tcp)
+			//	`v5node.UDP()` is assumed to be suitable,
+			//	there is a bug with discv5 encoding/decoding TCP record from enr, and `v5node.TCP()` is empty, despite being set explicitly
+			//	at p2psrv/server.go:285
+			node := discover.NewNode(discover.NodeID(v5node.ID()), v5node.IP(), uint16(v5node.UDP()), uint16(v5node.UDP()))
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
 				metricDiscoveredNodes().Add(1)
 				s.discoveredNodes.Set(node.ID, node)
 				logger.Trace("discovered node", "IP", node.IP, "UDP", node.UDP, "TCP", node.TCP)
 			}
-
 		case <-s.done:
-			log.Debug("Discover loop closed")
 			close(setPeriod)
 			return
 		}
@@ -412,7 +414,6 @@ func (s *Server) dialLoop() {
 			}
 
 			log := logger.New("node", node)
-			log.Debug("try to dial node")
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {

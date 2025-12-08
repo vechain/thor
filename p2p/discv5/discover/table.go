@@ -266,7 +266,7 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 // appendBucketNodes adds nodes at the given distance to the result slice.
 // This is used by the FINDNODE/v5 handler.
 func (tab *Table) appendBucketNodes(dist uint, result []*enode.Node, checkLive bool) []*enode.Node {
-	if dist > 256 {
+	if dist > hashBits {
 		return result
 	}
 	if dist == 0 {
@@ -375,7 +375,6 @@ loop:
 			ok := tab.handleAddNode(op)
 			tab.mutex.Unlock()
 			tab.addNodeHandled <- ok
-			log.Warn("Node was added", "ok", ok)
 
 		case op := <-tab.trackRequestCh:
 			tab.handleTrackRequest(op)
@@ -399,7 +398,6 @@ loop:
 			}
 			waiting, refreshDone = nil, nil
 			refresh.Reset(tab.nextRefreshTime())
-			log.Warn("Refresh done")
 
 		case <-tab.closeReq:
 			break loop
@@ -434,10 +432,9 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	//// (not hash-sized) and it is not easily possible to generate a
 	//// sha3 preimage that falls into a chosen bucket.
 	//// We perform a few lookups with a random target instead.
-	//for i := 0; i < 3; i++ {
-	//	tab.net.lookupRandom()
-	//}
-	//log.Warn("Finished refresh")
+	for range 3 {
+		tab.net.lookupRandom()
+	}
 }
 
 func (tab *Table) loadSeedNodes() {
@@ -511,19 +508,15 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	b := tab.bucket(req.node.ID())
 	n, _ := tab.bumpInBucket(b, req.node, req.isInbound)
 	if n != nil {
-		log.Warn("Node was NOT added 513")
 		// Already in bucket.
 		return false
 	}
 	if len(b.entries) >= bucketSize {
-		log.Warn("Node was NOT added 518")
 		// Bucket full, maybe add as replacement.
 		tab.addReplacement(b, req.node)
 		return false
 	}
-	log.Warn("Node", "node", req.node.IPAddr())
 	if !tab.addIP(b, req.node.IPAddr()) {
-		log.Warn("Node was NOT added 526")
 		// Can't add: IP limit reached.
 		return false
 	}
