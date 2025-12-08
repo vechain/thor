@@ -464,7 +464,6 @@ func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error)
 			if total == -1 {
 				total = min(int(response.RespCount), totalNodesResponseLimit)
 			}
-			log.Debug("nodes", "nodes", nodes)
 			if received++; received == total {
 				return nodes, nil
 			}
@@ -774,6 +773,11 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	return nil
 }
 
+func (t *UDPv5) AddInboundNode(n *enode.Node) bool {
+	return t.tab.addInboundNode(n)
+
+}
+
 // handleCallResponse dispatches a response packet to the call waiting for it.
 func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr netip.AddrPort, p v5wire.Packet) bool {
 	ac := t.activeCallByNode[fromID]
@@ -823,7 +827,6 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 		if t.handleCallResponse(fromID, fromAddr, p) {
 			toAddr := netip.AddrPortFrom(netutil.IPToAddr(p.ToIP), p.ToPort)
 			t.localNode.UDPEndpointStatement(fromAddr, toAddr)
-			log.Debug("Updated local node")
 		}
 	case *v5wire.Findnode:
 		t.handleFindnode(p, fromID, fromAddr)
@@ -921,7 +924,6 @@ func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr netip.AddrP
 // handleFindnode returns nodes to the requester.
 func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr netip.AddrPort) {
 	nodes := t.collectTableNodes(fromAddr.Addr(), p.Distances, findnodeResultLimit)
-	log.Warn("Sending nodes", "nodes", nodes)
 	for _, resp := range packNodes(p.ReqID, nodes) {
 		t.sendResponse(fromID, fromAddr, resp)
 	}
@@ -935,7 +937,7 @@ func (t *UDPv5) collectTableNodes(rip netip.Addr, distances []uint, limit int) [
 	for _, dist := range distances {
 		// Reject duplicate / invalid distances.
 		_, seen := processed[dist]
-		if seen || dist > 256 {
+		if seen || dist > hashBits {
 			continue
 		}
 		processed[dist] = struct{}{}
