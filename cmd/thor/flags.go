@@ -122,6 +122,11 @@ var (
 		Value: 11235,
 		Usage: "P2P network listening port",
 	}
+	disableTempDiscv5Flag = cli.BoolFlag{
+		Name:   "disable-temp-discv5",
+		Hidden: true,
+		Usage:  "disable legacy discovery protocol",
+	}
 	natFlag = cli.StringFlag{
 		Name:  "nat",
 		Value: "any",
