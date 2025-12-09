@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -433,7 +434,7 @@ func TestConvertRange_WithEvents(t *testing.T) {
 	// Block 10: empty (no txs)
 
 	// Mint blocks 1-2 (empty)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		require.NoError(t, chain.MintBlock())
 	}
 
@@ -459,7 +460,7 @@ func TestConvertRange_WithEvents(t *testing.T) {
 	eventBlock3 := chain.Repo().BestBlockSummary().Header.Number()
 
 	// Blocks 8-10: empty
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		require.NoError(t, chain.MintBlock())
 	}
 
@@ -601,13 +602,7 @@ func TestConvertRange_WithEvents(t *testing.T) {
 			var gotBlocks []uint32
 			for _, ev := range events {
 				// Only add if not already in the list (multiple events per block possible)
-				found := false
-				for _, b := range gotBlocks {
-					if b == ev.BlockNumber {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(gotBlocks, ev.BlockNumber)
 				if !found {
 					gotBlocks = append(gotBlocks, ev.BlockNumber)
 				}
