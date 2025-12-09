@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/api/doc"
@@ -387,6 +389,36 @@ func TestHandleRequestBodyLimitExceeded(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	wrappedHandler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
+	assert.Contains(t, rr.Body.String(), "http: request body too large")
+}
+
+func TestBodyLimitWithRequestLogger(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Log(err.Error())
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success from handler"))
+	})
+
+	router := mux.NewRouter()
+	router.Handle("/test", handler).Methods("POST")
+
+	var enabled atomic.Bool
+	enabled.Store(true)
+	router.Use(HandleRequestBodyLimit(1))
+	router.Use(RequestLoggerMiddleware(&mockLogger{}, &enabled, 0, false))
+
+	req := httptest.NewRequest("POST", "/test", strings.NewReader("this body is too large"))
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
 	assert.Contains(t, rr.Body.String(), "http: request body too large")
