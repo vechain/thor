@@ -7,6 +7,7 @@ package middleware
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/vechain/thor/v2/log"
 )
+
+var maxBytesErr *http.MaxBytesError
 
 // RequestLoggerMiddleware returns a middleware to ensure requests are syphoned into the writer
 func RequestLoggerMiddleware(
@@ -39,8 +42,19 @@ func RequestLoggerMiddleware(
 			if r.Body != nil {
 				bodyBytes, err = io.ReadAll(r.Body)
 				if err != nil {
-					logger.Warn("unexpected body read error", "err", err)
-					return // don't pass bad request to the next handler
+					// body limit middleware is applied before this middleware to protect against malicious requests
+					// so we need to take care of the body read error here
+					if errors.As(err, &maxBytesErr) {
+						logRequest(logger, "Body too large request", 0, r.URL.String(), r.Method, nil, http.StatusRequestEntityTooLarge)
+						w.WriteHeader(http.StatusRequestEntityTooLarge)
+						w.Write([]byte("http: request body too large"))
+						return
+					} else {
+						logRequest(logger, "API Request", 0, r.URL.String(), r.Method, []byte(err.Error()), http.StatusBadRequest)
+						w.WriteHeader(http.StatusBadRequest)
+						w.Write([]byte(err.Error()))
+						return
+					}
 				}
 				r.Body = io.NopCloser(io.Reader(bytes.NewReader(bodyBytes)))
 			}
@@ -63,15 +77,19 @@ func RequestLoggerMiddleware(
 			}
 
 			if message != "" {
-				logger.Info(message,
-					"DurationMs", duration.Milliseconds(),
-					"Timestamp", time.Now().Unix(),
-					"URI", r.URL.String(),
-					"Method", r.Method,
-					"Body", string(bodyBytes),
-					"StatusCode", captor.statusCode,
-				)
+				logRequest(logger, message, duration, r.URL.String(), r.Method, bodyBytes, captor.statusCode)
 			}
 		})
 	}
+}
+
+func logRequest(logger log.Logger, message string, duration time.Duration, URI string, method string, bodyBytes []byte, statusCode int) {
+	logger.Info(message,
+		"DurationMs", duration.Milliseconds(),
+		"Timestamp", time.Now().Unix(),
+		"URI", URI,
+		"Method", method,
+		"Body", string(bodyBytes),
+		"StatusCode", statusCode,
+	)
 }
