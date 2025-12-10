@@ -84,7 +84,7 @@ func (s *Server) Self() *discover.Node {
 }
 
 // Start start the server.
-func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error {
+func (s *Server) Start(protocols []*p2p.Protocol, topic *tempdiscv5.Topic) error {
 	for _, proto := range protocols {
 		cpy := *proto
 		run := cpy.Run
@@ -121,8 +121,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error 
 	}
 
 	var (
-		conn *net.UDPConn
-		//realaddr  *net.UDPAddr
+		conn      *net.UDPConn
 		unhandled chan discv5discover.ReadPacket
 	)
 
@@ -140,6 +139,17 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error 
 		return err
 	}
 
+	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	if s.opts.NAT != nil {
+		if !realaddr.IP.IsLoopback() {
+			s.goes.Go(func() { nat.Map(s.opts.NAT, s.done, "udp", realaddr.Port, realaddr.Port, "vechain discovery") })
+		}
+		// TODO: react to external IP changes over time.
+		if ext, err := s.opts.NAT.ExternalIP(); err == nil {
+			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+		}
+	}
+
 	if s.opts.DiscV5 {
 		unhandled = make(chan discv5discover.ReadPacket)
 		var lconn discv5discover.UDPConn
@@ -152,19 +162,21 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error 
 
 		s.discv5NewNodes = make(chan *enode.Node, 1)
 		laddr := conn.LocalAddr().(*net.UDPAddr)
-		if err := s.listenDiscV5(lconn, unhandled, laddr.Port); err != nil {
+		if err := s.listenDiscV5(lconn, unhandled, laddr.Port, realaddr); err != nil {
 			return err
 		}
 	}
 
 	if s.opts.TempDiscV5 {
-		if err := s.listenTempDiscV5(conn); err != nil {
+		if err := s.listenTempDiscV5(conn, realaddr, unhandled); err != nil {
 			return err
 		}
-		logger.Debug("registering topic", "topic", topic)
-		s.goes.Go(func() {
-			s.tempdiscv5.RegisterTopic(topic, s.done)
-		})
+		if topic != nil {
+			logger.Debug("registering topic", "topic", topic)
+			s.goes.Go(func() {
+				s.tempdiscv5.RegisterTopic(*topic, s.done)
+			})
+		}
 
 		logger.Debug("searching topic", "topic", topic)
 
@@ -177,7 +189,9 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic tempdiscv5.Topic) error 
 
 	logger.Debug("start up", "self", s.Self())
 
-	s.goes.Go(s.dialLoop)
+	if !s.opts.NoDial {
+		s.goes.Go(s.dialLoop)
+	}
 	return nil
 }
 
@@ -240,20 +254,8 @@ func (s *Server) TryDial(node *discover.Node) error {
 	return err
 }
 
-func (s *Server) listenTempDiscV5(conn *net.UDPConn) (err error) {
-
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	if s.opts.NAT != nil {
-		if !realaddr.IP.IsLoopback() {
-			s.goes.Go(func() { nat.Map(s.opts.NAT, s.done, "udp", realaddr.Port, realaddr.Port, "vechain discovery") })
-		}
-		// TODO: react to external IP changes over time.
-		if ext, err := s.opts.NAT.ExternalIP(); err == nil {
-			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
-		}
-	}
-
-	network, err := tempdiscv5.ListenUDP(s.opts.PrivateKey, conn, realaddr, "", s.opts.NetRestrict)
+func (s *Server) listenTempDiscV5(conn *net.UDPConn, realAddr *net.UDPAddr, unhandled chan discv5discover.ReadPacket) (err error) {
+	network, err := tempdiscv5.ListenUDP(s.opts.PrivateKey, conn, realAddr, "", s.opts.NetRestrict, unhandled)
 	if err != nil {
 		return err
 	}
@@ -270,17 +272,13 @@ func (s *Server) listenTempDiscV5(conn *net.UDPConn) (err error) {
 	return nil
 }
 
-func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5discover.ReadPacket, port int) (err error) {
+func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5discover.ReadPacket, port int, realAddr *net.UDPAddr) (err error) {
 	db, err := enode.OpenDB("")
 	if err != nil {
 		return err
 	}
 	localNode := enode.NewLocalNode(db, s.opts.PrivateKey)
-	externalIP, err := s.srv.Config.NAT.ExternalIP()
-	if err != nil {
-		return err
-	}
-	localNode.SetStaticIP(externalIP)
+	localNode.SetStaticIP(realAddr.IP)
 	localNode.SetFallbackUDP(port)
 	localNode.Set(enr.TCP(port))
 	bootnodes := make([]*enode.Node, len(s.bootstrapNodes))
@@ -317,16 +315,18 @@ func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5
 	return nil
 }
 
-func (s *Server) discoverLoop(topic tempdiscv5.Topic) {
+func (s *Server) discoverLoop(topic *tempdiscv5.Topic) {
 	setPeriod := make(chan time.Duration, 1)
 	setPeriod <- time.Millisecond * 100
 	discNodes := make(chan *tempdiscv5.Node, 100)
 	discLookups := make(chan bool, 100)
 
 	if s.tempdiscv5 != nil {
-		s.goes.Go(func() {
-			s.tempdiscv5.SearchTopic(topic, setPeriod, discNodes, discLookups)
-		})
+		if topic != nil {
+			s.goes.Go(func() {
+				s.tempdiscv5.SearchTopic(*topic, setPeriod, discNodes, discLookups)
+			})
+		}
 	} else if s.discv5 == nil {
 		return
 	}

@@ -458,8 +458,8 @@ func (srv *Server) Start() (err error) {
 	srv.peerOpDone = make(chan struct{})
 
 	var (
-		conn      *net.UDPConn
-		sconn     *sharedUDPConn
+		conn *net.UDPConn
+		//sconn     *sharedUDPConn
 		realaddr  *net.UDPAddr
 		unhandled chan discover.ReadPacket
 	)
@@ -487,7 +487,7 @@ func (srv *Server) Start() (err error) {
 
 	if !srv.NoDiscovery && srv.DiscoveryV5 {
 		unhandled = make(chan discover.ReadPacket, 100)
-		sconn = &sharedUDPConn{conn, unhandled}
+		//sconn = &sharedUDPConn{conn, unhandled}
 	}
 
 	// node table
@@ -507,24 +507,24 @@ func (srv *Server) Start() (err error) {
 		srv.ntab = ntab
 	}
 
-	if srv.DiscoveryV5 {
-		var (
-			ntab *tempdiscv5.Network
-			err  error
-		)
-		if sconn != nil {
-			ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
-		} else {
-			ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
-		}
-		if err != nil {
-			return err
-		}
-		if err := ntab.SetFallbackNodes(srv.BootstrapNodesV5); err != nil {
-			return err
-		}
-		srv.DiscV5 = ntab
-	}
+	//if srv.DiscoveryV5 {
+	//	var (
+	//		ntab *tempdiscv5.Network
+	//		err  error
+	//	)
+	//	if sconn != nil {
+	//		ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+	//	} else {
+	//		ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+	//	}
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if err := ntab.SetFallbackNodes(srv.BootstrapNodesV5); err != nil {
+	//		return err
+	//	}
+	//	srv.DiscV5 = ntab
+	//}
 
 	dynPeers := srv.maxDialedConns()
 	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)

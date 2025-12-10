@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	discv5discover "github.com/vechain/thor/v2/p2p/discv5/discover"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
 )
@@ -230,7 +231,7 @@ type udp struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
+func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBPath string, netrestrict *netutil.Netlist, unhandled chan discv5discover.ReadPacket) (*Network, error) {
 	transport, err := listenUDP(priv, conn, realaddr)
 	if err != nil {
 		return nil, err
@@ -241,7 +242,7 @@ func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBP
 	}
 	log.Info("UDP listener up", "net", net.tab.self)
 	transport.net = net
-	go transport.readLoop()
+	go transport.readLoop(unhandled)
 	return net, nil
 }
 
@@ -365,7 +366,7 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req any) (p, hash []byte, 
 
 // readLoop runs in its own goroutine. it injects ingress UDP packets
 // into the network loop.
-func (t *udp) readLoop() {
+func (t *udp) readLoop(unhandled chan discv5discover.ReadPacket) {
 	defer t.conn.Close()
 	// Discovery packets are defined to be no larger than 1280 bytes.
 	// Packets larger than this size will be cut at the end and treated
@@ -382,14 +383,20 @@ func (t *udp) readLoop() {
 			log.Debug(fmt.Sprintf("Read error: %v", err))
 			return
 		}
-		t.handlePacket(from, buf[:nbytes])
+		t.handlePacket(from, buf[:nbytes], unhandled)
 	}
 }
 
-func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
+func (t *udp) handlePacket(from *net.UDPAddr, buf []byte, unhandled chan discv5discover.ReadPacket) error {
 	pkt := ingressPacket{remoteAddr: from}
 	if err := decodePacket(buf, &pkt); err != nil {
 		log.Debug(fmt.Sprintf("Bad packet from %v: %v", from, err))
+		if unhandled != nil {
+			unhandled <- discv5discover.ReadPacket{
+				Data: buf,
+				Addr: from.AddrPort(),
+			}
+		}
 		//fmt.Println("bad packet", err)
 		return err
 	}

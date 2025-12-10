@@ -9,18 +9,16 @@ package main
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"net"
 	"os"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/vechain/thor/v2/cmd/thor/httpserver"
-	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
-	"github.com/vechain/thor/v2/p2p/tempdiscv5"
+	"github.com/vechain/thor/v2/p2psrv"
 )
 
 var (
@@ -38,6 +36,7 @@ var (
 		verbosityFlag,
 		enableMetricsFlag,
 		metricsAddrFlag,
+		disableTempDiscv5Flag,
 	}
 )
 
@@ -74,46 +73,28 @@ func run(ctx *cli.Context) error {
 		}
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", ctx.String("addr"))
-	if err != nil {
-		return errors.Wrap(err, "-addr")
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
+	enableTempDiscv5 := !ctx.Bool(disableTempDiscv5Flag.Name)
+
+	opts := &p2psrv.Options{
+		Name:        common.MakeName("thor", version),
+		PrivateKey:  key,
+		ListenAddr:  ctx.String("addr"),
+		NAT:         natm,
+		DiscV5:      true,
+		TempDiscV5:  enableTempDiscv5,
+		NetRestrict: restrictList,
+		NoDial:      true,
 	}
 
-	realAddr := conn.LocalAddr().(*net.UDPAddr)
-	if natm != nil {
-		if !realAddr.IP.IsLoopback() {
-			go nat.Map(natm, nil, "udp", realAddr.Port, realAddr.Port, "ethereum discovery")
-		}
-		// TODO: react to external IP changes over time.
-		if ext, err := natm.ExternalIP(); err == nil {
-			realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
-		}
-	}
-	net, err := tempdiscv5.ListenUDP(key, conn, realAddr, "", restrictList)
-	if err != nil {
+	srv := p2psrv.New(opts)
+	if err := srv.Start(nil, nil); err != nil {
 		return err
 	}
-	defer net.Close()
-	fmt.Println("Running", net.Self().String())
 
 	exitSignal := handleExitSignal()
-
-	if ctx.Bool(enableMetricsFlag.Name) {
-		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
-		if err != nil {
-			return fmt.Errorf("unable to start metrics server - %w", err)
-		}
-		fmt.Println("metrics server listening", url)
-		defer closeFunc()
-		go pollMetrics(exitSignal, net)
-	}
-
 	<-exitSignal.Done()
+
+	srv.Stop()
 
 	return nil
 }

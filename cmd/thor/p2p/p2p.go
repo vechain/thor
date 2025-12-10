@@ -92,7 +92,8 @@ func New(
 
 func (p *P2P) Start() error {
 	log.Info("starting P2P networking")
-	if err := p.p2pSrv.Start(p.comm.Protocols(), p.comm.DiscTopic()); err != nil {
+	topic := p.comm.DiscTopic()
+	if err := p.p2pSrv.Start(p.comm.Protocols(), &topic); err != nil {
 		return errors.Wrap(err, "start P2P server")
 	}
 	p.comm.Start()
