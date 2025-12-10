@@ -49,4 +49,9 @@ var (
 		Value: "localhost:2112",
 		Usage: "metrics service listening address",
 	}
+	disableTempDiscv5Flag = cli.BoolFlag{
+		Name:   "disable-temp-discv5",
+		Hidden: true,
+		Usage:  "disable legacy discovery protocol",
+	}
 )
