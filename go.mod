@@ -30,7 +30,7 @@ require (
 	github.com/qianbin/drlp v0.0.0-20240102101024-e0e02518b5f9
 	github.com/stretchr/testify v1.10.0
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
-	github.com/vechain/go-ecvrf v0.0.0-20251120085015-6b872dc7f1e6
+	github.com/vechain/go-ecvrf v0.0.0-20251211112124-5d5a3ef70fc9
 	golang.org/x/crypto v0.45.0
 	golang.org/x/sync v0.18.0
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
