@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"slices"
 	"time"
 
@@ -268,7 +269,7 @@ func (s *dialstate) checkDial(n *discover.Node, peers map[discover.NodeID]*Peer)
 		return errAlreadyDialing
 	case peers[n.ID] != nil:
 		return errAlreadyConnected
-	case s.ntab != nil && n.ID == s.ntab.Self().ID:
+	case !reflect.ValueOf(s.ntab).IsNil() && s.ntab != nil && n.ID == s.ntab.Self().ID:
 		return errSelf
 	case s.netrestrict != nil && !s.netrestrict.Contains(n.IP):
 		return errNotWhitelisted
