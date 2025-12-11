@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/beevik/ntp v0.2.0
 	github.com/davecgh/go-spew v1.1.1
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
 	github.com/dop251/goja v0.0.0-20230707174833-636fdf960de1
 	github.com/elastic/gosigar v0.10.5
 	github.com/ethereum/go-ethereum v1.8.14
@@ -30,7 +30,7 @@ require (
 	github.com/qianbin/drlp v0.0.0-20240102101024-e0e02518b5f9
 	github.com/stretchr/testify v1.10.0
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
-	github.com/vechain/go-ecvrf v0.0.0-20251023142748-481dd12dec86
+	github.com/vechain/go-ecvrf v0.0.0-20251120085015-6b872dc7f1e6
 	golang.org/x/crypto v0.45.0
 	golang.org/x/sync v0.18.0
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
