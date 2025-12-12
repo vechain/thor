@@ -43,10 +43,13 @@ type Server struct {
 	discoveredNodes *cache.RandCache
 	dialingNodes    *nodeMap
 	discv5NewNodes  chan *enode.Node
+
+	// Filter discv5 nodes based on the filter
+	filterNodes func(*enode.Node) bool
 }
 
 // New create a p2p server.
-func New(opts *Options) *Server {
+func New(opts *Options, filterNodes func(node *enode.Node) bool) *Server {
 	knownNodes := cache.NewPrioCache(5)
 	discoveredNodes := cache.NewRandCache(128)
 	for _, node := range opts.KnownNodes {
@@ -74,6 +77,7 @@ func New(opts *Options) *Server {
 		knownNodes:      knownNodes,
 		discoveredNodes: discoveredNodes,
 		dialingNodes:    newNodeMap(),
+		filterNodes:     filterNodes,
 	}
 }
 
@@ -162,9 +166,17 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic *tempdiscv5.Topic) error
 
 		s.discv5NewNodes = make(chan *enode.Node, 1)
 		laddr := conn.LocalAddr().(*net.UDPAddr)
-		if err := s.listenDiscV5(lconn, unhandled, laddr.Port, realaddr); err != nil {
-			return err
+		if topic != nil {
+			stringTopic := string(*topic)
+			if err := s.listenDiscV5(lconn, unhandled, laddr.Port, realaddr, &stringTopic); err != nil {
+				return err
+			}
+		} else {
+			if err := s.listenDiscV5(lconn, unhandled, laddr.Port, realaddr, nil); err != nil {
+				return err
+			}
 		}
+
 	}
 
 	if s.opts.TempDiscV5 {
@@ -272,7 +284,7 @@ func (s *Server) listenTempDiscV5(conn *net.UDPConn, realAddr *net.UDPAddr, unha
 	return nil
 }
 
-func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5discover.ReadPacket, port int, realAddr *net.UDPAddr) (err error) {
+func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5discover.ReadPacket, port int, realAddr *net.UDPAddr, topic *string) (err error) {
 	db, err := enode.OpenDB("")
 	if err != nil {
 		return err
@@ -281,6 +293,9 @@ func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5
 	localNode.SetStaticIP(realAddr.IP)
 	localNode.SetFallbackUDP(port)
 	localNode.Set(enr.TCP(port))
+	if topic != nil {
+		localNode.Set(enr.WithEntry("eth", *topic))
+	}
 	bootnodes := make([]*enode.Node, len(s.bootstrapNodes))
 	for index, node := range s.bootstrapNodes {
 		pubkey, err := node.ID.Pubkey()
@@ -301,7 +316,7 @@ func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5
 		V5ProtocolID:            nil, // if nil will use default
 		ValidSchemes:            enode.ValidSchemes,
 		Clock:                   mclock.System{},
-	}, s.discv5NewNodes)
+	}, s.discv5NewNodes, s.filterNodes)
 	if err != nil {
 		return err
 	}
@@ -358,15 +373,11 @@ func (s *Server) discoverLoop(topic *tempdiscv5.Topic) {
 				logger.Trace("discovered node", "node", node)
 			}
 		case v5node := <-s.discv5NewNodes:
-			// TODO: as thor uses the same port for discovery and rpc (udp/tcp)
-			//	`v5node.UDP()` is assumed to be suitable,
-			//	there is a bug with discv5 encoding/decoding TCP record from enr, and `v5node.TCP()` is empty, despite being set explicitly
-			//	at p2psrv/server.go:285
-			node := discover.NewNode(discover.NodeID(v5node.ID()), v5node.IP(), uint16(v5node.UDP()), uint16(v5node.UDP()))
+			node := discover.NewNode(discover.NodeID(v5node.ID()), v5node.IP(), uint16(v5node.UDP()), uint16(v5node.TCP()))
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
 				metricDiscoveredNodes().Add(1)
 				s.discoveredNodes.Set(node.ID, node)
-				logger.Trace("discovered node", "IP", node.IP, "UDP", node.UDP, "TCP", node.TCP)
+				logger.Trace("discovered node", "IP", node.IP, "UDP", node.UDP, "TCP", node.TCP, "node", v5node)
 			}
 		case <-s.done:
 			close(setPeriod)

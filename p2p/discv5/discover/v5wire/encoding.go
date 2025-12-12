@@ -157,19 +157,21 @@ type Codec struct {
 	msgctbuf []byte       // message data ciphertext
 
 	// decoder buffer
-	decbuf []byte
-	reader bytes.Reader
+	decbuf      []byte
+	reader      bytes.Reader
+	filterNodes func(*enode.Node) bool
 }
 
 // NewCodec creates a wire codec.
-func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock, protocolID *[6]byte) *Codec {
+func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock, protocolID *[6]byte, filterNodes func(*enode.Node) bool) *Codec {
 	c := &Codec{
-		sha256:     sha256.New(),
-		localnode:  ln,
-		privkey:    key,
-		sc:         NewSessionCache(1024, clock),
-		protocolID: DefaultProtocolID,
-		decbuf:     make([]byte, maxPacketSize),
+		sha256:      sha256.New(),
+		localnode:   ln,
+		privkey:     key,
+		sc:          NewSessionCache(1024, clock),
+		protocolID:  DefaultProtocolID,
+		decbuf:      make([]byte, maxPacketSize),
+		filterNodes: filterNodes,
 	}
 	if protocolID != nil {
 		c.protocolID = *protocolID
@@ -532,6 +534,10 @@ func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData
 	if err != nil {
 		c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
 		return node, msg, err
+	}
+
+	if !c.filterNodes(node) {
+		return node, msg, nil
 	}
 
 	// Handshake OK, drop the challenge and store the new session keys.

@@ -15,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/p2p/discv5/enode"
+	"github.com/vechain/thor/v2/p2p/enr"
 	"github.com/vechain/thor/v2/p2p/nat"
 
 	"github.com/vechain/thor/v2/comm"
@@ -82,9 +84,19 @@ func New(
 		}
 	}
 
+	topic := communicator.DiscTopic()
 	return &P2P{
-		comm:           communicator,
-		p2pSrv:         p2psrv.New(opts),
+		comm: communicator,
+		p2pSrv: p2psrv.New(opts, func(node *enode.Node) bool {
+			var entry enr.EthEntry
+			if err := node.Load(&entry); err != nil {
+				return false
+			}
+			if string(entry) != string(topic) || string(entry) == "disco" {
+				return false
+			}
+			return true
+		}),
 		peersCachePath: peersCachePath,
 		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&privateKey.PublicKey).Bytes(), listenPort),
 	}

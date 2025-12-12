@@ -109,6 +109,7 @@ type UDPv5 struct {
 	closeCtx       context.Context
 	cancelCloseCtx context.CancelFunc
 	wg             sync.WaitGroup
+	filterNodes    func(*enode.Node) bool
 }
 
 type sendRequest struct {
@@ -143,8 +144,8 @@ type callTimeout struct {
 }
 
 // ListenV5 listens on the given connection.
-func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config, newNodes chan *enode.Node) (*UDPv5, error) {
-	t, err := newUDPv5(conn, ln, cfg, newNodes)
+func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config, newNodes chan *enode.Node, filterNodes func(*enode.Node) bool) (*UDPv5, error) {
+	t, err := newUDPv5(conn, ln, cfg, newNodes, filterNodes)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +157,7 @@ func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config, newNodes chan *enod
 }
 
 // newUDPv5 creates a UDPv5 transport, but doesn't start any goroutines.
-func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config, newNodes chan *enode.Node) (*UDPv5, error) {
+func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config, newNodes chan *enode.Node, filterNodes func(*enode.Node) bool) (*UDPv5, error) {
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
@@ -178,7 +179,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config, newNodes chan *enod
 		respTimeoutCh: make(chan *callTimeout),
 		unhandled:     cfg.Unhandled,
 		// state of dispatch
-		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, cfg.V5ProtocolID),
+		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, cfg.V5ProtocolID, filterNodes),
 		activeCallByNode: make(map[enode.ID]*callV5),
 		activeCallByAuth: make(map[v5wire.Nonce]*callV5),
 		callQueue:        make(map[enode.ID][]*callV5),
@@ -186,6 +187,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config, newNodes chan *enod
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
 		newNodes:       newNodes,
+		filterNodes:    filterNodes,
 	}
 	t.talk = newTalkSystem(t)
 	tab, err := newTable(t, t.db, cfg)
@@ -760,6 +762,10 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	}
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
+		if !t.filterNodes(fromNode) {
+			log.Debug("Filtered out", "node", fromNode, "filter", t.filterNodes)
+			return nil
+		}
 		t.newNodes <- fromNode
 		t.tab.addInboundNode(fromNode)
 	}
