@@ -16,8 +16,10 @@ import (
 	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
 
+	"github.com/vechain/thor/v2/p2p/discv5/enode"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 	"github.com/vechain/thor/v2/p2psrv"
 )
 
@@ -86,8 +88,12 @@ func run(ctx *cli.Context) error {
 		NoDial:      true,
 	}
 
-	srv := p2psrv.New(opts)
-	if err := srv.Start(nil, nil); err != nil {
+	srv := p2psrv.New(opts, func(node *enode.Node) bool {
+		// allow all nodes to be added
+		return true
+	})
+	topic := tempdiscv5.Topic("disco")
+	if err := srv.Start(nil, &topic); err != nil {
 		return err
 	}
 

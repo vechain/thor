@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/p2p/discv5/enode"
 )
 
 func TestNewServer(t *testing.T) {
@@ -33,7 +34,10 @@ func TestNewServer(t *testing.T) {
 		KnownNodes:  Nodes{node},
 	}
 
-	server := New(opts)
+	server := New(opts, func(node *enode.Node) bool {
+		// allow all nodes to be added
+		return true
+	})
 
 	assert.Equal(t, "testNode", server.opts.Name)
 	assert.Equal(t, privateKey, server.opts.PrivateKey)
@@ -66,7 +70,10 @@ func TestNewServerConnectOnly(t *testing.T) {
 		KnownNodes:  Nodes{knownNode},
 	}
 
-	server := New(opts)
+	server := New(opts, func(node *enode.Node) bool {
+		// allow all nodes to be added
+		return true
+	})
 
 	assert.Equal(t, "testNode", server.opts.Name)
 	assert.Equal(t, privateKey, server.opts.PrivateKey)

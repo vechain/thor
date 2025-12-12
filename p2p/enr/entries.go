@@ -57,6 +57,14 @@ func WithEntry(k string, v interface{}) Entry {
 	return &generic{key: k, value: v}
 }
 
+// EthEntry is the ENR entry which advertises `eth` protocol on the discovery.
+type EthEntry string
+
+// ENRKey implements enr.Entry.
+func (e EthEntry) ENRKey() string {
+	return "eth"
+}
+
 // TCP is the "tcp" key, which holds the TCP port of the node.
 type TCP uint16
 

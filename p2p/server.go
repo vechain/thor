@@ -535,13 +535,10 @@ func (srv *Server) Start() (err error) {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
 	// listen/dial
-	if srv.ListenAddr != "" {
+	if srv.ListenAddr != "" && !srv.NoDial {
 		if err := srv.startListening(); err != nil {
 			return err
 		}
-	}
-	if srv.NoDial && srv.ListenAddr == "" {
-		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
 	}
 
 	srv.loopWG.Add(1)
