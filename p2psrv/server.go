@@ -44,7 +44,7 @@ type Server struct {
 	dialingNodes    *nodeMap
 	discv5NewNodes  chan *enode.Node
 
-	// Filter discv5 nodes based on the filter
+	// Filter discv5 nodes based on the filter. Returns true if passed
 	filterNodes func(*enode.Node) bool
 }
 

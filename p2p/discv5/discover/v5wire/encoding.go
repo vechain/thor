@@ -537,6 +537,7 @@ func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData
 	}
 
 	if !c.filterNodes(node) {
+		c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
 		return node, msg, nil
 	}
 
