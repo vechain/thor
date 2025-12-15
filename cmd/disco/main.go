@@ -49,14 +49,14 @@ func run(ctx *cli.Context) error {
 	}
 	initLogger(lvl)
 
-	natm, err := nat.Parse(ctx.String("nat"))
+	natm, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "-nat")
 	}
 
 	var key *ecdsa.PrivateKey
 
-	if keyHex := ctx.String("keyhex"); keyHex != "" {
+	if keyHex := ctx.String(keyHexFlag.Name); keyHex != "" {
 		if key, err = crypto.HexToECDSA(keyHex); err != nil {
 			return errors.Wrap(err, "-keyhex")
 		}
@@ -66,7 +66,7 @@ func run(ctx *cli.Context) error {
 		}
 	}
 
-	netrestrict := ctx.String("netrestrict")
+	netrestrict := ctx.String(netRestrictFlag.Name)
 	var restrictList *netutil.Netlist
 	if netrestrict != "" {
 		restrictList, err = netutil.ParseNetlist(netrestrict)
@@ -80,7 +80,7 @@ func run(ctx *cli.Context) error {
 	opts := &p2psrv.Options{
 		Name:        common.MakeName("thor", version),
 		PrivateKey:  key,
-		ListenAddr:  ctx.String("addr"),
+		ListenAddr:  ctx.String(addrFlag.Name),
 		NAT:         natm,
 		DiscV5:      true,
 		TempDiscV5:  enableTempDiscv5,
@@ -96,6 +96,9 @@ func run(ctx *cli.Context) error {
 	if err := srv.Start(nil, &topic); err != nil {
 		return err
 	}
+
+	println("Disco node started")
+	println("Enode URL:", srv.Self().String())
 
 	exitSignal := handleExitSignal()
 	<-exitSignal.Done()

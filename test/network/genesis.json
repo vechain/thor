@@ -1,0 +1,126 @@
+{
+  "launchTime": 1765807313,
+  "gaslimit": 40000000,
+  "extraData": "Custom Net",
+  "accounts": [
+    {
+      "address": "0xf077b491b355e64048ce21e3a6fc4751eeea77fa",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0x435933c8064b4ae76be665428e0307ef2ccfbd68",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0x0f872421dc479f3c11edd89512731814d0598db5",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0xf370940abdbd2583bc80bfc19d19bc216c88ccf0",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0x99602e4bbc0503b8ff4432bb1857f916c3653b85",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0x61e7d0c2b25706be3485980f39a3a994a8207acf",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0x361277d1b27504f36a3b33d3a52d1f8270331b8c",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0xd7f75a0a1287ab2916848909c8531a0ea9412800",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0xabef6032b9176c186f6bf984f548bda53349f70a",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    },
+    {
+      "address": "0x865306084235bf804c8bba8a8d56890940ca8f0b",
+      "balance": "0x33b2e3c9fd0803ce8000000",
+      "energy": "0x33b2e3c9fd0803ce8000000",
+      "code": "",
+      "storage": null
+    }
+  ],
+  "authority": [
+    {
+      "masterAddress": "0xf077b491b355e64048ce21e3a6fc4751eeea77fa",
+      "endorsorAddress": "0x435933c8064b4ae76be665428e0307ef2ccfbd68",
+      "identity": "0x0100000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "masterAddress": "0x0f872421dc479f3c11edd89512731814d0598db5",
+      "endorsorAddress": "0xf370940abdbd2583bc80bfc19d19bc216c88ccf0",
+      "identity": "0x0200000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "masterAddress": "0x99602e4bbc0503b8ff4432bb1857f916c3653b85",
+      "endorsorAddress": "0x61e7d0c2b25706be3485980f39a3a994a8207acf",
+      "identity": "0x0300000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "params": {
+    "rewardRatio": null,
+    "baseGasPrice": null,
+    "proposerEndorsement": null,
+    "executorAddress": "0xf077b491b355e64048ce21e3a6fc4751eeea77fa",
+    "maxBlockProposers": 3
+  },
+  "executor": {
+    "approvers": null
+  },
+  "forkConfig": {
+    "VIP191": 0,
+    "ETH_CONST": 0,
+    "BLOCKLIST": 0,
+    "ETH_IST": 0,
+    "VIP214": 0,
+    "FINALITY": 0,
+    "HAYABUSA": 0,
+    "GALACTICA": 0
+  },
+  "config": {
+    "blockInterval": 2,
+    "epochLength": 180,
+    "seederInterval": 8640,
+    "validatorEvictionThreshold": 60480,
+    "evictionCheckInterval": 25920,
+    "lowStakingPeriod": 60480,
+    "mediumStakingPeriod": 129600,
+    "highStakingPeriod": 259200,
+    "cooldownPeriod": 8640,
+    "hayabusaTP": 60480
+  }
+}
