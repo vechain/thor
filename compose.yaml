@@ -56,9 +56,10 @@ services:
       - --config-dir
       - /thor/node-new-p2p
       - --bootnode
-      - enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@10.5.0.11:55555
+      - enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@10.5.0.10:55555
       - --api-addr
       - 0.0.0.0:8669
+      - --disable-temp-discv5
     networks:
       thor-net:
         ipv4_address: 10.5.0.13
@@ -79,7 +80,7 @@ services:
       - --config-dir
       - /thor/node-mixed-p2p
       - --bootnode
-      - enode://e07ffe6214081b6cb57b5649c476ba7adbc3e0985793171737110d56872549ad9d616c4995f10592edc91690e8435440969439acec50fbf8baf17c84be25ed98@10.5.0.11:55555,enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@10.5.0.11:55555
+      - enode://e07ffe6214081b6cb57b5649c476ba7adbc3e0985793171737110d56872549ad9d616c4995f10592edc91690e8435440969439acec50fbf8baf17c84be25ed98@10.5.0.11:55555,enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@10.5.0.10:55555
       - --api-addr
       - 0.0.0.0:8669
     networks:
