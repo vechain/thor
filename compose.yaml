@@ -3,7 +3,7 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
-    entrypoint: 'disco --keyhex=b639c258292096306d2f60bc1a8da9bc434ad37f15cd44ee9a2526685f592220 --nat extip:10.5.0.10 --addr 0.0.0.0:55555'
+    entrypoint: 'disco --keyhex=b639c258292096306d2f60bc1a8da9bc434ad37f15cd44ee9a2526685f592220 --nat extip:10.5.0.10 --addr 0.0.0.0:55555 --verbosity 9'
     # enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@0.0.0.0:0
     container_name: new-bootnode
     networks:
@@ -31,7 +31,7 @@ services:
       - --network
       - /thor/genesis.json
       - --config-dir
-      - /thor/node-old-p2p
+      - /thor/node3
       - --bootnode
       - enode://e07ffe6214081b6cb57b5649c476ba7adbc3e0985793171737110d56872549ad9d616c4995f10592edc91690e8435440969439acec50fbf8baf17c84be25ed98@10.5.0.11:55555
       - --api-addr
@@ -54,12 +54,16 @@ services:
       - --network
       - /thor/genesis.json
       - --config-dir
-      - /thor/node-new-p2p
+      - /thor/node1
       - --bootnode
       - enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@10.5.0.10:55555
       - --api-addr
       - 0.0.0.0:8669
       - --disable-temp-discv5
+      - --nat
+      - extip:10.5.0.13
+      - --verbosity
+      - "9"
     networks:
       thor-net:
         ipv4_address: 10.5.0.13
@@ -78,11 +82,13 @@ services:
       - --network
       - /thor/genesis.json
       - --config-dir
-      - /thor/node-mixed-p2p
+      - /thor/node2
       - --bootnode
       - enode://e07ffe6214081b6cb57b5649c476ba7adbc3e0985793171737110d56872549ad9d616c4995f10592edc91690e8435440969439acec50fbf8baf17c84be25ed98@10.5.0.11:55555,enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@10.5.0.10:55555
       - --api-addr
       - 0.0.0.0:8669
+      - --nat
+      - extip:10.5.0.14
     networks:
       thor-net:
         ipv4_address: 10.5.0.14
