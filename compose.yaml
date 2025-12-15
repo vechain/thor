@@ -3,7 +3,7 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
-    entrypoint: 'disco --keyhex=b639c258292096306d2f60bc1a8da9bc434ad37f15cd44ee9a2526685f592220 --nat extip:10.5.0.10 --addr 0.0.0.0:55555 --verbosity 9'
+    entrypoint: 'disco --keyhex=b639c258292096306d2f60bc1a8da9bc434ad37f15cd44ee9a2526685f592220 --nat extip:10.5.0.10 --addr 0.0.0.0:55555 --verbosity 3'
     # enode://c492a9c028aa08c2625157bd5463c07a1be23d4a5ba68596f9898e7ffc61524c8cb73915edc8c425d68658487085f2703c39e1607bb04c99c2efec7ed81cc8aa@0.0.0.0:0
     container_name: new-bootnode
     networks:
