@@ -311,7 +311,7 @@ func (s *Server) listenDiscV5(conn discv5discover.UDPConn, unhandled chan discv5
 		V5RespTimeout:           700 * time.Millisecond,
 		Bootnodes:               bootnodes,
 		PingInterval:            3 * time.Second,
-		RefreshInterval:         30 * time.Minute,
+		RefreshInterval:         30 * time.Second,
 		NoFindnodeLivenessCheck: false,
 		V5ProtocolID:            nil, // if nil will use default
 		ValidSchemes:            enode.ValidSchemes,
