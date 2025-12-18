@@ -24,6 +24,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 func TestTxBasics(t *testing.T) {
@@ -309,6 +310,121 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 func clause() *tx.Clause {
 	address := genesis.DevAccounts()[1].Address
 	return tx.NewClause(&address).WithData(nil)
+}
+
+// TestMPPUserRemovedDuringTx tests the scenario where a user (B) removes themselves
+// from the prototype user list during a transaction that uses MPP.
+//
+// Setup:
+// - Target is Prototype contract (commonTo for MPP)
+// - B is the tx origin, Prototype's master, and Prototype's user with credit
+// - C is Prototype's sponsor
+//
+// The test verifies that:
+//  1. Before tx: B is Prototype's user with credit
+//  2. B (as Prototype's master) sends a tx calling removeUser to remove themselves
+//  3. Transaction is sponsored by C via MPP
+//  4. After tx: B is no longer Prototype's user and user credit is 0
+//  5. The returnGas function (doReturnGasAndSetCredit) handles this correctly
+//     by checking isUser before setting credit
+func TestMPPUserRemovedDuringTx(t *testing.T) {
+	db := muxdb.NewMem()
+	g := genesis.NewDevnet()
+	stater := state.NewStater(db)
+	parent, _, _, err := g.Build(stater)
+	assert.Nil(t, err)
+
+	repo, err := chain.NewRepository(db, parent)
+	assert.Nil(t, err)
+
+	st := stater.NewState(repo.BestBlockSummary().Root())
+
+	// Target is the Prototype contract (commonTo for MPP)
+	// B is the origin/user who will remove themselves (DevAccounts[0])
+	// C is the sponsor (DevAccounts[2])
+	target := builtin.Prototype.Address
+	B := genesis.DevAccounts()[0]
+	C := genesis.DevAccounts()[2]
+
+	targetTime := repo.BestBlockSummary().Header.Timestamp() + thor.BlockInterval()
+
+	// Setup: Set B as target's master (so B can call removeUser)
+	err = st.SetMaster(target, B.Address)
+	assert.Nil(t, err)
+
+	// Setup: Configure credit plan for target with large credit
+	bind := builtin.Prototype.Native(st).Bind(target)
+	err = bind.SetCreditPlan(math.MaxBig256, big.NewInt(1000))
+	assert.Nil(t, err)
+
+	// Setup: Add B as target's user
+	err = bind.AddUser(B.Address, targetTime)
+	assert.Nil(t, err)
+
+	// Verify B is now a user of target
+	isUser, err := bind.IsUser(B.Address)
+	assert.Nil(t, err)
+	assert.True(t, isUser, "B should be a user of target before the transaction")
+
+	// Verify B has credit
+	creditBefore, err := bind.UserCredit(B.Address, targetTime)
+	assert.Nil(t, err)
+	assert.True(t, creditBefore.Cmp(big.NewInt(0)) > 0, "B should have credit before the transaction")
+
+	// Setup: Set C as target's sponsor and select C
+	err = bind.Sponsor(C.Address, true)
+	assert.Nil(t, err)
+	bind.SelectSponsor(C.Address)
+
+	// Give C enough energy to pay for gas
+	builtin.Energy.Native(st, targetTime).Add(C.Address, math.MaxBig256)
+
+	// Build removeUser call data: removeUser(address _self, address _user)
+	method, found := builtin.Prototype.ABI.MethodByName("removeUser")
+	assert.True(t, found, "removeUser method should exist")
+
+	callData, err := method.EncodeInput(target, B.Address)
+	assert.Nil(t, err)
+
+	// Create transaction to call Prototype.removeUser(target, B)
+	// This will:
+	// 1. Use MPP because B is target's user with credit, and target has sponsor C
+	// 2. Execute removeUser which removes B from target's user list
+	// 3. When returnGas is called, B is no longer a user
+	trx := tx.NewBuilder(tx.TypeLegacy).
+		GasPriceCoef(1).
+		Gas(1000000).
+		Expiration(100).
+		Nonce(1).
+		ChainTag(repo.ChainTag()).
+		Clause(tx.NewClause(&target).WithData(callData)).
+		Build()
+	trx = tx.MustSign(trx, B.PrivateKey)
+
+	// Execute the transaction using runtime
+	rt := runtime.New(
+		repo.NewChain(repo.BestBlockSummary().Header.ID()),
+		st,
+		&xenv.BlockContext{Time: targetTime, Number: repo.BestBlockSummary().Header.Number() + 1},
+		&thor.NoFork,
+	)
+
+	receipt, err := rt.ExecuteTransaction(trx)
+	assert.Nil(t, err)
+	assert.False(t, receipt.Reverted, "Transaction should not revert")
+
+	// Verify that sponsor C paid for the transaction (not B)
+	assert.Equal(t, C.Address, receipt.GasPayer, "Sponsor C should be the gas payer")
+
+	// After transaction: Verify B is no longer a user of target
+	isUser, err = bind.IsUser(B.Address)
+	assert.Nil(t, err)
+	assert.False(t, isUser, "B should NOT be a user of target after the transaction")
+
+	// After transaction: Verify B's user credit is 0 (since they're no longer a user)
+	credit, err := bind.UserCredit(B.Address, targetTime)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, credit.Cmp(big.NewInt(0)), "B's user credit should be 0 after being removed")
 }
 
 func txBuilder(tag byte, txType tx.Type) *tx.Builder {
