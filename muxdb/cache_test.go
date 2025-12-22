@@ -43,16 +43,16 @@ func TestCacheNodeBlob(t *testing.T) {
 	)
 
 	// add to committing cache
-	cache.AddNodeBlob(&keyBuf, "", nil, ver, blob, true)
-	assert.Equal(t, blob, cache.GetNodeBlob(&keyBuf, "", nil, ver, false))
+	cache.AddNodeBlob(&keyBuf, "", []byte{0x0a}, ver, blob, true)
+	assert.Equal(t, blob, cache.GetNodeBlob(&keyBuf, "", []byte{0x0a}, ver, false))
 	// minor ver not matched
 	assert.Nil(t, cache.GetNodeBlob(&keyBuf, "", nil, trie.Version{Major: 1}, false))
 
 	cache = newCache(1, 0)
 
 	// add to querying cache
-	cache.AddNodeBlob(&keyBuf, "", nil, ver, blob, false)
-	assert.Equal(t, blob, cache.GetNodeBlob(&keyBuf, "", nil, ver, false))
+	cache.AddNodeBlob(&keyBuf, "", []byte{0x0b}, ver, blob, false)
+	assert.Equal(t, blob, cache.GetNodeBlob(&keyBuf, "", []byte{0x0b}, ver, false))
 	// minor ver not matched
 	assert.Nil(t, cache.GetNodeBlob(&keyBuf, "", nil, trie.Version{Major: 1}, false))
 }
