@@ -61,7 +61,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			base = parentTime + thor.BlockInterval()
 		}
 		// otherwise, use now as base
-		flow, pos, err := n.packer.Schedule(n.repo.BestBlockSummary(), base)
+		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), base)
 		if err != nil {
 			if authorized {
 				// if was authorized before, now mark as not authorized and log the error
@@ -80,7 +80,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			authorized = true
 			logger.Info("prepared to pack block")
 		}
-		logger.Info("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore(), "pos", pos)
+		logger.Info("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore()-flow.ParentHeader().TotalScore())
 
 		for {
 			if uint64(time.Now().Unix())+thor.BlockInterval()/2 > flow.When() {

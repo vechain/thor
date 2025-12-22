@@ -342,7 +342,7 @@ func packTxsIntoBlock(
 		return nil, err
 	}
 
-	flow, _, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1)
+	flow, err := p.Schedule(parentSum, parentBlk.Header().Timestamp()+1)
 	if err != nil {
 		return nil, err
 	}
