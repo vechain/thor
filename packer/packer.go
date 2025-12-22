@@ -59,7 +59,7 @@ func New(
 type scheduleFunc func(parent *chain.BlockSummary, nowTimestamp uint64, state *state.State) (thor.Address, uint64, uint64, error)
 
 // Schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flow, bool, error) {
+func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flow, error) {
 	st := p.stater.NewState(parent.Root())
 
 	var features tx.Features
@@ -82,7 +82,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 
 	beneficiary, newBlockTime, score, err := sched(parent, nowTimestamp, st)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	rt := runtime.New(
@@ -99,7 +99,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header, rt, features, dPosStatus.Active), dPosStatus.Active, nil
+	return newFlow(p, parent.Header, rt, features, dPosStatus.Active), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
