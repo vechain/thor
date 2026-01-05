@@ -32,6 +32,12 @@ jobs:
   scan-workflows:
     name: Scan Workflows
     uses: ./.github/workflows/scan-workflows.yaml
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      issues: write
+      pull-requests: write
     secrets:
       ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
 
