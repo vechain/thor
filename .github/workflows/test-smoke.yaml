@@ -30,13 +30,13 @@ jobs:
           REF="$DEFAULT_COMMIT"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
-            if [[ "${{ github.event.pull_request.base.ref }}" == release/* ]]; then
-              REF="${{ github.event.pull_request.base.ref }}"
+            if [[ "${GITHUB_EVENT_PULL_REQUEST_BASE_REF}" == release/* ]]; then
+              REF="${GITHUB_EVENT_PULL_REQUEST_BASE_REF}"
             fi
           else
             # For push events, we check the branch or tag that was pushed
-            if [[ "${{ github.ref_name }}" == release/* ]]; then
-              REF="${{ github.ref_name }}"
+            if [[ "${GITHUB_REF_NAME}" == release/* ]]; then
+              REF="${GITHUB_REF_NAME}"
             fi
           fi
 
@@ -48,6 +48,8 @@ jobs:
             echo "ref=$REF" >> "$GITHUB_OUTPUT"
           fi
           echo "DRAUPNIR REF: $(<$GITHUB_OUTPUT)"
+        env:
+          GITHUB_EVENT_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
       - name: Checkout
         uses: actions/checkout@v5
         with:
@@ -69,8 +71,11 @@ jobs:
         run: |
           timeout 60 bash -c 'until curl -s http://localhost:8669/accounts; do sleep 2; done'
       - name: Run Smoke Test Separately
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
-          THOR_BRANCH=${{ github.head_ref || github.ref_name }} \
+          THOR_BRANCH=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME} \
           RUNTESTS=TestSmokeTest,TestGenerateRequests,TestConnectionDiesNoPingResponse,TestConnectionClosedWithoutSubscription \
           TEST_NETWORK_ADDR=http://127.0.0.1:8669 \
           TEST_PK=99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36 \
