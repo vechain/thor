@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/api"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
@@ -170,12 +168,9 @@ func TestContract_Filter(t *testing.T) {
 		assert.False(t, receipt.Reverted)
 
 		// Filter events
+		block := uint64(receipt.Meta.BlockNumber)
 		events, err := env.bindContract.FilterEvent("ValueChanged").
-			InRange(&api.Range{
-				From: ptr(uint64(receipt.Meta.BlockNumber)),
-				To:   ptr(uint64(receipt.Meta.BlockNumber)),
-			}).
-			Execute()
+			Execute(FilterBlocks(block, block))
 		require.NoError(t, err)
 		assert.Len(t, events, 1)
 

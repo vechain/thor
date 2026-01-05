@@ -8,13 +8,13 @@ package httpserver
 import (
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/metrics"
 )
 
@@ -29,7 +29,7 @@ func StartMetricsServer(addr string) (string, func(), error) {
 	handler := handlers.CompressHandler(router)
 
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
+	var goes sync.WaitGroup
 	goes.Go(func() {
 		srv.Serve(listener)
 	})
