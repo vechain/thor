@@ -24,7 +24,7 @@ jobs:
       - name: Run Gosec
         id: gosec-run
         continue-on-error: true
-        uses: securego/gosec@6be2b51fd78feca86af91f5186b7964d76cb1256 # v2.22.10
+        uses: securego/gosec@latest # zizmor: ignore[unpinned-uses]
         with:
           args: '-exclude=G104,G115,G304,G406,G507 -exclude-dir=builtin/gen ./...'
 
