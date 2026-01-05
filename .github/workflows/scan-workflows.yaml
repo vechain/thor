@@ -2,8 +2,11 @@ name: Zizmor Scan
 
 on:
   workflow_call:
+    secrets:
+      ZIZMOR_TOKEN:
+        required: true
 
-permissions: {}
+permissions: { }
 
 jobs:
   zizmor:
