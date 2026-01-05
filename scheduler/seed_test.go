@@ -28,7 +28,7 @@ func TestSeeder_Generate(t *testing.T) {
 	})
 
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, err := chain.NewRepository(db, b0)

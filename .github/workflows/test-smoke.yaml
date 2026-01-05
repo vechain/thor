@@ -51,7 +51,7 @@ jobs:
         env:
           GITHUB_EVENT_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: vechain/draupnir
           token: ${{ secrets.DRAUPNIR_TOKEN }}

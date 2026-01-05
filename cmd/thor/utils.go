@@ -56,8 +56,6 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var devNetGenesisID thor.Bytes32
-
 func initLogger(ctx *cli.Context) (*slog.LevelVar, error) {
 	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
@@ -204,10 +202,10 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, *thor.ForkConfig, error)
 	defer thor.LockConfig()
 
 	switch network {
-	case "test":
+	case "testnet", "test":
 		gene := genesis.NewTestnet()
 		return gene, thor.GetForkConfig(gene.ID()), nil
-	case "main":
+	case "mainnet", "main":
 		gene := genesis.NewMainnet()
 		return gene, thor.GetForkConfig(gene.ID()), nil
 	default:
@@ -586,19 +584,13 @@ func printStartupMessage1(
 	)
 }
 
-func getOrCreateDevnetID() thor.Bytes32 {
-	if devNetGenesisID.IsZero() {
-		devNetGenesisID = genesis.NewDevnet().ID()
-	}
-	return devNetGenesisID
-}
-
 func printStartupMessage2(
 	gene *genesis.Genesis,
 	apiURL string,
 	nodeID string,
 	metricsURL string,
 	adminURL string,
+	isDevnet bool,
 ) {
 	fmt.Printf(`%v    API portal   [ %v ]%v%v%v`,
 		func() string { // node ID
@@ -631,7 +623,7 @@ func printStartupMessage2(
 		}(),
 		func() string {
 			// print default dev net's dev accounts info
-			if gene.ID() == getOrCreateDevnetID() {
+			if isDevnet {
 				return `
 ┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
 │  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │

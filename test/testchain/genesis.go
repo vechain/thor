@@ -71,8 +71,8 @@ func CreateGenesis(config genesis.DevConfig, mbp uint64, epochLength uint32, tra
 		}
 	}
 
-	if config.KeyBaseGasPrice == nil || config.KeyBaseGasPrice.Sign() == 0 {
-		gen.Params.BaseGasPrice = (*genesis.HexOrDecimal256)(config.KeyBaseGasPrice)
+	if config.BaseGasPrice == nil || config.BaseGasPrice.Sign() == 0 {
+		gen.Params.BaseGasPrice = (*genesis.HexOrDecimal256)(config.BaseGasPrice)
 	}
 
 	customNet, err := genesis.NewCustomNet(gen)

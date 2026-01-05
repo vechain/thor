@@ -106,7 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Get the commit message
         id: commit_message
         # This is a workaround to get the first line of the commit message. Passing the entire message can cause the payload (JSON) to be invalid.
