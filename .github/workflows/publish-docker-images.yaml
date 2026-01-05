@@ -1,4 +1,15 @@
 name: Publish Docker Image
+# -----------------------------------------------------------------------------
+# Build, tag, and publish multi-architecture Docker images (amd64 + arm64)
+# for both GHCR (GitHub Container Registry) and Docker Hub.
+#
+# Flow:
+#  1. Build each architecture in parallel on native runners.
+#  2. Push per-arch images (with -amd64 / -arm64 suffixes).
+#  3. Merge them into a multi-arch manifest under the canonical tag.
+#  4. Delete per-arch temporary tags to keep registry clean.
+#  5. Run a vulnerability scan on PRs and master.
+# -----------------------------------------------------------------------------
 
 on:
   workflow_call:
@@ -14,77 +25,347 @@ on:
       images:
         type: string
         required: true
-        description: 'The images to publish'
+        description: 'The images to publish.'
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
+# -----------------------------------------------------------------------------
+# 🏗️ 1. Build and push per-architecture images
+# Each architecture is built on its native runner (amd64, arm64)
+# to avoid slow QEMU emulation. Per-arch results are stored and later
+# combined into a multi-arch manifest.
+# -----------------------------------------------------------------------------
 jobs:
   build-and-push-image:
-    name: Build and Push Docker Image
-    runs-on: ubuntu-22.04
-
+    name: Build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs_on: ubuntu-24.04
+            platform: linux/amd64
+            arch: amd64
+          - runs_on: ubuntu-24.04-arm
+            platform: linux/arm64
+            arch: arm64
+    runs-on: ${{ matrix.runs_on }}
     environment: ${{ inputs.environment }}
+
     steps:
-
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up QEMU
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: docker/setup-qemu-action@v3
-
+      # ----------------------------
+      # Set up Buildx for multi-arch builds
+      # ----------------------------
       - name: Set up Docker Buildx
-        if: ${{ github.event_name != 'pull_request' }}
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      # ----------------------------
+      # Log in to registries
+      # ----------------------------
+      - name: Log in to GHCR
         uses: docker/login-action@v3
-        # Only log in to Docker Hub if the event is a release
-        if: ${{ inputs.environment == 'docker-publish' && github.event_name != 'pull_request' }}
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        if: ${{ github.event_name != 'pull_request' }}
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      - name: Log in to Docker Hub
+        if: ${{ inputs.environment == 'docker-publish' && github.event_name != 'pull_request' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ----------------------------
+      # Compute image tags and labels
+      # ----------------------------
+      - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # default to ghcr.io for workflow_dispatch
           images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
-          # use the branch + sha if workflow_dispatch
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
-      - name: Push to Registry(s)
+      # ----------------------------
+      # Add architecture suffixes to tags (e.g. -amd64, -arm64)
+      # ----------------------------
+      - name: Compute arch-suffixed tags
+        id: tags
+        shell: bash
+        env:
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          tr -d '\r' <<< "$META_TAGS" | awk -v a="$ARCH" 'NF{ if ($0 ~ ("-" a "$")) print $0; else print $0 "-" a }' > tags.txt
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          cat tags.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------
+      # Define BuildKit registry cache keys
+      # Enables cross-run caching to speed up rebuilds
+      # ----------------------------
+      - name: Compute registry cache refs
+        id: cache
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          CACHE_REPO=$(echo "$REPO" | tr '/' '-')
+          SAN_REF=$(echo "$REF" | sed 's|/|-|g')
+          echo "from=type=registry,ref=ghcr.io/${REPO}:buildcache-${SAN_REF}-${ARCH}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "to=type=registry,mode=max,ref=ghcr.io/${REPO}:buildcache-${SAN_REF}-${ARCH}" >> "$GITHUB_OUTPUT"
+          else
+            echo "to=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ----------------------------
+      # Build and push the architecture-specific image
+      # On PRs: build only, no push
+      # On main/release: push to registry and record digest
+      # ----------------------------
+      - name: Build and (conditionally) push ${{ matrix.platform }}
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          platforms: ${{ matrix.platform }}
           push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' && matrix.platform == 'linux/amd64' }}
           provenance: ${{ github.event_name != 'pull_request' }}
           sbom: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: ${{ steps.cache.outputs.from }}
+          cache-to: ${{ steps.cache.outputs.to }}
 
-      - name: Scan for vulnerabilities
+      # ----------------------------
+      # Save digest for later manifest creation
+      # ----------------------------
+      - name: Export digest
+        if: ${{ github.event_name != 'pull_request' }}
+        id: digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Replace slashes with underscores to make platform-safe filename
+          SAFE="${{ matrix.platform }}"
+          SAFE="${SAFE//\//_}"
+          FILE="digest-${SAFE}.txt"
+          echo "${{ steps.build.outputs.digest }}" > "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------
+      # Upload digest artifact for merge-manifest job
+      # ----------------------------
+      - name: Upload digest
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ steps.digest.outputs.file }}
+          retention-days: 1
+
+  # -----------------------------------------------------------------------------
+  # 🧩 2. Merge the per-arch images into one multi-arch manifest
+  # The manifest allows users to pull a single tag that works on any platform.
+  # -----------------------------------------------------------------------------
+  merge-manifest:
+    name: Create multi-arch manifest
+    needs: [build-and-push-image]
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: ${{ inputs.environment == 'docker-publish' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
+          tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
+
+      # ----------------------------
+      # Retrieve digest artifacts from each architecture
+      # ----------------------------
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: ./digests
+          merge-multiple: true
+
+      # ----------------------------
+      # Combine architecture-specific images into one manifest
+      # ----------------------------
+      - name: Create and push manifest list
+        shell: bash
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGES: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
+        run: |
+          set -euo pipefail
+          [ -f digests/digest-linux_amd64.txt ] || { echo "Missing amd64 digest"; exit 1; }
+          [ -f digests/digest-linux_arm64.txt ] || { echo "Missing arm64 digest"; exit 1; }
+          AMD64_DIGEST=$(cat digests/digest-linux_amd64.txt)
+          ARM64_DIGEST=$(cat digests/digest-linux_arm64.txt)
+
+          # For each image, tag manifest with all matching canonical tags
+          while IFS= read -r image; do
+            [ -z "$image" ] && continue
+            TAG_ARGS=""
+            while IFS= read -r tag; do
+              [ -z "$tag" ] && continue
+              case "$tag" in
+                "${image}:"*)
+                  base="${tag%-amd64}"
+                  base="${base%-arm64}"
+                  TAG_ARGS="$TAG_ARGS -t $base"
+                  ;;
+              esac
+            done <<< "$TAGS"
+
+            [ -z "$TAG_ARGS" ] && { echo "No tags for $image"; continue; }
+
+            docker buildx imagetools create \
+              $TAG_ARGS \
+              "${image}@${AMD64_DIGEST}" \
+              "${image}@${ARM64_DIGEST}"
+          done <<< "$IMAGES"
+
+      # ----------------------------
+      # Cleanup: remove temporary -amd64 and -arm64 tags
+      # These are now referenced in the manifest and no longer needed.
+      # ----------------------------
+      - name: Delete per-arch temporary tags (slim)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          echo "Cleaning up per-arch temporary tags for $REPO ..."
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          REPO_LC=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
+          API_BASE="/orgs/${OWNER}"
+          if ! gh api "${API_BASE}/packages/container/${REPO_LC}/versions?per_page=1" >/dev/null 2>&1; then
+            API_BASE="/users/${OWNER}"
+          fi
+
+          for arch in amd64 arm64; do
+            mapfile -t versions < <(
+              gh api -H "Accept: application/vnd.github+json" \
+                "${API_BASE}/packages/container/${REPO_LC}/versions?per_page=100" |
+              jq -r ".[] | select(.metadata.container.tags[]? | endswith(\"-${arch}\")) | .id"
+            )
+            for id in "${versions[@]:-}"; do
+              echo "Deleting version id ${id} ($arch)"
+              for attempt in {1..3}; do
+                if gh api -X DELETE \
+                  -H "Accept: application/vnd.github+json" \
+                  "${API_BASE}/packages/container/${REPO_LC}/versions/${id}" >/dev/null 2>&1; then
+                  echo "Deleted ${id}"
+                  break
+                fi
+                echo "Retry $attempt failed, sleeping..."
+                sleep $((attempt * 2))
+              done
+            done
+          done
+
+      # ----------------------------
+      # Post-run summary for GitHub UI
+      # ----------------------------
+      - name: Write workflow summary
+        if: always()
+        shell: bash
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          AMD64_DIGEST_PATH: digests/digest-linux_amd64.txt
+          ARM64_DIGEST_PATH: digests/digest-linux_arm64.txt
+        run: |
+          set -euo pipefail
+          echo "## 🚀 Docker Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Published tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$TAGS" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "$AMD64_DIGEST_PATH" ] && [ -f "$ARM64_DIGEST_PATH" ]; then
+            AMD64_DIGEST=$(cat "$AMD64_DIGEST_PATH")
+            ARM64_DIGEST=$(cat "$ARM64_DIGEST_PATH")
+            echo "**Digests used:**" >> $GITHUB_STEP_SUMMARY
+            echo "- 🧱 amd64: \`$AMD64_DIGEST\`" >> $GITHUB_STEP_SUMMARY
+            echo "- 🧱 arm64: \`$ARM64_DIGEST\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "**Status:** ✅ Manifest created and per-arch tags cleaned up." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Generated automatically by the Publish Docker Image workflow._" >> $GITHUB_STEP_SUMMARY
+
+  # -----------------------------------------------------------------------------
+  # 🔍 3. Security scan (Trivy)
+  # Run lightweight container vulnerability scan on PRs and master branch.
+  # -----------------------------------------------------------------------------
+  scan:
+    name: Scan (Trivy)
+    needs: [build-and-push-image]
+    runs-on: ubuntu-24.04
+    if: ${{ github.ref_name == 'master' }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+
+      # Recompute metadata so scan can reference same tags
+      - name: Extract metadata (tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
+          tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
+
+      - name: Scan for vulnerabilities (amd64 only)
         uses: crazy-max/ghaction-container-scan@v3
-        if: ${{ github.event_name == 'pull_request' || github.ref_name == 'master' }}
         with:
           image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           annotations: true
           severity: LOW
           dockerfile: ./Dockerfile
         env:
+          # Mirror of the Trivy vulnerability database
           # See https://github.com/aquasecurity/trivy/discussions/7538
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2

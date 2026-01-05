@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
@@ -64,7 +65,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	}
 
 	var (
-		goes    co.Goes
+		goes    sync.WaitGroup
 		pumpErr error
 		ch      = make(chan *block.Block, 1000)
 		cancel  func()
@@ -208,7 +209,7 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 	)
 
 	var (
-		goes    co.Goes
+		goes    sync.WaitGroup
 		pumpErr error
 		ch      = make(chan *block.Block, 512)
 		cancel  func()

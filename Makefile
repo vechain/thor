@@ -10,7 +10,7 @@ PACKAGES = `go list ./... | grep -v '/vendor/'`
 FUZZTIME=1m
 
 REQUIRED_GO_MAJOR = 1
-REQUIRED_GO_MINOR = 24
+REQUIRED_GO_MINOR = 25
 MAJOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f1)
 MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
 export GO111MODULE=on

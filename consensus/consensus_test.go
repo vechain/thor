@@ -102,7 +102,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
+	flow, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer2 := genesis.DevAccounts()[1]
 	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, &forkConfig, 0)
 	b1sum, _ := repo.GetBlockSummary(b1.Header().ID())
-	flow2, _, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval())
+	flow2, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval())
 	if err != nil {
 		return nil, err
 	}
@@ -876,7 +876,7 @@ func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 
-	gen := genesis.NewDevnet()
+	gen, forkConfig := genesis.NewDevnet()
 	genesisBlock, _, _, err := gen.Build(stater)
 	if err != nil {
 		t.Fatal(err)
@@ -887,9 +887,7 @@ func TestNewRuntimeForReplay_SyncPOSError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mockForkConfig := thor.ForkConfig{}
-
-	consensus := New(repo, stater, &mockForkConfig)
+	consensus := New(repo, stater, forkConfig)
 
 	builder := new(block.Builder).
 		ParentID(genesisBlock.Header().ID()).
