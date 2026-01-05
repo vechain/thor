@@ -25,7 +25,7 @@ type Consensus interface {
 
 // Packer defines the interface for packing blocks
 type Packer interface {
-	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, posActive bool, err error)
+	Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *packer.Flow, err error)
 	SetTargetGasLimit(gl uint64)
 }
 
