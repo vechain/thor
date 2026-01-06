@@ -32,8 +32,12 @@ func (sc *stmtCache) Prepare(query string) (*sql.Stmt, error) {
 
 	actual, loaded := sc.m.LoadOrStore(query, stmt)
 	if loaded {
-		err = stmt.Close()
-		return actual.(*sql.Stmt), err
+		if err = stmt.Close(); err != nil {
+			// the cached statement might be still valid
+			// but if we can't close then it's worth surfacing the error
+			return nil, err
+		}
+		return actual.(*sql.Stmt), nil
 	}
 
 	return stmt, nil

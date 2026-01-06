@@ -695,17 +695,14 @@ func (w *Writer) Commit() (err error) {
 			}
 			newCount := atomic.AddInt64(w.checkpointCount, count)
 
-			shouldCheckpoint := newCount >= 500
-
-			if shouldCheckpoint {
-				go func() {
-					err := w.checkpointWAL()
-					if err != nil {
-						log.Warn("failed to checkpoint wal file", "err", err)
-					} else {
-						atomic.StoreInt64(w.checkpointCount, 0)
-					}
-				}()
+			if newCount >= 500 {
+				if atomic.CompareAndSwapInt64(w.checkpointCount, newCount, 0) {
+					go func() {
+						if err := w.checkpointWAL(); err != nil {
+							log.Error("failed to checkpoint wal file", "err", err)
+						}
+					}()
+				}
 			}
 		}
 	}()
