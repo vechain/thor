@@ -1,5 +1,8 @@
 name: Master / Release CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:

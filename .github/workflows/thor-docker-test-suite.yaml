@@ -1,5 +1,8 @@
 name: Thor Docker Test Suite
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     secrets:
