@@ -178,6 +178,29 @@ func TestOption(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
+
+	transferTopic := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+	criteriaSet := make([]*api.EventCriteria, 11)
+	for i := range 11 {
+		criteriaSet[i] = &api.EventCriteria{
+			TopicSet: api.TopicSet{
+				Topic0: &transferTopic,
+			},
+		}
+	}
+
+	from := uint64(0)
+	filter = api.EventFilter{
+		CriteriaSet: criteriaSet,
+		Range:       &api.Range{From: &from},
+		Options:     nil,
+		Order:       logdb.DESC,
+	}
+
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "number of criteria in criteriaSet: 11 cannot be greater than: 10\n", string(res))
 }
 
 func TestZeroFrom(t *testing.T) {
@@ -314,7 +337,7 @@ func initEventServer(t *testing.T, limit uint64) *testchain.Chain {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.LogDB(), limit).Mount(router, "/logs/event")
+	New(thorChain.Repo(), thorChain.LogDB(), limit, 10).Mount(router, "/logs/event")
 	ts = httptest.NewServer(router)
 
 	return thorChain
