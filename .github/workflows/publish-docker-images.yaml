@@ -49,7 +49,7 @@ jobs:
             platform: linux/amd64
             arch: amd64
           - runs_on: ubuntu-24.04-arm
-            platform: linux/arm64
+            platform: docker-build-arm64
             arch: arm64
     runs-on: ${{ matrix.runs_on }}
     environment: ${{ inputs.environment }}
