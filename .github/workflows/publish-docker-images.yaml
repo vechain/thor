@@ -66,6 +66,8 @@ jobs:
 
   build-and-push-image:
     name: Build (${{ matrix.platform }})
+    needs:
+      - visibility
     strategy:
       fail-fast: false
       matrix:
