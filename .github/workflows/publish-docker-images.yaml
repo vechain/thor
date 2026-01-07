@@ -75,7 +75,7 @@ jobs:
             arch: amd64
           - runs_on: docker-build-arm64
             # default arm runner not available in private repos
-            runs-on: ${{ needs.visibility.outputs.is_public && 'ubuntu-24.04-arm' || 'docker-build-arm64' }}
+            runs-on: ${{ needs.visibility.outputs.is_public == 'true' && 'ubuntu-24.04-arm' || 'docker-build-arm64' }}
             platform: linux/arm64
             arch: arm64
     runs-on: ${{ matrix.runs_on }}
