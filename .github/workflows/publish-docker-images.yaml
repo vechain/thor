@@ -57,8 +57,10 @@ jobs:
           echo "Is private? ${IS_PRIVATE}"
 
           if [ "$IS_PRIVATE" == "false" ]; then
+            echo "Repository is public."
             echo "is_public=true" >> "$GITHUB_OUTPUT"
           else
+            echo "Repository is private."
             echo "is_public=false" >> "$GITHUB_OUTPUT"
           fi
 
