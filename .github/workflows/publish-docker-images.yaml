@@ -50,6 +50,8 @@ jobs:
         run: |
           IS_PRIVATE=$(gh repo view ${{ github.repository }} --json isPrivate -q .isPrivate)
           echo "is_private=${IS_PRIVATE}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   build-and-push-image:
     name: Build (${{ matrix.platform }})
