@@ -39,6 +39,25 @@ permissions:
 # combined into a multi-arch manifest.
 # -----------------------------------------------------------------------------
 jobs:
+  visibility:
+    runs-on: ubuntu-latest
+    outputs:
+      is_public: ${{ steps.visibility.outputs.is_public }}
+    steps:
+      - id: visibility
+        run: |
+          IS_PRIVATE=$(curl -s -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}" | jq -r '.private')
+
+          if [ "$IS_PRIVATE" == "false" ]; then
+            echo "is_public=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_public=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-push-image:
     name: Build (${{ matrix.platform }})
     strategy:
@@ -49,6 +68,8 @@ jobs:
             platform: linux/amd64
             arch: amd64
           - runs_on: docker-build-arm64
+            # default arm runner not available in private repos
+            runs-on: ${{ needs.visibility.outputs.is_public && 'ubuntu-24.04-arm' || 'docker-build-arm64' }}
             platform: linux/arm64
             arch: arm64
     runs-on: ${{ matrix.runs_on }}
