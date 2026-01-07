@@ -39,8 +39,24 @@ permissions:
 # combined into a multi-arch manifest.
 # -----------------------------------------------------------------------------
 jobs:
+  visibility:
+    runs-on: ubuntu-latest
+    outputs:
+      is_private: ${{ steps.visibility.outputs.is_private }}
+    steps:
+      - id: visibility
+        name: Check if repository is private
+        shell: bash
+        run: |
+          IS_PRIVATE=$(gh repo view ${{ github.repository }} --json isPrivate -q .isPrivate)
+          echo "is_private=${IS_PRIVATE}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build-and-push-image:
     name: Build (${{ matrix.platform }})
+    needs:
+      - visibility
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +64,8 @@ jobs:
           - runs_on: ubuntu-24.04
             platform: linux/amd64
             arch: amd64
-          - runs_on: ubuntu-24.04-arm
+            # GitHub-hosted ARM runner for public repos, custom runner for private
+          - runs_on: ${{ needs.visibility.outputs.is_private == 'true' && 'docker-build-arm64' || 'ubuntu-24.04-arm' }}
             platform: linux/arm64
             arch: arm64
     runs-on: ${{ matrix.runs_on }}
