@@ -64,15 +64,15 @@ func New(path string) (logDB *LogDB, err error) {
 		return nil, err
 	}
 
-	if _, err := wconn2.ExecContext(context.Background(), "pragma synchronous=off"); err != nil {
+	if _, err = wconn2.ExecContext(context.Background(), "PRAGMA synchronous=off"); err != nil {
 		return nil, err
 	}
 
-	if _, err := wconn1.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", journalSize)); err != nil {
+	if _, err = wconn1.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", journalSize)); err != nil {
 		return nil, err
 	}
 
-	if _, err := wconn1.ExecContext(context.Background(), "PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
+	if _, err = wconn1.ExecContext(context.Background(), "PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
 		return nil, err
 	}
 

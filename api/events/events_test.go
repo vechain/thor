@@ -337,7 +337,7 @@ func initEventServer(t *testing.T, limit uint64) *testchain.Chain {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.LogDB(), limit).Mount(router, "/logs/event")
+	New(thorChain.Repo(), thorChain.LogDB(), limit, 10).Mount(router, "/logs/event")
 	ts = httptest.NewServer(router)
 
 	return thorChain

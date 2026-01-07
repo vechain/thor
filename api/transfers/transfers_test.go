@@ -270,7 +270,7 @@ func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), logDb, limit).Mount(router, "/logs/transfer")
+	New(thorChain.Repo(), logDb, limit, 10).Mount(router, "/logs/transfer")
 
 	ts = httptest.NewServer(router)
 }

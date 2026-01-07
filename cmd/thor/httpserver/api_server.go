@@ -44,6 +44,7 @@ var logger = log.WithContext("pkg", "api")
 const (
 	defaultFeeCacheSize     = 1024
 	defaultRequestBodyLimit = 200 * 1024 // 200KB
+	defaultMaxCriteriaCount = 10
 )
 
 type APIConfig struct {
@@ -109,8 +110,8 @@ func StartAPIServer(
 
 	accounts.New(repo, stater, config.CallGasLimit, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
 	if !config.SkipLogs {
-		events.New(repo, logDB, config.LogsLimit).Mount(router, "/logs/event")
-		transfers.New(repo, logDB, config.LogsLimit).Mount(router, "/logs/transfer")
+		events.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/event")
+		transfers.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).Mount(router, "/blocks")
 	transactions.New(repo, txPool).Mount(router, "/transactions")

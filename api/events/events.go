@@ -19,19 +19,19 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 )
 
-const MaxCriteriaCount = 10
-
 type Events struct {
-	repo  *chain.Repository
-	db    *logdb.LogDB
-	limit uint64
+	repo             *chain.Repository
+	db               *logdb.LogDB
+	limit            uint64
+	maxCriteriaCount int
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Events {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64, maxCriteriaCount int) *Events {
 	return &Events{
 		repo,
 		db,
 		logsLimit,
+		maxCriteriaCount,
 	}
 }
 
@@ -70,11 +70,11 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 			return restutil.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
 		}
 	}
-	if len(filter.CriteriaSet) > MaxCriteriaCount {
+	if len(filter.CriteriaSet) > e.maxCriteriaCount {
 		return restutil.BadRequest(fmt.Errorf(
 			"number of criteria in criteriaSet: %d cannot be greater than: %d",
 			len(filter.CriteriaSet),
-			MaxCriteriaCount),
+			e.maxCriteriaCount),
 		)
 	}
 	if filter.Options == nil {
