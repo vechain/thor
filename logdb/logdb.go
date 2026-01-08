@@ -61,26 +61,26 @@ func New(path string) (logDB *LogDB, err error) {
 		return nil, err
 	}
 
-	wconn1, err := writeDB.Conn(context.Background())
+	wconn, err := writeDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	wconn2, err := writeDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = wconn2.ExecContext(context.Background(), "PRAGMA synchronous=off"); err != nil {
-		return nil, err
-	}
-
-	if _, err = wconn1.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", journalSize)); err != nil {
+	if _, err = wconn.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", journalSize)); err != nil {
 		return nil, err
 	}
 
 	// at this point, the logdb is not open for reading, so we can truncate the wal file
-	if _, err = wconn1.ExecContext(context.Background(), "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+	if _, err = wconn.ExecContext(context.Background(), "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		return nil, fmt.Errorf("failed to truncate wal file: %w", err)
+	}
+
+	wconnSyncOff, err := writeDB.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = wconnSyncOff.ExecContext(context.Background(), "PRAGMA synchronous=off"); err != nil {
 		return nil, err
 	}
 
@@ -102,8 +102,8 @@ func New(path string) (logDB *LogDB, err error) {
 		readDB:         readDB,
 		writeDB:        writeDB,
 		writeStmtCache: newStmtCache(writeDB),
-		wconn:          wconn1,
-		wconnSyncOff:   wconn2,
+		wconn:          wconn,
+		wconnSyncOff:   wconnSyncOff,
 	}, nil
 }
 
