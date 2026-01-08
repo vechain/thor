@@ -340,7 +340,7 @@ func TestGetAfterPrune(t *testing.T) {
 	assert.NoError(t, err)
 
 	st = state.NewStater(chain.Database()).NewState(sum.Root())
-	balance, err = st.GetBalance(to)
+	_, err = st.GetBalance(to)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing trie node")
 }

@@ -247,7 +247,7 @@ func TestContextChecker(t *testing.T) {
 }
 
 func TestGetAfterPrune(t *testing.T) {
-	var name = "prune-test"
+	name := "prune-test"
 
 	db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 	engine := engine.NewLevelEngine(db)
