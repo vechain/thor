@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/test/testchain"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -306,4 +307,40 @@ func TestPrune(t *testing.T) {
 	assert.Nil(t, err)
 
 	closeDB()
+}
+
+func TestGetAfterPrune(t *testing.T) {
+	chain, err := testchain.NewDefault()
+	assert.NoError(t, err)
+
+	accounts := genesis.DevAccounts()
+	to := thor.BytesToAddress([]byte("to"))
+
+	for range 10 {
+		err = chain.MintClauses(accounts[0], []*tx.Clause{tx.NewClause(&to).WithValue(big.NewInt(1))})
+		assert.NoError(t, err)
+	}
+
+	pruner := Pruner{
+		repo: chain.Repo(),
+		db:   chain.Database(),
+	}
+	// iterate best chain to 10
+
+	// prune [0, 10)
+	err = pruner.pruneTries(chain.Repo().NewBestChain(), 0, chain.Repo().BestBlockSummary().Header.Number())
+	assert.NoError(t, err)
+
+	st := chain.State()
+	balance, err := st.GetBalance(to)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(10), balance)
+
+	sum, err := chain.Repo().NewBestChain().GetBlockSummary(9)
+	assert.NoError(t, err)
+
+	st = state.NewStater(chain.Database()).NewState(sum.Root())
+	balance, err = st.GetBalance(to)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing trie node")
 }
