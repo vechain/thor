@@ -20,16 +20,18 @@ import (
 )
 
 type Transfers struct {
-	repo  *chain.Repository
-	db    *logdb.LogDB
-	limit uint64
+	repo             *chain.Repository
+	db               *logdb.LogDB
+	limit            uint64
+	maxCriteriaCount int
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Transfers {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64, maxCriteriaCount int) *Transfers {
 	return &Transfers{
 		repo,
 		db,
 		logsLimit,
+		maxCriteriaCount,
 	}
 }
 
@@ -75,6 +77,13 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		if criterion == nil {
 			return restutil.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
 		}
+	}
+	if len(filter.CriteriaSet) > t.maxCriteriaCount {
+		return restutil.BadRequest(fmt.Errorf(
+			"number of criteria in criteriaSet: %d cannot be greater than: %d",
+			len(filter.CriteriaSet),
+			t.maxCriteriaCount),
+		)
 	}
 	if filter.Options == nil {
 		filter.Options = &api.Options{}
