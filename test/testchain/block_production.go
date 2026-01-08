@@ -29,7 +29,7 @@ func (c *Chain) MintBlock(transactions ...*tx.Transaction) error {
 	best := c.repo.BestBlockSummary()
 	now := best.Header.Timestamp() + thor.BlockInterval()
 	p := packer.New(c.Repo(), c.Stater(), validator.Address, nil, c.GetForkConfig(), 0)
-	flow, _, err := p.Schedule(c.Repo().BestBlockSummary(), now)
+	flow, err := p.Schedule(c.Repo().BestBlockSummary(), now)
 	if err != nil {
 		return fmt.Errorf("unable to schedule packing: %w", err)
 	}
@@ -93,7 +93,7 @@ func (c *Chain) NextValidator() (genesis.DevAccount, bool) {
 
 		now := best.Header.Timestamp() + thor.BlockInterval()
 
-		flow, _, err := p.Schedule(c.Repo().BestBlockSummary(), now)
+		flow, err := p.Schedule(c.Repo().BestBlockSummary(), now)
 		if err != nil {
 			continue
 		}

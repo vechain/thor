@@ -14,7 +14,7 @@ import (
 var (
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "the network to join (main|test) or the path/URL to a genesis file",
+		Usage: "the network to join (mainnet|main|testnet|test) or the path/URL to a genesis file",
 	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",
@@ -90,7 +90,7 @@ var (
 	}
 	apiSlowQueriesThresholdFlag = cli.Uint64Flag{
 		Name:  "api-slow-queries-threshold",
-		Value: 500,
+		Value: 0,
 		Usage: "all queries with execution time(ms) above threshold will be logged",
 	}
 	apiLog5xxErrorsFlag = cli.BoolFlag{

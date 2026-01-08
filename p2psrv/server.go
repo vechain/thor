@@ -11,6 +11,7 @@ import (
 	"math"
 	"net"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/vechain/thor/v2/common/mclock"
@@ -24,7 +25,6 @@ import (
 	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 
 	"github.com/vechain/thor/v2/cache"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
 )
 
@@ -36,7 +36,7 @@ type Server struct {
 	srv             *p2p.Server
 	tempdiscv5      *tempdiscv5.Network
 	discv5          *discv5discover.UDPv5
-	goes            co.Goes
+	goes            sync.WaitGroup
 	done            chan struct{}
 	bootstrapNodes  []*tempdiscv5.Node
 	knownNodes      *cache.PrioCache

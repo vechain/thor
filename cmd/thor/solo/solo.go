@@ -9,6 +9,7 @@ import (
 	"context"
 	"math/big"
 	"math/rand/v2"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
@@ -73,7 +73,7 @@ func New(
 
 // Run runs the packer for solo
 func (s *Solo) Run(ctx context.Context) error {
-	goes := &co.Goes{}
+	goes := &sync.WaitGroup{}
 
 	defer func() {
 		<-ctx.Done()

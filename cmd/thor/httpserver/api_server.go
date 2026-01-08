@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -44,6 +44,7 @@ var logger = log.WithContext("pkg", "api")
 const (
 	defaultFeeCacheSize     = 1024
 	defaultRequestBodyLimit = 200 * 1024 // 200KB
+	defaultMaxCriteriaCount = 10
 )
 
 type APIConfig struct {
@@ -109,8 +110,8 @@ func StartAPIServer(
 
 	accounts.New(repo, stater, config.CallGasLimit, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
 	if !config.SkipLogs {
-		events.New(repo, logDB, config.LogsLimit).Mount(router, "/logs/event")
-		transfers.New(repo, logDB, config.LogsLimit).Mount(router, "/logs/transfer")
+		events.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/event")
+		transfers.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).Mount(router, "/blocks")
 	transactions.New(repo, txPool).Mount(router, "/transactions")
@@ -162,7 +163,7 @@ func StartAPIServer(
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(router)
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
+	var goes sync.WaitGroup
 	goes.Go(func() {
 		srv.Serve(listener)
 	})

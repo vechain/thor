@@ -107,7 +107,7 @@ make
 Run Thor:
 
 ```sh
-bin/thor --network main
+bin/thor --network mainnet
 ```
 
 Thor will begin syncing the mainnet and can be accessed at [http://localhost:8669/](http://localhost:8669/).
@@ -123,7 +123,7 @@ docker run -d \
   -p 11235:11235 \
   -p 11235:11235/udp \
   --name thor-node vechain/thor \
-    --network main  \
+    --network mainnet  \
     --api-addr 0.0.0.0:8669
 ```
 
@@ -140,7 +140,7 @@ services:
   thor-node:
     image: vechain/thor
     container_name: thor-node
-    command: --network main --api-addr 0.0.0.0:8669
+    command: --network mainnet --api-addr 0.0.0.0:8669
     volumes:
       - thor-data:/home/thor
     ports:

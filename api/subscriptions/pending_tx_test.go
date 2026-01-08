@@ -72,7 +72,7 @@ func TestPendingTx_Unsubscribe(t *testing.T) {
 
 func TestPendingTx_DispatchLoop(t *testing.T) {
 	db := muxdb.NewMem()
-	gene := genesis.NewDevnet()
+	gene, forkConfig := genesis.NewDevnet()
 	stater := state.NewStater(db)
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
@@ -81,7 +81,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, forkConfig)
 	p := newPendingTx(txPool)
 
 	// Add new block to be in a sync state
@@ -127,9 +127,9 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 }
 
 func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, t *testing.T) {
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &thor.NoFork, 0)
+	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &thor.SoloFork, 0)
 	sum, _ := repo.GetBlockSummary(b0.Header().ID())
-	flow, _, err := packer.Schedule(sum, uint64(time.Now().Unix()))
+	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}

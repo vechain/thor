@@ -68,7 +68,7 @@ func (ti *txIterator) OnProcessed(_ thor.Bytes32, _ error) {
 func TestP(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)
@@ -87,7 +87,7 @@ func TestP(t *testing.T) {
 	for {
 		best := repo.BestBlockSummary()
 		p := packer.New(repo, stater, a1.Address, &a1.Address, &thor.NoFork, 0)
-		flow, _, err := p.Schedule(best, uint64(time.Now().Unix()))
+		flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,7 +153,7 @@ func TestForkVIP191(t *testing.T) {
 
 	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a1.Address, &a1.Address, &fc, 0)
-	flow, _, err := p.Schedule(best, uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestForkVIP191(t *testing.T) {
 func TestBlocklist(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)
@@ -205,7 +205,7 @@ func TestBlocklist(t *testing.T) {
 
 	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig, 0)
-	flow, _, err := p.Schedule(best, uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,14 +233,14 @@ func TestBlocklist(t *testing.T) {
 func TestMock(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 
 	b0, _, _, _ := g.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
 	a0 := genesis.DevAccounts()[0]
 
-	p := packer.New(repo, stater, a0.Address, &a0.Address, &thor.NoFork, 0)
+	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig, 0)
 
 	best := repo.BestBlockSummary()
 
@@ -260,7 +260,7 @@ func TestMock(t *testing.T) {
 func TestSetGasLimit(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	stater := state.NewStater(db)
 	b0, _, _, _ := g.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)

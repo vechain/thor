@@ -61,7 +61,7 @@ func TestAdopt(t *testing.T) {
 	// Setup environment
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 
 	// Build genesis block
 	b, _, _, _ := g.Build(stater)
@@ -73,13 +73,13 @@ func TestAdopt(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &thor.NoFork, 0)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, forkConfig, 0)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
 	}
 
-	flow, _, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal("Error scheduling:", err)
 	}
@@ -139,7 +139,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 		t.Fatal("Error getting block summary:", err)
 	}
 
-	flow, _, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal("Error scheduling:", err)
 	}
@@ -170,22 +170,17 @@ func TestAdoptTypedTxs(t *testing.T) {
 
 func TestPack(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, forkConfig := genesis.NewDevnet()
 
 	stater := state.NewStater(db)
 	parent, _, _, _ := g.Build(stater)
 
 	repo, _ := chain.NewRepository(db, parent)
 
-	forkConfig := thor.NoFork
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP214 = 0
-	forkConfig.FINALITY = 0
-
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 
@@ -201,7 +196,7 @@ func TestPack(t *testing.T) {
 
 func TestPackAfterGalacticaFork(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 
 	stater := state.NewStater(db)
 	parent, _, _, _ := g.Build(stater)
@@ -217,7 +212,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
 
 	// Block 1: Galactica is not enabled
 	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false)
@@ -234,7 +229,7 @@ func TestPackAfterGalacticaFork(t *testing.T) {
 
 	// Block 2: Galactica is enabled
 	parentSum, _ = repo.GetBlockSummary(block.Header().ID())
-	flow, _, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval())
+	flow, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval())
 	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(2), block.Header().Number())
@@ -291,7 +286,7 @@ func TestAdoptErr(t *testing.T) {
 	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, config, 0)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
-	flow, _, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
 
 	// Test chain tag mismatch
 	tx1 := createTx(tx.TypeLegacy, byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
@@ -441,8 +436,8 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 
 func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	config := genesis.DevConfig{
-		ForkConfig:      &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32},
-		KeyBaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
+		ForkConfig:   &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32},
+		BaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
 	}
 	chain, err := testchain.NewIntegrationTestChain(config, 180)
 	assert.NoError(t, err)
@@ -501,7 +496,7 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig, 990000000000001)
 
-	flow, _, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
+	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
 
 	expectedErrorMessage := "bad tx: effective priority fee too low"
 	assert.ErrorContainsf(t, flow.Adopt(txNoPriorityFee), expectedErrorMessage, "Expected error message: '%s'", expectedErrorMessage)

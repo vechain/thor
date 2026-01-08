@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,7 +21,6 @@ import (
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -81,7 +81,7 @@ type TxPool struct {
 	cancel func()
 	txFeed event.Feed
 	scope  event.SubscriptionScope
-	goes   co.Goes
+	goes   sync.WaitGroup
 }
 
 // New create a new TxPool instance.

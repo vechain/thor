@@ -21,16 +21,26 @@ func newStmtCache(db *sql.DB) *stmtCache {
 }
 
 func (sc *stmtCache) Prepare(query string) (*sql.Stmt, error) {
-	cached, _ := sc.m.Load(query)
-	if cached == nil {
-		stmt, err := sc.db.Prepare(query)
-		if err != nil {
+	if cached, ok := sc.m.Load(query); ok {
+		return cached.(*sql.Stmt), nil
+	}
+
+	stmt, err := sc.db.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+
+	actual, loaded := sc.m.LoadOrStore(query, stmt)
+	if loaded {
+		if err = stmt.Close(); err != nil {
+			// the cached statement might be still valid
+			// but if we can't close then it's worth surfacing the error
 			return nil, err
 		}
-		sc.m.Store(query, stmt)
-		cached = stmt
+		return actual.(*sql.Stmt), nil
 	}
-	return cached.(*sql.Stmt), nil
+
+	return stmt, nil
 }
 
 func (sc *stmtCache) MustPrepare(query string) *sql.Stmt {

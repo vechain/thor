@@ -150,7 +150,7 @@ type testResolvedTransaction struct {
 func newTestResolvedTransaction(t *testing.T) (*testResolvedTransaction, error) {
 	db := muxdb.NewMem()
 
-	gen := genesis.NewDevnet()
+	gen, _ := genesis.NewDevnet()
 
 	stater := state.NewStater(db)
 	parent, _, _, err := gen.Build(stater)

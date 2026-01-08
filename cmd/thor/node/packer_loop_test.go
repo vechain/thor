@@ -36,15 +36,17 @@ func getFlowAndNode(t *testing.T, forkConfig *thor.ForkConfig) (*packer.Flow, *N
 	db := muxdb.NewMem()
 	now := time.Now().Unix()
 	launchTime := uint64(now) - thor.BlockInterval()
-	builder := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &thor.SoloFork, LaunchTime: launchTime})
+
+	if forkConfig == nil {
+		forkConfig = &thor.SoloFork
+		forkConfig.HAYABUSA = 1
+	}
+
+	builder := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: forkConfig, LaunchTime: launchTime})
 	a1 := genesis.DevAccounts()[0]
 
 	b0, _, _, err := builder.Build(state.NewStater(db))
 	assert.Nil(t, err)
-
-	if forkConfig == nil {
-		forkConfig = &thor.SoloFork
-	}
 
 	repo, _ := chain.NewRepository(db, b0)
 
