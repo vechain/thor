@@ -54,9 +54,6 @@ func New(path string) (logDB *LogDB, err error) {
 		}
 	}()
 
-	// Limit write connections to 2 (wconn and wconnSyncOff)
-	writeDB.SetMaxOpenConns(2)
-
 	if _, err := writeDB.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
 		return nil, err
 	}
