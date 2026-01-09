@@ -94,9 +94,9 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 }
 
 // BenchmarkFakeDB_WriteBlocks creates a temporary database, performs some write + commit benchmarks and then deletes the db
-func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
+func BenchmarkFakeDB_WriteBlocks(b *testing.B) {
 	db, err := createTempDB()
-	require.NoError(t, err)
+	require.NoError(b, err)
 	defer db.Close()
 
 	blk := new(block.Builder).Build()
@@ -109,38 +109,38 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	}{
 		{
 			"repeated writes",
-			func(_ *testing.B) {
+			func(b *testing.B) {
 				for range writeCount {
 					blk = new(block.Builder).
 						ParentID(blk.Header().ID()).
 						Transaction(newTx(tx.TypeLegacy)).
 						Build()
 					receipts := tx.Receipts{newReceipt(), newReceipt()}
-					require.NoError(t, w.Write(blk, receipts))
-					require.NoError(t, w.Commit())
+					require.NoError(b, w.Write(blk, receipts))
+					require.NoError(b, w.Commit())
 				}
 			},
 		},
 		{
 			"batched writes",
-			func(_ *testing.B) {
+			func(b *testing.B) {
 				for range writeCount {
 					blk = new(block.Builder).
 						ParentID(blk.Header().ID()).
 						Transaction(newTx(tx.TypeLegacy)).
 						Build()
 					receipts := tx.Receipts{newReceipt(), newReceipt()}
-					require.NoError(t, w.Write(blk, receipts))
+					require.NoError(b, w.Write(blk, receipts))
 				}
-				require.NoError(t, w.Commit())
+				require.NoError(b, w.Commit())
 			},
 		},
 	}
 
-	t.ResetTimer()
 	for _, tt := range tests {
-		t.Run(tt.name, func(b *testing.B) {
-			for t.Loop() {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ResetTimer()
+			for b.Loop() {
 				tt.writeFunc(b)
 			}
 		})
