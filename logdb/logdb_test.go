@@ -11,7 +11,6 @@ import (
 	"database/sql"
 	"math/big"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -568,49 +567,4 @@ func TestStatementCacheRace(t *testing.T) {
 	}
 
 	wg.Wait()
-}
-
-func TestCheckpointRaceCondition(t *testing.T) {
-	// Test the checkpoint race condition fix without actually running checkpoints
-	var checkpointCount int64
-	var checkpointCounter int64
-	var wg sync.WaitGroup
-
-	numGoroutines := 50
-	commitsPerGoroutine := 20
-
-	// Simulate concurrent commits that should trigger checkpoints
-	for range numGoroutines {
-		wg.Go(func() {
-			for range commitsPerGoroutine {
-				// Simulate the checkpoint logic from Commit()
-				count := int64(25) // Each commit adds 25 to counter
-				newCount := atomic.AddInt64(&checkpointCounter, count)
-
-				if newCount >= 500 {
-					if atomic.CompareAndSwapInt64(&checkpointCounter, newCount, 0) {
-						// Instead of actual checkpoint, just count successful CAS operations
-						atomic.AddInt64(&checkpointCount, 1)
-					}
-				}
-			}
-		})
-	}
-
-	wg.Wait()
-
-	// Verify that checkpoints were triggered but not excessively
-	totalCommits := int64(numGoroutines * commitsPerGoroutine * 25)
-	expectedCheckpoints := totalCommits / 500
-	actualCheckpoints := atomic.LoadInt64(&checkpointCount)
-
-	// Should have triggered checkpoints, but due to race condition fix,
-	// we might have slightly fewer or more due to reset timing
-	assert.True(t, actualCheckpoints > 0, "Should have triggered at least one checkpoint")
-	assert.True(t, actualCheckpoints <= expectedCheckpoints+5,
-		"Should not have excessive checkpoints due to race conditions. Expected ~%d, got %d",
-		expectedCheckpoints, actualCheckpoints)
-
-	t.Logf("Total commits: %d, Expected checkpoints: ~%d, Actual checkpoints: %d",
-		totalCommits, expectedCheckpoints, actualCheckpoints)
 }

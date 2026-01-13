@@ -12,9 +12,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"sync/atomic"
-
-	"github.com/vechain/thor/v2/log"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
@@ -29,61 +26,81 @@ const (
 )
 
 type LogDB struct {
-	path              string
-	driverVersion     string
-	db                *sql.DB
-	wconn             *sql.Conn
-	wconnSyncOff      *sql.Conn
-	stmtCache         *stmtCache
-	checkpointCounter int64
+	path          string
+	driverVersion string
+
+	// readDB is used for read operations (queries)
+	// No statement cache for reads since queries are dynamically built
+	readDB *sql.DB
+
+	// writeDB is used for write operations (inserts)
+	// Separated from readDB to avoid cache=shared concurrency issues
+	writeDB        *sql.DB
+	writeStmtCache *stmtCache
+	wconn          *sql.Conn
+	wconnSyncOff   *sql.Conn
 }
 
 // New create or open log db at given path.
 func New(path string) (logDB *LogDB, err error) {
-	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
+	// writeDB for write operations with immediate transaction lock
+	writeDB, err := sql.Open("sqlite3", path+"?_journal=wal&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			_ = db.Close()
+			_ = writeDB.Close()
 		}
 	}()
 
-	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+	if _, err := writeDB.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
 		return nil, err
 	}
 
-	wconn1, err := db.Conn(context.Background())
+	wconn, err := writeDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	wconn2, err := db.Conn(context.Background())
+	if _, err = wconn.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", journalSize)); err != nil {
+		return nil, err
+	}
+
+	// at this point, the logdb is not open for reading, so we can truncate the wal file
+	if _, err = wconn.ExecContext(context.Background(), "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		return nil, fmt.Errorf("failed to truncate wal file: %w", err)
+	}
+
+	wconnSyncOff, err := writeDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err = wconn2.ExecContext(context.Background(), "PRAGMA synchronous=off"); err != nil {
+	if _, err = wconnSyncOff.ExecContext(context.Background(), "PRAGMA synchronous=off"); err != nil {
 		return nil, err
 	}
 
-	if _, err = wconn1.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", journalSize)); err != nil {
+	// readDB for read operations (separate from writeDB to avoid concurrency issues)
+	readDB, err := sql.Open("sqlite3", path+"?_journal=wal&mode=ro")
+	if err != nil {
 		return nil, err
 	}
-
-	if _, err = wconn1.ExecContext(context.Background(), "PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
-		return nil, err
-	}
+	defer func() {
+		if err != nil {
+			_ = readDB.Close()
+		}
+	}()
 
 	driverVer, _, _ := sqlite3.Version()
 	return &LogDB{
-		path:          path,
-		driverVersion: driverVer,
-		db:            db,
-		wconn:         wconn1,
-		wconnSyncOff:  wconn2,
-		stmtCache:     newStmtCache(db),
+		path:           path,
+		driverVersion:  driverVer,
+		readDB:         readDB,
+		writeDB:        writeDB,
+		writeStmtCache: newStmtCache(writeDB),
+		wconn:          wconn,
+		wconnSyncOff:   wconnSyncOff,
 	}, nil
 }
 
@@ -92,14 +109,17 @@ func New(path string) (logDB *LogDB, err error) {
 // 1. Uses synchronous=off for faster writes in memory
 // 2. Uses a single connection with minimal transaction overhead
 // 3. Optimizes for in-memory performance
+// Note: In-memory database uses cache=shared so all connections share data
 func NewMem() (*LogDB, error) {
 	// Generate 6 random bytes for unique database name
 	randBytes := make([]byte, 6)
 	if _, err := rand.Read(randBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate random bytes: %w", err)
 	}
+	// For in-memory database, we must use cache=shared so all connections see the same data
 	dbName := fmt.Sprintf("file:memdb_%s?mode=memory&cache=shared&_txlock=immediate&synchronous=off&journal_mode=memory", hex.EncodeToString(randBytes))
-	// Open SQLite in-memory database with optimized settings:
+
+	// Single DB for in-memory (cache=shared is required for multiple connections to see same data)
 	// - mode=memory: Create a new in-memory database
 	// - cache=shared: Enable shared cache mode
 	// - _txlock=immediate: Acquire locks immediately for better concurrency
@@ -115,7 +135,7 @@ func NewMem() (*LogDB, error) {
 		return nil, err
 	}
 
-	// Create a single connection with optimized settings
+	// Create a single write connection
 	wconn, err := db.Conn(context.Background())
 	if err != nil {
 		db.Close()
@@ -124,23 +144,36 @@ func NewMem() (*LogDB, error) {
 
 	driverVer, _, _ := sqlite3.Version()
 	return &LogDB{
-		path:          dbName,
-		driverVersion: driverVer,
-		db:            db,
-		wconn:         wconn,
-		wconnSyncOff:  wconn, // Use same connection for both writers
-		stmtCache:     newStmtCache(db),
+		path:           dbName,
+		driverVersion:  driverVer,
+		readDB:         db,
+		writeDB:        nil, // No separate writeDB for in-memory
+		writeStmtCache: newStmtCache(db),
+		wconn:          wconn,
+		wconnSyncOff:   wconn, // Use same connection for both writers
 	}, nil
 }
 
 // Close close the log db.
 func (db *LogDB) Close() (err error) {
+	// Close write connections first
 	err = db.wconn.Close()
-	if err1 := db.wconnSyncOff.Close(); err == nil {
-		err = err1
+	if db.wconnSyncOff != db.wconn { // Don't double-close for in-memory DB
+		if err1 := db.wconnSyncOff.Close(); err == nil {
+			err = err1
+		}
 	}
-	db.stmtCache.Clear()
-	if err1 := db.db.Close(); err == nil {
+
+	// Clear write statement cache
+	db.writeStmtCache.Clear()
+
+	// Close databases
+	if db.writeDB != nil {
+		if err1 := db.writeDB.Close(); err == nil {
+			err = err1
+		}
+	}
+	if err1 := db.readDB.Close(); err == nil {
 		err = err1
 	}
 	return err
@@ -305,12 +338,7 @@ FROM (%v) t
 }
 
 func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*Event, error) {
-	stmt, err := db.stmtCache.Prepare(query)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := stmt.QueryContext(ctx, args...)
+	rows, err := db.readDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -378,12 +406,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 }
 
 func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) ([]*Transfer, error) {
-	stmt, err := db.stmtCache.Prepare(query)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := stmt.QueryContext(ctx, args...)
+	rows, err := db.readDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -441,12 +464,13 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) 
 }
 
 // NewestBlockID query newest written block id.
+// Uses writeDB since this is called during write operations.
 func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
 	var data []byte
-	row := db.stmtCache.MustPrepare(`SELECT MAX(data) FROM (
-			SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
-			UNION
-			SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`).QueryRow()
+	row := db.writeStmtCache.MustPrepare(`SELECT MAX(data) FROM (
+		SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
+		UNION
+		SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`).QueryRow()
 
 	if err := row.Scan(&data); err != nil {
 		if sql.ErrNoRows != err {
@@ -458,6 +482,7 @@ func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
 }
 
 // HasBlockID query whether given block id related logs were written.
+// Uses writeDB since this is called during write operations.
 func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 	const query = `SELECT COUNT(*) FROM (
 		SELECT * FROM (SELECT seq FROM transfer WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1) 
@@ -468,7 +493,7 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
+	row := db.writeStmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
 	var count int
 	if err := row.Scan(&count); err != nil {
 		// no need to check ErrNoRows
@@ -479,12 +504,12 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 
 // NewWriter creates a log writer.
 func (db *LogDB) NewWriter() *Writer {
-	return &Writer{conn: db.wconn, stmtCache: db.stmtCache, checkpointCount: &db.checkpointCounter}
+	return &Writer{conn: db.wconn, stmtCache: db.writeStmtCache}
 }
 
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
 func (db *LogDB) NewWriterSyncOff() *Writer {
-	return &Writer{conn: db.wconnSyncOff, stmtCache: db.stmtCache}
+	return &Writer{conn: db.wconnSyncOff, stmtCache: db.writeStmtCache}
 }
 
 func topicValue(topics []thor.Bytes32, i int) []byte {
@@ -513,7 +538,6 @@ type Writer struct {
 
 	tx               *sql.Tx
 	uncommittedCount int
-	checkpointCount  *int64
 }
 
 // Truncate truncates the database by deleting logs after blockNum (included).
@@ -688,30 +712,10 @@ func (w *Writer) Commit() (err error) {
 	defer func() {
 		if err == nil {
 			w.tx = nil
-			count := int64(w.uncommittedCount)
 			w.uncommittedCount = 0
-			if w.checkpointCount == nil {
-				w.checkpointCount = new(int64)
-			}
-			newCount := atomic.AddInt64(w.checkpointCount, count)
-
-			if newCount >= 500 {
-				if atomic.CompareAndSwapInt64(w.checkpointCount, newCount, 0) {
-					go func() {
-						if err := w.checkpointWAL(); err != nil {
-							log.Error("failed to checkpoint wal file", "err", err)
-						}
-					}()
-				}
-			}
 		}
 	}()
 	return w.tx.Commit()
-}
-
-func (w *Writer) checkpointWAL() error {
-	_, err := w.conn.ExecContext(context.Background(), "PRAGMA wal_checkpoint(TRUNCATE)")
-	return err
 }
 
 // Rollback rollback all uncommitted logs.
