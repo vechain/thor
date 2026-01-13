@@ -115,6 +115,7 @@ func main() {
 			bootNodeFlag,
 			allowedPeersFlag,
 			skipLogsFlag,
+			logDbAdditionalIndexesFlag,
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
@@ -135,6 +136,7 @@ func main() {
 					genesisFlag,
 					dataDirFlag,
 					cacheFlag,
+					logDbAdditionalIndexesFlag,
 					apiTxpoolFlag,
 					apiAddrFlag,
 					apiCorsFlag,
@@ -230,7 +232,8 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-	logDB, err := openLogDB(instanceDir)
+	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
+	logDB, err := openLogDB(instanceDir, logDbAdditionalIndexes)
 	if err != nil {
 		return err
 	}
@@ -397,6 +400,7 @@ func soloAction(ctx *cli.Context) error {
 	var logDB *logdb.LogDB
 	var instanceDir string
 
+	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
 	if ctx.Bool(persistFlag.Name) {
 		if instanceDir, err = makeInstanceDir(ctx, gene); err != nil {
 			return err
@@ -409,7 +413,7 @@ func soloAction(ctx *cli.Context) error {
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-		if logDB, err = openLogDB(instanceDir); err != nil {
+		if logDB, err = openLogDB(instanceDir, logDbAdditionalIndexes); err != nil {
 			return err
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
