@@ -39,7 +39,7 @@ type LogDB struct {
 }
 
 // New create or open log db at given path.
-func New(path string) (logDB *LogDB, err error) {
+func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
 	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
 	if err != nil {
 		return nil, err
@@ -50,8 +50,25 @@ func New(path string) (logDB *LogDB, err error) {
 		}
 	}()
 
+	// if logs db doesn't have any records in events table additional indexes will be created
+	// has values returns false only if the event table is not yet created which means that it is empty
+	logsDBHasValues, err := hasValues(db)
+	if err != nil {
+		return nil, err
+	}
+
+	if !logsDBHasValues {
+		createAdditionalIndexes = true
+	}
+
 	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
 		return nil, err
+	}
+
+	if createAdditionalIndexes {
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
+			return nil, err
+		}
 	}
 
 	wconn1, err := db.Conn(context.Background())
@@ -112,6 +129,10 @@ func NewMem() (*LogDB, error) {
 
 	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
 		db.Close()
+		return nil, err
+	}
+
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
 		return nil, err
 	}
 
@@ -485,6 +506,17 @@ func (db *LogDB) NewWriter() *Writer {
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
 func (db *LogDB) NewWriterSyncOff() *Writer {
 	return &Writer{conn: db.wconnSyncOff, stmtCache: db.stmtCache}
+}
+
+func hasValues(db *sql.DB) (bool, error) {
+	row := db.QueryRow("SELECT EXISTS (SELECT name FROM sqlite_master WHERE type='table' AND name = 'event');")
+
+	var exists int
+	if err := row.Scan(&exists); err != nil {
+		// no need to check ErrNoRows
+		return false, err
+	}
+	return exists > 0, nil
 }
 
 func topicValue(topics []thor.Bytes32, i int) []byte {
