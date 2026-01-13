@@ -42,7 +42,7 @@ type LogDB struct {
 }
 
 // New create or open log db at given path.
-func New(path string) (logDB *LogDB, err error) {
+func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
 	// writeDB for write operations with immediate transaction lock
 	writeDB, err := sql.Open("sqlite3", path+"?_journal=wal&_txlock=immediate")
 	if err != nil {
@@ -54,8 +54,23 @@ func New(path string) (logDB *LogDB, err error) {
 		}
 	}()
 
+	logsDBHasValues, err := hasValues(writeDB)
+	if err != nil {
+		return nil, err
+	}
+
+	if !logsDBHasValues {
+		createAdditionalIndexes = true
+	}
+
 	if _, err := writeDB.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
 		return nil, err
+	}
+
+	if createAdditionalIndexes {
+		if _, err := writeDB.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
+			return nil, err
+		}
 	}
 
 	wconn, err := writeDB.Conn(context.Background())
@@ -132,6 +147,10 @@ func NewMem() (*LogDB, error) {
 
 	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
 		db.Close()
+		return nil, err
+	}
+
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
 		return nil, err
 	}
 
