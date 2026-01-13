@@ -82,6 +82,10 @@ func (c *cache) log() {
 
 // AddNodeBlob adds encoded node blob into the cache.
 func (c *cache) AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, blob []byte, isCommitting bool) {
+	// skip root node cache, since root node is already cached in root node cache
+	if len(path) == 0 {
+		return
+	}
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
 	v = binary.AppendUvarint(v, uint64(ver.Minor))
@@ -102,6 +106,10 @@ func (c *cache) AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 
 // GetNodeBlob returns the cached node blob.
 func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.Version, peek bool) []byte {
+	// skip root node cache, since root node is already cached in root node cache
+	if len(path) == 0 {
+		return nil
+	}
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
 	v = binary.AppendUvarint(v, uint64(ver.Minor))
