@@ -8,6 +8,8 @@ package muxdb
 import (
 	"context"
 	"encoding/binary"
+	"math"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 
 	"github.com/vechain/thor/v2/muxdb/engine"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
 
@@ -241,4 +244,81 @@ func TestContextChecker(t *testing.T) {
 		}
 	}
 	t.Error("Expected context canceled error")
+}
+
+func TestGetAfterPrune(t *testing.T) {
+	name := "prune-test"
+
+	db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+	engine := engine.NewLevelEngine(db)
+	back := &backend{
+		Store:            engine,
+		Cache:            &dummyCache{},
+		HistPtnFactor:    1,
+		DedupedPtnFactor: math.MaxUint32,
+		CachedNodeTTL:    100,
+	}
+
+	mux := &MuxDB{
+		engine:      engine,
+		trieBackend: back,
+		done:        make(chan struct{}),
+	}
+
+	key := thor.Blake2b([]byte("key")).Bytes()
+	root := trie.Root{}
+	root3 := trie.Root{}
+	root4 := trie.Root{}
+	for i := range uint32(5) {
+		tr := newTrie(name, back, root)
+
+		value := []byte("checkpoint-" + strconv.Itoa(int(i)))
+
+		err := tr.Update(key, value, nil)
+		assert.Nil(t, err)
+
+		ver := trie.Version{Major: i}
+		err = tr.Commit(ver, false)
+		assert.Nil(t, err)
+		root = trie.Root{
+			Hash: tr.Hash(),
+			Ver:  ver,
+		}
+		if i == 3 {
+			root3 = root
+		}
+		if i == 4 {
+			root4 = root
+		}
+	}
+
+	tr3 := newTrie(name, back, root3)
+	value, _, err := tr3.Get(key)
+	assert.Nil(t, err)
+	assert.Equal(t, "checkpoint-3", string(value))
+
+	// checkpoint(squash) for [0,3], keep 4 in the hist space
+	err = tr3.Checkpoint(context.Background(), 0, nil)
+	assert.Nil(t, err)
+
+	tr3 = newTrie(name, back, root3)
+	value, _, err = tr3.Get(key)
+	assert.Nil(t, err)
+	assert.Equal(t, "checkpoint-3", string(value))
+
+	// delete [0,4) in hist space
+	err = mux.DeleteTrieHistoryNodes(context.Background(), 0, 4)
+	assert.Nil(t, err)
+
+	// version 4 can be still read
+	tr4 := newTrie(name, back, root4)
+	value, _, err = tr4.Get(key)
+	assert.Nil(t, err)
+	assert.Equal(t, "checkpoint-4", string(value))
+
+	// version 3 can not be read since it's been pruned
+	tr3 = newTrie(name, back, root3)
+	_, _, err = tr3.Get(key)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing trie node")
 }
