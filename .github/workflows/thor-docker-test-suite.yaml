@@ -1,0 +1,21 @@
+name: Thor Docker Test Suite
+
+on:
+  workflow_call:
+    secrets:
+      DRAUPNIR_TOKEN:
+        required: true
+
+jobs:
+  build-image:
+    uses: ./.github/workflows/build-image.yaml
+
+  e2e-tests:
+    needs: build-image
+    uses: ./.github/workflows/test-e2e.yaml
+
+  smoke-tests:
+    needs: build-image
+    uses: ./.github/workflows/test-smoke.yaml
+    secrets:
+      DRAUPNIR_TOKEN: ${{ secrets.DRAUPNIR_TOKEN }}
