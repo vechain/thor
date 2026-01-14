@@ -14,10 +14,8 @@ jobs:
   unit_tests:
     strategy:
       matrix:
-        go-version: [1.25.4]
+        go-version: [1.25.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - go-version: 1.25.x
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
