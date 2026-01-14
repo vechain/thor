@@ -82,6 +82,11 @@ var (
 		Name:  "api-enable-txpool",
 		Usage: "enable txpool REST API endpoints",
 	}
+	// db indexes flags
+	logDbAdditionalIndexesFlag = cli.BoolFlag{
+		Name:  "logdb-additional-indexes",
+		Usage: "enable creation of additional indexes on startup",
+	}
 	// priority fees API flags
 	apiPriorityFeesPercentageFlag = cli.Uint64Flag{
 		Name:  "api-priority-fees-percentage",

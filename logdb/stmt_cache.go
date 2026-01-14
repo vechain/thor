@@ -21,16 +21,26 @@ func newStmtCache(db *sql.DB) *stmtCache {
 }
 
 func (sc *stmtCache) Prepare(query string) (*sql.Stmt, error) {
-	cached, _ := sc.m.Load(query)
-	if cached == nil {
-		stmt, err := sc.db.Prepare(query)
-		if err != nil {
-			return nil, err
-		}
-		sc.m.Store(query, stmt)
-		cached = stmt
+	// Fast path: check if already cached
+	if cached, ok := sc.m.Load(query); ok {
+		return cached.(*sql.Stmt), nil
 	}
-	return cached.(*sql.Stmt), nil
+
+	// Slow path: prepare new statement
+	stmt, err := sc.db.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use LoadOrStore to handle race condition:
+	// If another goroutine stored first, use theirs and close ours
+	actual, loaded := sc.m.LoadOrStore(query, stmt)
+	if loaded {
+		// Another goroutine won the race, close our duplicate
+		// Ignore error since not used anymore
+		stmt.Close()
+	}
+	return actual.(*sql.Stmt), nil
 }
 
 func (sc *stmtCache) MustPrepare(query string) *sql.Stmt {

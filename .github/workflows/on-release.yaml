@@ -21,12 +21,12 @@ jobs:
 
       - name: Validate Tag
         run: |
-          node -e "if (!/^v\d+\.\d+\.\d+$/.test('${{ github.ref_name }}')) { console.error('Invalid version provided');process.exit(1);}"
+          node -e "if (!/^v\d+\.\d+\.\d+$/.test('${GITHUB_REF_NAME}')) { console.error('Invalid version provided');process.exit(1);}"
 
       - name: Validate VERSION
         run: |
           version=$(cat cmd/thor/VERSION)
-          tag="${{ github.ref_name }}"
+          tag="${GITHUB_REF_NAME}"
           tag="${tag#v}"  # Remove the "v" prefix from the tag
           if [ "$tag" != "$version" ]; then
             echo "VERSION file does not match tag"
@@ -36,7 +36,7 @@ jobs:
       - name: Validate API Version
         run: |
           thor_version=$(cat cmd/thor/VERSION)
-          api_version=$(grep -o 'version: [0-9][0-9.]*' api/doc/thor.yaml | awk '{print $2}')
+          api_version=$(grep -o 'version: [0-9.]*' api/doc/thor.yaml | awk '{print $2}')
           if [ "$thor_version" != "$api_version" ]; then
             echo "API spec version ($api_version) does not match Thor version ($thor_version)"
             exit 1
@@ -47,7 +47,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # This step validates that the tag is an official release
         run: |
-          prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
+          prerelease=$(gh release view ${GITHUB_REF_NAME} --json isPrerelease | jq -r '.isPrerelease')
           if [ "$prerelease" != "false" ]; then
             echo "Tag is not an official release"
             exit 1

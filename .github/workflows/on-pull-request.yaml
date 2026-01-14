@@ -1,5 +1,8 @@
 name: Pull Request CI
 
+permissions:
+  contents: read
+
 on:
   pull_request:
 
@@ -25,6 +28,18 @@ jobs:
   module-check:
     name: Go Module Check
     uses: ./.github/workflows/go-mod-check.yaml
+
+  scan-workflows:
+    name: Scan Workflows
+    uses: ./.github/workflows/scan-workflows.yaml
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      issues: write
+      pull-requests: write
+    secrets:
+      ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
 
   thor-docker-test-suite:
     uses: ./.github/workflows/thor-docker-test-suite.yaml
