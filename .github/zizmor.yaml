@@ -1,10 +1,9 @@
 rules:
   unpinned-uses:
     config:
-      allow:
-        - actions/checkout@v5
-        - actions/setup-go@v5
-        - actions/setup-node@v4
-        - actions/download-artifact@v4
-        - actions/upload-artifact@v4
-        
+      policies:
+        actions/checkout:  ref-pin
+        actions/setup-go: ref-pin
+        actions/setup-node: ref-pin
+        actions/download-artifact: ref-pin
+        actions/upload-artifact: ref-pin
