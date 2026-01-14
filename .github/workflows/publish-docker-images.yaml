@@ -365,7 +365,7 @@ jobs:
   # -----------------------------------------------------------------------------
   scan:
     name: Scan (Trivy)
-    needs: [build-and-push-image]
+    needs: [merge-manifest]
     runs-on: ubuntu-24.04
     if: ${{ github.ref_name == 'master' }}
     steps:
