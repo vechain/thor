@@ -8,3 +8,4 @@ rules:
         actions/setup-node: ref-pin
         actions/download-artifact: ref-pin
         actions/upload-artifact: ref-pin
+        actions/stale: ref-pin
