@@ -1,0 +1,10 @@
+rules:
+  unpinned-uses:
+    config:
+     # Trusted GitHub-maintained action
+      policies:
+        actions/checkout:  ref-pin
+        actions/setup-go: ref-pin
+        actions/setup-node: ref-pin
+        actions/download-artifact: ref-pin
+        actions/upload-artifact: ref-pin
