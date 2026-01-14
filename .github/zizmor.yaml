@@ -1,3 +1,10 @@
 rules:
   unpinned-uses:
-    disable: true
+    config:
+      allow:
+        - actions/checkout@v5
+        - actions/setup-go@v5
+        - actions/setup-node@v4
+        - actions/download-artifact@v4
+        - actions/upload-artifact@v4
+        
