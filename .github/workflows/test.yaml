@@ -14,11 +14,8 @@ jobs:
   unit_tests:
     strategy:
       matrix:
-        go-version: [1.25.4]
+        go-version: [1.25.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - go-version: 1.25.x
-            os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -54,7 +51,7 @@ jobs:
         run: make test-coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5
         if: ${{ github.repository == 'vechain/thor' }}
         with:
           fail_ci_if_error: true
