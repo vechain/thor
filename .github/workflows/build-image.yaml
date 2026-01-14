@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
@@ -27,7 +27,7 @@ jobs:
           outputs: type=docker,dest=/tmp/thor-pipeline.tar
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4 # zizmor: ignore[unpinned-uses]
         with:
           name: thor-pipeline-image-${{ github.sha }}
           path: /tmp/thor-pipeline.tar

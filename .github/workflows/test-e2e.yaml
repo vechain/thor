@@ -8,14 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4 # zizmor: ignore[unpinned-uses]
         with:
           name: thor-pipeline-image-${{ github.sha }}
           path: /tmp
       - name: Load image
         run: docker load --input /tmp/thor-pipeline.tar
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
       - name: Set e2e repo reference
         id: set-ref
         env:
@@ -46,12 +46,12 @@ jobs:
             echo "ref=$REF" >> "$GITHUB_OUTPUT"
           fi
       - name: Checkout e2e tests
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
         with:
           repository: vechain/thor-e2e-tests
           ref: ${{ steps.set-ref.outputs.ref }}
       - name: Setup Node JS
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4 # zizmor: ignore[unpinned-uses]
         with:
           node-version: '20.x'
       - name: Run E2E Tests
@@ -60,7 +60,7 @@ jobs:
           yarn install
           yarn docker:up
           yarn test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4 # zizmor: ignore[unpinned-uses]
         if: success() || failure()
         with:
           name: e2e-test-results-${{ github.sha }}

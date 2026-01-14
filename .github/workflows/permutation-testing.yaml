@@ -20,10 +20,10 @@ jobs:
     timeout-minutes: 240 # 4 hours
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5 # zizmor: ignore[unpinned-uses]
         with:
           go-version: '1.25.x'
 

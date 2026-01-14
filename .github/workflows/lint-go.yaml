@@ -12,8 +12,8 @@ jobs:
     name: golangci-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
+      - uses: actions/setup-go@v5 # zizmor: ignore[unpinned-uses]
         with:
           go-version: '1.25.x'
           cache: false

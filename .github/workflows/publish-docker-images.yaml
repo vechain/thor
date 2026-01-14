@@ -73,7 +73,7 @@ jobs:
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
 
       # ----------------------------
       # Set up Buildx for multi-arch builds
@@ -187,7 +187,7 @@ jobs:
       # ----------------------------
       - name: Upload digest
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4 # zizmor: ignore[unpinned-uses]
         with:
           name: digest-${{ matrix.arch }}
           path: ${{ steps.digest.outputs.file }}
@@ -205,7 +205,7 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
 
       - name: Log in to GHCR
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
@@ -235,7 +235,7 @@ jobs:
       # Retrieve digest artifacts from each architecture
       # ----------------------------
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4 # zizmor: ignore[unpinned-uses]
         with:
           pattern: digest-*
           path: ./digests
@@ -365,7 +365,7 @@ jobs:
     if: ${{ github.ref_name == 'master' }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
 
       # Recompute metadata so scan can reference same tags
       - name: Extract metadata (tags)

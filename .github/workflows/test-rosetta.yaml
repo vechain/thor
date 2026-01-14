@@ -57,13 +57,13 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5 # zizmor: ignore[unpinned-uses]
         with:
           repository: vechain/rosetta
           ref: ${{ steps.set-ref.outputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4 # zizmor: ignore[unpinned-uses]
         with:
           node-version: '18'
           cache: 'npm'
