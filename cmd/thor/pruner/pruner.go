@@ -156,7 +156,7 @@ func (p *Pruner) checkpointTries(targetChain *chain.Chain, base, target uint32) 
 	}
 
 	// checkpoint index trie
-	indexTrie := p.db.NewTrie(chain.IndexTrieName, summary.IndexRoot())
+	indexTrie := p.db.NewTrie(muxdb.IndexTrieName, summary.IndexRoot())
 	indexTrie.SetNoFillCache(true)
 
 	if err := indexTrie.Checkpoint(p.ctx, base, nil); err != nil {
@@ -164,7 +164,7 @@ func (p *Pruner) checkpointTries(targetChain *chain.Chain, base, target uint32) 
 	}
 
 	// checkpoint account trie
-	accTrie := p.db.NewTrie(state.AccountTrieName, summary.Root())
+	accTrie := p.db.NewTrie(muxdb.AccountTrieName, summary.Root())
 	accTrie.SetNoFillCache(true)
 
 	var sTries []*muxdb.Trie
