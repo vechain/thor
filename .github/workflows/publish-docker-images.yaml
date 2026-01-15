@@ -30,7 +30,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 # -----------------------------------------------------------------------------
 # 🏗️ 1. Build and push per-architecture images
@@ -57,6 +56,9 @@ jobs:
     name: Build (${{ matrix.platform }})
     needs:
       - visibility
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -203,6 +205,9 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v5
@@ -360,7 +365,7 @@ jobs:
   # -----------------------------------------------------------------------------
   scan:
     name: Scan (Trivy)
-    needs: [build-and-push-image]
+    needs: [merge-manifest]
     runs-on: ubuntu-24.04
     if: ${{ github.ref_name == 'master' }}
     steps:
