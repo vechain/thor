@@ -20,10 +20,6 @@ import (
 )
 
 const (
-	// AccountTrieName is the name of account trie.
-	AccountTrieName       = "a"
-	StorageTrieNamePrefix = "s"
-
 	codeStoreName = "state.code"
 )
 
@@ -33,7 +29,7 @@ func StorageTrieName(sid []byte) string {
 	if len(sid) == 0 {
 		panic("empty storage id")
 	}
-	return StorageTrieNamePrefix + string(sid)
+	return muxdb.StorageTrieNamePrefix + string(sid)
 }
 
 // Error is the error caused by state access failure.
@@ -57,7 +53,7 @@ type State struct {
 func New(db *muxdb.MuxDB, root trie.Root) *State {
 	state := State{
 		db:    db,
-		trie:  db.NewTrie(AccountTrieName, root),
+		trie:  db.NewTrie(muxdb.AccountTrieName, root),
 		cache: make(map[thor.Address]*cachedObject),
 	}
 
