@@ -108,12 +108,12 @@ func TestStatus(t *testing.T) {
 func TestNewPruner(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene, _ := genesis.NewDevnet()
+	gene, fc := genesis.NewDevnet()
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
 	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
-	pr := New(db, repo, bftMockedEngine)
+	pr := New(db, repo, bftMockedEngine, *fc)
 	pr.Stop()
 }
 
@@ -188,7 +188,7 @@ func (tc *testCommitter) ShouldVote(parentID thor.Bytes32) (bool, error) {
 func TestWaitUntil(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene, _ := genesis.NewDevnet()
+	gene, fc := genesis.NewDevnet()
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()
@@ -201,6 +201,7 @@ func TestWaitUntil(t *testing.T) {
 		ctx:      ctx,
 		commiter: testCommiter,
 		cancel:   cancel,
+		fc:       fc,
 	}
 
 	parentID := b0.Header().ID()

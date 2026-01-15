@@ -8,6 +8,7 @@ package pruner
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -40,10 +41,11 @@ type Pruner struct {
 	commiter bft.Committer
 	cancel   func()
 	goes     sync.WaitGroup
+	fc       *thor.ForkConfig
 }
 
 // New creates and starts the pruner.
-func New(db *muxdb.MuxDB, repo *chain.Repository, commiter bft.Committer) *Pruner {
+func New(db *muxdb.MuxDB, repo *chain.Repository, commiter bft.Committer, fc thor.ForkConfig) *Pruner {
 	ctx, cancel := context.WithCancel(context.Background())
 	o := &Pruner{
 		db:       db,
@@ -51,6 +53,7 @@ func New(db *muxdb.MuxDB, repo *chain.Repository, commiter bft.Committer) *Prune
 		ctx:      ctx,
 		commiter: commiter,
 		cancel:   cancel,
+		fc:       &fc,
 	}
 	o.goes.Go(func() {
 		if err := o.loop(); err != nil {
@@ -198,6 +201,9 @@ func (p *Pruner) pruneTries(targetChain *chain.Chain, base, target uint32) error
 // awaitUntilFinalized waits until the target block number becomes almost final(steady),
 // and returns the steady chain.
 func (p *Pruner) awaitUntilFinalized(target uint32) (*chain.Chain, error) {
+	if p.fc.FINALITY > target {
+		return p.awaitUntilSteady(target)
+	}
 	for {
 		finalizedID := p.commiter.Finalized()
 		finalizedNum := block.Number(finalizedID)
@@ -214,6 +220,52 @@ func (p *Pruner) awaitUntilFinalized(target uint32) (*chain.Chain, error) {
 		case <-p.ctx.Done():
 			return nil, p.ctx.Err()
 		case <-time.After(time.Second):
+		}
+	}
+}
+
+func (p *Pruner) awaitUntilSteady(target uint32) (*chain.Chain, error) {
+	const windowSize = 100000
+
+	backoff := uint32(0)
+	for {
+		best := p.repo.BestBlockSummary()
+		bestNum := best.Header.Number()
+		if bestNum > target+backoff {
+			var meanScore float64
+			if bestNum > windowSize {
+				baseNum := bestNum - windowSize
+				baseHeader, err := p.repo.NewChain(best.Header.ID()).GetBlockHeader(baseNum)
+				if err != nil {
+					return nil, err
+				}
+				meanScore = math.Round(float64(best.Header.TotalScore()-baseHeader.TotalScore()) / float64(windowSize))
+			} else {
+				meanScore = math.Round(float64(best.Header.TotalScore()) / float64(bestNum))
+			}
+			set := make(map[thor.Address]struct{})
+			// reverse iterate the chain and collect signers.
+			for i, prev := 0, best.Header; i < int(meanScore*3) && prev.Number() >= target; i++ {
+				signer, _ := prev.Signer()
+				set[signer] = struct{}{}
+				if len(set) >= int(math.Round((meanScore+1)/2)) {
+					// got enough unique signers
+					steadyID := prev.ID()
+					return p.repo.NewChain(steadyID), nil
+				}
+				parent, err := p.repo.GetBlockSummary(prev.ParentID())
+				if err != nil {
+					return nil, err
+				}
+				prev = parent.Header
+			}
+			backoff += uint32(meanScore)
+		} else {
+			select {
+			case <-p.ctx.Done():
+				return nil, p.ctx.Err()
+			case <-time.After(time.Second):
+			}
 		}
 	}
 }
