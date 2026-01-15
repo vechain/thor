@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -353,7 +354,7 @@ func TestGetStorageRandomlyTouchedAfterPrune(t *testing.T) {
 		expectedEnergy uint64
 	}
 
-	var cases = []testcase{
+	cases := []testcase{
 		{
 			name:           "touch storage every block",
 			blocks:         []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -447,10 +448,5 @@ func TestGetStorageRandomlyTouchedAfterPrune(t *testing.T) {
 }
 
 func contains(slice []int, val int) bool {
-	for _, v := range slice {
-		if v == val {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, val)
 }
