@@ -49,12 +49,14 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer fu
 	}
 
 	if m.quota[txObj.Origin()] >= limitPerAccount {
+		metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "account"})
 		return errors.New("account quota exceeded")
 	}
 
 	delegator := txObj.Delegator()
 	if delegator != nil {
 		if m.quota[*delegator] >= limitPerAccount {
+			metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "delegator"})
 			return errors.New("delegator quota exceeded")
 		}
 	}
