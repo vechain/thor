@@ -7,6 +7,7 @@ package muxdb
 
 import (
 	"context"
+	"errors"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
@@ -71,6 +72,12 @@ func (t *Trie) newDatabaseReader() trie.DatabaseReader {
 			} else {
 				// found in hist space
 				return
+			}
+
+			// enforce root node to be only fetched from hist space
+			// to prevent accessing root node of a revision that has been pruned
+			if len(path) == 0 {
+				return nil, errors.New("not found")
 			}
 
 			// then from deduped space

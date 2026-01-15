@@ -30,7 +30,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 # -----------------------------------------------------------------------------
 # 🏗️ 1. Build and push per-architecture images
@@ -39,8 +38,27 @@ permissions:
 # combined into a multi-arch manifest.
 # -----------------------------------------------------------------------------
 jobs:
+  visibility:
+    runs-on: ubuntu-latest
+    outputs:
+      is_private: ${{ steps.visibility.outputs.is_private }}
+    steps:
+      - id: visibility
+        name: Check if repository is private
+        shell: bash
+        run: |
+          IS_PRIVATE=$(gh repo view ${{ github.repository }} --json isPrivate -q .isPrivate)
+          echo "is_private=${IS_PRIVATE}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build-and-push-image:
     name: Build (${{ matrix.platform }})
+    needs:
+      - visibility
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +66,8 @@ jobs:
           - runs_on: ubuntu-24.04
             platform: linux/amd64
             arch: amd64
-          - runs_on: ubuntu-24.04-arm
+            # GitHub-hosted ARM runner for public repos, custom runner for private
+          - runs_on: ${{ needs.visibility.outputs.is_private == 'true' && 'docker-build-arm64' || 'ubuntu-24.04-arm' }}
             platform: linux/arm64
             arch: arm64
     runs-on: ${{ matrix.runs_on }}
@@ -62,13 +81,13 @@ jobs:
       # Set up Buildx for multi-arch builds
       # ----------------------------
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
 
       # ----------------------------
       # Log in to registries
       # ----------------------------
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -76,7 +95,7 @@ jobs:
 
       - name: Log in to Docker Hub
         if: ${{ inputs.environment == 'docker-publish' && github.event_name != 'pull_request' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -86,7 +105,7 @@ jobs:
       # ----------------------------
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5
         with:
           images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
@@ -136,7 +155,7 @@ jobs:
       # ----------------------------
       - name: Build and (conditionally) push ${{ matrix.platform }}
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
         with:
           context: .
           platforms: ${{ matrix.platform }}
@@ -186,12 +205,15 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v5
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -199,17 +221,17 @@ jobs:
 
       - name: Log in to Docker Hub
         if: ${{ inputs.environment == 'docker-publish' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
 
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5
         with:
           images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
@@ -343,7 +365,7 @@ jobs:
   # -----------------------------------------------------------------------------
   scan:
     name: Scan (Trivy)
-    needs: [build-and-push-image]
+    needs: [merge-manifest]
     runs-on: ubuntu-24.04
     if: ${{ github.ref_name == 'master' }}
     steps:
@@ -353,13 +375,13 @@ jobs:
       # Recompute metadata so scan can reference same tags
       - name: Extract metadata (tags)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5
         with:
           images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
           tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
       - name: Scan for vulnerabilities (amd64 only)
-        uses: crazy-max/ghaction-container-scan@v3
+        uses: crazy-max/ghaction-container-scan@4d8e0acba576e46016cbd65b9ecfc604e85e3990 # v3
         with:
           image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           annotations: true

@@ -8,7 +8,9 @@ package logdb
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"math/big"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -526,4 +528,43 @@ func TestRemoveLeadingZeros(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestStatementCacheRace(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	assert.NoError(t, err)
+	defer db.Close()
+
+	cache := newStmtCache(db)
+	defer cache.Clear()
+
+	// Create a simple table for testing
+	_, err = db.Exec("CREATE TABLE test (id INTEGER)")
+	assert.NoError(t, err)
+
+	var wg sync.WaitGroup
+	numGoroutines := 100
+
+	// Test concurrent access to the same query
+	for range numGoroutines {
+		wg.Go(func() {
+			stmt, err := cache.Prepare("SELECT 1")
+			assert.NoError(t, err)
+			assert.NotNil(t, stmt)
+		})
+	}
+
+	// Test concurrent access to different queries
+	for i := range numGoroutines {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			query := "SELECT " + string(rune('0'+id%10))
+			stmt, err := cache.Prepare(query)
+			assert.NoError(t, err)
+			assert.NotNil(t, stmt)
+		}(i)
+	}
+
+	wg.Wait()
 }
