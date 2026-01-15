@@ -14,6 +14,7 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 
@@ -68,8 +69,19 @@ func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
 	}
 
 	if createAdditionalIndexes {
-		if _, err := writeDB.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
+		// Check if index already exists
+		var indexExists int
+		row := writeDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='event_i5'")
+		if err = row.Scan(&indexExists); err != nil {
 			return nil, err
+		}
+
+		if indexExists == 0 {
+			log.Info("creating additional database index event_i5, this may take several minutes on large databases...")
+			if _, err := writeDB.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
+				return nil, err
+			}
+			log.Info("database index event_i5 created successfully")
 		}
 	}
 
