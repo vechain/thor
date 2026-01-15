@@ -13,6 +13,13 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
+const (
+	IndexTrieName   = "i" // the name of index trie.
+	AccountTrieName = "a" // the name of account trie(a.k.a state).
+
+	StorageTrieNamePrefix = "s" // the prefix of storage trie.
+)
+
 // Trie is the managed trie.
 type Trie struct {
 	name        string
@@ -74,9 +81,11 @@ func (t *Trie) newDatabaseReader() trie.DatabaseReader {
 				return
 			}
 
-			// enforce root node to be only fetched from hist space
-			// to prevent accessing root node of a revision that has been pruned
-			if len(path) == 0 {
+			// Enforce root node to be only fetched from hist space to prevent accessing root node of a revision that has been pruned.
+			// Account trie and index trie are ensured to commit for each version so safe to enforce the rule.
+			// While storage trie is not guaranteed to commit for each version, but storage trie root is stored in the
+			// account trie, each storage trie access is checked by previous account trie accessing, so safe to fetch from deduped space.
+			if len(path) == 0 && (t.name == AccountTrieName || t.name == IndexTrieName) {
 				return nil, errors.New("not found")
 			}
 

@@ -24,12 +24,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const (
-	// IndexTrieName is the name of index trie.
-	// The index tire is used to store mappings from block number to block id, and tx id to tx meta.
-	IndexTrieName = "i"
-)
-
 type storageTxMeta struct {
 	Index    uint64
 	Reverted bool
@@ -57,6 +51,7 @@ type Chain struct {
 
 func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 	var (
+		// The index tire is used to store mappings from block number to block id, and tx id to tx meta.
 		indexTrie *muxdb.Trie
 		initErr   error
 	)
@@ -67,7 +62,7 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 		func() (*muxdb.Trie, error) {
 			if indexTrie == nil && initErr == nil {
 				if summary, err := repo.GetBlockSummary(headID); err == nil {
-					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot())
+					indexTrie = repo.db.NewTrie(muxdb.IndexTrieName, summary.IndexRoot())
 				} else {
 					initErr = errors.Wrap(err, fmt.Sprintf("lazy init chain, head=%v", headID))
 				}
@@ -373,7 +368,7 @@ func (r *Repository) NewChain(headID thor.Bytes32) *Chain {
 }
 
 func (r *Repository) indexBlock(parentRoot trie.Root, newBlockID thor.Bytes32, newConflicts uint32) error {
-	t := r.db.NewTrie(IndexTrieName, parentRoot)
+	t := r.db.NewTrie(muxdb.IndexTrieName, parentRoot)
 	// map block number to block ID
 	if err := t.Update(newBlockID[:4], newBlockID[:], nil); err != nil {
 		return err
