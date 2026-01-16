@@ -93,8 +93,8 @@ func (p *Pruner) loop() error {
 		// select target
 		target := status.Base + period
 
-		// adding thor.MaxStateHistory here since we need to ensure that full history is required to be kept
-		// for EVM accessibility. It's defined in thor/params.go(thor.MaxStateHistory ~7 days).
+		// adding thor.MaxStateHistory here since we need to ensure that defined range of history is required
+		// to be kept for EVM accessibility. It's defined in thor/params.go(thor.MaxStateHistory ~7 days).
 		targetChain, err := p.awaitUntilPrunable(target + thor.MaxStateHistory)
 		if err != nil {
 			return errors.Wrap(err, "awaitUntilPrunable")
