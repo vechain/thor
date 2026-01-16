@@ -93,9 +93,11 @@ func (p *Pruner) loop() error {
 		// select target
 		target := status.Base + period
 
-		targetChain, err := p.awaitUntilFinalized(target + thor.MaxStateHistory)
+		// adding thor.MaxStateHistory here since we need to ensure that full history is required to be kept
+		// for EVM accessibility. It's defined in thor/params.go(thor.MaxStateHistory ~7 days).
+		targetChain, err := p.awaitUntilPrunable(target + thor.MaxStateHistory)
 		if err != nil {
-			return errors.Wrap(err, "awaitUntilFinalized")
+			return errors.Wrap(err, "awaitUntilPrunable")
 		}
 		startTime := time.Now().UnixNano()
 
@@ -198,12 +200,13 @@ func (p *Pruner) pruneTries(targetChain *chain.Chain, base, target uint32) error
 	return nil
 }
 
-// awaitUntilFinalized waits until the target block number becomes almost final(steady),
-// and returns the steady chain.
-func (p *Pruner) awaitUntilFinalized(target uint32) (*chain.Chain, error) {
+// awaitUntilPrunable waits until the target block number becomes prunable,and returns the prunable chain.
+// Before the finality hard fork, it's awaitUntilSteady. After the finality hard fork, it's awaitUntilFinalized.
+func (p *Pruner) awaitUntilPrunable(target uint32) (*chain.Chain, error) {
 	if p.fc.FINALITY > target {
 		return p.awaitUntilSteady(target)
 	}
+
 	for {
 		finalizedID := p.commiter.Finalized()
 		finalizedNum := block.Number(finalizedID)
