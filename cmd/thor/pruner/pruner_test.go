@@ -13,10 +13,12 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/test/testchain"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -108,12 +110,12 @@ func TestStatus(t *testing.T) {
 func TestNewPruner(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene, _ := genesis.NewDevnet()
+	gene, fc := genesis.NewDevnet()
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
 	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
-	pr := New(db, repo, bftMockedEngine)
+	pr := New(db, repo, bftMockedEngine, *fc)
 	pr.Stop()
 }
 
@@ -188,7 +190,7 @@ func (tc *testCommitter) ShouldVote(parentID thor.Bytes32) (bool, error) {
 func TestWaitUntil(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene, _ := genesis.NewDevnet()
+	gene, fc := genesis.NewDevnet()
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()
@@ -201,6 +203,7 @@ func TestWaitUntil(t *testing.T) {
 		ctx:      ctx,
 		commiter: testCommiter,
 		cancel:   cancel,
+		fc:       fc,
 	}
 
 	parentID := b0.Header().ID()
@@ -231,7 +234,7 @@ func TestWaitUntil(t *testing.T) {
 
 	cancel()
 	// Use a target that doesn't exist yet to force waiting (where cancellation is checked)
-	_, err = pruner.awaitUntilFinalized(200000) // Target beyond current best
+	_, err = pruner.awaitUntilPrunable(200000) // Target beyond current best
 	assert.NotNil(t, err)
 	assert.Equal(t, context.Canceled, err)
 
@@ -250,7 +253,7 @@ func TestWaitUntil(t *testing.T) {
 	pruner.ctx = ctx
 	pruner.cancel = cancel
 
-	chain, err := pruner.awaitUntilFinalized(100000)
+	chain, err := pruner.awaitUntilPrunable(100000)
 	assert.Nil(t, err)
 
 	assert.True(t, block.Number(chain.HeadID()) >= 10000)
@@ -343,4 +346,108 @@ func TestGetAfterPrune(t *testing.T) {
 	_, err = st.GetBalance(to)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing trie node")
+}
+
+func TestGetStorageRandomlyTouchedAfterPrune(t *testing.T) {
+	type testcase struct {
+		name           string
+		blocks         []int
+		expectedEnergy uint64
+	}
+
+	cases := []testcase{
+		{
+			name:           "touch storage every block",
+			blocks:         []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			expectedEnergy: uint64(10),
+		},
+		{
+			name:           "touch only once at 9",
+			blocks:         []int{9},
+			expectedEnergy: uint64(1),
+		},
+		{
+			name:           "touch only once at 10",
+			blocks:         []int{10},
+			expectedEnergy: uint64(1),
+		},
+		{
+			name:           "touch randomly before pruning point case 1",
+			blocks:         []int{5, 7, 8},
+			expectedEnergy: uint64(3),
+		},
+		{
+			name:           "touch randomly before pruning point case 2",
+			blocks:         []int{5, 7},
+			expectedEnergy: uint64(2),
+		},
+		{
+			name:           "touch randomly before pruning point case 3",
+			blocks:         []int{3, 6},
+			expectedEnergy: uint64(2),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			chain, err := testchain.NewDefault()
+			assert.NoError(t, err)
+
+			accounts := genesis.DevAccounts()
+			to := thor.BytesToAddress([]byte("to"))
+
+			// prepare energy transfer data
+			transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+			assert.True(t, ok)
+			transferData, err := transferMethod.EncodeInput(to, big.NewInt(1))
+			assert.NoError(t, err)
+
+			for i := range 20 {
+				clauses := []*tx.Clause{tx.NewClause(&to).WithValue(big.NewInt(1))}
+				if contains(tc.blocks, i+1) {
+					// touch energy storage by transferring 1 wei VTHO
+					clauses = append(clauses, tx.NewClause(&builtin.Energy.Address).WithData(transferData))
+				}
+
+				err = chain.MintClauses(accounts[0], clauses)
+				assert.NoError(t, err)
+			}
+
+			pruner := Pruner{
+				repo: chain.Repo(),
+				db:   chain.Database(),
+			}
+			// iterate best chain to 20
+
+			// prune [0, 10)
+			blk10, err := chain.Repo().NewBestChain().GetBlockSummary(10)
+			if err != nil {
+				t.Fatalf("failed to get block 10: %v", err)
+			}
+			err = pruner.pruneTries(chain.Repo().NewChain(blk10.Header.ID()), 0, blk10.Header.Number())
+			assert.NoError(t, err)
+
+			st := chain.State()
+			balance, err := st.GetEnergy(to, chain.Repo().BestBlockSummary().Header.Timestamp(), math.MaxUint64)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedEnergy, balance.Uint64())
+
+			st = state.NewStater(chain.Database()).NewState(blk10.Root())
+			_, err = st.GetEnergy(to, blk10.Header.Timestamp(), math.MaxUint64)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedEnergy, balance.Uint64())
+
+			sum, err := chain.Repo().NewBestChain().GetBlockSummary(9)
+			assert.NoError(t, err)
+
+			st = state.NewStater(chain.Database()).NewState(sum.Root())
+			_, err = st.GetEnergy(to, sum.Header.Timestamp(), math.MaxUint64)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "missing trie node")
+		})
+	}
+}
+
+func contains(slice []int, val int) bool {
+	return slices.Contains(slice, val)
 }
