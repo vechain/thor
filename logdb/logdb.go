@@ -26,6 +26,8 @@ const (
 	journalSize = 52428800 // 50MB
 )
 
+var logger = log.WithContext("pkg", "logdb")
+
 type LogDB struct {
 	path          string
 	driverVersion string
@@ -55,20 +57,20 @@ func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
 		}
 	}()
 
-	logsDBHasValues, err := hasValues(writeDB)
+	hasValues, err := hasValues(writeDB)
 	if err != nil {
 		return nil, err
 	}
 
-	if !logsDBHasValues {
-		createAdditionalIndexes = true
+	dbSchema := refTableScheme + eventTableSchema + transferTableSchema
+	if !hasValues {
+		dbSchema += additionalEventIndexSchema
 	}
-
-	if _, err := writeDB.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+	if _, err := writeDB.Exec(dbSchema); err != nil {
 		return nil, err
 	}
 
-	if createAdditionalIndexes {
+	if hasValues && createAdditionalIndexes {
 		// Check if index already exists
 		var indexExists int
 		row := writeDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='event_i5'")
@@ -77,11 +79,11 @@ func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
 		}
 
 		if indexExists == 0 {
-			log.Info("creating additional database index event_i5, this may take several minutes on large databases...")
-			if _, err := writeDB.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
+			logger.Info("creating additional event index, this may take several minutes on large databases...")
+			if _, err := writeDB.Exec(additionalEventIndexSchema); err != nil {
 				return nil, err
 			}
-			log.Info("database index event_i5 created successfully")
+			logger.Info("additional event index created successfully")
 		}
 	}
 
