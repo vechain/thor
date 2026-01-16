@@ -110,12 +110,12 @@ func TestStatus(t *testing.T) {
 func TestNewPruner(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene, _ := genesis.NewDevnet()
+	gene, fc := genesis.NewDevnet()
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
 	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
-	pr := New(db, repo, bftMockedEngine)
+	pr := New(db, repo, bftMockedEngine, *fc)
 	pr.Stop()
 }
 
@@ -190,7 +190,7 @@ func (tc *testCommitter) ShouldVote(parentID thor.Bytes32) (bool, error) {
 func TestWaitUntil(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene, _ := genesis.NewDevnet()
+	gene, fc := genesis.NewDevnet()
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 	devAccounts := genesis.DevAccounts()
@@ -203,6 +203,7 @@ func TestWaitUntil(t *testing.T) {
 		ctx:      ctx,
 		commiter: testCommiter,
 		cancel:   cancel,
+		fc:       fc,
 	}
 
 	parentID := b0.Header().ID()
@@ -233,7 +234,7 @@ func TestWaitUntil(t *testing.T) {
 
 	cancel()
 	// Use a target that doesn't exist yet to force waiting (where cancellation is checked)
-	_, err = pruner.awaitUntilFinalized(200000) // Target beyond current best
+	_, err = pruner.awaitUntilPrunable(200000) // Target beyond current best
 	assert.NotNil(t, err)
 	assert.Equal(t, context.Canceled, err)
 
@@ -252,7 +253,7 @@ func TestWaitUntil(t *testing.T) {
 	pruner.ctx = ctx
 	pruner.cancel = cancel
 
-	chain, err := pruner.awaitUntilFinalized(100000)
+	chain, err := pruner.awaitUntilPrunable(100000)
 	assert.Nil(t, err)
 
 	assert.True(t, block.Number(chain.HeadID()) >= 10000)
