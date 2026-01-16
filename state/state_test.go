@@ -230,7 +230,7 @@ func TestStorageBarrier(t *testing.T) {
 	root, err := stage.Commit()
 	assert.Nil(t, err)
 
-	tr := db.NewTrie(AccountTrieName, trie.Root{Hash: root})
+	tr := db.NewTrie(muxdb.AccountTrieName, trie.Root{Hash: root})
 	acc, _, err := loadAccount(tr, addr)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(acc.StorageRoot), "should skip storage writes when account deleteed then recreated")

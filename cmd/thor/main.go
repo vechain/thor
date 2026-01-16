@@ -319,7 +319,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer p2pCommunicator.Stop()
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
-		pruner := pruner.New(mainDB, repo, bftEngine)
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
@@ -509,7 +509,7 @@ func soloAction(ctx *cli.Context) error {
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
-		pruner := pruner.New(mainDB, repo, bftMockedEngine)
+		pruner := pruner.New(mainDB, repo, bftMockedEngine, *forkConfig)
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 

@@ -14,6 +14,7 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 
@@ -24,6 +25,8 @@ const (
 	refIDQuery  = "(SELECT id FROM ref WHERE data=?)"
 	journalSize = 52428800 // 50MB
 )
+
+var logger = log.WithContext("pkg", "logdb")
 
 type LogDB struct {
 	path          string
@@ -54,22 +57,33 @@ func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
 		}
 	}()
 
-	logsDBHasValues, err := hasValues(writeDB)
+	hasValues, err := hasValues(writeDB)
 	if err != nil {
 		return nil, err
 	}
 
-	if !logsDBHasValues {
-		createAdditionalIndexes = true
+	dbSchema := refTableScheme + eventTableSchema + transferTableSchema
+	if !hasValues {
+		dbSchema += additionalEventIndexSchema
 	}
-
-	if _, err := writeDB.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+	if _, err := writeDB.Exec(dbSchema); err != nil {
 		return nil, err
 	}
 
-	if createAdditionalIndexes {
-		if _, err := writeDB.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
+	if hasValues && createAdditionalIndexes {
+		// Check if index already exists
+		var indexExists int
+		row := writeDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='event_i5'")
+		if err = row.Scan(&indexExists); err != nil {
 			return nil, err
+		}
+
+		if indexExists == 0 {
+			logger.Info("creating additional event index, this may take several minutes on large databases...")
+			if _, err := writeDB.Exec(additionalEventIndexSchema); err != nil {
+				return nil, err
+			}
+			logger.Info("additional event index created successfully")
 		}
 	}
 
