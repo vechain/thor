@@ -27,10 +27,8 @@ import (
 	"time"
 
 	"github.com/elastic/gosigar"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
@@ -80,35 +78,7 @@ func initLogger(ctx *cli.Context) (*slog.LevelVar, error) {
 	stakerLogger := log.New(jsonLogs, &stakerLevel).With("pkg", "staker")
 	staker.SetLogger(stakerLogger)
 
-	ethlog.Root().SetHandler(ethlog.LvlFilterHandler(ethlog.LvlWarn, &ethLogger{
-		logger: log.WithContext("pkg", "geth"),
-	}))
-
 	return &level, nil
-}
-
-type ethLogger struct {
-	logger log.Logger
-}
-
-func (h *ethLogger) Log(r *ethlog.Record) error {
-	switch r.Lvl {
-	case ethlog.LvlCrit:
-		h.logger.Crit(r.Msg)
-	case ethlog.LvlError:
-		h.logger.Error(r.Msg)
-	case ethlog.LvlWarn:
-		h.logger.Warn(r.Msg)
-	case ethlog.LvlInfo:
-		h.logger.Info(r.Msg)
-	case ethlog.LvlDebug:
-		h.logger.Debug(r.Msg)
-	case ethlog.LvlTrace:
-		h.logger.Trace(r.Msg)
-	default:
-		return nil
-	}
-	return nil
 }
 
 func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {
@@ -549,9 +519,9 @@ func printStartupMessage1(
 ) {
 	bestBlock := repo.BestBlockSummary()
 
-	name := common.MakeName("Thor", fullVersion())
+	name := p2p.MakeName("Thor", fullVersion())
 	if master == nil { // solo has no master
-		name = common.MakeName("Thor solo", fullVersion())
+		name = p2p.MakeName("Thor solo", fullVersion())
 	}
 
 	fmt.Printf(`Starting %v

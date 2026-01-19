@@ -20,10 +20,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
@@ -343,7 +343,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	}
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
-	gas := new(big.Int).Set(math.BigMax(modLen, baseLen))
+	gas := new(big.Int).Set(bigMax(modLen, baseLen))
 	if c.eip2565 {
 		// EIP-2565 has three changes
 		// 1. Different multComplexity (inlined here)
@@ -357,7 +357,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		gas = gas.Div(gas, big8)
 		gas.Mul(gas, gas)
 
-		gas.Mul(gas, math.BigMax(adjExpLen, big1))
+		gas.Mul(gas, bigMax(adjExpLen, big1))
 		// 2. Different divisor (`GQUADDIVISOR`) (3)
 		gas.Div(gas, big3)
 		if gas.BitLen() > 64 {
@@ -370,13 +370,20 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		return gas.Uint64()
 	}
 	gas = modexpMultComplexity(gas)
-	gas.Mul(gas, math.BigMax(adjExpLen, big1))
+	gas.Mul(gas, bigMax(adjExpLen, big1))
 	gas.Div(gas, big20)
 
 	if gas.BitLen() > 64 {
 		return math.MaxUint64
 	}
 	return gas.Uint64()
+}
+
+func bigMax(a, b *big.Int) *big.Int {
+	if a.Cmp(b) == -1 {
+		return a
+	}
+	return b
 }
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
@@ -444,7 +451,7 @@ func (c *bn256Add) RequiredGas(input []byte) uint64 {
 	if c.eip1108 {
 		return Bn256AddGasEIP1108
 	}
-	return params.Bn256AddGas
+	return params.Bn256AddGasByzantium
 }
 
 func (c *bn256Add) Run(input []byte) ([]byte, error) {
@@ -471,7 +478,7 @@ func (c *bn256ScalarMul) RequiredGas(input []byte) uint64 {
 	if c.eip1108 {
 		return Bn256ScalarMulGasEIP1108
 	}
-	return params.Bn256ScalarMulGas
+	return params.Bn256ScalarMulGasByzantium
 }
 
 func (c *bn256ScalarMul) Run(input []byte) ([]byte, error) {
@@ -505,7 +512,7 @@ func (c *bn256Pairing) RequiredGas(input []byte) uint64 {
 	if c.eip1108 {
 		return Bn256PairingBaseGasEIP1108 + uint64(len(input)/192)*Bn256PairingPerPointGasEIP1108
 	}
-	return params.Bn256PairingBaseGas + uint64(len(input)/192)*params.Bn256PairingPerPointGas
+	return params.Bn256PairingBaseGasByzantium + uint64(len(input)/192)*params.Bn256PairingPerPointGasByzantium
 }
 
 func (c *bn256Pairing) Run(input []byte) ([]byte, error) {

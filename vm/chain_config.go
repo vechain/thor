@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/vechain/thor/v2/thor"
 )
 
 // isForked returns whether a fork scheduled at block s is active at the given head block.
@@ -34,6 +35,58 @@ func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
 // IsShanghai returns whether num is either equal to the Shanghai fork block or greater.
 func (c *ChainConfig) IsShanghai(num *big.Int) bool {
 	return isForked(c.ShanghaiBlock, num)
+}
+
+// IsHomestead returns whether num is either equal to the homestead block or greater.
+func (c *ChainConfig) IsHomestead(num *big.Int) bool {
+	return isForked(c.HomesteadBlock, num)
+}
+
+// IsDAOFork returns whether num is either equal to the DAO fork block or greater.
+func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
+	return isForked(c.DAOForkBlock, num)
+}
+
+// IsEIP150 returns whether num is either equal to the EIP150 fork block or greater.
+func (c *ChainConfig) IsEIP150(num *big.Int) bool {
+	return isForked(c.EIP150Block, num)
+}
+
+// IsEIP155 returns whether num is either equal to the EIP155 fork block or greater.
+func (c *ChainConfig) IsEIP155(num *big.Int) bool {
+	return isForked(c.EIP155Block, num)
+}
+
+// IsEIP158 returns whether num is either equal to the EIP158 fork block or greater.
+func (c *ChainConfig) IsEIP158(num *big.Int) bool {
+	return isForked(c.EIP158Block, num)
+}
+
+// IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
+func (c *ChainConfig) IsByzantium(num *big.Int) bool {
+	return isForked(c.ByzantiumBlock, num)
+}
+
+// IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
+func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
+	return isForked(c.ConstantinopleBlock, num)
+}
+
+// GasTable copied from go-ethereum v1.8.16
+func (c *ChainConfig) GasTable(num *big.Int) thor.GasTable {
+	if num == nil {
+		return thor.GasTableHomestead
+	}
+	switch {
+	case c.IsConstantinople(num):
+		return thor.GasTableConstantinople
+	case c.IsEIP158(num):
+		return thor.GasTableEIP158
+	case c.IsEIP150(num):
+		return thor.GasTableEIP150
+	default:
+		return thor.GasTableHomestead
+	}
 }
 
 // Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions

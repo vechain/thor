@@ -42,6 +42,11 @@ func Root() Logger {
 	return root.Load().(Logger)
 }
 
+// Enabled returns true if the provided level is enabled
+func Enabled(ctx context.Context, level slog.Level) bool {
+	return Root().Enabled(ctx, level)
+}
+
 // The following functions bypass the exported logger methods (logger.Debug,
 // etc.) to keep the call depth the same for all paths to logger.Write so
 // runtime.Caller(2) always refers to the call site in client code.

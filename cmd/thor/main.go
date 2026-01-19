@@ -17,8 +17,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
-	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v1"
 
@@ -589,10 +589,15 @@ func masterKeyAction(ctx *cli.Context) error {
 			return errors.New("passphrase confirmation mismatch")
 		}
 
+		id, err := uuid.NewRandom()
+		if err != nil {
+			return err
+		}
+
 		keyjson, err := keystore.EncryptKey(&keystore.Key{
 			PrivateKey: masterKey,
 			Address:    crypto.PubkeyToAddress(masterKey.PublicKey),
-			Id:         uuid.NewRandom(),
+			Id:         id,
 		},
 			password, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {

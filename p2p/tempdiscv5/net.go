@@ -18,6 +18,7 @@ package tempdiscv5
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -28,10 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2p/netutil"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -428,10 +429,10 @@ loop:
 			if err := net.handle(n, pkt.ev, &pkt); err != nil {
 				status = err.Error()
 			}
-			log.Trace("", "msg", log.Lazy{Fn: func() string {
-				return fmt.Sprintf("<<< (%d) %v from %x@%v: %v -> %v (%v)",
-					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
-			}})
+			if log.Enabled(context.Background(), log.LvlTrace) {
+				log.Trace("", "msg", fmt.Sprintf("<<< (%d) %v from %x@%v: %v -> %v (%v)",
+					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status))
+			}
 			// TODO: persist state if n.state goes >= known, delete if it goes <= known
 
 		// State transition timeouts.
@@ -447,10 +448,11 @@ loop:
 			if err := net.handle(timeout.node, timeout.ev, nil); err != nil {
 				status = err.Error()
 			}
-			log.Trace("", "msg", log.Lazy{Fn: func() string {
-				return fmt.Sprintf("--- (%d) %v for %x@%v: %v -> %v (%v)",
+			if log.Enabled(context.Background(), log.LvlTrace) {
+				msg := fmt.Sprintf("--- (%d) %v for %x@%v: %v -> %v (%v)",
 					net.tab.count, timeout.ev, timeout.node.ID[:8], timeout.node.addr(), prestate, timeout.node.state, status)
-			}})
+				log.Trace("", "msg", msg)
+			}
 
 		// Querying.
 		case q := <-net.queryReq:
@@ -681,15 +683,15 @@ func (net *Network) refresh(done chan<- struct{}) {
 		return
 	}
 	for _, n := range seeds {
-		log.Debug("", "msg", log.Lazy{Fn: func() string {
+		if log.Enabled(context.Background(), log.LvlDebug) {
 			var age string
 			if net.db != nil {
 				age = time.Since(net.db.lastPong(n.ID)).String()
 			} else {
 				age = "unknown"
 			}
-			return fmt.Sprintf("seed node (age %s): %v", age, n)
-		}})
+			log.Debug("", "msg", fmt.Sprintf("seed node (age %s): %v", age, n))
+		}
 		n = net.internNodeFromDB(n)
 		if n.state == unknown {
 			net.transition(n, verifyinit)
@@ -1239,7 +1241,7 @@ func (net *Network) checkTopicRegister(data *topicRegister) (*pong, error) {
 }
 
 func rlpHash(x any) (h common.Hash) {
-	hw := sha3.NewKeccak256()
+	hw := sha3.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h

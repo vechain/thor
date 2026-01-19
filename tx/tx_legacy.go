@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	math2 "math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -82,7 +83,7 @@ func (t *legacyTransaction) signingFields() []any {
 func (t *legacyTransaction) gasPrice(baseGasPrice *big.Int) *big.Int {
 	x := big.NewInt(int64(t.GasPriceCoef))
 	x.Mul(x, baseGasPrice)
-	x.Div(x, big.NewInt(math.MaxUint8))
+	x.Div(x, big.NewInt(math2.MaxUint8))
 	return x.Add(x, baseGasPrice)
 }
 

@@ -434,7 +434,14 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
 	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
-	return math.BigMin(t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas().Add(t.body.maxPriorityFeePerGas(), baseFee))
+	return bigMin(t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas().Add(t.body.maxPriorityFeePerGas(), baseFee))
+}
+
+func bigMin(a, b *big.Int) *big.Int {
+	if a.Cmp(b) == -1 {
+		return a
+	}
+	return b
 }
 
 // EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction. If maxFeePerGas is less than
@@ -457,7 +464,7 @@ func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseG
 	}
 
 	priorityFeePerGas := new(big.Int).Sub(maxFeePerGas, baseFee)
-	return math.BigMin(priorityFeePerGas, maxPriorityFeePerGas)
+	return bigMin(priorityFeePerGas, maxPriorityFeePerGas)
 }
 
 // GasPriceCoef returns gas price coef.
@@ -678,7 +685,7 @@ func dataGas(data []byte) (uint64, error) {
 	if overflow {
 		return 0, errIntrinsicGasOverflow
 	}
-	nzgas, overflow := math.SafeMul(params.TxDataNonZeroGas, nz)
+	nzgas, overflow := math.SafeMul(params.TxDataNonZeroGasFrontier, nz)
 	if overflow {
 		return 0, errIntrinsicGasOverflow
 	}

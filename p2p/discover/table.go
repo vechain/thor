@@ -23,6 +23,7 @@
 package discover
 
 import (
+	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -35,7 +36,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2p/netutil"
 )
 
@@ -442,8 +443,10 @@ func (tab *Table) loadSeedNodes() {
 	seeds = append(seeds, tab.nursery...)
 	for i := range seeds {
 		seed := seeds[i]
-		age := log.Lazy{Fn: func() any { return time.Since(tab.db.lastPongReceived(seed.ID)) }}
-		log.Debug("Found seed node in database", "id", seed.ID, "addr", seed.addr(), "age", age)
+		if log.Enabled(context.Background(), log.LvlDebug) {
+			age := time.Since(tab.db.lastPongReceived(seed.ID))
+			log.Debug("Found seed node in database", "id", seed.ID, "addr", seed.addr(), "age", age)
+		}
 		tab.add(seed)
 	}
 }

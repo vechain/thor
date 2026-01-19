@@ -7,12 +7,12 @@ package solo
 
 import (
 	"context"
+	math2 "math"
 	"math/big"
 	"math/rand/v2"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin"
@@ -163,7 +163,7 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 	}
 
 	trx := builder.BlockRef(tx.NewBlockRef(0)).
-		Expiration(math.MaxUint32).
+		Expiration(math2.MaxUint32).
 		Nonce(rand.Uint64()). //#nosec G404
 		DependsOn(nil).
 		Gas(1_000_000).
