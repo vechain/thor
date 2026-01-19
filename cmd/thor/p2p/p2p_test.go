@@ -11,7 +11,10 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/test/testnode"
 
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -22,6 +25,8 @@ import (
 func TestNewThorP2P(t *testing.T) {
 	// Generate a private key for testing
 	privateKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	chain, err := testnode.NewDefaultNode()
+	require.NoError(t, err)
 
 	// Setup test cases
 	tests := []struct {
@@ -92,7 +97,7 @@ func TestNewThorP2P(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Instantiate P2P
 			thor := New(
-				nil,
+				comm.New(chain.Chain().Repo(), chain.TxPool()),
 				privateKey,
 				"/tmp/thor-instance",
 				nil,
