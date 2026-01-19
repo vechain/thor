@@ -7,6 +7,7 @@ THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
 
 PACKAGES = `go list ./... | grep -v '/vendor/'`
+MODERNIZE_PACKAGES = `go list ./... | grep -v '/common' | grep -v '/rlp' | grep -v '/p2p'`
 FUZZTIME=1m
 
 REQUIRED_GO_MAJOR = 1
@@ -83,16 +84,25 @@ lint_command_check:
 lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
 	@echo "running golangci-lint..."
 	@golangci-lint run --config .golangci.yml
-	@echo "running modernize..."
-	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.20.0 ./...
 	@echo "done."
 
 lint-fix: | go_version_check lint_command_check #@ Attempt to fix linting issues
 	@echo "running golangci-lint..."
 	@golangci-lint run --config .golangci.yml --fix
+	@echo "done."
+
+modernize: | go_version_check #@ Run 'modernize' analysis
 	@echo "running modernize..."
-	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.20.0 --fix ./...
-	@echo "running builtin generator..."
+	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.20.0 $(MODERNIZE_PACKAGES)
+	@echo "done."
+
+modernize-fix: | go_version_check #@ Attempt to fix 'modernize' issues
+	@echo "running modernize..."
+	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.20.0 --fix $(MODERNIZE_PACKAGES)
+	@echo "done."
+
+builtins: | go_version_check #@ Check that built-in files are up to date
+	@echo "checking built-in files..."
 	@go generate ./builtin/gen
 	@echo "done."
 
