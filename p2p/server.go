@@ -32,9 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/v2/p2p/discover"
-	"github.com/vechain/thor/v2/p2p/discv5"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 )
 
 const (
@@ -93,7 +93,7 @@ type Config struct {
 	// BootstrapNodesV5 are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.
-	BootstrapNodesV5 []*discv5.Node `toml:",omitempty"`
+	BootstrapNodesV5 []*tempdiscv5.Node `toml:",omitempty"`
 
 	// Static nodes are used as pre-configured connections which are always
 	// maintained and re-connected on disconnects.
@@ -162,7 +162,7 @@ type Server struct {
 	listener     net.Listener
 	ourHandshake *protoHandshake
 	lastLookup   time.Time
-	DiscV5       *discv5.Network
+	DiscV5       *tempdiscv5.Network
 
 	// These are for Peers, PeerCount (and nothing else).
 	peerOp     chan peerOpFunc
@@ -398,6 +398,13 @@ type sharedUDPConn struct {
 	unhandled chan discover.ReadPacket
 }
 
+func NewSharedUDPConn(conn *net.UDPConn, unhandled chan discover.ReadPacket) sharedUDPConn {
+	return sharedUDPConn{
+		UDPConn:   conn,
+		unhandled: unhandled,
+	}
+}
+
 // ReadFromUDP implements discv5.conn
 func (s *sharedUDPConn) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) {
 	packet, ok := <-s.unhandled
@@ -451,8 +458,8 @@ func (srv *Server) Start() (err error) {
 	srv.peerOpDone = make(chan struct{})
 
 	var (
-		conn      *net.UDPConn
-		sconn     *sharedUDPConn
+		conn *net.UDPConn
+		//sconn     *sharedUDPConn
 		realaddr  *net.UDPAddr
 		unhandled chan discover.ReadPacket
 	)
@@ -480,7 +487,7 @@ func (srv *Server) Start() (err error) {
 
 	if !srv.NoDiscovery && srv.DiscoveryV5 {
 		unhandled = make(chan discover.ReadPacket, 100)
-		sconn = &sharedUDPConn{conn, unhandled}
+		//sconn = &sharedUDPConn{conn, unhandled}
 	}
 
 	// node table
@@ -500,24 +507,24 @@ func (srv *Server) Start() (err error) {
 		srv.ntab = ntab
 	}
 
-	if srv.DiscoveryV5 {
-		var (
-			ntab *discv5.Network
-			err  error
-		)
-		if sconn != nil {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
-		} else {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
-		}
-		if err != nil {
-			return err
-		}
-		if err := ntab.SetFallbackNodes(srv.BootstrapNodesV5); err != nil {
-			return err
-		}
-		srv.DiscV5 = ntab
-	}
+	//if srv.DiscoveryV5 {
+	//	var (
+	//		ntab *tempdiscv5.Network
+	//		err  error
+	//	)
+	//	if sconn != nil {
+	//		ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+	//	} else {
+	//		ntab, err = tempdiscv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+	//	}
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if err := ntab.SetFallbackNodes(srv.BootstrapNodesV5); err != nil {
+	//		return err
+	//	}
+	//	srv.DiscV5 = ntab
+	//}
 
 	dynPeers := srv.maxDialedConns()
 	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)
@@ -528,13 +535,10 @@ func (srv *Server) Start() (err error) {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
 	// listen/dial
-	if srv.ListenAddr != "" {
+	if srv.ListenAddr != "" && !srv.NoDial {
 		if err := srv.startListening(); err != nil {
 			return err
 		}
-	}
-	if srv.NoDial && srv.ListenAddr == "" {
-		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
 	}
 
 	srv.loopWG.Add(1)

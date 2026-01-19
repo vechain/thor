@@ -18,3 +18,5 @@ header:
   paths-ignore:
     - 'builtin/gen/bindata.go'
     - 'tracers/**/gen_*.go'
+    # temp copies of go-ethereum
+    - 'common/**'
