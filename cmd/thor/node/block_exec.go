@@ -198,7 +198,8 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 	commitElapsed := mclock.Now() - ctx.startTime - execElapsed
 
 	if v, updated := n.bandwidth.Update(ctx.newBlock.Header(), time.Duration(realElapsed)); updated {
-		metricNodeGasPerSecond().Set(int64(v))
+		metricBandwidthGasPerSecond().Set(int64(v))
+
 		logger.Trace("bandwidth updated", "gps", v)
 	}
 
