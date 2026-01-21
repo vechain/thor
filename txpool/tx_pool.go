@@ -240,10 +240,6 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": source})
 		}
 	}()
-	txTypeString := "Legacy"
-	if newTx.Type() == tx.TypeDynamicFee {
-		txTypeString = "DynamicFee"
-	}
 
 	if p.all.ContainsHash(newTx.Hash()) {
 		// tx already in the pool
@@ -274,7 +270,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	}
 
 	atomic.AddUint32(&p.addedAfterWash, 1)
+
+	txTypeString := "Legacy"
+	if newTx.Type() == tx.TypeDynamicFee {
+		txTypeString = "DynamicFee"
+	}
 	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
+
 	return nil
 }
 
@@ -697,6 +699,10 @@ func (p *TxPool) Len() int {
 
 // validateTxBasics runs static validation on a transaction.
 func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
+	if err := trx.EnforceSignatureLowS(); err != nil {
+		return badTxError{err.Error()}
+	}
+
 	if trx.ChainTag() != p.repo.ChainTag() {
 		return badTxError{"chain tag mismatch"}
 	}

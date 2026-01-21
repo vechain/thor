@@ -26,9 +26,21 @@ import (
 
 var (
 	ErrTxTypeNotSupported = errors.New("transaction type not supported")
+	ErrHighSInSignature   = errors.New("invalid signature: S value is out of range")
 
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	errShortTypedTx         = errors.New("typed transaction too short")
+
+	// secp256k1HalfN is N/2 precomputed as 32-byte big-endian array for efficient low-s check.
+	// N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+	// N/2 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+	secp256k1HalfN = func() [32]byte {
+		n := crypto.S256().Params().N
+		halfN := new(big.Int).Rsh(n, 1)
+		var result [32]byte
+		halfN.FillBytes(result[:])
+		return result
+	}()
 )
 
 type Type = byte
@@ -624,6 +636,32 @@ func (t *Transaction) validateSignatureLength() error {
 	if len(t.body.signature()) != expectedSigLen {
 		return secp256k1.ErrInvalidSignatureLen
 	}
+	return nil
+}
+
+// EnforceSignatureLowS checks that the S value in the signature are <= secp256k1 N/2.
+// This is not required for consensus, but a protection against signature malleability.
+func (t *Transaction) EnforceSignatureLowS() error {
+	if err := t.validateSignatureLength(); err != nil {
+		return err
+	}
+
+	sig := t.body.signature()
+
+	// Check first signature's S (bytes 32:64)
+	if len(sig) == 65 {
+		if bytes.Compare(sig[32:64], secp256k1HalfN[:]) > 0 {
+			return ErrHighSInSignature
+		}
+	}
+
+	// Check delegator signature's S if present (bytes 97:129)
+	if len(sig) == 130 {
+		if bytes.Compare(sig[65+32:65+64], secp256k1HalfN[:]) > 0 {
+			return ErrHighSInSignature
+		}
+	}
+
 	return nil
 }
 
