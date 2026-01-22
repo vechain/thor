@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
@@ -220,27 +219,6 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 
 func (n *Node) postBlockProcessing(newBlock *block.Block, conflicts uint32) {
 	if err := func() error {
-		// print welcome info
-		if n.initialSynced {
-			blockNum := newBlock.Header().Number()
-			blockID := newBlock.Header().ID()
-			if needPrintWelcomeInfo() &&
-				blockNum >= n.forkConfig.HAYABUSA+thor.HayabusaTP() &&
-				// if transition period are set to 0, transition will attempt to happen on every block
-				(thor.HayabusaTP() == 0 || (blockNum-n.forkConfig.HAYABUSA)%thor.HayabusaTP() == 0) {
-				summary, err := n.repo.GetBlockSummary(blockID)
-				if err != nil {
-					return err
-				}
-				active, err := builtin.Staker.Native(n.stater.NewState(summary.Root())).IsPoSActive()
-				if err != nil {
-					return nil
-				}
-				if active {
-					printWelcomeInfo()
-				}
-			}
-		}
 		// scan for double signing, when exiting block at the same height are more than one
 		if conflicts > 0 {
 			newSigner, err := newBlock.Header().Signer()
