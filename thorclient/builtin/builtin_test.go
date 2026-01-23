@@ -122,6 +122,5 @@ func newTestNode(t *testing.T, useExecutor bool) (testnode.Node, *thorclient.Cli
 	require.NoError(t, err)
 	require.NoError(t, node.Start())
 
-	client := thorclient.New(node.APIServer().URL)
-	return node, client
+	return node, thorclient.New(node.APIServer().URL)
 }

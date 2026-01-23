@@ -76,7 +76,7 @@ type Client struct {
 //
 // Returns a new Client instance ready for HTTP operations.
 func New(url string) *Client {
-	sanitizedURL := SanitizeURL(url)
+	sanitizedURL := sanitizeURL(url)
 	return &Client{
 		httpConn: httpclient.New(sanitizedURL),
 	}
@@ -93,7 +93,7 @@ func New(url string) *Client {
 //
 // Returns a new Client instance using the custom HTTP client.
 func NewWithHTTP(url string, c *http.Client) *Client {
-	sanitizedURL := SanitizeURL(url)
+	sanitizedURL := sanitizeURL(url)
 	return &Client{
 		httpConn: httpclient.NewWithHTTP(sanitizedURL, c),
 	}
@@ -119,7 +119,7 @@ func NewWithHTTP(url string, c *http.Client) *Client {
 //   - *Client: A new client instance with both HTTP and WebSocket capabilities
 //   - error: An error if the WebSocket connection cannot be established
 func NewWithWS(url string) (*Client, error) {
-	sanitizedURL := SanitizeURL(url)
+	sanitizedURL := sanitizeURL(url)
 	wsClient, err := wsclient.NewClient(sanitizedURL)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func NewWithWS(url string) (*Client, error) {
 	}, nil
 }
 
-func SanitizeURL(nodeURL string) string {
+func sanitizeURL(nodeURL string) string {
 	nodeURL = strings.TrimSpace(nodeURL)
 	if nodeURL == "" {
 		return nodeURL

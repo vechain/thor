@@ -6,6 +6,7 @@
 package thorclient
 
 import (
+	"encoding/json"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -129,7 +130,6 @@ func TestGetTransaction(t *testing.T) {
 			defer ts.Close()
 
 			client := New(ts.URL)
-
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
 		})
@@ -169,7 +169,6 @@ func TestClient_DebugRevertedTransaction(t *testing.T) {
 
 	// check that we can get debug info for the reverted transaction
 	client := New(node.APIServer().URL)
-
 	id := trx.ID()
 	data, err := client.DebugRevertedTransaction(&id)
 	assert.NoError(t, err)
@@ -204,9 +203,54 @@ func TestClient_DebugReverted_VMError(t *testing.T) {
 
 	// check that we can get debug info for the reverted transaction
 	client := New(node.APIServer().URL)
-
 	id := trx.ID()
 	data, err := client.DebugRevertedTransaction(&id)
 	assert.ErrorContains(t, err, "transaction errored with: out of gas")
 	assert.Empty(t, string(data))
+}
+
+func TestClient_SanitizeURL(t *testing.T) {
+	expectedTx := &transactions.Transaction{
+		ID:       thor.BytesToBytes32([]byte("txid12345678901234567890123456789012")),
+		Type:     tx.TypeLegacy,
+		ChainTag: 0x27,
+		Clauses:  make(api.Clauses, 0),
+		Gas:      21000,
+		Origin:   thor.Address{},
+		Nonce:    0,
+		Size:     100,
+	}
+
+	for _, tc := range []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{
+			name:     "URL with trailing slash",
+			url:      "/",
+			expected: "/transactions/" + expectedTx.ID.String(),
+		},
+		{
+			name:     "URL without trailing slash",
+			url:      "",
+			expected: "/transactions/" + expectedTx.ID.String(),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, tc.expected, r.URL.Path)
+
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(expectedTx)
+			}))
+			defer ts.Close()
+
+			client := New(ts.URL + tc.url)
+			tx, err := client.Transaction(&expectedTx.ID)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedTx.ID, tx.ID)
+			assert.Equal(t, expectedTx.Type, tx.Type)
+		})
+	}
 }
