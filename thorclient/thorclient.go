@@ -75,14 +75,11 @@ type Client struct {
 //   - url: The base URL of the VeChainThor node API
 //
 // Returns a new Client instance ready for HTTP operations.
-func New(url string) (*Client, error) {
-	sanitizedURL, err := SanitizeURL(url)
-	if err != nil {
-		return nil, err
-	}
+func New(url string) *Client {
+	sanitizedURL := SanitizeURL(url)
 	return &Client{
 		httpConn: httpclient.New(sanitizedURL),
-	}, nil
+	}
 }
 
 // NewWithHTTP creates a new VeChainThor client using the provided HTTP URL and custom HTTP client.
@@ -95,14 +92,11 @@ func New(url string) (*Client, error) {
 //   - c: A custom http.Client with desired configuration
 //
 // Returns a new Client instance using the custom HTTP client.
-func NewWithHTTP(url string, c *http.Client) (*Client, error) {
-	sanitizedURL, err := SanitizeURL(url)
-	if err != nil {
-		return nil, err
-	}
+func NewWithHTTP(url string, c *http.Client) *Client {
+	sanitizedURL := SanitizeURL(url)
 	return &Client{
 		httpConn: httpclient.NewWithHTTP(sanitizedURL, c),
-	}, nil
+	}
 }
 
 // NewWithWS creates a new VeChainThor client with both HTTP and WebSocket capabilities.
@@ -125,10 +119,7 @@ func NewWithHTTP(url string, c *http.Client) (*Client, error) {
 //   - *Client: A new client instance with both HTTP and WebSocket capabilities
 //   - error: An error if the WebSocket connection cannot be established
 func NewWithWS(url string) (*Client, error) {
-	sanitizedURL, err := SanitizeURL(url)
-	if err != nil {
-		return nil, err
-	}
+	sanitizedURL := SanitizeURL(url)
 	wsClient, err := wsclient.NewClient(sanitizedURL)
 	if err != nil {
 		return nil, err
@@ -140,15 +131,15 @@ func NewWithWS(url string) (*Client, error) {
 	}, nil
 }
 
-func SanitizeURL(nodeURL string) (string, error) {
+func SanitizeURL(nodeURL string) string {
 	nodeURL = strings.TrimSpace(nodeURL)
 	if nodeURL == "" {
-		return nodeURL, fmt.Errorf("empty URL provided")
+		return nodeURL
 	}
 
 	parsedURL, err := url.Parse(nodeURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid URL format: %w", err)
+		return nodeURL
 	}
 
 	if parsedURL.Scheme == "" {
@@ -156,18 +147,18 @@ func SanitizeURL(nodeURL string) (string, error) {
 	}
 
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return "", fmt.Errorf("unsupported URL scheme: %s (only http/https allowed)", parsedURL.Scheme)
+		return nodeURL
 	}
 
 	if parsedURL.Host == "" {
-		return "", fmt.Errorf("URL must include a host")
+		return nodeURL
 	}
 
 	parsedURL.Path = strings.TrimSuffix(parsedURL.Path, "/")
 	parsedURL.Fragment = ""
 	sanitizedURL := parsedURL.String()
 
-	return sanitizedURL, nil
+	return sanitizedURL
 }
 
 // Option represents a functional option for customizing client requests.

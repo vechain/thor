@@ -114,9 +114,7 @@ func TestAccount(t *testing.T) {
 	initAccountServer(t, true)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"getAccount":                          getAccount,
 		"getAccountWithNonExistingRevision":   getAccountWithNonExistingRevision,
@@ -141,9 +139,7 @@ func TestDeprecated(t *testing.T) {
 	initAccountServer(t, false)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 
 	body := &api.CallData{}
 
@@ -592,9 +588,7 @@ func TestGetRawStorage(t *testing.T) {
 	initAccountServer(t, true)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 
 	// get authority head key
 	addr := builtin.Authority.Address
@@ -665,8 +659,7 @@ func TestRawStorageStaker(t *testing.T) {
 	ts = httptest.NewServer(router)
 	defer ts.Close()
 
-	client, err := thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	client := thorclient.New(ts.URL)
 
 	validator := genesis.DevAccounts()[0]
 	staker, err := clientBuiltin.NewStaker(client)

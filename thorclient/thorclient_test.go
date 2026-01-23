@@ -88,8 +88,7 @@ func TestRevision(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client, err := New(ts.URL)
-			assert.NoError(t, err)
+			client := New(ts.URL)
 
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
@@ -129,8 +128,7 @@ func TestGetTransaction(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client, err := New(ts.URL)
-			assert.NoError(t, err)
+			client := New(ts.URL)
 
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
@@ -170,8 +168,7 @@ func TestClient_DebugRevertedTransaction(t *testing.T) {
 	require.NoError(t, node.Chain().MintBlock(trx))
 
 	// check that we can get debug info for the reverted transaction
-	client, err := New(node.APIServer().URL)
-	assert.NoError(t, err)
+	client := New(node.APIServer().URL)
 
 	id := trx.ID()
 	data, err := client.DebugRevertedTransaction(&id)
@@ -206,8 +203,7 @@ func TestClient_DebugReverted_VMError(t *testing.T) {
 	require.NoError(t, node.Chain().MintBlock(trx))
 
 	// check that we can get debug info for the reverted transaction
-	client, err := New(node.APIServer().URL)
-	assert.NoError(t, err)
+	client := New(node.APIServer().URL)
 
 	id := trx.ID()
 	data, err := client.DebugRevertedTransaction(&id)

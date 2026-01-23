@@ -14,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -120,9 +118,8 @@ func addTransactionToPool(t *testing.T, testNode testnode.Node) {
 	testTx = tx.MustSign(testTx, genesis.DevAccounts()[0].PrivateKey)
 
 	// Add transaction to the pool
-	c, err := New(testNode.APIServer().URL)
-	assert.NoError(t, err)
-	_, err = c.SendTransaction(testTx)
+	c := New(testNode.APIServer().URL)
+	_, err := c.SendTransaction(testTx)
 	require.NoError(t, err)
 }
 
@@ -157,26 +154,23 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 
 	// 1. Test GET /accounts/{address}
 	t.Run("GetAccount", func(t *testing.T) {
-		c, err := New(ts.URL)
-		assert.NoError(t, err)
-		_, err = c.Account(&address1)
+		c := New(ts.URL)
+		_, err := c.Account(&address1)
 		require.NoError(t, err)
 		// TODO validate the response body here
 	})
 
 	// 2. Test GET /accounts/{address}/code
 	t.Run("GetCode", func(t *testing.T) {
-		c, err := New(ts.URL)
-		assert.NoError(t, err)
-		_, err = c.AccountCode(&address1)
+		c := New(ts.URL)
+		_, err := c.AccountCode(&address1)
 		require.NoError(t, err)
 		// TODO validate the response body here
 	})
 
 	// 3. Test GET /accounts/{address}/storage/{key}
 	t.Run("GetStorage", func(t *testing.T) {
-		c, err := New(ts.URL)
-		assert.NoError(t, err)
+		c := New(ts.URL)
 		response, err := c.AccountStorage(&address1, &storageKey)
 		require.NoError(t, err)
 		require.Equal(t, thor.Bytes32{}.String(), response.Value)
@@ -184,8 +178,7 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 
 	// 3. Test GET /accounts/{address}/storage/raw/{key}
 	t.Run("GetRawStorage", func(t *testing.T) {
-		c, err := New(ts.URL)
-		assert.NoError(t, err)
+		c := New(ts.URL)
 		response, err := c.RawAccountStorage(&address1, &storageKey)
 		require.NoError(t, err)
 		require.Equal(t, "0x", response.Value)
@@ -193,8 +186,7 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 
 	// 4. Test POST /accounts/*
 	t.Run("InspectClauses", func(t *testing.T) {
-		c, err := New(ts.URL)
-		assert.NoError(t, err)
+		c := New(ts.URL)
 		// Define the payload for the batch call
 		value := math.HexOrDecimal256(*big.NewInt(1))
 		payload := &api.BatchCallData{
@@ -214,7 +206,7 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 			GasPrice: &value,
 			Caller:   &address1,
 		}
-		_, err = c.InspectClauses(payload)
+		_, err := c.InspectClauses(payload)
 		require.NoError(t, err)
 
 		// Simulate sending request with revision query parameter
@@ -224,8 +216,7 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 }
 
 func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *httptest.Server) {
-	c, err := New(ts.URL)
-	assert.NoError(t, err)
+	c := New(ts.URL)
 
 	// 1. Test retrieving a pre-mined transaction by ID
 	t.Run("GetTransaction", func(t *testing.T) {
@@ -304,8 +295,7 @@ func testTransactionsEndpoint(t *testing.T, thorChain *testchain.Chain, ts *http
 }
 
 func testBlocksEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
-	c, err := New(ts.URL)
-	assert.NoError(t, err)
+	c := New(ts.URL)
 	// Example revision (this could be a block number or block ID)
 	revision := "best"
 
@@ -406,8 +396,7 @@ func testDebugEndpoint(t *testing.T, thorChain *testchain.Chain, ts *httptest.Se
 }
 
 func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
-	c, err := New(ts.URL)
-	assert.NoError(t, err)
+	c := New(ts.URL)
 
 	// Example address and topic for filtering events
 	address := thor.MustParseAddress("0x0123456789abcdef0123456789abcdef01234567")
@@ -442,8 +431,7 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 }
 
 func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
-	c, err := New(ts.URL)
-	assert.NoError(t, err)
+	c := New(ts.URL)
 	// 1. Test GET /node/network/peers
 	t.Run("Peers", func(t *testing.T) {
 		_, err := c.Peers()
@@ -493,8 +481,7 @@ func testNodeEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 }
 
 func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Server) {
-	c, err := New(ts.URL)
-	assert.NoError(t, err)
+	c := New(ts.URL)
 	// 1. Test GET /fees/history
 	t.Run("GetFeesHistory", func(t *testing.T) {
 		blockCount := uint32(1)

@@ -55,8 +55,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	owner := NewSigner(accounts[0].PrivateKey)
 	user := NewSigner(accounts[1].PrivateKey)
 
-	client, err := thorclient.New(testNode.APIServer().URL)
-	assert.NoError(t, err)
+	client := thorclient.New(testNode.APIServer().URL)
 	// Deploy test contract
 	bindContract, err := DeployContract(client, owner, []byte(bindcontract.ABI), bindcontract.HexBytecode)
 	require.NoError(t, err)

@@ -51,9 +51,7 @@ func TestDebug(t *testing.T) {
 	defer ts.Close()
 
 	// /tracers endpoint
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"testTraceClauseWithInvalidTracerName":     testTraceClauseWithInvalidTracerName,
 		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,

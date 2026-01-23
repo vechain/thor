@@ -39,9 +39,7 @@ func TestEmptyEvents(t *testing.T) {
 	initEventServer(t, defaultLogLimit)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"testEventsBadRequest": testEventsBadRequest,
 		"testEventWithEmptyDb": testEventWithEmptyDb,
@@ -55,9 +53,7 @@ func TestEvents(t *testing.T) {
 	defer ts.Close()
 
 	blocksToInsert := 5
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	insertBlocks(t, thorChain, blocksToInsert)
 	testEventWithBlocks(t, blocksToInsert)
 }
@@ -66,9 +62,7 @@ func TestOptionalIndexes(t *testing.T) {
 	thorChain := initEventServer(t, defaultLogLimit)
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 
 	testCases := []struct {
 		name           string
@@ -127,9 +121,7 @@ func TestEvents_WithOptionsNoLimit(t *testing.T) {
   "criteriaSet" : null
 }`
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", []byte(request))
 	require.NoError(t, err)
 	var tLogs []*api.FilteredEvent
@@ -149,9 +141,7 @@ func TestOption(t *testing.T) {
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	filter := api.EventFilter{
 		CriteriaSet: make([]*api.EventCriteria, 0),
 		Range:       nil,
@@ -218,9 +208,7 @@ func TestZeroFrom(t *testing.T) {
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	transferTopic := thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 	criteria := []*api.EventCriteria{
 		{
@@ -253,9 +241,7 @@ func TestNullCriteriaSet(t *testing.T) {
 	initEventServer(t, defaultLogLimit)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", []byte(`{"criteriaSet": null}`))
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)

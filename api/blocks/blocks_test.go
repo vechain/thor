@@ -46,9 +46,7 @@ func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
 		"testBadQueryParams":                    testBadQueryParams,
 		"testInvalidBlockID":                    testInvalidBlockID,

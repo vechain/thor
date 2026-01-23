@@ -40,9 +40,7 @@ func TestEmptyTransfers(t *testing.T) {
 	initTransferServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	testTransferBadRequest(t)
 	testTransferWithEmptyDb(t)
 }
@@ -52,9 +50,7 @@ func TestTransfers(t *testing.T) {
 	initTransferServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	blocksToInsert := 5
 	insertBlocks(t, db, blocksToInsert)
 
@@ -67,9 +63,7 @@ func TestOption(t *testing.T) {
 	defer ts.Close()
 	insertBlocks(t, db, 5)
 
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 	filter := api.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
@@ -113,9 +107,7 @@ func TestOptionalData(t *testing.T) {
 	initTransferServer(t, db, defaultLogLimit)
 	defer ts.Close()
 	insertBlocks(t, db, 5)
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 
 	testCases := []struct {
 		name           string
@@ -165,9 +157,7 @@ func TestNullCriteriaSet(t *testing.T) {
 	db := createDb(t)
 	initTransferServer(t, db, defaultLogLimit)
 	defer ts.Close()
-	var err error
-	tclient, err = thorclient.New(ts.URL)
-	assert.NoError(t, err)
+	tclient = thorclient.New(ts.URL)
 
 	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", []byte(`{"criteriaSet": null}`))
 	require.NoError(t, err)
