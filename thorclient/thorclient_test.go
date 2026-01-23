@@ -88,7 +88,8 @@ func TestRevision(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := New(ts.URL)
+			client, err := New(ts.URL)
+			assert.NoError(t, err)
 
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
@@ -128,7 +129,9 @@ func TestGetTransaction(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := New(ts.URL)
+			client, err := New(ts.URL)
+			assert.NoError(t, err)
+
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
 		})
@@ -167,7 +170,9 @@ func TestClient_DebugRevertedTransaction(t *testing.T) {
 	require.NoError(t, node.Chain().MintBlock(trx))
 
 	// check that we can get debug info for the reverted transaction
-	client := New(node.APIServer().URL)
+	client, err := New(node.APIServer().URL)
+	assert.NoError(t, err)
+
 	id := trx.ID()
 	data, err := client.DebugRevertedTransaction(&id)
 	assert.NoError(t, err)
@@ -201,7 +206,9 @@ func TestClient_DebugReverted_VMError(t *testing.T) {
 	require.NoError(t, node.Chain().MintBlock(trx))
 
 	// check that we can get debug info for the reverted transaction
-	client := New(node.APIServer().URL)
+	client, err := New(node.APIServer().URL)
+	assert.NoError(t, err)
+
 	id := trx.ID()
 	data, err := client.DebugRevertedTransaction(&id)
 	assert.ErrorContains(t, err, "transaction errored with: out of gas")

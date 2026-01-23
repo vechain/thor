@@ -33,7 +33,10 @@ var (
 
 func TestNode(t *testing.T) {
 	initCommServer(t)
-	tclient = thorclient.New(ts.URL)
+
+	var err error
+	tclient, err = thorclient.New(ts.URL)
+	require.NoError(t, err)
 
 	peersStats, err := tclient.Peers()
 	require.NoError(t, err)

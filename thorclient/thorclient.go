@@ -31,6 +31,8 @@ package thorclient
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -73,10 +75,14 @@ type Client struct {
 //   - url: The base URL of the VeChainThor node API
 //
 // Returns a new Client instance ready for HTTP operations.
-func New(url string) *Client {
-	return &Client{
-		httpConn: httpclient.New(url),
+func New(url string) (*Client, error) {
+	sanitizedURL, err := SanitizeURL(url)
+	if err != nil {
+		return nil, err
 	}
+	return &Client{
+		httpConn: httpclient.New(sanitizedURL),
+	}, nil
 }
 
 // NewWithHTTP creates a new VeChainThor client using the provided HTTP URL and custom HTTP client.
@@ -89,10 +95,14 @@ func New(url string) *Client {
 //   - c: A custom http.Client with desired configuration
 //
 // Returns a new Client instance using the custom HTTP client.
-func NewWithHTTP(url string, c *http.Client) *Client {
-	return &Client{
-		httpConn: httpclient.NewWithHTTP(url, c),
+func NewWithHTTP(url string, c *http.Client) (*Client, error) {
+	sanitizedURL, err := SanitizeURL(url)
+	if err != nil {
+		return nil, err
 	}
+	return &Client{
+		httpConn: httpclient.NewWithHTTP(sanitizedURL, c),
+	}, nil
 }
 
 // NewWithWS creates a new VeChainThor client with both HTTP and WebSocket capabilities.
@@ -115,15 +125,49 @@ func NewWithHTTP(url string, c *http.Client) *Client {
 //   - *Client: A new client instance with both HTTP and WebSocket capabilities
 //   - error: An error if the WebSocket connection cannot be established
 func NewWithWS(url string) (*Client, error) {
-	wsClient, err := wsclient.NewClient(url)
+	sanitizedURL, err := SanitizeURL(url)
+	if err != nil {
+		return nil, err
+	}
+	wsClient, err := wsclient.NewClient(sanitizedURL)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		httpConn: httpclient.New(url),
+		httpConn: httpclient.New(sanitizedURL),
 		wsConn:   wsClient,
 	}, nil
+}
+
+func SanitizeURL(nodeURL string) (string, error) {
+	nodeURL = strings.TrimSpace(nodeURL)
+	if nodeURL == "" {
+		return nodeURL, fmt.Errorf("empty URL provided")
+	}
+
+	parsedURL, err := url.Parse(nodeURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	if parsedURL.Scheme == "" {
+		parsedURL.Scheme = "http"
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return "", fmt.Errorf("unsupported URL scheme: %s (only http/https allowed)", parsedURL.Scheme)
+	}
+
+	if parsedURL.Host == "" {
+		return "", fmt.Errorf("URL must include a host")
+	}
+
+	parsedURL.Path = strings.TrimSuffix(parsedURL.Path, "/")
+	parsedURL.Fragment = ""
+	sanitizedURL := parsedURL.String()
+
+	return sanitizedURL, nil
 }
 
 // Option represents a functional option for customizing client requests.

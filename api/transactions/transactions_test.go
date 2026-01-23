@@ -46,7 +46,9 @@ func TestTransaction(t *testing.T) {
 	defer ts.Close()
 
 	// Send tx
-	tclient = thorclient.New(ts.URL)
+	var err error
+	tclient, err = thorclient.New(ts.URL)
+	assert.NoError(t, err)
 	for name, tt := range map[string]func(*testing.T){
 		"sendLegacyTx":                             sendLegacyTx,
 		"sendImpossibleBlockRefExpiryTx":           sendImpossibleBlockRefExpiryTx,

@@ -38,7 +38,8 @@ func TestFeesBacktraceGreaterThanFixedSize(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 8, 10, 10)
 	t.Cleanup(ts.Close)
 
-	tclient := thorclient.New(ts.URL)
+	tclient, err := thorclient.New(ts.URL)
+	assert.NoError(t, err)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
 		"getFeeHistoryBestBlock":               getFeeHistoryBestBlock,
 		"getFeeHistoryWrongBlockCount":         getFeeHistoryWrongBlockCount,
@@ -57,7 +58,8 @@ func TestFeesFixedSizeGreaterThanBacktrace(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 8, 6, 10)
 	t.Cleanup(ts.Close)
 
-	tclient := thorclient.New(ts.URL)
+	tclient, err := thorclient.New(ts.URL)
+	assert.NoError(t, err)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
 		"getFeeHistoryWithSummaries":          getFeeHistoryWithSummaries,
 		"getFeeHistoryOnlySummaries":          getFeeHistoryOnlySummaries,
@@ -76,7 +78,8 @@ func TestFeesFixedSizeSameAsBacktrace(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 11, 11, 10)
 	t.Cleanup(ts.Close)
 
-	tclient := thorclient.New(ts.URL)
+	tclient, err := thorclient.New(ts.URL)
+	assert.NoError(t, err)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
 		"getFeeHistoryBestBlock":                        getFeeHistoryBestBlock,
 		"getFeeHistoryMoreBlocksRequestedThanAvailable": getFeeHistoryMoreBlocksRequestedThanAvailable,
@@ -94,7 +97,8 @@ func TestRewardPercentiles(t *testing.T) {
 	ts, bestchain := initFeesServer(t, 8, 10, 10)
 	t.Cleanup(ts.Close)
 
-	tclient := thorclient.New(ts.URL)
+	tclient, err := thorclient.New(ts.URL)
+	assert.NoError(t, err)
 	for name, tt := range map[string]func(*testing.T, *thorclient.Client, *chain.Chain){
 		"getRewardsValidPercentiles":         getRewardsValidPercentiles,
 		"getRewardsInvalidPercentiles":       getRewardsInvalidPercentiles,
@@ -115,7 +119,8 @@ func TestFeeHistoryHugeBlockCountClamped(t *testing.T) {
 	ts, _ := initFeesServer(t, backtraceLimit /* fixedCacheSize */, 10 /* numberOfBlocks */, 10)
 	t.Cleanup(ts.Close)
 
-	client := thorclient.New(ts.URL)
+	client, err := thorclient.New(ts.URL)
+	assert.NoError(t, err)
 
 	// use an astronomically large blockCount
 	huge := uint64(math.MaxUint64)
