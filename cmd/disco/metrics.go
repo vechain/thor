@@ -7,14 +7,7 @@ package main
 
 import (
 	"context"
-	"net"
-	"net/http"
-	"sync"
 	"time"
-
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/p2p/discv5/discover"
@@ -22,32 +15,6 @@ import (
 )
 
 var metricsPeerCount = metrics.LazyLoadGaugeVec("disco_peercount", []string{"id", "network"})
-
-// startMetricsServer starts an HTTP server that exposes metrics at /metrics endpoint.
-// Returns the metrics URL, a cleanup function, and any error encountered.
-func startMetricsServer(addr string) (string, func(), error) {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen metrics API addr [%v]", addr)
-	}
-
-	router := mux.NewRouter()
-	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
-	handler := handlers.CompressHandler(router)
-
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		srv.Serve(listener)
-	}()
-
-	return "http://" + listener.Addr().String() + "/metrics", func() {
-		srv.Close()
-		wg.Wait()
-	}, nil
-}
 
 // pollMetrics periodically collects and reports metrics from both discovery networks.
 func pollMetrics(ctx context.Context, discv5 *discover.UDPv5, tempnet *tempdiscv5.Network) {

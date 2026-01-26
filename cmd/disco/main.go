@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v3"
+
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/log"
 
