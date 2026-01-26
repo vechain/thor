@@ -509,3 +509,100 @@ func (e *mockedEngine) CommitBlock(header *block.Header, isPacking bool) error {
 func (e *mockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
+
+// soloMockedEngine is a stateful mocked BFT engine for solo mode that properly
+// tracks blockchain progress and returns a "finalized" block based on the best
+// block with a safety gap. This enables the pruner to work in solo mode.
+//
+// Design rationale:
+//   - In solo mode, there's no actual BFT consensus, so we simulate finality by
+//     considering blocks "finalized" when they're a safe distance behind the best block
+//   - The safety gap ensures we don't prune blocks that might still be accessed
+//   - This is necessary because the pruner waits for blocks to be finalized before
+//     pruning historical state
+type soloMockedEngine struct {
+	repo      repositoryReader
+	safetyGap uint32 // Number of blocks behind best to consider "finalized"
+}
+
+// repositoryReader defines the minimal interface needed from chain.Repository
+// to query blockchain state for finality determination.
+type repositoryReader interface {
+	BestBlockSummary() *chain.BlockSummary
+	GenesisBlock() *block.Block
+	NewChain(head thor.Bytes32) *chain.Chain
+}
+
+// Finalized returns the block ID considered "finalized" in solo mode.
+// Returns best block minus safety gap, or genesis if not enough blocks exist.
+func (e *soloMockedEngine) Finalized() thor.Bytes32 {
+	best := e.repo.BestBlockSummary()
+	bestNum := best.Header.Number()
+
+	// If we don't have enough blocks yet, genesis is finalized
+	if bestNum <= e.safetyGap {
+		return e.repo.GenesisBlock().Header().ID()
+	}
+
+	// Calculate finalized block number (best - safety gap)
+	finalizedNum := bestNum - e.safetyGap
+
+	// Get the block ID at the finalized height
+	chain := e.repo.NewChain(best.Header.ID())
+	finalizedID, err := chain.GetBlockID(finalizedNum)
+	if err != nil {
+		// Fallback to genesis if we can't get the finalized block
+		return e.repo.GenesisBlock().Header().ID()
+	}
+
+	return finalizedID
+}
+
+// Justified returns the justified checkpoint. In solo mode, we use the same
+// logic as Finalized since there's no distinction without real BFT consensus.
+func (e *soloMockedEngine) Justified() (thor.Bytes32, error) {
+	return e.Finalized(), nil
+}
+
+// Accepts always returns true in solo mode since there's no competing chains
+// or validation needed - the single node accepts all blocks it produces.
+func (e *soloMockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
+	return true, nil
+}
+
+// Select always returns true in solo mode since there's no fork choice rule
+// needed - the single node always extends its own chain.
+func (e *soloMockedEngine) Select(header *block.Header) (bool, error) {
+	return true, nil
+}
+
+// CommitBlock is a no-op in solo mode since there's no BFT voting or
+// commitment protocol needed.
+func (e *soloMockedEngine) CommitBlock(header *block.Header, isPacking bool) error {
+	return nil
+}
+
+// ShouldVote always returns false in solo mode since there's no voting
+// mechanism - the single node produces blocks without consensus votes.
+func (e *soloMockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
+	return false, nil
+}
+
+// NewSoloMockedEngine creates a new mocked BFT engine for solo mode that
+// properly simulates block finality to enable pruning.
+//
+// Parameters:
+//   - repo: The blockchain repository to query for block information
+//   - safetyGap: Number of blocks behind best to consider "finalized"
+//     Recommended: 1000 blocks (provides ~200 seconds buffer in solo mode)
+//
+// The safety gap ensures that:
+//   - Blocks have time to be generated before pruning catches up
+//   - Recent blocks that might be accessed remain available
+//   - The pruner can make consistent progress as the chain grows
+func NewSoloMockedEngine(repo repositoryReader, safetyGap uint32) Committer {
+	return &soloMockedEngine{
+		repo:      repo,
+		safetyGap: safetyGap,
+	}
+}

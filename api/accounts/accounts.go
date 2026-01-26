@@ -300,34 +300,36 @@ func (a *Accounts) batchCall(
 			BaseFee:     header.BaseFee(),
 		},
 		a.forkConfig)
+
 	results = make(api.BatchCallResults, 0)
-	resultCh := make(chan any, 1)
+
 	for i, clause := range clauses {
+		clauseProcessedChan := make(chan any, 1)
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
 		go func() {
-			out, _, err := exec()
-			if err != nil {
-				resultCh <- err
+			select {
+			case <-ctx.Done():
+				interrupt() // stop clause processing if the request has been closed
+			case <-clauseProcessedChan:
 			}
-			resultCh <- out
 		}()
-		select {
-		case <-ctx.Done():
-			interrupt()
-			return nil, ctx.Err()
-		case result := <-resultCh:
-			switch v := result.(type) {
-			case error:
-				return nil, v
-			case *runtime.Output:
-				results = append(results, api.ConvertCallResultWithInputGas(v, gas))
-				if v.VMErr != nil {
-					return results, nil
-				}
-				gas = v.LeftOverGas
-			}
+
+		out, _, err := exec()
+		if err != nil {
+			close(clauseProcessedChan)
+			return nil, err
 		}
+
+		results = append(results, api.ConvertCallResultWithInputGas(out, gas))
+		if out.VMErr != nil {
+			close(clauseProcessedChan)
+			return results, nil
+		}
+
+		gas = out.LeftOverGas
+		close(clauseProcessedChan)
 	}
+
 	return results, nil
 }
 

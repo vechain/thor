@@ -490,7 +490,10 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		pool = txPool
 	}
 
-	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
+	// Use solo mocked engine that tracks chain progress to enable pruning.
+	// Safety gap of 1000 blocks ensures recent blocks remain accessible while
+	// allowing the pruner to make progress on historical state.
+	bftMockedEngine := bft.NewSoloMockedEngine(repo, 1000)
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
 		repo,
