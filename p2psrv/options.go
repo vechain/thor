@@ -28,7 +28,9 @@ type Options struct {
 
 	// NoDiscovery can be used to disable the peer discovery mechanism.
 	// Disabling is useful for protocol debugging (manual topology).
-	NoDiscovery bool
+	TempDiscV5 bool
+
+	DiscV5 bool
 
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
