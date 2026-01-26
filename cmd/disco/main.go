@@ -16,7 +16,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v3"
+	"github.com/vechain/thor/v2/cmd/thor/httpserver"
+	"github.com/vechain/thor/v2/log"
 
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/p2p/discv5/enode"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
@@ -50,24 +53,24 @@ func run(_ context.Context, ctx *cli.Command) error {
 	}
 	initLogger(lvl)
 
-	natm, err := nat.Parse(ctx.String("nat"))
+	natm, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "-nat")
 	}
 
 	var key *ecdsa.PrivateKey
 
-	if keyHex := ctx.String("keyhex"); keyHex != "" {
+	if keyHex := ctx.String(keyHexFlag.Name); keyHex != "" {
 		if key, err = crypto.HexToECDSA(keyHex); err != nil {
 			return errors.Wrap(err, "-keyhex")
 		}
 	} else {
-		if key, err = loadOrGenerateKeyFile(ctx.String("keyfile")); err != nil {
+		if key, err = loadOrGenerateKeyFile(ctx.String(keyFileFlag.Name)); err != nil {
 			return errors.Wrap(err, "-keyfile")
 		}
 	}
 
-	netrestrict := ctx.String("netrestrict")
+	netrestrict := ctx.String(netRestrictFlag.Name)
 	var restrictList *netutil.Netlist
 	if netrestrict != "" {
 		restrictList, err = netutil.ParseNetlist(netrestrict)
@@ -93,10 +96,30 @@ func run(_ context.Context, ctx *cli.Command) error {
 		// allow all nodes to be added
 		return true
 	})
+
 	topic := tempdiscv5.Topic("disco")
 	if err := srv.Start(nil, &topic); err != nil {
 		return err
 	}
+
+	// Initialize metrics if enabled
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		metricsAddr := ctx.String(metricsAddrFlag.Name)
+		url, metricsCloser, err := httpserver.StartMetricsServer(metricsAddr)
+		if err != nil {
+			return errors.Wrap(err, "start metrics server")
+		}
+		defer metricsCloser()
+		log.Info("metrics server started", "url", url)
+
+		// Start metrics polling in a goroutine
+		metricsCtx, metricsCancel := context.WithCancel(context.Background())
+		defer metricsCancel()
+		go pollMetrics(metricsCtx, srv.DiscV5(), srv.TempDiscV5())
+	}
+
+	log.Info("p2p server started", "self", srv.Self().String())
 
 	exitSignal := handleExitSignal()
 	<-exitSignal.Done()

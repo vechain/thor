@@ -46,7 +46,7 @@ var (
 	}
 	verbosityFlag = &cli.Uint64Flag{
 		Name:    "verbosity",
-		Value:   log.LegacyLevelWarn,
+		Value:   log.LegacyLevelInfo,
 		Usage:   "log verbosity (0-9)",
 		Sources: envVar("VERBOSITY"),
 	}

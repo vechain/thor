@@ -249,6 +249,16 @@ func (s *Server) Options() *Options {
 	return s.opts
 }
 
+// DiscV5 returns the discovery v5 instance.
+func (s *Server) DiscV5() *discv5discover.UDPv5 {
+	return s.discv5
+}
+
+// TempDiscV5 returns the temporary discovery v5 instance.
+func (s *Server) TempDiscV5() *tempdiscv5.Network {
+	return s.tempdiscv5
+}
+
 // TryDial tries to establish a connection with the  the given node.
 func (s *Server) TryDial(node *discover.Node) error {
 	if s.dialingNodes.Contains(node.ID) {
