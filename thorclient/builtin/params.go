@@ -11,6 +11,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
+	"github.com/vechain/thor/v2/abi"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
@@ -87,7 +89,7 @@ func (p *Params) FilterSet(opts ...bind.FilterOption) ([]SetEvent, error) {
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
