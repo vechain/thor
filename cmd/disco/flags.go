@@ -6,52 +6,65 @@
 package main
 
 import (
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v3"
 
 	"github.com/vechain/thor/v2/log"
 )
 
+func envVar(name string) cli.ValueSourceChain {
+	return cli.NewValueSourceChain(cli.EnvVar("DISCO_" + name))
+}
+
 var (
-	addrFlag = cli.StringFlag{
-		Name:  "addr",
-		Value: ":55555",
-		Usage: "listen address",
+	addrFlag = &cli.StringFlag{
+		Name:    "addr",
+		Value:   ":55555",
+		Usage:   "listen address",
+		Sources: envVar("ADDR"),
 	}
-	keyFileFlag = cli.StringFlag{
-		Name:  "keyfile",
-		Usage: "private key file path",
-		Value: defaultKeyFile(),
+	keyFileFlag = &cli.StringFlag{
+		Name:    "keyfile",
+		Usage:   "private key file path",
+		Value:   defaultKeyFile(),
+		Sources: envVar("KEYFILE"),
 	}
-	keyHexFlag = cli.StringFlag{
-		Name:  "keyhex",
-		Usage: "private key as hex",
+	keyHexFlag = &cli.StringFlag{
+		Name:    "keyhex",
+		Usage:   "private key as hex",
+		Sources: envVar("KEYHEX"),
 	}
-	natFlag = cli.StringFlag{
-		Name:  "nat",
-		Value: "none",
-		Usage: "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
+	natFlag = &cli.StringFlag{
+		Name:    "nat",
+		Value:   "none",
+		Usage:   "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
+		Sources: envVar("NAT"),
 	}
-	netRestrictFlag = cli.StringFlag{
-		Name:  "netrestrict",
-		Usage: "restrict network communication to the given IP networks (CIDR masks)",
+	netRestrictFlag = &cli.StringFlag{
+		Name:    "netrestrict",
+		Usage:   "restrict network communication to the given IP networks (CIDR masks)",
+		Sources: envVar("NETRESTRICT"),
 	}
-	verbosityFlag = cli.UintFlag{
-		Name:  "verbosity",
-		Value: log.LegacyLevelWarn,
-		Usage: "log verbosity (0-9)",
+	verbosityFlag = &cli.Uint64Flag{
+		Name:    "verbosity",
+		Value:   log.LegacyLevelWarn,
+		Usage:   "log verbosity (0-9)",
+		Sources: envVar("VERBOSITY"),
 	}
-	enableMetricsFlag = cli.BoolFlag{
-		Name:  "enable-metrics",
-		Usage: "enables metrics collection",
+	enableMetricsFlag = &cli.BoolFlag{
+		Name:    "enable-metrics",
+		Usage:   "enables metrics collection",
+		Sources: envVar("ENABLE_METRICS"),
 	}
-	metricsAddrFlag = cli.StringFlag{
-		Name:  "metrics-addr",
-		Value: "localhost:2112",
-		Usage: "metrics service listening address",
+	metricsAddrFlag = &cli.StringFlag{
+		Name:    "metrics-addr",
+		Value:   "localhost:2112",
+		Usage:   "metrics service listening address",
+		Sources: envVar("METRICS_ADDR"),
 	}
-	disableTempDiscv5Flag = cli.BoolFlag{
-		Name:   "disable-temp-discv5",
-		Hidden: true,
-		Usage:  "disable legacy discovery protocol",
+	disableTempDiscv5Flag = &cli.BoolFlag{
+		Name:    "disable-temp-discv5",
+		Hidden:  true,
+		Usage:   "disable legacy discovery protocol",
+		Sources: envVar("TEMP_DISCV5"),
 	}
 )

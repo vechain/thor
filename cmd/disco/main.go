@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"os"
@@ -14,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v3"
 
 	"github.com/vechain/thor/v2/p2p/discv5/enode"
 	"github.com/vechain/thor/v2/p2p/nat"
@@ -42,7 +43,7 @@ var (
 	}
 )
 
-func run(ctx *cli.Context) error {
+func run(_ context.Context, ctx *cli.Command) error {
 	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "parse verbosity flag")
@@ -110,7 +111,7 @@ func main() {
 	if gitTag == "" {
 		versionMeta = "dev"
 	}
-	app := cli.App{
+	app := cli.Command{
 		Version:   fmt.Sprintf("%s-%s-%s", version, gitCommit, versionMeta),
 		Name:      "Disco",
 		Usage:     "VeChain Thor bootstrap node",
@@ -118,7 +119,7 @@ func main() {
 		Flags:     flags,
 		Action:    run,
 	}
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
