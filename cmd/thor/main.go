@@ -27,6 +27,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/pruner"
+	"github.com/vechain/thor/v2/cmd/thor/reprocess"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
@@ -181,6 +182,19 @@ func main() {
 					exportMasterKeyFlag,
 				},
 				Action: masterKeyAction,
+			},
+			{
+				Name:  "reprocess",
+				Usage: "reprocess chain from snapshot data",
+				Flags: []cli.Flag{
+					snapshotDirFlag,
+					outputDirFlag,
+					dataDirFlag,
+					logDbAdditionalIndexesFlag,
+					verbosityFlag,
+					jsonLogsFlag,
+				},
+				Action: reprocessAction,
 			},
 		},
 	}
@@ -603,5 +617,83 @@ func masterKeyAction(ctx *cli.Context) error {
 		_, err = fmt.Println(string(keyjson))
 		return err
 	}
+	return nil
+}
+
+func reprocessAction(ctx *cli.Context) error {
+	_, err := initLogger(ctx)
+	if err != nil {
+		return errors.Wrap(err, "init logger")
+	}
+	snapshotDir := ctx.String(snapshotDirFlag.Name)
+	if snapshotDir == "" {
+		return errors.New("snapshot data directory required (use --snapshot-dir)")
+	}
+
+	outputDir := ctx.String(outputDirFlag.Name)
+	if outputDir == "" {
+		outputDir = ctx.String(dataDirFlag.Name)
+	}
+
+	fmt.Printf("[REPROCESS] Starting chain reprocessing\n")
+	fmt.Printf("[REPROCESS] Snapshot: %s\n", snapshotDir)
+	fmt.Printf("[REPROCESS] Output: %s\n", outputDir)
+	log.Info("Starting chain reprocessing", "snapshot", snapshotDir, "output", outputDir)
+
+	// Detect or get genesis
+	network := ctx.String(networkFlag.Name)
+	var genesisGene *genesis.Genesis
+	var forkConfig *thor.ForkConfig
+
+	if network != "" {
+		gene, fc, err := selectGenesis(ctx)
+		if err != nil {
+			return errors.Wrap(err, "select genesis")
+		}
+		genesisGene = gene
+		forkConfig = fc
+	}
+
+	// Create output directory
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return errors.Wrap(err, "create output directory")
+	}
+
+	// Open target databases
+	mainDB, err := openMainDB(ctx, outputDir)
+	if err != nil {
+		return errors.Wrap(err, "open target main database")
+	}
+	defer func() { log.Info("closing target main database..."); mainDB.Close() }()
+
+	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
+	logDB, err := openLogDB(outputDir, logDbAdditionalIndexes)
+	if err != nil {
+		return errors.Wrap(err, "open target log database")
+	}
+	defer func() { log.Info("closing target log database..."); logDB.Close() }()
+
+	// Reprocess chain
+	if genesisGene != nil && forkConfig != nil {
+		err = reprocess.ReprocessChainFromSnapshotWithGenesis(
+			snapshotDir,
+			mainDB,
+			logDB,
+			genesisGene, // Pass genesis builder, not built block
+			forkConfig,
+		)
+	} else {
+		err = reprocess.ReprocessChainFromSnapshot(
+			snapshotDir,
+			mainDB,
+			logDB,
+		)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "reprocess chain")
+	}
+
+	log.Info("Chain reprocessing completed successfully")
 	return nil
 }
