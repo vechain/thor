@@ -40,14 +40,12 @@ jobs:
             fi
           fi
 
-          # Verify if branch exists using GitHub API instead of git ls-remote
-          if curl -s -H "Authorization: token ${{ secrets.DRAUPNIR_TOKEN }}" \
-          "https://api.github.com/repos/vechain/draupnir/branches/$REF" >/dev/null 2>&1; then
-            echo "Branch $REF exists"
-            echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          else
-            echo "Branch $REF does not exist, using default commit"
+          # Verify if branch exists
+          if ! git ls-remote --heads https://github.com/vechain/draupnir.git $REF; then
+            echo "Branch does not exist, using default commit"
             echo "ref=$DEFAULT_COMMIT" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
           fi
           echo "DRAUPNIR REF: $(<$GITHUB_OUTPUT)"
         env:
