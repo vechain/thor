@@ -8,7 +8,57 @@ package main
 import (
 	"math"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/node"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
 )
+
+func TestPrintStartupMessage1(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	gene, forkConfig := genesis.NewDevnet()
+	b, _, _, _ := gene.Build(stater)
+	repo, _ := chain.NewRepository(db, b)
+
+	key, _ := crypto.GenerateKey()
+	master := &node.Master{PrivateKey: key}
+
+	t.Run("with master", func(t *testing.T) {
+		printStartupMessage1(gene, repo, master, "/tmp/test", forkConfig)
+	})
+
+	t.Run("with beneficiary", func(t *testing.T) {
+		beneficiary := thor.BytesToAddress([]byte("beneficiary"))
+		master.Beneficiary = &beneficiary
+		printStartupMessage1(gene, repo, master, "/tmp/test", forkConfig)
+	})
+
+	t.Run("solo mode", func(t *testing.T) {
+		printStartupMessage1(gene, repo, nil, "/tmp/test", forkConfig)
+	})
+}
+
+func TestPrintStartupMessage2(t *testing.T) {
+	gene, _ := genesis.NewDevnet()
+
+	t.Run("all fields", func(t *testing.T) {
+		printStartupMessage2(gene, "http://localhost:8669", "enode://abc@127.0.0.1:11235", "http://localhost:2112", "http://localhost:2113", false)
+	})
+
+	t.Run("minimal fields", func(t *testing.T) {
+		printStartupMessage2(gene, "http://localhost:8669", "", "", "", false)
+	})
+
+	t.Run("devnet", func(t *testing.T) {
+		printStartupMessage2(gene, "http://localhost:8669", "", "", "", true)
+	})
+}
 
 func TestReadIntFromUInt64Flag_WithinRange(t *testing.T) {
 	got, err := readIntFromUInt64Flag(42)
