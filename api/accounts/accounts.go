@@ -304,30 +304,38 @@ func (a *Accounts) batchCall(
 	results = make(api.BatchCallResults, 0)
 
 	for i, clause := range clauses {
-		clauseProcessedChan := make(chan any, 1)
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
+
+		done := make(chan struct{})
 		go func() {
 			select {
 			case <-ctx.Done():
-				interrupt() // stop clause processing if the request has been closed
-			case <-clauseProcessedChan:
+				interrupt()
+				return
+			case <-done:
+				return
 			}
 		}()
 
-		out, _, err := exec()
+		out, interrupted, err := exec()
+		close(done)
+
+		if interrupted {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, errors.New("execution interrupted")
+		}
+		// errors other than interrupted
 		if err != nil {
-			close(clauseProcessedChan)
 			return nil, err
 		}
 
 		results = append(results, api.ConvertCallResultWithInputGas(out, gas))
 		if out.VMErr != nil {
-			close(clauseProcessedChan)
 			return results, nil
 		}
-
 		gas = out.LeftOverGas
-		close(clauseProcessedChan)
 	}
 
 	return results, nil
