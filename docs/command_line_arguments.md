@@ -8,7 +8,10 @@ To show usages of all command line options:
 bin/thor -h
 ```
 
-## Thor Commands
+## Command Line Arguments
+
+- **note**: Arguments can be set via environment variables, e.g. `THOR_API_ADDR=0.0.0.0:8669 bin/thor`. To see all 
+variables, run: `bin/thor --help`
 
 | Commands                         | Description                                                                                                                              |
 |----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
