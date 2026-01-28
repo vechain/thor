@@ -60,7 +60,7 @@ func TestHandleRPC_MsgNewTx(t *testing.T) {
 
 	t.Run("valid transaction", func(t *testing.T) {
 		writeCalled := false
-		var writtenData interface{}
+		var writtenData any
 
 		write := func(data any) {
 			writeCalled = true
@@ -137,7 +137,7 @@ func TestHandleRPC_MsgNewTx(t *testing.T) {
 
 	t.Run("transaction at size limit boundary", func(t *testing.T) {
 		writeCalled := false
-		var writtenData interface{}
+		var writtenData any
 
 		write := func(data any) {
 			writeCalled = true
