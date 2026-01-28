@@ -31,6 +31,8 @@ package thorclient
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -74,8 +76,9 @@ type Client struct {
 //
 // Returns a new Client instance ready for HTTP operations.
 func New(url string) *Client {
+	sanitizedURL := sanitizeURL(url)
 	return &Client{
-		httpConn: httpclient.New(url),
+		httpConn: httpclient.New(sanitizedURL),
 	}
 }
 
@@ -90,8 +93,9 @@ func New(url string) *Client {
 //
 // Returns a new Client instance using the custom HTTP client.
 func NewWithHTTP(url string, c *http.Client) *Client {
+	sanitizedURL := sanitizeURL(url)
 	return &Client{
-		httpConn: httpclient.NewWithHTTP(url, c),
+		httpConn: httpclient.NewWithHTTP(sanitizedURL, c),
 	}
 }
 
@@ -115,15 +119,46 @@ func NewWithHTTP(url string, c *http.Client) *Client {
 //   - *Client: A new client instance with both HTTP and WebSocket capabilities
 //   - error: An error if the WebSocket connection cannot be established
 func NewWithWS(url string) (*Client, error) {
-	wsClient, err := wsclient.NewClient(url)
+	sanitizedURL := sanitizeURL(url)
+	wsClient, err := wsclient.NewClient(sanitizedURL)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		httpConn: httpclient.New(url),
+		httpConn: httpclient.New(sanitizedURL),
 		wsConn:   wsClient,
 	}, nil
+}
+
+func sanitizeURL(nodeURL string) string {
+	nodeURL = strings.TrimSpace(nodeURL)
+	if nodeURL == "" {
+		return nodeURL
+	}
+
+	parsedURL, err := url.Parse(nodeURL)
+	if err != nil {
+		return nodeURL
+	}
+
+	if parsedURL.Scheme == "" {
+		parsedURL.Scheme = "http"
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nodeURL
+	}
+
+	if parsedURL.Host == "" {
+		return nodeURL
+	}
+
+	parsedURL.Path = strings.TrimSuffix(parsedURL.Path, "/")
+	parsedURL.Fragment = ""
+	sanitizedURL := parsedURL.String()
+
+	return sanitizedURL
 }
 
 // Option represents a functional option for customizing client requests.
