@@ -622,7 +622,7 @@ func masterKeyAction(_ context.Context, ctx *cli.Command) error {
 	return nil
 }
 
-func reprocessAction(ctx *cli.Context) error {
+func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	_, err := initLogger(ctx)
 	if err != nil {
 		return errors.Wrap(err, "init logger")
