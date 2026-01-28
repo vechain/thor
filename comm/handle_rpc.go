@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/vechain/thor/v2/txpool"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 
@@ -19,6 +21,8 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
+
+var maxTxSize = uint32(txpool.MaxTxSize + 1024)
 
 // peer will be disconnected if error returned
 func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsToSync *txsToSync) (err error) {
@@ -66,6 +70,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 		}
 		write(&struct{}{})
 	case proto.MsgNewTx:
+		if msg.Size > maxTxSize {
+			return errors.New("payload size: exceeds limit")
+		}
 		var newTx *tx.Transaction
 		if err := msg.Decode(&newTx); err != nil {
 			return errors.WithMessage(err, "decode msg")
