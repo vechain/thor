@@ -193,6 +193,7 @@ func main() {
 					logDbAdditionalIndexesFlag,
 					verbosityFlag,
 					jsonLogsFlag,
+					skipLogsFlag,
 				},
 				Action: reprocessAction,
 			},
@@ -640,7 +641,6 @@ func reprocessAction(ctx *cli.Context) error {
 	fmt.Printf("[REPROCESS] Output: %s\n", outputDir)
 	log.Info("Starting chain reprocessing", "snapshot", snapshotDir, "output", outputDir)
 
-	// Detect or get genesis
 	network := ctx.String(networkFlag.Name)
 	var genesisGene *genesis.Genesis
 	var forkConfig *thor.ForkConfig
@@ -654,18 +654,17 @@ func reprocessAction(ctx *cli.Context) error {
 		forkConfig = fc
 	}
 
-	// Create output directory
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return errors.Wrap(err, "create output directory")
 	}
 
-	// Open target databases
 	mainDB, err := openMainDB(ctx, outputDir)
 	if err != nil {
 		return errors.Wrap(err, "open target main database")
 	}
 	defer func() { log.Info("closing target main database..."); mainDB.Close() }()
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
 	logDB, err := openLogDB(outputDir, logDbAdditionalIndexes)
 	if err != nil {
@@ -673,20 +672,21 @@ func reprocessAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("closing target log database..."); logDB.Close() }()
 
-	// Reprocess chain
 	if genesisGene != nil && forkConfig != nil {
 		err = reprocess.ReprocessChainFromSnapshotWithGenesis(
 			snapshotDir,
 			mainDB,
 			logDB,
-			genesisGene, // Pass genesis builder, not built block
+			genesisGene,
 			forkConfig,
+			skipLogs,
 		)
 	} else {
 		err = reprocess.ReprocessChainFromSnapshot(
 			snapshotDir,
 			mainDB,
 			logDB,
+			skipLogs,
 		)
 	}
 

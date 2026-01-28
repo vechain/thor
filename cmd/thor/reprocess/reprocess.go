@@ -33,6 +33,7 @@ func ReprocessChainFromSnapshot(
 	snapshotDataDir string,
 	targetDB *muxdb.MuxDB,
 	targetLogDB *logdb.LogDB,
+	skipLogs bool,
 ) error {
 	log.Info("Opening snapshot database", "dir", snapshotDataDir)
 
@@ -91,16 +92,18 @@ func ReprocessChainFromSnapshot(
 			return errors.Wrap(err, "re-initialize target repository")
 		}
 
-		logWriter := targetLogDB.NewWriter()
-		if err := logWriter.Write(builtGenesisBlock, tx.Receipts{{
-			Outputs: []*tx.Output{
-				{Events: genesisEvents, Transfers: genesisTransfers},
-			},
-		}}); err != nil {
-			return errors.Wrap(err, "write genesis logs")
-		}
-		if err := logWriter.Commit(); err != nil {
-			return errors.Wrap(err, "commit genesis logs")
+		if !skipLogs {
+			logWriter := targetLogDB.NewWriter()
+			if err := logWriter.Write(builtGenesisBlock, tx.Receipts{{
+				Outputs: []*tx.Output{
+					{Events: genesisEvents, Transfers: genesisTransfers},
+				},
+			}}); err != nil {
+				return errors.Wrap(err, "write genesis logs")
+			}
+			if err := logWriter.Commit(); err != nil {
+				return errors.Wrap(err, "commit genesis logs")
+			}
 		}
 	} else {
 		log.Info("Resuming reprocessing", "currentBlock", targetBestBlockNum)
@@ -139,7 +142,10 @@ func ReprocessChainFromSnapshot(
 	fmt.Printf("[REPROCESS] Starting from block %d to %d (%d blocks to process)\n",
 		startBlockNum, bestBlockNum, totalBlocksToProcess)
 
-	logWriter := targetLogDB.NewWriter()
+	var logWriter *logdb.Writer
+	if !skipLogs {
+		logWriter = targetLogDB.NewWriter()
+	}
 
 	for blockNum := startBlockNum; blockNum <= bestBlockNum; blockNum++ {
 		snapshotBlock, err := snapshotBestChain.GetBlock(blockNum)
@@ -170,15 +176,17 @@ func ReprocessChainFromSnapshot(
 			return errors.Wrapf(err, "add block %d to target repository", blockNum)
 		}
 
-		if err := logWriter.Write(snapshotBlock, receipts); err != nil {
-			return errors.Wrapf(err, "write logs for block %d", blockNum)
-		}
+		if !skipLogs {
+			if err := logWriter.Write(snapshotBlock, receipts); err != nil {
+				return errors.Wrapf(err, "write logs for block %d", blockNum)
+			}
 
-		blocksProcessed := blockNum - startBlockNum + 1
-		shouldCommitLogs := blocksProcessed%logBatchSize == 0 || blockNum == bestBlockNum
-		if shouldCommitLogs {
-			if err := logWriter.Commit(); err != nil {
-				return errors.Wrapf(err, "commit logs at block %d", blockNum)
+			blocksProcessed := blockNum - startBlockNum + 1
+			shouldCommitLogs := blocksProcessed%logBatchSize == 0 || blockNum == bestBlockNum
+			if shouldCommitLogs {
+				if err := logWriter.Commit(); err != nil {
+					return errors.Wrapf(err, "commit logs at block %d", blockNum)
+				}
 			}
 		}
 
@@ -197,8 +205,10 @@ func ReprocessChainFromSnapshot(
 		}
 	}
 
-	if err := logWriter.Commit(); err != nil {
-		return errors.Wrap(err, "final commit logs")
+	if !skipLogs {
+		if err := logWriter.Commit(); err != nil {
+			return errors.Wrap(err, "final commit logs")
+		}
 	}
 
 	log.Info("Reprocessing completed successfully", "totalBlocks", bestBlockNum+1)
@@ -296,6 +306,7 @@ func ReprocessChainFromSnapshotWithGenesis(
 	targetLogDB *logdb.LogDB,
 	genesisGene *genesis.Genesis,
 	forkConfig *thor.ForkConfig,
+	skipLogs bool,
 ) error {
 	log.Info("Opening snapshot database", "dir", snapshotDataDir)
 
@@ -343,16 +354,18 @@ func ReprocessChainFromSnapshotWithGenesis(
 			return errors.Wrap(err, "re-initialize target repository")
 		}
 
-		logWriter := targetLogDB.NewWriter()
-		if err := logWriter.Write(genesisBlock, tx.Receipts{{
-			Outputs: []*tx.Output{
-				{Events: genesisEvents, Transfers: genesisTransfers},
-			},
-		}}); err != nil {
-			return errors.Wrap(err, "write genesis logs")
-		}
-		if err := logWriter.Commit(); err != nil {
-			return errors.Wrap(err, "commit genesis logs")
+		if !skipLogs {
+			logWriter := targetLogDB.NewWriter()
+			if err := logWriter.Write(genesisBlock, tx.Receipts{{
+				Outputs: []*tx.Output{
+					{Events: genesisEvents, Transfers: genesisTransfers},
+				},
+			}}); err != nil {
+				return errors.Wrap(err, "write genesis logs")
+			}
+			if err := logWriter.Commit(); err != nil {
+				return errors.Wrap(err, "commit genesis logs")
+			}
 		}
 	} else {
 		log.Info("Resuming reprocessing", "currentBlock", targetBestBlockNum)
@@ -391,7 +404,10 @@ func ReprocessChainFromSnapshotWithGenesis(
 	fmt.Printf("[REPROCESS] Starting from block %d to %d (%d blocks to process)\n",
 		startBlockNum, bestBlockNum, totalBlocksToProcess)
 
-	logWriter := targetLogDB.NewWriter()
+	var logWriter *logdb.Writer
+	if !skipLogs {
+		logWriter = targetLogDB.NewWriter()
+	}
 
 	for blockNum := startBlockNum; blockNum <= bestBlockNum; blockNum++ {
 		snapshotBlock, err := snapshotBestChain.GetBlock(blockNum)
@@ -422,15 +438,17 @@ func ReprocessChainFromSnapshotWithGenesis(
 			return errors.Wrapf(err, "add block %d to target repository", blockNum)
 		}
 
-		if err := logWriter.Write(snapshotBlock, receipts); err != nil {
-			return errors.Wrapf(err, "write logs for block %d", blockNum)
-		}
+		if !skipLogs {
+			if err := logWriter.Write(snapshotBlock, receipts); err != nil {
+				return errors.Wrapf(err, "write logs for block %d", blockNum)
+			}
 
-		blocksProcessed := blockNum - startBlockNum + 1
-		shouldCommitLogs := blocksProcessed%logBatchSize == 0 || blockNum == bestBlockNum
-		if shouldCommitLogs {
-			if err := logWriter.Commit(); err != nil {
-				return errors.Wrapf(err, "commit logs at block %d", blockNum)
+			blocksProcessed := blockNum - startBlockNum + 1
+			shouldCommitLogs := blocksProcessed%logBatchSize == 0 || blockNum == bestBlockNum
+			if shouldCommitLogs {
+				if err := logWriter.Commit(); err != nil {
+					return errors.Wrapf(err, "commit logs at block %d", blockNum)
+				}
 			}
 		}
 
@@ -449,8 +467,10 @@ func ReprocessChainFromSnapshotWithGenesis(
 		}
 	}
 
-	if err := logWriter.Commit(); err != nil {
-		return errors.Wrap(err, "final commit logs")
+	if !skipLogs {
+		if err := logWriter.Commit(); err != nil {
+			return errors.Wrap(err, "final commit logs")
+		}
 	}
 
 	log.Info("Reprocessing completed successfully", "totalBlocks", bestBlockNum+1)
