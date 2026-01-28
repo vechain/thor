@@ -301,19 +301,27 @@ func (a *Accounts) batchCall(
 		},
 		a.forkConfig)
 	results = make(api.BatchCallResults, 0)
-	resultCh := make(chan any, 1)
 	for i, clause := range clauses {
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
+		resultCh := make(chan any, 1)
+		done := make(chan struct{})
+
 		go func() {
-			out, _, err := exec()
+			defer close(done)
+			out, interrupted, err := exec()
+			if interrupted {
+				return
+			}
 			if err != nil {
 				resultCh <- err
+			} else {
+				resultCh <- out
 			}
-			resultCh <- out
 		}()
 		select {
 		case <-ctx.Done():
 			interrupt()
+			<-done
 			return nil, ctx.Err()
 		case result := <-resultCh:
 			switch v := result.(type) {
