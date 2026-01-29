@@ -106,6 +106,18 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	})
 }
 
+// Returns true or false for a given blockId based on the current state of chain. If the block for a given number is
+// found it compares id with provided id, if the block is not found returns false. There are couple of possible scenarios
+// here:
+//  1. Block number in future - returns false
+//  2. Block number is on canonical chain - returns true
+//     3.a. Node is currently on a side chain and returns true for block ID1 and block number X - returns true
+//     3.b. After some time node converges to canonical chain and re-org mechanism sets different block id ID2 for block
+//     number X - returns false (it is possible that couple of seconds before same node was returning true for block ID2)
+//     4.a. Node is currently on a side chain and returns false for block ID3 and block number Y - returns false
+//     4.b. After some time node converges to canonical chain and re-org mechanism sets different block id ID3 for block
+//     number Y - returns true (it is possible that couple of seconds before same node was returning false for block ID3)
+//  5. Node has never seen a block from side chain so it returns false for block which was never seen
 func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
 	idByNum, err := b.repo.NewBestChain().GetBlockID(blkNum)
 	if err != nil {
