@@ -256,6 +256,12 @@ var (
 		Sources: envVar("MIN_EFFECTIVE_PRIORITY_FEE"),
 	}
 
+	wscProviderURLFlag = &cli.StringFlag{
+		Name:    "wsc-provider-url",
+		Usage:   "URL to fetch weak subjectivity checkpoint",
+		Sources: envVar("WSC_PROVIDER_URL"),
+	}
+
 	// solo mode only flags
 	onDemandFlag = &cli.BoolFlag{
 		Name:    "on-demand",

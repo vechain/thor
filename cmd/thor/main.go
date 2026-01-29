@@ -127,6 +127,7 @@ func main() {
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
 			minEffectivePriorityFeeFlag,
+			wscProviderURLFlag,
 		},
 		Action: defaultAction,
 		Commands: []*cli.Command{
@@ -333,6 +334,7 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 		SkipLogs:         skipLogs,
 		MinTxPriorityFee: minTxPriorityFee,
 		TargetGasLimit:   ctx.Uint64(targetGasLimitFlag.Name),
+		WSCProviderURL:   ctx.String(wscProviderURLFlag.Name),
 	}
 	stater := state.NewStater(mainDB)
 
