@@ -188,9 +188,8 @@ func main() {
 				Name:  "reprocess",
 				Usage: "reprocess chain from snapshot data",
 				Flags: []cli.Flag{
-					snapshotDirFlag,
-					outputDirFlag,
 					dataDirFlag,
+					outputDirFlag,
 					logDbAdditionalIndexesFlag,
 					verbosityFlag,
 					jsonLogsFlag,
@@ -627,43 +626,20 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	if err != nil {
 		return errors.Wrap(err, "init logger")
 	}
-	snapshotDir := ctx.String(snapshotDirFlag.Name)
-	if snapshotDir == "" {
-		return errors.New("snapshot data directory required (use --snapshot-dir)")
+	inputDir := ctx.String(dataDirFlag.Name)
+	if inputDir == "" {
+		return errors.New("data directory required (use --data-dir)")
 	}
 
 	outputDir := ctx.String(outputDirFlag.Name)
 	if outputDir == "" {
-		outputDir = ctx.String(dataDirFlag.Name)
+		return errors.New("output data directory required (use --output-dir)")
 	}
-
-	fmt.Printf("[REPROCESS] Starting chain reprocessing\n")
-	fmt.Printf("[REPROCESS] Snapshot: %s\n", snapshotDir)
-	fmt.Printf("[REPROCESS] Output: %s\n", outputDir)
-	log.Info("Starting chain reprocessing", "snapshot", snapshotDir, "output", outputDir)
-
-	network := ctx.String(networkFlag.Name)
-	var genesisGene *genesis.Genesis
-	var forkConfig *thor.ForkConfig
-
-	if network != "" {
-		gene, fc, err := selectGenesis(ctx)
-		if err != nil {
-			return errors.Wrap(err, "select genesis")
-		}
-		genesisGene = gene
-		forkConfig = fc
-	}
-
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return errors.Wrap(err, "create output directory")
 	}
 
-	mainDB, err := openMainDB(ctx, outputDir)
-	if err != nil {
-		return errors.Wrap(err, "open target main database")
-	}
-	defer func() { log.Info("closing target main database..."); mainDB.Close() }()
+	log.Info("Starting chain reprocessing", "input dir", inputDir, "output", outputDir)
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
@@ -673,23 +649,12 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	}
 	defer func() { log.Info("closing target log database..."); logDB.Close() }()
 
-	if genesisGene != nil && forkConfig != nil {
-		err = reprocess.ReprocessChainFromSnapshotWithGenesis(
-			snapshotDir,
-			mainDB,
-			logDB,
-			genesisGene,
-			forkConfig,
-			skipLogs,
-		)
-	} else {
-		err = reprocess.ReprocessChainFromSnapshot(
-			snapshotDir,
-			mainDB,
-			logDB,
-			skipLogs,
-		)
-	}
+	err = reprocess.ReprocessChainFromSnapshot(
+		inputDir,
+		outputDir,
+		logDB,
+		skipLogs,
+	)
 
 	if err != nil {
 		return errors.Wrap(err, "reprocess chain")
