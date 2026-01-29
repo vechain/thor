@@ -552,21 +552,38 @@ func printStartupMessage1(
 		name = common.MakeName("Thor solo", fullVersion())
 	}
 
-	log.Info("Starting " + name)
-	log.Info("Network", "id", gene.ID(), "name", gene.Name())
-	log.Info("Best block", "id", bestBlock.Header.ID(), "number", bestBlock.Header.Number(), "time", time.Unix(int64(bestBlock.Header.Timestamp()), 0))
-	log.Info("Forks", "config", forkConfig)
+	message := fmt.Sprintf(`Starting %v
+    Network      [ %v %v ]
+    Best block   [ %v #%v @%v ]
+    Forks        [ %v ]%v
+    Instance dir [ %v ]
+`,
+		name,
+		gene.ID(), gene.Name(),
+		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
+		forkConfig,
+		func() string {
+			// solo mode does not have master, so skip this part
+			if master == nil {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Master       [ %v ]
+    Beneficiary  [ %v ]`,
+					master.Address().Hex(),
+					func() string {
+						if master.Beneficiary == nil {
+							return "not set, defaults to endorser"
+						}
+						return master.Beneficiary.Hex()
+					}(),
+				)
+			}
+		}(),
+		dataDir,
+	)
 
-	if master != nil {
-		beneficiary := "not set, defaults to endorser"
-		if master.Beneficiary != nil {
-			beneficiary = master.Beneficiary.Hex()
-		}
-		log.Info("Master", "address", master.Address().Hex())
-		log.Info("Beneficiary", "address", beneficiary)
-	}
-
-	log.Info("Instance dir", "path", dataDir)
+	logStartupMessage(message)
 }
 
 func printStartupMessage2(
@@ -577,19 +594,48 @@ func printStartupMessage2(
 	adminURL string,
 	isDevnet bool,
 ) {
-	if nodeID != "" {
-		log.Info("Node ID", "id", nodeID)
-	}
-	log.Info("API portal", "url", apiURL)
-	if metricsURL != "" {
-		log.Info("Metrics", "url", metricsURL)
-	}
-	if adminURL != "" {
-		log.Info("Admin", "url", adminURL)
-	}
-	if isDevnet {
-		log.Info("Devnet mnemonic", "words", "denial kitchen pet squirrel other broom bar gas better priority spoil cross")
-	}
+	message := fmt.Sprintf(`%v    API portal   [ %v ]%v%v%v`,
+		func() string { // node ID
+			if nodeID == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`    Node ID      [ %v ]
+`,
+					nodeID)
+			}
+		}(),
+		apiURL,
+		func() string { // metrics URL
+			if metricsURL == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Metrics      [ %v ]`,
+					metricsURL)
+			}
+		}(),
+		func() string { // admin URL
+			if adminURL == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Admin        [ %v ]`,
+					adminURL)
+			}
+		}(),
+		func() string {
+			// print default dev net's dev accounts info
+			if isDevnet {
+				return `
+    Mnemonic     [ denial kitchen pet squirrel other broom bar gas better priority spoil cross ]
+`
+			} else {
+				return "\n"
+			}
+		}(),
+	)
+
+	logStartupMessage(message)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -654,4 +700,14 @@ func parseTracerList(list string) []string {
 	}
 
 	return tracers
+}
+
+func logStartupMessage(message string) {
+	lines := strings.Split(message, "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		log.Info(line)
+	}
 }
