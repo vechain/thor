@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -163,7 +164,11 @@ func (c *IOCollector) getIOStats() (*ioData, error) {
 	return result, scanner.Err()
 }
 
+var registered atomic.Bool
+
 // registerIOCollector registers the ProcessCollector with Prometheus.
 func registerIOCollector() {
-	prometheus.MustRegister(NewIOCollector())
+	if registered.CompareAndSwap(false, true) {
+		prometheus.MustRegister(NewIOCollector())
+	}
 }
