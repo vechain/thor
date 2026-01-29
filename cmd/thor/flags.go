@@ -290,10 +290,6 @@ var (
 		Usage:   "path or URL to genesis file, if not set, the default devnet genesis will be used",
 		Sources: envVar("GENESIS"),
 	}
-	snapshotDirFlag = &cli.StringFlag{
-		Name:  "snapshot-dir",
-		Usage: "path to snapshot data directory (contains main.db and logs-v2.db)",
-	}
 	outputDirFlag = &cli.StringFlag{
 		Name:  "output-dir",
 		Usage: "directory for output databases (defaults to data-dir if not specified)",

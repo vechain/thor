@@ -655,7 +655,6 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 		logDB,
 		skipLogs,
 	)
-
 	if err != nil {
 		return errors.Wrap(err, "reprocess chain")
 	}
