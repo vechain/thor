@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
@@ -148,7 +149,6 @@ func (aw *asyncLogWriter) Close() error {
 }
 
 // ReprocessChainFromSnapshot reprocesses all blocks from a snapshot data directory
-// ReprocessChainFromSnapshot reprocesses all blocks from a snapshot data directory
 func ReprocessChainFromSnapshot(
 	inputDataDir string,
 	outputDatDir string,
@@ -257,18 +257,17 @@ func ReprocessChainFromSnapshot(
 		"endBlock", bestBlockNum,
 		"totalBlocks", totalBlocksToProcess)
 
-	// Prefetch the first block to start the pipeline
-	var prefetchedBlockChan chan *blockResult
+	var prefetchedBlock *blockResult
 	if startBlockNum <= bestBlockNum {
-		prefetchedBlockChan = make(chan *blockResult, 1)
+		prefetchedBlock = &blockResult{}
 		go func(num uint32) {
 			blk, err := snapshotBestChain.GetBlock(num)
-			prefetchedBlockChan <- &blockResult{block: blk, err: err}
+			prefetchedBlock.block = blk
+			prefetchedBlock.err = err
 		}(startBlockNum)
 	}
 
 	for blockNum := startBlockNum; blockNum <= bestBlockNum; blockNum++ {
-		// Prefetch next block in parallel (if not last block)
 		var nextBlockChan chan *blockResult
 		if blockNum < bestBlockNum {
 			nextBlockChan = make(chan *blockResult, 1)
@@ -278,17 +277,16 @@ func ReprocessChainFromSnapshot(
 			}(blockNum + 1)
 		}
 
-		// Get current block (use prefetched if available)
 		var snapshotBlock *block.Block
-		if prefetchedBlockChan != nil {
-			prefetchedResult := <-prefetchedBlockChan
-			if prefetchedResult.err != nil {
-				return errors.Wrapf(prefetchedResult.err, "get block %d from snapshot", blockNum)
+		if prefetchedBlock != nil {
+			for prefetchedBlock.block == nil && prefetchedBlock.err == nil {
+				time.Sleep(10 * time.Millisecond)
 			}
-			snapshotBlock = prefetchedResult.block
-			prefetchedBlockChan = nil // Clear after use
+			if prefetchedBlock.err != nil {
+				return errors.Wrapf(prefetchedBlock.err, "get block %d from snapshot", blockNum)
+			}
+			snapshotBlock = prefetchedBlock.block
 		} else {
-			// Fallback: fetch synchronously (shouldn't happen in normal flow)
 			var err error
 			snapshotBlock, err = snapshotBestChain.GetBlock(blockNum)
 			if err != nil {
@@ -296,7 +294,6 @@ func ReprocessChainFromSnapshot(
 			}
 		}
 
-		// Extract parent ID and fetch parent summary in parallel
 		parentID := snapshotBlock.Header().ParentID()
 		parentSummaryChan := make(chan *summaryResult, 1)
 		go func(pid thor.Bytes32) {
@@ -304,14 +301,12 @@ func ReprocessChainFromSnapshot(
 			parentSummaryChan <- &summaryResult{summary: summary, err: err}
 		}(parentID)
 
-		// Wait for parent summary
 		parentResult := <-parentSummaryChan
 		if parentResult.err != nil {
 			return errors.Wrapf(parentResult.err, "get parent summary for block %d", blockNum)
 		}
 		parentSummary := parentResult.summary
 
-		// Process block
 		stage, receipts, err := cons.Process(
 			parentSummary,
 			snapshotBlock,
@@ -338,7 +333,6 @@ func ReprocessChainFromSnapshot(
 				return errors.Wrapf(err, "write logs for block %d", blockNum)
 			}
 
-			// Check for async errors periodically
 			select {
 			case err := <-asyncWriter.errChan:
 				return errors.Wrapf(err, "async log write error at block %d", blockNum)
@@ -363,11 +357,10 @@ func ReprocessChainFromSnapshot(
 			}
 		}
 
-		// Get the next prefetched block for the next iteration
 		if nextBlockChan != nil {
-			prefetchedBlockChan = nextBlockChan
+			prefetchedBlock = <-nextBlockChan
 		} else {
-			prefetchedBlockChan = nil
+			prefetchedBlock = nil
 		}
 	}
 
