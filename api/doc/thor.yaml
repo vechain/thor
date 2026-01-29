@@ -2488,7 +2488,11 @@ components:
       properties:
         isTrunk:
           type: boolean
-          description: Whether the block is trunk (true) or not (false)
+          description: Whether the block is trunk (true) or not (false). Trunk blocks are the blocks which are forming
+            canonical chain. It is possible, in the event of side chain, that for a period of time block is
+            marked as trunk and later to be marked as non trunk, and vice versa. Reason for such a behaviour
+            is that at certain point node which is queried might follow non-canonical fork. For the same reason
+            some nodes might have never received blocks from fork and hence return null for non trunk blocks.
           example: true
           nullable: false
 
