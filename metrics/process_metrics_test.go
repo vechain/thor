@@ -122,7 +122,7 @@ func TestProcessCollector_Integration(t *testing.T) {
 	// Create a new registry to avoid conflicts with default registry
 	registry := prometheus.NewRegistry()
 
-	collector := NewProcessCollector()
+	collector := NewIOCollector()
 	err := registry.Register(collector)
 	require.NoError(t, err)
 
