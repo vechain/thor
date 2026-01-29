@@ -31,6 +31,13 @@ func (n *Node) packerLoop(ctx context.Context) {
 		return
 	case <-n.comm.Synced():
 	}
+	if n.wscRequired {
+		logger.Info("verifying weak subjectivity checkpoint")
+		if err := n.verifyWeakSubjectivity(ctx); err != nil {
+			logger.Error("weak subjectivity checkpoint failed", "err", err)
+			panic(err)
+		}
+	}
 	n.initialSynced = true
 	logger.Info("synchronization process done")
 
