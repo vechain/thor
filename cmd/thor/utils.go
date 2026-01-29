@@ -703,8 +703,8 @@ func parseTracerList(list string) []string {
 }
 
 func logStartupMessage(message string) {
-	lines := strings.Split(message, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(message, "\n")
+	for line := range lines {
 		if line == "" {
 			continue
 		}
