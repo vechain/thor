@@ -510,19 +510,17 @@ func (e *mockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-// soloMockedEngine is a stateful mocked BFT engine for solo mode that properly
-// tracks blockchain progress and returns a "finalized" block based on the best
-// block with a safety gap. This enables the pruner to work in solo mode.
+// soloMockedEngine is a mocked BFT engine for solo mode that simulates real world BFT engine behavior.
+// It assumes every epoch is committed.
 //
 // Design rationale:
-//   - In solo mode, there's no actual BFT consensus, so we simulate finality by
-//     considering blocks "finalized" when they're a safe distance behind the best block
-//   - The safety gap ensures we don't prune blocks that might still be accessed
-//   - This is necessary because the pruner waits for blocks to be finalized before
-//     pruning historical state
+//   - In solo mode, there's no actual BFT consensus, so we simulate finality by assuming every epoch is committed.
+//   - Finalized block is determined by: finalized = current_checkpoint - 2*EpochLength
+//   - Justified block is determined by: justified = current_checkpoint - 1*EpochLength
+//   - This matches the real BFT engine behavior where finalized = findCheckpointByQuality(quality-1) when quality > 1
 type soloMockedEngine struct {
-	repo      repositoryReader
-	safetyGap uint32 // Number of blocks behind best to consider "finalized"
+	repo       repositoryReader
+	forkConfig thor.ForkConfig // Used to get FINALITY threshold
 }
 
 // repositoryReader defines the minimal interface needed from chain.Repository
@@ -534,34 +532,70 @@ type repositoryReader interface {
 }
 
 // Finalized returns the block ID considered "finalized" in solo mode.
-// Returns best block minus safety gap, or genesis if not enough blocks exist.
+// Assumes every epoch is committed and calculates finalized as current_checkpoint - 2*EpochLength.
 func (e *soloMockedEngine) Finalized() thor.Bytes32 {
 	best := e.repo.BestBlockSummary()
 	bestNum := best.Header.Number()
 
-	// If we don't have enough blocks yet, genesis is finalized
-	if bestNum <= e.safetyGap {
+	// Before FINALITY activation, return genesis
+	if bestNum < e.forkConfig.FINALITY {
 		return e.repo.GenesisBlock().Header().ID()
 	}
 
-	// Calculate finalized block number (best - safety gap)
-	finalizedNum := bestNum - e.safetyGap
+	// Calculate current checkpoint
+	currentCheckpoint := getCheckPoint(bestNum)
+	finalityCheckpoint := getCheckPoint(e.forkConfig.FINALITY)
 
-	// Get the block ID at the finalized height
+	// Need at least 2 complete epochs to finalize (quality > 1)
+	// finalized = currentCheckpoint - 2 * EpochLength
+	minCheckpointForFinalize := finalityCheckpoint + 2*thor.EpochLength()
+	if currentCheckpoint < minCheckpointForFinalize {
+		return e.repo.GenesisBlock().Header().ID()
+	}
+
+	// Finalized checkpoint = current checkpoint - 2 epochs
+	finalizedCheckpoint := currentCheckpoint - 2*thor.EpochLength()
+
+	// Get the block ID at the finalized checkpoint
 	chain := e.repo.NewChain(best.Header.ID())
-	finalizedID, err := chain.GetBlockID(finalizedNum)
+	finalizedID, err := chain.GetBlockID(finalizedCheckpoint)
 	if err != nil {
-		// Fallback to genesis if we can't get the finalized block
 		return e.repo.GenesisBlock().Header().ID()
 	}
 
 	return finalizedID
 }
 
-// Justified returns the justified checkpoint. In solo mode, we use the same
-// logic as Finalized since there's no distinction without real BFT consensus.
+// Justified returns the justified checkpoint. In solo mode, assumes every epoch
+// is justified and returns the previous complete epoch's checkpoint.
 func (e *soloMockedEngine) Justified() (thor.Bytes32, error) {
-	return e.Finalized(), nil
+	best := e.repo.BestBlockSummary()
+	bestNum := best.Header.Number()
+
+	// Before FINALITY activation, return genesis
+	if bestNum < e.forkConfig.FINALITY {
+		return e.repo.GenesisBlock().Header().ID(), nil
+	}
+
+	// Calculate current checkpoint
+	currentCheckpoint := getCheckPoint(bestNum)
+	finalityCheckpoint := getCheckPoint(e.forkConfig.FINALITY)
+
+	// If still in the first epoch (or before), return genesis
+	if currentCheckpoint <= finalityCheckpoint {
+		return e.repo.GenesisBlock().Header().ID(), nil
+	}
+
+	// Justified = previous epoch's checkpoint (current - 1 epoch)
+	justifiedCheckpoint := currentCheckpoint - thor.EpochLength()
+
+	chain := e.repo.NewChain(best.Header.ID())
+	justifiedID, err := chain.GetBlockID(justifiedCheckpoint)
+	if err != nil {
+		return e.repo.GenesisBlock().Header().ID(), nil
+	}
+
+	return justifiedID, nil
 }
 
 // Accepts always returns true in solo mode since there's no competing chains
@@ -589,20 +623,19 @@ func (e *soloMockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 }
 
 // NewSoloMockedEngine creates a new mocked BFT engine for solo mode that
-// properly simulates block finality to enable pruning.
+// simulates quality-based finality to enable pruning.
+//
+// In solo mode, we assume every epoch is committed (quality increments by 1
+// each epoch). Finalized block is determined by: finalized = current_checkpoint - 2*EpochLength
+// This matches the real BFT engine behavior where finalized = findCheckpointByQuality(quality-1)
+// when quality > 1.
 //
 // Parameters:
 //   - repo: The blockchain repository to query for block information
-//   - safetyGap: Number of blocks behind best to consider "finalized"
-//     Recommended: 1000 blocks (provides ~200 seconds buffer in solo mode)
-//
-// The safety gap ensures that:
-//   - Blocks have time to be generated before pruning catches up
-//   - Recent blocks that might be accessed remain available
-//   - The pruner can make consistent progress as the chain grows
-func NewSoloMockedEngine(repo repositoryReader, safetyGap uint32) Committer {
+//   - forkConfig: Fork configuration containing FINALITY threshold
+func NewSoloMockedEngine(repo repositoryReader, forkConfig thor.ForkConfig) Committer {
 	return &soloMockedEngine{
-		repo:      repo,
-		safetyGap: safetyGap,
+		repo:       repo,
+		forkConfig: forkConfig,
 	}
 }
