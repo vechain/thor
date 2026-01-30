@@ -300,34 +300,44 @@ func (a *Accounts) batchCall(
 			BaseFee:     header.BaseFee(),
 		},
 		a.forkConfig)
+
 	results = make(api.BatchCallResults, 0)
-	resultCh := make(chan any, 1)
+
 	for i, clause := range clauses {
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
+
+		done := make(chan struct{})
 		go func() {
-			out, _, err := exec()
-			if err != nil {
-				resultCh <- err
+			select {
+			case <-ctx.Done():
+				interrupt()
+				return
+			case <-done:
+				return
 			}
-			resultCh <- out
 		}()
-		select {
-		case <-ctx.Done():
-			interrupt()
-			return nil, ctx.Err()
-		case result := <-resultCh:
-			switch v := result.(type) {
-			case error:
-				return nil, v
-			case *runtime.Output:
-				results = append(results, api.ConvertCallResultWithInputGas(v, gas))
-				if v.VMErr != nil {
-					return results, nil
-				}
-				gas = v.LeftOverGas
+
+		out, interrupted, err := exec()
+		close(done)
+
+		if interrupted {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
+			return nil, errors.New("execution interrupted")
 		}
+		// errors other than interrupted
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results, api.ConvertCallResultWithInputGas(out, gas))
+		if out.VMErr != nil {
+			return results, nil
+		}
+		gas = out.LeftOverGas
 	}
+
 	return results, nil
 }
 

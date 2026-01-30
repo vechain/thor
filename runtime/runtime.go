@@ -76,7 +76,7 @@ type Output struct {
 
 type TransactionExecutor struct {
 	HasNextClause func() bool
-	PrepareNext   func() (exec func() (gasUsed uint64, output *Output, err error), interrupt func())
+	PrepareNext   func() (exec func() (gasUsed uint64, output *Output, interrupted bool, err error), interrupt func())
 	Finalize      func() (*tx.Receipt, error)
 }
 
@@ -406,7 +406,7 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 	}
 	for executor.HasNextClause() {
 		exec, _ := executor.PrepareNext()
-		if _, _, err := exec(); err != nil {
+		if _, _, _, err := exec(); err != nil {
 			return nil, err
 		}
 	}
@@ -449,11 +449,11 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 
 	return &TransactionExecutor{
 		HasNextClause: hasNext,
-		PrepareNext: func() (exec func() (uint64, *Output, error), interrupt func()) {
+		PrepareNext: func() (exec func() (uint64, *Output, bool, error), interrupt func()) {
 			nextClauseIndex := uint32(len(txOutputs))
 			execFunc, interrupt := rt.PrepareClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
 
-			exec = func() (gasUsed uint64, output *Output, err error) {
+			exec = func() (gasUsed uint64, output *Output, interrupted bool, err error) {
 				if rt.vmConfig.Tracer != nil {
 					rt.vmConfig.Tracer.CaptureClauseStart(leftOverGas)
 					defer func() {
@@ -461,10 +461,15 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 					}()
 				}
 
-				output, _, err = execFunc()
+				output, interrupted, err = execFunc()
 				if err != nil {
-					return 0, nil, err
+					return 0, nil, false, err
 				}
+
+				if interrupted {
+					return 0, nil, true, nil
+				}
+
 				gasUsed = leftOverGas - output.LeftOverGas
 				leftOverGas = output.LeftOverGas
 
