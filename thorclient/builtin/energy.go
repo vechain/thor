@@ -12,6 +12,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
+	"github.com/vechain/thor/v2/abi"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
@@ -164,7 +166,7 @@ func (e *Energy) FilterTransfer(opts ...bind.FilterOption) ([]TransferEvent, err
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
@@ -213,7 +215,7 @@ func (e *Energy) FilterApproval(opts ...bind.FilterOption) ([]ApprovalEvent, err
 			return nil, err
 		}
 
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+		if err := abi.UnpackIntoInterface(&event.Inputs, bytes, &data); err != nil {
 			return nil, err
 		}
 
