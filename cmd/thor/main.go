@@ -493,7 +493,7 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	// Use solo mocked engine that tracks chain progress to enable pruning.
 	// Safety gap of 1000 blocks ensures recent blocks remain accessible while
 	// allowing the pruner to make progress on historical state.
-	bftEngine := bft.NewSoloMockedEngine(repo, *forkConfig)
+	bftEngine := bft.NewSoloMockedEngine(repo, forkConfig)
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
 		repo,

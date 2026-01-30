@@ -520,7 +520,7 @@ func (e *mockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 //   - This matches the real BFT engine behavior where finalized = findCheckpointByQuality(quality-1) when quality > 1
 type soloMockedEngine struct {
 	repo       repositoryReader
-	forkConfig thor.ForkConfig // Used to get FINALITY threshold
+	forkConfig *thor.ForkConfig // Used to get FINALITY threshold
 }
 
 // repositoryReader defines the minimal interface needed from chain.Repository
@@ -633,7 +633,7 @@ func (e *soloMockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 // Parameters:
 //   - repo: The blockchain repository to query for block information
 //   - forkConfig: Fork configuration containing FINALITY threshold
-func NewSoloMockedEngine(repo repositoryReader, forkConfig thor.ForkConfig) Committer {
+func NewSoloMockedEngine(repo repositoryReader, forkConfig *thor.ForkConfig) Committer {
 	return &soloMockedEngine{
 		repo:       repo,
 		forkConfig: forkConfig,
