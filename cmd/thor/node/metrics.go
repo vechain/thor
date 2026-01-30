@@ -17,5 +17,5 @@ var (
 	metricBlockRejectedCount     = metrics.LazyLoadCounter("block_rejected_count")
 	metricChainForkCount         = metrics.LazyLoadCounter("chain_fork_count")
 	metricDoubleSignedBlocks     = metrics.LazyLoadCounterVec("double_signed_blocks_counter", []string{"signer"})
-	metricNodeGasPerSecond       = metrics.LazyLoadGauge("node_gas_per_second")
+	metricBandwidthGasPerSecond  = metrics.LazyLoadGauge("node_bandwidth_gas_per_second")
 )
