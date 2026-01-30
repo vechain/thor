@@ -256,6 +256,8 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 			}
 		})
 	}
+
+	metricBlocksBroadcastedCounter().Add(1)
 }
 
 // PeerCount returns count of peers.
