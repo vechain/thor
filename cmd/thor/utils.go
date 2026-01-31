@@ -535,6 +535,8 @@ func newP2PCommunicator(ctx *cli.Command, repo *chain.Repository, txPool *txpool
 		allowedPeers,
 		cachedPeers,
 		bootnodePeers,
+		!ctx.Bool(disableTempDiscv5Flag.Name),
+		true,
 	), nil
 }
 
