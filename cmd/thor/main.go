@@ -28,6 +28,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/pruner"
+	"github.com/vechain/thor/v2/cmd/thor/reprocess"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
@@ -182,6 +183,19 @@ func main() {
 					exportMasterKeyFlag,
 				},
 				Action: masterKeyAction,
+			},
+			{
+				Name:  "reprocess",
+				Usage: "reprocess chain from snapshot data",
+				Flags: []cli.Flag{
+					dataDirFlag,
+					outputDirFlag,
+					logDbAdditionalIndexesFlag,
+					verbosityFlag,
+					jsonLogsFlag,
+					skipLogsFlag,
+				},
+				Action: reprocessAction,
 			},
 		},
 	}
@@ -604,5 +618,47 @@ func masterKeyAction(_ context.Context, ctx *cli.Command) error {
 		_, err = fmt.Println(string(keyjson))
 		return err
 	}
+	return nil
+}
+
+func reprocessAction(_ context.Context, ctx *cli.Command) error {
+	_, err := initLogger(ctx)
+	if err != nil {
+		return errors.Wrap(err, "init logger")
+	}
+	inputDir := ctx.String(dataDirFlag.Name)
+	if inputDir == "" {
+		return errors.New("data directory required (use --data-dir)")
+	}
+
+	outputDir := ctx.String(outputDirFlag.Name)
+	if outputDir == "" {
+		return errors.New("output data directory required (use --output-dir)")
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return errors.Wrap(err, "create output directory")
+	}
+
+	log.Info("Starting chain reprocessing", "input dir", inputDir, "output", outputDir)
+
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
+	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
+	logDB, err := openLogDB(outputDir, logDbAdditionalIndexes)
+	if err != nil {
+		return errors.Wrap(err, "open target log database")
+	}
+	defer func() { log.Info("closing target log database..."); logDB.Close() }()
+
+	err = reprocess.ReprocessChainFromSnapshot(
+		inputDir,
+		outputDir,
+		logDB,
+		skipLogs,
+	)
+	if err != nil {
+		return errors.Wrap(err, "reprocess chain")
+	}
+
+	log.Info("Chain reprocessing completed successfully")
 	return nil
 }
