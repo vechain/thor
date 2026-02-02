@@ -292,6 +292,6 @@ var (
 	}
 	outputDirFlag = &cli.StringFlag{
 		Name:  "output-dir",
-		Usage: "directory for output databases (defaults to data-dir if not specified)",
+		Usage: "directory for output databases (required)",
 	}
 )
