@@ -118,7 +118,7 @@ func (d *Debug) prepareClauseEnv(
 				return rt, txExec, txID, nil
 			}
 			exec, _ := txExec.PrepareNext()
-			if _, _, err := exec(); err != nil {
+			if _, _, _, err := exec(); err != nil {
 				return nil, nil, thor.Bytes32{}, err
 			}
 			clauseCounter++
@@ -160,24 +160,34 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 		State:       rt.State(),
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
-	errCh := make(chan error, 1)
+
 	exec, interrupt := txExec.PrepareNext()
+	done := make(chan struct{})
 	go func() {
-		_, _, err := exec()
-		errCh <- err
+		select {
+		case <-ctx.Done():
+			interrupt()
+			return
+		case <-done:
+			return
+		}
 	}()
 
-	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		tracer.Stop(err)
-		interrupt()
-		return nil, err
-	case err := <-errCh:
-		if err != nil {
-			return nil, err
+	_, _, interrupted, err := exec()
+	close(done)
+
+	if interrupted {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
+		return nil, errors.New("execution interrupted")
 	}
+
+	// errors other than interrupted
+	if err != nil {
+		return nil, err
+	}
+
 	return tracer.GetResult()
 }
 
@@ -294,23 +304,33 @@ func (d *Debug) traceCall(
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
 
-	errCh := make(chan error, 1)
 	exec, interrupt := rt.PrepareClause(clause, 0, gas, txCtx)
+	done := make(chan struct{})
 	go func() {
-		_, _, err := exec()
-		errCh <- err
-	}()
-	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		tracer.Stop(err)
-		interrupt()
-		return nil, err
-	case err := <-errCh:
-		if err != nil {
-			return nil, err
+		select {
+		case <-ctx.Done():
+			interrupt()
+			return
+		case <-done:
+			return
 		}
+	}()
+
+	_, interrupted, err := exec()
+	close(done)
+
+	if interrupted {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, errors.New("execution interrupted")
 	}
+
+	// errors other than interrupted
+	if err != nil {
+		return nil, err
+	}
+
 	return tracer.GetResult()
 }
 
