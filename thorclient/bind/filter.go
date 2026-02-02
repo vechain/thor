@@ -82,7 +82,7 @@ func (b *FilterBuilder) Execute(options ...FilterOption) ([]api.FilteredEvent, e
 	}
 	cfg.opts.IncludeIndexes = true
 
-	id := thor.Bytes32(event.Id())
+	id := thor.Bytes32(event.ID)
 	req := &api.EventFilter{
 		Range:   cfg.evRange,
 		Options: cfg.opts,

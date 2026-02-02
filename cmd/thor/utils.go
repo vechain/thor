@@ -552,7 +552,7 @@ func printStartupMessage1(
 		name = common.MakeName("Thor solo", fullVersion())
 	}
 
-	fmt.Printf(`Starting %v
+	message := fmt.Sprintf(`Starting %v
     Network      [ %v %v ]
     Best block   [ %v #%v @%v ]
     Forks        [ %v ]%v
@@ -582,6 +582,8 @@ func printStartupMessage1(
 		}(),
 		dataDir,
 	)
+
+	logStartupMessage(message)
 }
 
 func printStartupMessage2(
@@ -592,7 +594,7 @@ func printStartupMessage2(
 	adminURL string,
 	isDevnet bool,
 ) {
-	fmt.Printf(`%v    API portal   [ %v ]%v%v%v`,
+	message := fmt.Sprintf(`%v    API portal   [ %v ]%v%v%v`,
 		func() string { // node ID
 			if nodeID == "" {
 				return ""
@@ -625,15 +627,15 @@ func printStartupMessage2(
 			// print default dev net's dev accounts info
 			if isDevnet {
 				return `
-┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+    Mnemonic     [ denial kitchen pet squirrel other broom bar gas better priority spoil cross ]
 `
 			} else {
 				return "\n"
 			}
 		}(),
 	)
+
+	logStartupMessage(message)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -698,4 +700,14 @@ func parseTracerList(list string) []string {
 	}
 
 	return tracers
+}
+
+func logStartupMessage(message string) {
+	lines := strings.SplitSeq(message, "\n")
+	for line := range lines {
+		if line == "" {
+			continue
+		}
+		log.Info(line)
+	}
 }
