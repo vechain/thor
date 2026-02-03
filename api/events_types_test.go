@@ -64,15 +64,10 @@ func testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo(t *testing.T, chain 
 	bestBlock := chain.Repo().BestBlockSummary()
 
 	rng := newRange(TimeRangeType, bestBlock.Header.Timestamp(), genesis.Timestamp())
-	expectedRange := &logdb.Range{
-		From: bestBlock.Header.Number(),
-		To:   genesis.Number(),
-	}
 
-	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
+	_, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
-	assert.NoError(t, err)
-	assert.Equal(t, expectedRange, convRng)
+	assert.ErrorContains(t, err, "from cannot be greater than to")
 }
 
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
@@ -97,11 +92,9 @@ func testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber(t *testing.T, chai
 func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain *testchain.Chain) {
 	rng := newRange(BlockRangeType, logdb.MaxBlockNumber, 0)
 
-	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
+	_, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
-	assert.NoError(t, err)
-	assert.Equal(t, emptyRange.From, convertedRng.From)
-	assert.Equal(t, uint32(*rng.To), convertedRng.To)
+	assert.ErrorContains(t, err, "from cannot be greater than to")
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
