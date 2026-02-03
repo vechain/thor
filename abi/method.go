@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"errors"
 
-	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
+	ethabi "github.com/vechain/thor/v2/abi/ethabi"
 )
 
 // MethodID method id.
@@ -41,7 +41,7 @@ func (m *Method) Name() string {
 
 // Const returns if the method is const.
 func (m *Method) Const() bool {
-	return m.method.Const
+	return m.method.Constant || m.method.StateMutability == "view" || m.method.StateMutability == "pure"
 }
 
 // EncodeInput encode args to data.
@@ -62,7 +62,7 @@ func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 func (m *Method) DecodeInput(input []byte, v any) error {
 	if m.id.IsEmpty() {
 		if len(input) != 0 {
-			return m.method.Inputs.Unpack(v, input)
+			return UnpackIntoInterface(&m.method.Inputs, input, v)
 		}
 		// if constructor with no parameters
 		return nil
@@ -72,7 +72,7 @@ func (m *Method) DecodeInput(input []byte, v any) error {
 		return errors.New("input has incorrect prefix")
 	}
 
-	return m.method.Inputs.Unpack(v, input[4:])
+	return UnpackIntoInterface(&m.method.Inputs, input[len(m.id):], v)
 }
 
 // EncodeOutput encode output args to data.
@@ -85,7 +85,7 @@ func (m *Method) DecodeOutput(output []byte, v any) error {
 	if len(output)%32 != 0 {
 		return errors.New("output has incorrect length")
 	}
-	return m.method.Outputs.Unpack(v, output)
+	return UnpackIntoInterface(&m.method.Outputs, output, v)
 }
 
 // ExtractMethodID extract method id from input data.
