@@ -490,14 +490,17 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		pool = txPool
 	}
 
-	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
+	// Use solo mocked engine that tracks chain progress to enable pruning.
+	// Safety gap of 1000 blocks ensures recent blocks remain accessible while
+	// allowing the pruner to make progress on historical state.
+	bftEngine := bft.NewSoloMockedEngine(repo, forkConfig)
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
 		repo,
 		stater,
 		pool,
 		logDB,
-		bftMockedEngine,
+		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, true),
@@ -510,7 +513,7 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
-		pruner := pruner.New(mainDB, repo, bftMockedEngine, *forkConfig)
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
