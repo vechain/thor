@@ -6,11 +6,13 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
+	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
@@ -78,10 +80,10 @@ func (o *Options) Validate(limit uint64) error {
 		return nil
 	}
 	if o.Limit != nil && *o.Limit > limit {
-		return fmt.Errorf("options.limit exceeds the maximum allowed value of %d", limit)
+		return restutil.BadRequest(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", limit))
 	}
 	if o.Offset > math.MaxInt64 {
-		return fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64)
+		return restutil.BadRequest(fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64))
 	}
 
 	return nil
@@ -145,7 +147,7 @@ func (r *Range) Validate() error {
 	}
 	if r.Unit != "" {
 		if r.Unit != BlockRangeType && r.Unit != TimeRangeType {
-			return fmt.Errorf("filter.Range.Unit must be either 'block' or 'time', got '%s'", r.Unit)
+			return restutil.BadRequest(errors.New("invalid range unit"))
 		}
 	}
 
@@ -153,7 +155,7 @@ func (r *Range) Validate() error {
 		return nil // No range specified, which is valid
 	}
 	if *r.From > *r.To {
-		return fmt.Errorf("filter.Range.To must be greater than or equal to filter.Range.From")
+		return restutil.BadRequest(errors.New("from cannot be greater than to"))
 	}
 
 	return nil
@@ -167,6 +169,9 @@ var emptyRange = logdb.Range{
 func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 	if r == nil {
 		return nil, nil
+	}
+	if err := r.Validate(); err != nil {
+		return nil, err
 	}
 
 	if r.Unit == TimeRangeType {
@@ -199,6 +204,9 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			if err != nil {
 				return nil, err
 			}
+		}
+		if fromHeader.Number() > toHeader.Number() {
+			return nil, restutil.BadRequest(errors.New("from block is greater than to block"))
 		}
 
 		return &logdb.Range{
