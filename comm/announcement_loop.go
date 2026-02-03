@@ -85,6 +85,8 @@ func (c *Communicator) fetchBlockByID(peer *Peer, newBlockID thor.Bytes32) {
 		return
 	}
 
+	metricFetchedBlockCount().Add(1)
+
 	c.newBlockFeed.Send(&NewBlockEvent{
 		Block: &blk,
 	})

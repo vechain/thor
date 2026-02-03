@@ -214,6 +214,11 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 	metricBlockProcessedTxs().AddWithLabel(int64(len(ctx.receipts)), map[string]string{"type": blockType})
 	metricBlockProcessedGas().AddWithLabel(int64(ctx.newBlock.Header().GasUsed()), map[string]string{"type": blockType})
 	metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
+	if ctx.becomeBest {
+		metricBestBlockGauge().Set(int64(ctx.newBlock.Header().Number()))
+		metricTotalScoreGauge().Set(int64(ctx.newBlock.Header().TotalScore()))
+		metricBestBlockTimestampGauge().Set(int64(ctx.newBlock.Header().Timestamp()))
+	}
 
 	return nil
 }
