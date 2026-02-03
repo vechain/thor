@@ -35,7 +35,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v3"
 
 	"github.com/vechain/thor/v2/builtin/staker"
 	"github.com/vechain/thor/v2/chain"
@@ -56,7 +56,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-func initLogger(ctx *cli.Context) (*slog.LevelVar, error) {
+func initLogger(ctx *cli.Command) (*slog.LevelVar, error) {
 	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
 		return nil, errors.Wrap(err, "parse verbosity flag")
@@ -192,7 +192,7 @@ func readPasswordFromNewTTY(prompt string) (string, error) {
 	return pass, err
 }
 
-func selectGenesis(ctx *cli.Context) (*genesis.Genesis, *thor.ForkConfig, error) {
+func selectGenesis(ctx *cli.Command) (*genesis.Genesis, *thor.ForkConfig, error) {
 	network := ctx.String(networkFlag.Name)
 	if network == "" {
 		_ = cli.ShowAppHelp(ctx)
@@ -251,7 +251,7 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	return customGen, &forkConfig, nil
 }
 
-func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool) httpserver.APIConfig {
+func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool) httpserver.APIConfig {
 	return httpserver.APIConfig{
 		AllowedOrigins:             ctx.String(apiCorsFlag.Name),
 		BacktraceLimit:             uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
@@ -268,13 +268,13 @@ func makeAPIConfig(ctx *cli.Context, logAPIRequests *atomic.Bool, soloMode bool)
 		EnableDeprecated:           ctx.Bool(apiEnableDeprecatedFlag.Name),
 		SoloMode:                   soloMode,
 		EnableTxPool:               ctx.Bool(apiTxpoolFlag.Name),
-		Timeout:                    ctx.Int(apiTimeoutFlag.Name),
-		SlowQueriesThreshold:       ctx.Int(apiSlowQueriesThresholdFlag.Name),
+		Timeout:                    int(ctx.Uint64(apiTimeoutFlag.Name)),
+		SlowQueriesThreshold:       int(ctx.Uint64(apiSlowQueriesThresholdFlag.Name)),
 		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),
 	}
 }
 
-func makeConfigDir(ctx *cli.Context) (string, error) {
+func makeConfigDir(ctx *cli.Command) (string, error) {
 	dir := ctx.String(configDirFlag.Name)
 	if dir == "" {
 		return "", fmt.Errorf("unable to infer default config dir, use -%s to specify", configDirFlag.Name)
@@ -285,7 +285,7 @@ func makeConfigDir(ctx *cli.Context) (string, error) {
 	return dir, nil
 }
 
-func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
+func makeInstanceDir(ctx *cli.Command, gene *genesis.Genesis) (string, error) {
 	dataDir := ctx.String(dataDirFlag.Name)
 	if dataDir == "" {
 		return "", fmt.Errorf("unable to infer default data dir, use -%s to specify", dataDirFlag.Name)
@@ -303,8 +303,8 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 	return instanceDir, nil
 }
 
-func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
-	cacheMB := normalizeCacheSize(ctx.Int(cacheFlag.Name))
+func openMainDB(ctx *cli.Command, dir string) (*muxdb.MuxDB, error) {
+	cacheMB := normalizeCacheSize(int(ctx.Uint64(cacheFlag.Name)))
 	log.Debug("cache size(MB)", "size", cacheMB)
 
 	fdCache := suggestFDCache()
@@ -415,7 +415,7 @@ func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logd
 	return repo, nil
 }
 
-func beneficiary(ctx *cli.Context) (*thor.Address, error) {
+func beneficiary(ctx *cli.Command) (*thor.Address, error) {
 	value := ctx.String(beneficiaryFlag.Name)
 	if value == "" {
 		return nil, nil
@@ -427,7 +427,7 @@ func beneficiary(ctx *cli.Context) (*thor.Address, error) {
 	return &addr, nil
 }
 
-func masterKeyPath(ctx *cli.Context) (string, error) {
+func masterKeyPath(ctx *cli.Command) (string, error) {
 	configDir, err := makeConfigDir(ctx)
 	if err != nil {
 		return "", err
@@ -456,7 +456,7 @@ func loadNodeMasterFromStdin() (*ecdsa.PrivateKey, error) {
 	return crypto.HexToECDSA(strings.TrimSpace(input))
 }
 
-func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
+func loadNodeMaster(ctx *cli.Command) (*node.Master, error) {
 	var key *ecdsa.PrivateKey
 	var err error
 
@@ -484,7 +484,7 @@ func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 	return master, nil
 }
 
-func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2p.P2P, error) {
+func newP2PCommunicator(ctx *cli.Command, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2p.P2P, error) {
 	// known peers will be loaded/stored from/in this file
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
@@ -529,9 +529,9 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 		instanceDir,
 		userNAT,
 		fullVersion(),
-		ctx.Int(maxPeersFlag.Name),
-		ctx.Int(p2pPortFlag.Name),
-		fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
+		int(ctx.Uint64(maxPeersFlag.Name)),
+		int(ctx.Uint64(p2pPortFlag.Name)),
+		fmt.Sprintf(":%v", ctx.Uint64(p2pPortFlag.Name)),
 		allowedPeers,
 		cachedPeers,
 		bootnodePeers,
@@ -552,7 +552,7 @@ func printStartupMessage1(
 		name = common.MakeName("Thor solo", fullVersion())
 	}
 
-	fmt.Printf(`Starting %v
+	message := fmt.Sprintf(`Starting %v
     Network      [ %v %v ]
     Best block   [ %v #%v @%v ]
     Forks        [ %v ]%v
@@ -582,6 +582,8 @@ func printStartupMessage1(
 		}(),
 		dataDir,
 	)
+
+	logStartupMessage(message)
 }
 
 func printStartupMessage2(
@@ -592,7 +594,7 @@ func printStartupMessage2(
 	adminURL string,
 	isDevnet bool,
 ) {
-	fmt.Printf(`%v    API portal   [ %v ]%v%v%v`,
+	message := fmt.Sprintf(`%v    API portal   [ %v ]%v%v%v`,
 		func() string { // node ID
 			if nodeID == "" {
 				return ""
@@ -625,15 +627,15 @@ func printStartupMessage2(
 			// print default dev net's dev accounts info
 			if isDevnet {
 				return `
-┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+    Mnemonic     [ denial kitchen pet squirrel other broom bar gas better priority spoil cross ]
 `
 			} else {
 				return "\n"
 			}
 		}(),
 	)
+
+	logStartupMessage(message)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -698,4 +700,14 @@ func parseTracerList(list string) []string {
 	}
 
 	return tracers
+}
+
+func logStartupMessage(message string) {
+	lines := strings.SplitSeq(message, "\n")
+	for line := range lines {
+		if line == "" {
+			continue
+		}
+		log.Info(line)
+	}
 }

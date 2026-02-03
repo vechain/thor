@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v3"
 
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/bft"
@@ -80,7 +81,7 @@ func fullVersion() string {
 }
 
 func main() {
-	app := cli.App{
+	app := &cli.Command{
 		Version:   fullVersion(),
 		Name:      "Thor",
 		Usage:     "Node of VeChain Thor Network",
@@ -128,7 +129,7 @@ func main() {
 			minEffectivePriorityFeeFlag,
 		},
 		Action: defaultAction,
-		Commands: []cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:  "solo",
 				Usage: "client runs in solo mode for test & dev",
@@ -185,13 +186,13 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func defaultAction(ctx *cli.Context) error {
+func defaultAction(_ context.Context, ctx *cli.Command) error {
 	exitSignal := handleExitSignal()
 
 	defer func() { log.Info("exited") }()
@@ -319,7 +320,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer p2pCommunicator.Stop()
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
-		pruner := pruner.New(mainDB, repo, bftEngine)
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
@@ -351,7 +352,7 @@ func defaultAction(ctx *cli.Context) error {
 	).Run(exitSignal)
 }
 
-func soloAction(ctx *cli.Context) error {
+func soloAction(_ context.Context, ctx *cli.Command) error {
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
 	logLevel, err := initLogger(ctx)
@@ -489,14 +490,17 @@ func soloAction(ctx *cli.Context) error {
 		pool = txPool
 	}
 
-	bftMockedEngine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
+	// Use solo mocked engine that tracks chain progress to enable pruning.
+	// Safety gap of 1000 blocks ensures recent blocks remain accessible while
+	// allowing the pruner to make progress on historical state.
+	bftEngine := bft.NewSoloMockedEngine(repo, forkConfig)
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
 		repo,
 		stater,
 		pool,
 		logDB,
-		bftMockedEngine,
+		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
 		makeAPIConfig(ctx, logAPIRequests, true),
@@ -509,14 +513,14 @@ func soloAction(ctx *cli.Context) error {
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
-		pruner := pruner.New(mainDB, repo, bftMockedEngine)
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
 	return solo.New(repo, stater, pool, options, core).Run(exitSignal)
 }
 
-func masterKeyAction(ctx *cli.Context) error {
+func masterKeyAction(_ context.Context, ctx *cli.Command) error {
 	hasImportFlag := ctx.Bool(importMasterKeyFlag.Name)
 	hasExportFlag := ctx.Bool(exportMasterKeyFlag.Name)
 	if hasImportFlag && hasExportFlag {
