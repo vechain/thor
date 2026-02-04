@@ -22,8 +22,13 @@ const (
 	wscMaxBodySize  = 16 * 1024 * 1024
 )
 
-// prepareWeakSubjectivity decides if WSC must run after synchronization, based on finalized age and URL presence.
+// prepareWeakSubjectivity only enables WSC when a provider URL is configured.
 func (n *Node) prepareWeakSubjectivity() (bool, error) {
+	if n.options.WSCProviderURL == "" {
+		logger.Debug("weak subjectivity checkpoint disabled: provider url not set")
+		return false, nil
+	}
+
 	summary, err := n.finalizedSummary()
 	if err != nil {
 		return false, err
@@ -37,11 +42,6 @@ func (n *Node) prepareWeakSubjectivity() (bool, error) {
 	}
 	if safe {
 		logger.Info("weak subjectivity checkpoint skipped", "finalized", shortID(finalizedID), "age", age)
-		return false, nil
-	}
-
-	if n.options.WSCProviderURL == "" {
-		logger.Warn("weak subjectivity checkpoint required but provider url not set; continuing without check", "finalized", shortID(finalizedID), "age", age)
 		return false, nil
 	}
 

@@ -162,6 +162,13 @@ func TestPrepareWeakSubjectivity(t *testing.T) {
 		require.False(t, required)
 	})
 
+	t.Run("future timestamp without url", func(t *testing.T) {
+		node := newTestNode(t, uint64(now.Add(2*time.Hour).Unix()), "")
+		required, err := node.prepareWeakSubjectivity()
+		require.NoError(t, err)
+		require.False(t, required)
+	})
+
 	t.Run("out of range with url", func(t *testing.T) {
 		node := newTestNode(t, uint64(now.Add(-2*time.Hour).Unix()), "http://example.test")
 		required, err := node.prepareWeakSubjectivity()
