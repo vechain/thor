@@ -12,10 +12,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 )
 
-func fetchRemoteBootstrapNodes(ctx context.Context, remoteURL string) ([]*discv5.Node, error) {
+func fetchRemoteBootstrapNodes(ctx context.Context, remoteURL string) ([]*tempdiscv5.Node, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", remoteURL, nil)
 	if err != nil {
 		return nil, err
@@ -32,11 +32,11 @@ func fetchRemoteBootstrapNodes(ctx context.Context, remoteURL string) ([]*discv5
 		return nil, fmt.Errorf("http fetch failed: statusCode=%d", resp.StatusCode)
 	}
 
-	nodes := []*discv5.Node{}
+	nodes := []*tempdiscv5.Node{}
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		if scanner.Text() != "" {
-			disc, err := discv5.ParseNode(scanner.Text())
+			disc, err := tempdiscv5.ParseNode(scanner.Text())
 			if err != nil {
 				return nil, err
 			}

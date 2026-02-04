@@ -112,6 +112,7 @@ func main() {
 			jsonLogsFlag,
 			maxPeersFlag,
 			p2pPortFlag,
+			disableTempDiscv5Flag,
 			natFlag,
 			bootNodeFlag,
 			allowedPeersFlag,
