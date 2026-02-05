@@ -688,6 +688,11 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 		return errors.Wrap(err, "init bft engine")
 	}
 
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
+
 	if sourceRepo.BestBlockSummary().Header.Number() > repo.BestBlockSummary().Header.Number() {
 		log.Info("starting chain reprocessing", "instance-directory", instanceDir, "from", repo.BestBlockSummary().Header.Number())
 		err = reprocess.ReprocessChainFromSnapshot(exitSignal, sourceRepo.NewBestChain(), state.NewStater(mainDB), logDB, repo, forkConfig, bftEngine, skipLogs)
