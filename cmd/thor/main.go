@@ -186,11 +186,11 @@ func main() {
 				Action: masterKeyAction,
 			},
 			{
-				Name:  "reprocess",
-				Usage: "reprocess chain from snapshot data",
+				Name:      "reprocess",
+				Usage:     "reprocess chain from snapshot data and save to the output directory",
+				ArgsUsage: "<output-dir>",
 				Flags: []cli.Flag{
 					instanceDirFlag,
-					outputDirFlag,
 					skipLogsFlag,
 					disablePrunerFlag,
 					cacheFlag,
@@ -633,6 +633,12 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 		return errors.Wrap(err, "init logger")
 	}
 
+	// get output directory from positional argument
+	if ctx.Args().Len() != 1 {
+		return errors.New("output-dir argument is required")
+	}
+	outputDir := ctx.Args().First()
+
 	// initialize and verify source database
 	sourceDB, gene, err := openDBFromInstanceDir(ctx.String(instanceDirFlag.Name))
 	if err != nil {
@@ -655,7 +661,7 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	}
 
 	// initialize the output directory
-	instanceDir, err := makeInstanceDir(ctx.String(outputDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name))
+	instanceDir, err := makeInstanceDir(outputDir, gene, ctx.Bool(disablePrunerFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "make instance directory")
 	}

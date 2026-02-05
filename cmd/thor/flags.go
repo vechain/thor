@@ -297,9 +297,4 @@ var (
 		Required: true,
 		Usage:    "directory for instance(instance-xxxxxxx-v4[-full])",
 	}
-	outputDirFlag = &cli.StringFlag{
-		Name:     "output-dir",
-		Required: true,
-		Usage:    "directory for output which will contain instance directory",
-	}
 )
