@@ -25,6 +25,7 @@ import (
 
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/pruner"
@@ -188,12 +189,13 @@ func main() {
 				Name:  "reprocess",
 				Usage: "reprocess chain from snapshot data",
 				Flags: []cli.Flag{
-					dataDirFlag,
+					instanceDirFlag,
 					outputDirFlag,
-					logDbAdditionalIndexesFlag,
+					skipLogsFlag,
+					disablePrunerFlag,
+					cacheFlag,
 					verbosityFlag,
 					jsonLogsFlag,
-					skipLogsFlag,
 				},
 				Action: reprocessAction,
 			},
@@ -233,12 +235,12 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	instanceDir, err := makeInstanceDir(ctx, gene)
+	instanceDir, err := makeInstanceDir(ctx.String(dataDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name))
 	if err != nil {
 		return err
 	}
 
-	mainDB, err := openMainDB(ctx, instanceDir)
+	mainDB, err := openMainDB(instanceDir, int(ctx.Uint64(cacheFlag.Name)), ctx.Bool(disablePrunerFlag.Name))
 	if err != nil {
 		return err
 	}
@@ -417,10 +419,10 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 
 	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
 	if ctx.Bool(persistFlag.Name) {
-		if instanceDir, err = makeInstanceDir(ctx, gene); err != nil {
+		if instanceDir, err = makeInstanceDir(ctx.String(dataDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name)); err != nil {
 			return err
 		}
-		if mainDB, err = openMainDB(ctx, instanceDir); err != nil {
+		if mainDB, err = openMainDB(instanceDir, int(ctx.Uint64(cacheFlag.Name)), ctx.Bool(disablePrunerFlag.Name)); err != nil {
 			return err
 		}
 		if enableMetrics {
@@ -505,8 +507,6 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	}
 
 	// Use solo mocked engine that tracks chain progress to enable pruning.
-	// Safety gap of 1000 blocks ensures recent blocks remain accessible while
-	// allowing the pruner to make progress on historical state.
 	bftEngine := bft.NewSoloMockedEngine(repo, forkConfig)
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
@@ -625,43 +625,79 @@ func masterKeyAction(_ context.Context, ctx *cli.Command) error {
 }
 
 func reprocessAction(_ context.Context, ctx *cli.Command) error {
+	exitSignal := handleExitSignal()
+	defer func() { log.Info("exited") }()
+
 	_, err := initLogger(ctx)
 	if err != nil {
 		return errors.Wrap(err, "init logger")
 	}
-	inputDir := ctx.String(dataDirFlag.Name)
-	if inputDir == "" {
-		return errors.New("data directory required (use --data-dir)")
+
+	// initialize and verify source database
+	sourceDB, gene, err := openDBFromInstanceDir(ctx.String(instanceDirFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "open source instance directory")
+	}
+	defer func() { log.Info("closing source database..."); sourceDB.Close() }()
+
+	genesisBlock, _, _, err := gene.Build(state.NewStater(sourceDB))
+	if err != nil {
+		return errors.Wrap(err, "build genesis block")
+	}
+	sourceRepo, err := chain.NewRepository(sourceDB, genesisBlock)
+	if err != nil {
+		return errors.Wrap(err, "initialize source repository")
 	}
 
-	outputDir := ctx.String(outputDirFlag.Name)
-	if outputDir == "" {
-		return errors.New("output data directory required (use --output-dir)")
-	}
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
-		return errors.Wrap(err, "create output directory")
+	forkConfig := thor.GetForkConfig(genesisBlock.Header().ID())
+	if forkConfig == nil {
+		return errors.Errorf("unknown genesis ID: %v", genesisBlock.Header().ID())
 	}
 
-	log.Info("Starting chain reprocessing", "input dir", inputDir, "output", outputDir)
+	// initialize the output directory
+	instanceDir, err := makeInstanceDir(ctx.String(outputDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "make instance directory")
+	}
+	mainDB, err := openMainDB(instanceDir, int(ctx.Uint64(cacheFlag.Name)), ctx.Bool(disablePrunerFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "open database")
+	}
+	defer func() { log.Info("closing database..."); mainDB.Close() }()
+
+	logDB, err := openLogDB(instanceDir, true)
+	if err != nil {
+		return errors.Wrap(err, "open log database")
+	}
+	defer func() { log.Info("closing log database..."); logDB.Close() }()
+
+	repo, err := initChainRepository(gene, mainDB, logDB)
+	if err != nil {
+		return errors.Wrap(err, "initialize repository")
+	}
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
-	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
-	logDB, err := openLogDB(outputDir, logDbAdditionalIndexes)
-	if err != nil {
-		return errors.Wrap(err, "open target log database")
-	}
-	defer func() { log.Info("closing target log database..."); logDB.Close() }()
-
-	err = reprocess.ReprocessChainFromSnapshot(
-		inputDir,
-		outputDir,
-		logDB,
-		skipLogs,
-	)
-	if err != nil {
-		return errors.Wrap(err, "reprocess chain")
+	if !skipLogs {
+		if err := syncLogDB(exitSignal, repo, logDB, false); err != nil {
+			return err
+		}
 	}
 
-	log.Info("Chain reprocessing completed successfully")
+	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, thor.Address{})
+	if err != nil {
+		return errors.Wrap(err, "init bft engine")
+	}
+
+	if sourceRepo.BestBlockSummary().Header.Number() > repo.BestBlockSummary().Header.Number() {
+		log.Info("starting chain reprocessing", "instance-directory", instanceDir, "from", repo.BestBlockSummary().Header.Number())
+		err = reprocess.ReprocessChainFromSnapshot(exitSignal, sourceRepo.NewBestChain(), state.NewStater(mainDB), logDB, repo, forkConfig, bftEngine, skipLogs)
+		if err != nil {
+			return errors.Wrap(err, "reprocess chain")
+		}
+		log.Info("chain reprocessing completed successfully")
+	} else {
+		log.Info("chain reprocessing already complete")
+	}
+
 	return nil
 }
