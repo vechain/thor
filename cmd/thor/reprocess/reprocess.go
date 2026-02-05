@@ -7,26 +7,22 @@ package reprocess
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
-	"math"
-	"os"
-	"path/filepath"
-	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
 
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
+	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/consensus"
-	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -39,39 +35,21 @@ const (
 type asyncLogWriter struct {
 	writer    *logdb.Writer
 	writeChan chan logWriteRequest
-	errChan   chan error
 	wg        sync.WaitGroup
-	ctx       context.Context
-	cancel    context.CancelFunc
-	mu        sync.Mutex
-	lastErr   error
+	closed    atomic.Bool
+	firstErr  atomic.Pointer[error]
 }
 
 type logWriteRequest struct {
 	block    *block.Block
 	receipts tx.Receipts
-	blockNum uint32
 	commit   bool
 }
 
-type blockResult struct {
-	block *block.Block
-	err   error
-}
-
-type summaryResult struct {
-	summary *chain.BlockSummary
-	err     error
-}
-
 func newAsyncLogWriter(writer *logdb.Writer) *asyncLogWriter {
-	ctx, cancel := context.WithCancel(context.Background())
 	aw := &asyncLogWriter{
 		writer:    writer,
 		writeChan: make(chan logWriteRequest, 100), // buffer for smooth operation
-		errChan:   make(chan error, 1),
-		ctx:       ctx,
-		cancel:    cancel,
 	}
 
 	aw.wg.Add(1)
@@ -82,108 +60,94 @@ func newAsyncLogWriter(writer *logdb.Writer) *asyncLogWriter {
 func (aw *asyncLogWriter) writeLoop() {
 	defer aw.wg.Done()
 
-	for {
-		select {
-		case <-aw.ctx.Done():
+	// Process all pending writes until channel is closed or error occurs
+	for req := range aw.writeChan {
+		// Check if there's already an error, stop processing if so
+		if err := aw.firstErr.Load(); err != nil {
 			return
-		case req, ok := <-aw.writeChan:
-			if !ok {
-				return
-			}
+		}
 
-			if err := aw.writer.Write(req.block, req.receipts); err != nil {
-				aw.mu.Lock()
-				aw.lastErr = err
-				aw.mu.Unlock()
-				select {
-				case aw.errChan <- err:
-				default:
-				}
-				continue
-			}
+		// Write logs
+		if err := aw.writer.Write(req.block, req.receipts); err != nil {
+			aw.firstErr.CompareAndSwap(nil, &err)
+			return // Stop processing on error
+		}
 
-			if req.commit {
-				if err := aw.writer.Commit(); err != nil {
-					aw.mu.Lock()
-					aw.lastErr = err
-					aw.mu.Unlock()
-					select {
-					case aw.errChan <- err:
-					default:
-					}
-				}
+		// Commit if requested
+		if req.commit {
+			if err := aw.writer.Commit(); err != nil {
+				aw.firstErr.CompareAndSwap(nil, &err)
+				return // Stop processing on error
 			}
 		}
 	}
 }
 
-func (aw *asyncLogWriter) Write(block *block.Block, receipts tx.Receipts, blockNum uint32, commit bool) error {
-	aw.mu.Lock()
-	if aw.lastErr != nil {
-		err := aw.lastErr
-		aw.mu.Unlock()
-		return err
+func (aw *asyncLogWriter) Write(block *block.Block, receipts tx.Receipts, commit bool) error {
+	// Check if writer is closed
+	if aw.closed.Load() {
+		return errors.New("log writer is closed")
 	}
-	aw.mu.Unlock()
 
-	select {
-	case <-aw.ctx.Done():
-		return aw.ctx.Err()
-	case aw.writeChan <- logWriteRequest{block: block, receipts: receipts, blockNum: blockNum, commit: commit}:
-		return nil
+	// Check for previous errors
+	if err := aw.firstErr.Load(); err != nil {
+		return *err
 	}
+
+	// Send write request to channel
+	// This blocks if channel is full, ensuring back pressure
+	aw.writeChan <- logWriteRequest{block: block, receipts: receipts, commit: commit}
+	return nil
 }
 
 func (aw *asyncLogWriter) Close() error {
+	// Mark as closed to prevent new writes
+	aw.closed.Store(true)
+
+	// Close channel and wait for all pending writes to complete
 	close(aw.writeChan)
 	aw.wg.Wait()
 
-	if err := aw.writer.Commit(); err != nil {
-		return err
+	// Check if there was an error during writing
+	if err := aw.firstErr.Load(); err != nil {
+		return *err
 	}
 
-	aw.mu.Lock()
-	err := aw.lastErr
-	aw.mu.Unlock()
-	return err
+	// Final commit to ensure all data is persisted
+	return aw.writer.Commit()
 }
 
 // ReprocessChainFromSnapshot reprocesses all blocks from a snapshot data directory
 func ReprocessChainFromSnapshot(
-	inputDataDir string,
-	outputDatDir string,
-	outputLogDB *logdb.LogDB,
+	ctx context.Context,
+	source *chain.Chain,
+	stater *state.Stater,
+	logDB *logdb.LogDB,
+	repo *chain.Repository,
+	forkConfig *thor.ForkConfig,
+	bftEngine bft.Committer,
 	skipLogs bool,
 ) error {
-	inputDB, err := getInputDB(inputDataDir)
-	if err != nil {
-		return errors.Wrap(err, "open input database")
-	}
-	defer inputDB.Close()
+	// Get start and end block numbers
+	bestBlockSummary := repo.BestBlockSummary()
+	startBlockNum := bestBlockSummary.Header.Number() + 1
+	endBlockNumber := block.Number(source.HeadID())
 
-	outputDB, err := getOutputDB(outputDatDir)
-	if err != nil {
-		return errors.Wrap(err, "open output database")
-	}
-	defer outputDB.Close()
-
-	genesisBlock, forkConfig, genesisGene, err := detectGenesisFromSnapshot(inputDB)
-	if err != nil {
-		return errors.Wrap(err, "detect genesis from snapshot")
+	if startBlockNum > endBlockNumber {
+		log.Info("reprocessing already complete", "currentBlock", startBlockNum-1, "sourceBlock", endBlockNumber)
+		return nil
 	}
 
-	log.Info("Detected genesis", "id", genesisBlock.Header().ID(), "forkConfig", forkConfig)
+	totalBlocks := endBlockNumber - startBlockNum + 1
+	log.Info("starting reprocessing", "startBlock", startBlockNum, "endBlock", endBlockNumber, "totalBlocks", totalBlocks)
 
-	targetRepo, err := chain.NewRepository(outputDB, genesisBlock)
-	if err != nil {
-		return errors.Wrap(err, "open target repository")
-	}
+	// Create consensus
+	cons := consensus.New(repo, stater, forkConfig)
 
-	targetBestSummary := targetRepo.BestBlockSummary()
-	targetBestBlockNum := targetBestSummary.Header.Number()
-	logWriter := outputLogDB.NewWriter()
+	// Setup async log writer
 	var asyncWriter *asyncLogWriter
 	if !skipLogs {
+		logWriter := logDB.NewWriter()
 		asyncWriter = newAsyncLogWriter(logWriter)
 		defer func() {
 			if asyncWriter != nil {
@@ -194,319 +158,159 @@ func ReprocessChainFromSnapshot(
 		}()
 	}
 
-	if targetBestBlockNum == 0 {
-		log.Info("Initializing genesis state in target database")
-		targetStater := state.NewStater(outputDB)
-		builtGenesisBlock, genesisEvents, genesisTransfers, err := genesisGene.Build(targetStater)
-		if err != nil {
-			return errors.Wrap(err, "build genesis state in target database")
-		}
+	// Three-stage pipeline for block reprocessing:
+	//
+	// Stage 1: Block Fetcher
+	//   - Fetches blocks from source chain
+	//   - Sends to rawBlockChan
+	//
+	// Stage 2: Block Warmer
+	//   - Receives blocks from rawBlockChan
+	//   - Pre-warms caches (ID, Beta, IntrinsicGas, etc.)
+	//   - Sends warmed blocks to blockChan
+	//
+	// Stage 3: Block Processor (main loop)
+	//   - Receives warmed blocks from blockChan
+	//   - Processes blocks (consensus, state, logs)
+	//
+	rawBlockChan := make(chan *block.Block, 100)
+	blockChan := make(chan *block.Block, 1000)
+	errChan := make(chan error, 3)
 
-		if builtGenesisBlock.Header().ID() != genesisBlock.Header().ID() {
-			return errors.Errorf("genesis ID mismatch: built %v, snapshot %v",
-				builtGenesisBlock.Header().ID(), genesisBlock.Header().ID())
-		}
-
-		targetRepo, err = chain.NewRepository(outputDB, builtGenesisBlock)
-		if err != nil {
-			return errors.Wrap(err, "re-initialize target repository")
-		}
-
-		if !skipLogs {
-			if err := logWriter.Write(builtGenesisBlock, tx.Receipts{{
-				Outputs: []*tx.Output{
-					{Events: genesisEvents, Transfers: genesisTransfers},
-				},
-			}}); err != nil {
-				return errors.Wrap(err, "write genesis logs")
+	// Stage 1: Fetch blocks from source
+	go func() {
+		defer close(rawBlockChan)
+		for blockNum := startBlockNum; blockNum <= endBlockNumber; blockNum++ {
+			// Check for cancellation before expensive GetBlock call
+			select {
+			case <-ctx.Done():
+				return // Stop producing, channel will be closed by defer
+			default:
 			}
-			if err := logWriter.Commit(); err != nil {
-				return errors.Wrap(err, "commit genesis logs")
-			}
-		}
-	} else {
-		log.Info("Resuming reprocessing", "currentBlock", targetBestBlockNum)
-	}
 
-	snapshotRepo, err := chain.NewRepository(inputDB, genesisBlock)
-	if err != nil {
-		return errors.Wrap(err, "open snapshot repository")
-	}
-
-	bestSummary := snapshotRepo.BestBlockSummary()
-	bestBlockNum := bestSummary.Header.Number()
-	log.Info("Snapshot best block", "number", bestBlockNum, "id", bestSummary.Header.ID())
-
-	if targetBestBlockNum >= bestBlockNum {
-		log.Info("Reprocessing already complete",
-			"targetBlock", targetBestBlockNum,
-			"snapshotBlock", bestBlockNum)
-		log.Info("[REPROCESS] Already complete:", "target at block", targetBestBlockNum, "snapshot at block", bestBlockNum)
-		return nil
-	}
-
-	stater := state.NewStater(outputDB)
-	cons := consensus.New(targetRepo, stater, forkConfig)
-
-	snapshotBestChain := snapshotRepo.NewBestChain()
-
-	startBlockNum := targetBestBlockNum + 1
-	totalBlocksToProcess := bestBlockNum - targetBestBlockNum
-	log.Info("Starting reprocessing",
-		"startBlock", startBlockNum,
-		"endBlock", bestBlockNum,
-		"totalBlocks", totalBlocksToProcess)
-
-	var prefetchedBlock *blockResult
-	if startBlockNum <= bestBlockNum {
-		prefetchedBlock = &blockResult{}
-		go func(num uint32) {
-			blk, err := snapshotBestChain.GetBlock(num)
-			prefetchedBlock.block = blk
-			prefetchedBlock.err = err
-		}(startBlockNum)
-	}
-
-	for blockNum := startBlockNum; blockNum <= bestBlockNum; blockNum++ {
-		var nextBlockChan chan *blockResult
-		if blockNum < bestBlockNum {
-			nextBlockChan = make(chan *blockResult, 1)
-			go func(num uint32) {
-				blk, err := snapshotBestChain.GetBlock(num)
-				nextBlockChan <- &blockResult{block: blk, err: err}
-			}(blockNum + 1)
-		}
-
-		var snapshotBlock *block.Block
-		if prefetchedBlock != nil {
-			for prefetchedBlock.block == nil && prefetchedBlock.err == nil {
-				time.Sleep(10 * time.Millisecond)
-			}
-			if prefetchedBlock.err != nil {
-				return errors.Wrapf(prefetchedBlock.err, "get block %d from snapshot", blockNum)
-			}
-			snapshotBlock = prefetchedBlock.block
-		} else {
-			var err error
-			snapshotBlock, err = snapshotBestChain.GetBlock(blockNum)
+			blk, err := source.GetBlock(blockNum)
 			if err != nil {
-				return errors.Wrapf(err, "get block %d from snapshot", blockNum)
-			}
-		}
-
-		parentID := snapshotBlock.Header().ParentID()
-		parentSummaryChan := make(chan *summaryResult, 1)
-		go func(pid thor.Bytes32) {
-			summary, err := targetRepo.GetBlockSummary(pid)
-			parentSummaryChan <- &summaryResult{summary: summary, err: err}
-		}(parentID)
-
-		parentResult := <-parentSummaryChan
-		if parentResult.err != nil {
-			return errors.Wrapf(parentResult.err, "get parent summary for block %d", blockNum)
-		}
-		parentSummary := parentResult.summary
-
-		stage, receipts, err := cons.Process(
-			parentSummary,
-			snapshotBlock,
-			snapshotBlock.Header().Timestamp(),
-			0,
-		)
-		if err != nil {
-			return errors.Wrapf(err, "failed to process block %d", blockNum)
-		}
-
-		if _, err := stage.Commit(); err != nil {
-			return errors.Wrapf(err, "commit state for block %d", blockNum)
-		}
-
-		if err := targetRepo.AddBlock(snapshotBlock, receipts, 0, true); err != nil {
-			return errors.Wrapf(err, "add block %d to target repository", blockNum)
-		}
-
-		if !skipLogs {
-			blocksProcessed := blockNum - startBlockNum + 1
-			shouldCommitLogs := blocksProcessed%logBatchSize == 0 || blockNum == bestBlockNum
-
-			if err := asyncWriter.Write(snapshotBlock, receipts, blockNum, shouldCommitLogs); err != nil {
-				return errors.Wrapf(err, "write logs for block %d", blockNum)
+				errChan <- errors.Wrapf(err, "fetch block %d from source", blockNum)
+				return
 			}
 
 			select {
-			case err := <-asyncWriter.errChan:
-				return errors.Wrapf(err, "async log write error at block %d", blockNum)
-			default:
+			case rawBlockChan <- blk:
+			case <-ctx.Done():
+				return // Stop producing
 			}
 		}
+	}()
 
-		if blockNum%10000 == 0 || blockNum%100000 == 0 || blockNum == bestBlockNum {
-			percent := float64(blockNum) / float64(bestBlockNum) * 100
-			remaining := bestBlockNum - blockNum
-			log.Info("Reprocessing progress",
-				"block", blockNum,
-				"total", bestBlockNum,
-				"percent", fmt.Sprintf("%.2f%%", percent),
-				"remaining", remaining)
-			if blockNum%100000 == 0 || blockNum == bestBlockNum {
-				log.Info("[REPROCESS]",
-					"Block", blockNum,
-					"bestBlockNum", bestBlockNum,
-					"percent", percent,
-					"remaining", remaining)
+	// Stage 2: Warmup blocks
+	go func() {
+		defer close(blockChan)
+		<-co.Parallel(func(queue chan<- func()) {
+			for {
+				// Non-blocking receive with cancellation support
+				var blk *block.Block
+				select {
+				case b, ok := <-rawBlockChan:
+					if !ok {
+						return // Channel closed, done
+					}
+					blk = b
+				case <-ctx.Done():
+					return // Stop producing
+				}
+
+				// Warmup: precompute and cache expensive operations
+				queue <- func() {
+					_ = blk.Header().ID()
+					_, _ = blk.Header().Beta()
+				}
+				txs := blk.Transactions()
+				queue <- func() {
+					for _, tx := range txs {
+						_ = tx.ID()
+						_ = tx.UnprovedWork()
+						_, _ = tx.IntrinsicGas()
+						_, _ = tx.Delegator()
+					}
+				}
+
+				select {
+				case blockChan <- blk:
+				case <-ctx.Done():
+					return // Stop producing
+				}
 			}
-		}
+		})
+	}()
 
-		if nextBlockChan != nil {
-			prefetchedBlock = <-nextBlockChan
-		} else {
-			prefetchedBlock = nil
-		}
-	}
+	// Stage 3: Process blocks
+	blocksProcessed := uint32(0)
+	bandwidth := &bandwidth.Bandwidth{}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errChan:
+			return err
+		case blk, ok := <-blockChan:
+			if !ok {
+				// Channel closed, all blocks processed
+				log.Info("reprocessing completed successfully", "totalBlocks", blocksProcessed)
+				return nil
+			}
 
-	log.Info("Reprocessing completed successfully", "totalBlocks", bestBlockNum+1, "remaining", totalBlocksToProcess)
-	return nil
-}
+			blockNum := blk.Header().Number()
 
-// detectGenesisFromSnapshot detects genesis block, fork config, and genesis builder from snapshot
-func detectGenesisFromSnapshot(db *muxdb.MuxDB) (*block.Block, *thor.ForkConfig, *genesis.Genesis, error) {
-	propStore := db.NewStore("chain.props")
-	bestBlockIDKey := []byte("best-block-id")
-
-	bestBlockIDBytes, err := propStore.Get(bestBlockIDKey)
-	if err != nil {
-		if propStore.IsNotFound(err) {
-			return nil, nil, nil, errors.New("snapshot database appears empty - no best block found")
-		}
-		return nil, nil, nil, errors.Wrap(err, "read best block ID")
-	}
-
-	bestBlockID := thor.BytesToBytes32(bestBlockIDBytes)
-
-	hdrStore := db.NewStore("chain.hdr")
-	bestSummary, err := loadBlockSummary(hdrStore, bestBlockID)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "load best block summary")
-	}
-
-	indexTrie := db.NewTrie(muxdb.IndexTrieName, bestSummary.IndexRoot())
-	var genesisKey [4]byte
-	binary.BigEndian.PutUint32(genesisKey[:], 0)
-
-	genesisIDBytes, _, err := indexTrie.Get(genesisKey[:])
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "get genesis block ID from index trie")
-	}
-
-	if len(genesisIDBytes) == 0 {
-		return nil, nil, nil, errors.New("genesis block not found in index trie")
-	}
-
-	genesisID := thor.BytesToBytes32(genesisIDBytes)
-
-	log.Info("Found genesis ID in snapshot", "id", genesisID)
-
-	for _, geneInfo := range []struct {
-		name string
-		fn   func() (*genesis.Genesis, *thor.ForkConfig)
-	}{
-		{"mainnet", func() (*genesis.Genesis, *thor.ForkConfig) {
-			g := genesis.NewMainnet()
-			return g, thor.GetForkConfig(g.ID())
-		}},
-		{"testnet", func() (*genesis.Genesis, *thor.ForkConfig) {
-			g := genesis.NewTestnet()
-			return g, thor.GetForkConfig(g.ID())
-		}},
-	} {
-		gene, forkConfig := geneInfo.fn()
-		if gene.ID() == genesisID {
-			stater := state.NewStater(db)
-			genesisBlock, _, _, err := gene.Build(stater)
+			// Get parent summary
+			parentID := blk.Header().ParentID()
+			parentSummary, err := repo.GetBlockSummary(parentID)
 			if err != nil {
-				log.Warn("Failed to build genesis block", "network", geneInfo.name, "err", err)
-				continue
+				return errors.Wrapf(err, "get parent summary for block %d", blockNum)
+			}
+			startTime := mclock.Now()
+			// Process block
+			stage, receipts, err := cons.Process(parentSummary, blk, blk.Header().Timestamp(), 0)
+			if err != nil {
+				return errors.Wrapf(err, "process block %d", blockNum)
 			}
 
-			log.Info("Matched genesis", "network", geneInfo.name, "id", genesisID)
-			return genesisBlock, forkConfig, gene, nil
+			// Commit state
+			if _, err := stage.Commit(); err != nil {
+				return errors.Wrapf(err, "commit state for block %d", blockNum)
+			}
+
+			// Add block to repository
+			if err := repo.AddBlock(blk, receipts, 0, true); err != nil {
+				return errors.Wrapf(err, "add block %d to repository", blockNum)
+			}
+
+			// commit block in bft engine
+			if blk.Header().Number() >= forkConfig.FINALITY {
+				if err := bftEngine.CommitBlock(blk.Header(), false); err != nil {
+					return errors.Wrap(err, "bft commits")
+				}
+			}
+
+			realElapsed := mclock.Now() - startTime
+			bandwidth.Update(blk.Header(), time.Duration(realElapsed))
+
+			// Write logs
+			if !skipLogs {
+				blocksProcessed++
+				shouldCommit := blocksProcessed%logBatchSize == 0 || blockNum == endBlockNumber
+				if err := asyncWriter.Write(blk, receipts, shouldCommit); err != nil {
+					return errors.Wrapf(err, "write logs for block %d", blockNum)
+				}
+			}
+
+			// Progress logging
+			if blockNum%10000 == 0 || blockNum == endBlockNumber {
+				percent := float64(blockNum-startBlockNum+1) / float64(totalBlocks) * 100
+				log.Info("processed blocks",
+					"block", blockNum,
+					"bandwidth", fmt.Sprintf("%.2f mgas/s", float64(bandwidth.Value())/1000000),
+					"percent", fmt.Sprintf("%.2f%%", percent))
+			}
 		}
 	}
-
-	return nil, nil, nil, errors.Errorf("unknown genesis ID %v - cannot build genesis state. Please use a known network (mainnet/testnet)", genesisID)
-}
-
-func loadBlockSummary(r kv.Getter, id thor.Bytes32) (*chain.BlockSummary, error) {
-	data, err := r.Get(id.Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	var summary chain.BlockSummary
-	if err := rlp.DecodeBytes(data, &summary); err != nil {
-		return nil, err
-	}
-
-	return &summary, nil
-}
-
-func getInputDB(inputDataDir string) (*muxdb.MuxDB, error) {
-	log.Info("Opening input database", "dir", inputDataDir)
-	inputDBPath := filepath.Join(inputDataDir, "main.db")
-	if _, err := os.Stat(inputDBPath); err != nil {
-		return nil, errors.Wrapf(err, "input database not found at %s", inputDBPath)
-	}
-
-	opts := muxdb.Options{
-		TrieNodeCacheSizeMB:        2048,
-		TrieCachedNodeTTL:          60,
-		TrieDedupedPartitionFactor: math.MaxUint32,
-		TrieWillCleanHistory:       false,
-		OpenFilesCacheCapacity:     20000,
-		ReadCacheMB:                2048,
-		WriteBufferMB:              4,
-		TrieHistPartitionFactor:    524288,
-	}
-
-	inputDB, err := muxdb.Open(inputDBPath, &opts)
-	if err != nil {
-		return nil, errors.Wrap(err, "open snapshot database")
-	}
-	return inputDB, nil
-}
-
-func getOutputDB(outputDatDir string) (*muxdb.MuxDB, error) {
-	fdCache := 5120
-	cacheMB := 256
-
-	opts := muxdb.Options{
-		TrieNodeCacheSizeMB:        cacheMB,
-		TrieCachedNodeTTL:          30,
-		TrieDedupedPartitionFactor: math.MaxUint32,
-		TrieWillCleanHistory:       true,
-		OpenFilesCacheCapacity:     fdCache,
-		ReadCacheMB:                128,
-		WriteBufferMB:              512,
-	}
-
-	// go-ethereum stuff
-	// Ensure Go's GC ignores the database cache for trigger percentage
-	totalCacheMB := cacheMB + opts.ReadCacheMB + opts.WriteBufferMB*2
-	gogc := math.Max(10, math.Min(100, 50/(float64(totalCacheMB)/1024)))
-
-	log.Debug("sanitize Go's GC trigger", "percent", int(gogc))
-	debug.SetGCPercent(int(gogc))
-
-	if opts.TrieWillCleanHistory {
-		opts.TrieHistPartitionFactor = 256
-	} else {
-		opts.TrieHistPartitionFactor = 524288
-	}
-
-	path := filepath.Join(outputDatDir, "main.db")
-	db, err := muxdb.Open(path, &opts)
-	if err != nil {
-		return nil, errors.Wrapf(err, "open main database [%v]", path)
-	}
-	return db, nil
 }
