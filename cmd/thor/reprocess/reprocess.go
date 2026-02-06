@@ -255,7 +255,15 @@ func ReprocessChainFromSnapshot(
 		case blk, ok := <-blockChan:
 			if !ok {
 				// Channel closed, all blocks processed
-				log.Info("reprocessing completed successfully", "processed", blocksProcessed, "best", repo.BestBlockSummary().Header.Number(), "duration", time.Since(processStartTime))
+				log.Info(
+					"reprocessing completed successfully",
+					"processed",
+					blocksProcessed,
+					"best",
+					repo.BestBlockSummary().Header.Number(),
+					"duration",
+					time.Since(processStartTime),
+				)
 				return nil
 			}
 

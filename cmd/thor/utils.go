@@ -58,6 +58,10 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
+const (
+	instanceDirVersion = "v4"
+)
+
 func initLogger(ctx *cli.Command) (*slog.LevelVar, error) {
 	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
@@ -297,7 +301,7 @@ func makeInstanceDir(dataDir string, gene *genesis.Genesis, disablePruner bool) 
 		suffix = "-full"
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v4", gene.ID().Bytes()[24:])+suffix)
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-%s", gene.ID().Bytes()[24:], instanceDirVersion)+suffix)
 	if err := os.MkdirAll(instanceDir, 0o700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
@@ -715,9 +719,10 @@ func logStartupMessage(message string) {
 
 func openDBFromInstanceDir(instanceDir string) (*muxdb.MuxDB, *genesis.Genesis, error) {
 	instanceDirName := filepath.Base(instanceDir)
-	matches := regexp.MustCompile(`^instance-([0-9a-f]{16})-v4(-full)?$`).FindStringSubmatch(instanceDirName)
+	pattern := fmt.Sprintf(`^instance-([0-9a-f]{16})-%s(-full)?$`, instanceDirVersion)
+	matches := regexp.MustCompile(pattern).FindStringSubmatch(instanceDirName)
 	if matches == nil {
-		return nil, nil, errors.New("invalid instance directory format, expected format: instance-<16-hex-chars>-v4[-full]")
+		return nil, nil, fmt.Errorf("invalid instance directory format, expected format: instance-<16-hex-chars>-%s[-full]", instanceDirVersion)
 	}
 	genesisHash := matches[1]
 	isFull := matches[2] != ""
@@ -741,5 +746,5 @@ func openDBFromInstanceDir(instanceDir string) (*muxdb.MuxDB, *genesis.Genesis, 
 }
 
 func defaultInstanceDir() string {
-	return filepath.Join(defaultDataDir(), fmt.Sprintf("instance-%x-v4", genesis.NewMainnet().ID().Bytes()[24:]))
+	return filepath.Join(defaultDataDir(), fmt.Sprintf("instance-%x-%s", genesis.NewMainnet().ID().Bytes()[24:], instanceDirVersion))
 }
