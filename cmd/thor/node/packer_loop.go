@@ -33,7 +33,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 	if n.wscRequired {
 		logger.Info("verifying weak subjectivity checkpoint")
-		if err := n.verifyWeakSubjectivity(ctx); err != nil {
+		if err := n.verifyWeakSubjectivityCheckpoint(ctx); err != nil {
 			logger.Error("weak subjectivity checkpoint failed", "err", err)
 			panic(err)
 		}

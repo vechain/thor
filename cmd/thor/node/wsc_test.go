@@ -94,7 +94,7 @@ func TestFinalizedAge(t *testing.T) {
 	require.Equal(t, 2*time.Minute, age)
 }
 
-func TestFetchWSCCheckpoint(t *testing.T) {
+func TestFetchWSCheckpoint(t *testing.T) {
 	id := thor.MustParseBytes32("0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
 
 	t.Run("success", func(t *testing.T) {
@@ -102,13 +102,13 @@ func TestFetchWSCCheckpoint(t *testing.T) {
 		server := newCheckpointServer(http.StatusOK, body)
 		defer server.Close()
 
-		got, err := fetchWSCCheckpoint(context.Background(), server.URL)
+		got, err := fetchWSCheckpoint(context.Background(), server.URL)
 		require.NoError(t, err)
 		require.Equal(t, id, got)
 	})
 
 	t.Run("missing url", func(t *testing.T) {
-		_, err := fetchWSCCheckpoint(context.Background(), "")
+		_, err := fetchWSCheckpoint(context.Background(), "")
 		require.Error(t, err)
 	})
 
@@ -116,7 +116,7 @@ func TestFetchWSCCheckpoint(t *testing.T) {
 		server := newCheckpointServer(http.StatusInternalServerError, `{"id":"0x00"}`)
 		defer server.Close()
 
-		_, err := fetchWSCCheckpoint(context.Background(), server.URL)
+		_, err := fetchWSCheckpoint(context.Background(), server.URL)
 		require.ErrorContains(t, err, "unexpected response status")
 	})
 
@@ -124,7 +124,7 @@ func TestFetchWSCCheckpoint(t *testing.T) {
 		server := newCheckpointServer(http.StatusOK, "not-json")
 		defer server.Close()
 
-		_, err := fetchWSCCheckpoint(context.Background(), server.URL)
+		_, err := fetchWSCheckpoint(context.Background(), server.URL)
 		require.ErrorContains(t, err, "decode checkpoint response")
 	})
 
@@ -132,7 +132,7 @@ func TestFetchWSCCheckpoint(t *testing.T) {
 		server := newCheckpointServer(http.StatusOK, `{}`)
 		defer server.Close()
 
-		_, err := fetchWSCCheckpoint(context.Background(), server.URL)
+		_, err := fetchWSCheckpoint(context.Background(), server.URL)
 		require.ErrorContains(t, err, "missing id")
 	})
 
@@ -140,7 +140,7 @@ func TestFetchWSCCheckpoint(t *testing.T) {
 		server := newCheckpointServer(http.StatusOK, `{"id":"0x1234"}`)
 		defer server.Close()
 
-		_, err := fetchWSCCheckpoint(context.Background(), server.URL)
+		_, err := fetchWSCheckpoint(context.Background(), server.URL)
 		require.ErrorContains(t, err, "decode checkpoint response")
 	})
 }
@@ -150,28 +150,28 @@ func TestPrepareWeakSubjectivity(t *testing.T) {
 
 	t.Run("safe range", func(t *testing.T) {
 		node := newTestNode(t, uint64(now.Add(-10*time.Second).Unix()), "http://example.test")
-		required, err := node.prepareWeakSubjectivity()
+		required, err := node.shouldCheckWeakSubjectivityCheckpoint()
 		require.NoError(t, err)
 		require.False(t, required)
 	})
 
 	t.Run("out of range without url", func(t *testing.T) {
 		node := newTestNode(t, uint64(now.Add(-2*time.Hour).Unix()), "")
-		required, err := node.prepareWeakSubjectivity()
+		required, err := node.shouldCheckWeakSubjectivityCheckpoint()
 		require.NoError(t, err)
 		require.False(t, required)
 	})
 
 	t.Run("future timestamp without url", func(t *testing.T) {
 		node := newTestNode(t, uint64(now.Add(2*time.Hour).Unix()), "")
-		required, err := node.prepareWeakSubjectivity()
+		required, err := node.shouldCheckWeakSubjectivityCheckpoint()
 		require.NoError(t, err)
 		require.False(t, required)
 	})
 
 	t.Run("out of range with url", func(t *testing.T) {
 		node := newTestNode(t, uint64(now.Add(-2*time.Hour).Unix()), "http://example.test")
-		required, err := node.prepareWeakSubjectivity()
+		required, err := node.shouldCheckWeakSubjectivityCheckpoint()
 		require.NoError(t, err)
 		require.True(t, required)
 	})
@@ -187,7 +187,7 @@ func TestVerifyWeakSubjectivity(t *testing.T) {
 		defer server.Close()
 
 		node.options.WSCProviderURL = server.URL
-		require.NoError(t, node.verifyWeakSubjectivity(context.Background()))
+		require.NoError(t, node.verifyWeakSubjectivityCheckpoint(context.Background()))
 	})
 
 	t.Run("mismatch", func(t *testing.T) {
@@ -199,7 +199,7 @@ func TestVerifyWeakSubjectivity(t *testing.T) {
 		defer server.Close()
 
 		node.options.WSCProviderURL = server.URL
-		err := node.verifyWeakSubjectivity(context.Background())
+		err := node.verifyWeakSubjectivityCheckpoint(context.Background())
 		require.ErrorContains(t, err, "checkpoint mismatch")
 	})
 
@@ -210,7 +210,7 @@ func TestVerifyWeakSubjectivity(t *testing.T) {
 		defer server.Close()
 
 		node.options.WSCProviderURL = server.URL
-		err := node.verifyWeakSubjectivity(context.Background())
+		err := node.verifyWeakSubjectivityCheckpoint(context.Background())
 		require.ErrorContains(t, err, "outside safe range")
 	})
 }

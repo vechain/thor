@@ -112,7 +112,7 @@ func (n *Node) Run(ctx context.Context) error {
 	}
 	n.maxBlockNum = maxBlockNum
 
-	wscRequired, err := n.prepareWeakSubjectivity()
+	wscRequired, err := n.shouldCheckWeakSubjectivityCheckpoint()
 	if err != nil {
 		return err
 	}

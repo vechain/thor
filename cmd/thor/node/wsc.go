@@ -22,64 +22,59 @@ const (
 	wscMaxBodySize  = 16 * 1024 * 1024
 )
 
-// prepareWeakSubjectivity only enables WSC when a provider URL is configured.
-func (n *Node) prepareWeakSubjectivity() (bool, error) {
+// finalizedStatus loads the finalized block and computes its safe-range status.
+func (n *Node) finalizedStatus() (id thor.Bytes32, safe bool, age time.Duration, err error) {
+	summary, err := n.repo.GetBlockSummary(n.bft.Finalized())
+	if err != nil {
+		return thor.Bytes32{}, false, 0, err
+	}
+	id = summary.Header.ID()
+	safe, age, err = finalizedInSafeRange(time.Now(), summary)
+	return
+}
+
+// shouldCheckWeakSubjectivityCheckpoint only enables WSC when a provider URL is configured
+// and the local finalized block is stale enough to warrant external verification.
+func (n *Node) shouldCheckWeakSubjectivityCheckpoint() (bool, error) {
 	if n.options.WSCProviderURL == "" {
 		logger.Debug("weak subjectivity checkpoint disabled: provider url not set")
 		return false, nil
 	}
 
-	summary, err := n.finalizedSummary()
-	if err != nil {
-		return false, err
-	}
-
-	now := time.Now()
-	finalizedID := summary.Header.ID()
-	safe, age, err := finalizedInSafeRange(now, summary)
+	id, safe, age, err := n.finalizedStatus()
 	if err != nil {
 		return false, err
 	}
 	if safe {
-		logger.Info("weak subjectivity checkpoint skipped", "finalized", shortID(finalizedID), "age", age)
+		logger.Info("weak subjectivity checkpoint skipped", "finalized", shortID(id), "age", age)
 		return false, nil
 	}
 
-	logger.Info("weak subjectivity checkpoint required", "finalized", shortID(finalizedID), "age", age, "provider", n.options.WSCProviderURL)
+	logger.Info("weak subjectivity checkpoint required", "finalized", shortID(id), "age", age, "provider", n.options.WSCProviderURL)
 	return true, nil
 }
 
-// verifyWeakSubjectivity fetches the checkpoint and enforces both the safe-range and ID match.
-func (n *Node) verifyWeakSubjectivity(ctx context.Context) error {
-	checkpoint, err := fetchWSCCheckpoint(ctx, n.options.WSCProviderURL)
+// verifyWeakSubjectivityCheckpoint fetches the remote checkpoint after sync and
+// enforces both the safe-range constraint and an exact ID match against the local finalized block.
+func (n *Node) verifyWeakSubjectivityCheckpoint(ctx context.Context) error {
+	checkpoint, err := fetchWSCheckpoint(ctx, n.options.WSCProviderURL)
 	if err != nil {
 		return err
 	}
 
-	summary, err := n.finalizedSummary()
-	if err != nil {
-		return err
-	}
-
-	safe, age, err := finalizedInSafeRange(time.Now(), summary)
+	id, safe, age, err := n.finalizedStatus()
 	if err != nil {
 		return err
 	}
 	if !safe {
 		return fmt.Errorf("finalized block outside safe range (age %s)", age)
 	}
-
-	finalizedID := summary.Header.ID()
-	if checkpoint != finalizedID {
-		return fmt.Errorf("checkpoint mismatch: checkpoint=%s finalized=%s", checkpoint, finalizedID)
+	if checkpoint != id {
+		return fmt.Errorf("checkpoint mismatch: checkpoint=%s finalized=%s", checkpoint, id)
 	}
 
-	logger.Info("weak subjectivity checkpoint verified", "finalized", shortID(finalizedID))
+	logger.Info("weak subjectivity checkpoint verified", "finalized", shortID(id))
 	return nil
-}
-
-func (n *Node) finalizedSummary() (*chain.BlockSummary, error) {
-	return n.repo.GetBlockSummary(n.bft.Finalized())
 }
 
 // finalizedInSafeRange returns false (with error) if the finalized timestamp is ahead of local time.
@@ -100,8 +95,8 @@ func finalizedAge(now time.Time, summary *chain.BlockSummary) (time.Duration, er
 	return now.Sub(blockTime), nil
 }
 
-// fetchWSCCheckpoint performs a bounded HTTP GET and expects a JSON payload with an id field.
-func fetchWSCCheckpoint(ctx context.Context, url string) (thor.Bytes32, error) {
+// fetchWSCheckpoint performs a bounded HTTP GET and expects a JSON payload with an id field.
+func fetchWSCheckpoint(ctx context.Context, url string) (thor.Bytes32, error) {
 	if url == "" {
 		return thor.Bytes32{}, fmt.Errorf("missing checkpoint url")
 	}
