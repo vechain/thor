@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/bft"
@@ -152,7 +151,7 @@ func ReprocessChainFromSnapshot(
 		defer func() {
 			if asyncWriter != nil {
 				if err := asyncWriter.Close(); err != nil {
-					log.Error("Failed to close async log writer", "err", err)
+					log.Error("failed to close async log writer", "err", err)
 				}
 			}
 		}()
@@ -175,7 +174,7 @@ func ReprocessChainFromSnapshot(
 	//
 	rawBlockChan := make(chan *block.Block, 100)
 	blockChan := make(chan *block.Block, 1000)
-	errChan := make(chan error, 3)
+	errChan := make(chan error, 1)
 
 	// Stage 1: Fetch blocks from source
 	go func() {
@@ -246,6 +245,7 @@ func ReprocessChainFromSnapshot(
 	// Stage 3: Process blocks
 	blocksProcessed := uint32(0)
 	bandwidth := &bandwidth.Bandwidth{}
+	processStartTime := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -255,7 +255,7 @@ func ReprocessChainFromSnapshot(
 		case blk, ok := <-blockChan:
 			if !ok {
 				// Channel closed, all blocks processed
-				log.Info("reprocessing completed successfully", "totalBlocks", blocksProcessed)
+				log.Info("reprocessing completed successfully", "processed", blocksProcessed, "best", repo.BestBlockSummary().Header.Number(), "duration", time.Since(processStartTime))
 				return nil
 			}
 
@@ -267,7 +267,7 @@ func ReprocessChainFromSnapshot(
 			if err != nil {
 				return errors.Wrapf(err, "get parent summary for block %d", blockNum)
 			}
-			startTime := mclock.Now()
+			startTime := time.Now()
 			// Process block
 			stage, receipts, err := cons.Process(parentSummary, blk, blk.Header().Timestamp(), 0)
 			if err != nil {
@@ -291,8 +291,8 @@ func ReprocessChainFromSnapshot(
 				}
 			}
 
-			realElapsed := mclock.Now() - startTime
-			bandwidth.Update(blk.Header(), time.Duration(realElapsed))
+			realElapsed := time.Since(startTime)
+			bandwidth.Update(blk.Header(), realElapsed)
 
 			// Write logs
 			if !skipLogs {
