@@ -739,3 +739,7 @@ func openDBFromInstanceDir(instanceDir string) (*muxdb.MuxDB, *genesis.Genesis, 
 	}
 	return mainDB, gene, nil
 }
+
+func defaultInstanceDir() string {
+	return filepath.Join(defaultDataDir(), fmt.Sprintf("instance-%x-v4", genesis.NewMainnet().ID().Bytes()[24:]))
+}

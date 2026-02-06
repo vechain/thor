@@ -625,6 +625,12 @@ func masterKeyAction(_ context.Context, ctx *cli.Command) error {
 }
 
 func reprocessAction(_ context.Context, ctx *cli.Command) error {
+	// get output directory from positional argument
+	if ctx.Args().Len() != 1 {
+		return errors.New("output-dir argument is required, e.g. 'thor reprocess /path/to/output'")
+	}
+	outputDir := ctx.Args().First()
+
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
 
@@ -633,14 +639,9 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 		return errors.Wrap(err, "init logger")
 	}
 
-	// get output directory from positional argument
-	if ctx.Args().Len() != 1 {
-		return errors.New("output-dir argument is required")
-	}
-	outputDir := ctx.Args().First()
-
 	// initialize and verify source database
-	sourceDB, gene, err := openDBFromInstanceDir(ctx.String(instanceDirFlag.Name))
+	sourceInstanceDir := ctx.String(instanceDirFlag.Name)
+	sourceDB, gene, err := openDBFromInstanceDir(sourceInstanceDir)
 	if err != nil {
 		return errors.Wrap(err, "open source instance directory")
 	}
@@ -699,8 +700,8 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
 	}
 
+	log.Info("starting chain reprocessing", "instance-directory", sourceInstanceDir)
 	if sourceRepo.BestBlockSummary().Header.Number() > repo.BestBlockSummary().Header.Number() {
-		log.Info("starting chain reprocessing", "instance-directory", instanceDir, "from", repo.BestBlockSummary().Header.Number())
 		err = reprocess.ReprocessChainFromSnapshot(exitSignal, sourceRepo.NewBestChain(), state.NewStater(mainDB), logDB, repo, forkConfig, bftEngine, skipLogs)
 		if err != nil {
 			return errors.Wrap(err, "reprocess chain")

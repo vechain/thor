@@ -293,8 +293,8 @@ var (
 
 	// reprocess action flags
 	instanceDirFlag = &cli.StringFlag{
-		Name:     "instance-dir",
-		Required: true,
-		Usage:    "directory for instance(instance-xxxxxxx-v4[-full])",
+		Name:  "instance-dir",
+		Value: defaultInstanceDir(),
+		Usage: "directory for instance(instance-xxxxxxx-v4[-full])",
 	}
 )
