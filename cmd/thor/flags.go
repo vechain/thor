@@ -290,8 +290,11 @@ var (
 		Usage:   "path or URL to genesis file, if not set, the default devnet genesis will be used",
 		Sources: envVar("GENESIS"),
 	}
-	outputDirFlag = &cli.StringFlag{
-		Name:  "output-dir",
-		Usage: "directory for output databases (required)",
+
+	// reprocess action flags
+	instanceDirFlag = &cli.StringFlag{
+		Name:  "instance-dir",
+		Value: defaultInstanceDir(),
+		Usage: "directory for instance(instance-xxxxxxx-v4[-full])",
 	}
 )
