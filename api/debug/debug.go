@@ -118,7 +118,7 @@ func (d *Debug) prepareClauseEnv(
 				return rt, txExec, txID, nil
 			}
 			exec, _ := txExec.PrepareNext()
-			if _, _, _, err := exec(); err != nil {
+			if _, err := exec(); err != nil {
 				return nil, nil, thor.Bytes32{}, err
 			}
 			clauseCounter++
@@ -173,7 +173,7 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 		}
 	}()
 
-	_, _, interrupted, err := exec()
+	interrupted, err := exec()
 	close(done)
 
 	if interrupted {
