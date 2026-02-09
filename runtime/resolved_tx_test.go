@@ -393,7 +393,7 @@ func TestMPPUserRemovedDuringTx(t *testing.T) {
 	// 3. When returnGas is called, B is no longer a user
 	trx := tx.NewBuilder(tx.TypeLegacy).
 		GasPriceCoef(1).
-		Gas(1000000).
+		Gas(100000).
 		Expiration(100).
 		Nonce(1).
 		ChainTag(repo.ChainTag()).
@@ -405,7 +405,7 @@ func TestMPPUserRemovedDuringTx(t *testing.T) {
 	rt := runtime.New(
 		repo.NewChain(repo.BestBlockSummary().Header.ID()),
 		st,
-		&xenv.BlockContext{Time: targetTime, Number: repo.BestBlockSummary().Header.Number() + 1},
+		&xenv.BlockContext{Time: targetTime, Number: repo.BestBlockSummary().Header.Number() + 1, GasLimit: repo.BestBlockSummary().Header.GasLimit()},
 		&thor.NoFork,
 	)
 

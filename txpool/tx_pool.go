@@ -246,12 +246,12 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return nil
 	}
 
-	if p.isBlocked(newTx) {
-		return nil
-	}
-
 	if err := p.validateTxBasics(newTx); err != nil {
 		return err
+	}
+
+	if p.isBlocked(newTx) {
+		return nil
 	}
 
 	txObj, err := ResolveTx(newTx, localSubmitted)
@@ -473,12 +473,7 @@ func (p *TxPool) Executables() tx.Transactions {
 func (p *TxPool) Fill(txs tx.Transactions) {
 	txObjs := make([]*TxObject, 0, len(txs))
 	for _, tx := range txs {
-		origin, _ := tx.Origin()
-		if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
-			continue
-		}
-		delegator, _ := tx.Delegator()
-		if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+		if p.isBlocked(tx) {
 			continue
 		}
 		// here we ignore errors
@@ -581,15 +576,9 @@ func (p *TxPool) wash(
 	}()
 
 	for _, txObj := range all {
-		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
+		if p.isBlocked(txObj.Transaction) {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked")
-			continue
-		}
-		delegator := txObj.Delegator()
-		if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
-			toRemove = append(toRemove, txObj)
-			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked delegator")
 			continue
 		}
 

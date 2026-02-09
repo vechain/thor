@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -551,7 +550,7 @@ func TestVerifyBlock(t *testing.T) {
 				expectedPrefix := "block state root mismatch"
 				err = tc.consent(blk)
 
-				assert.True(t, strings.HasPrefix(err.Error(), expectedPrefix))
+				assert.ErrorContains(t, err, expectedPrefix)
 			},
 		},
 		{
@@ -575,7 +574,7 @@ func TestVerifyBlock(t *testing.T) {
 				expectedPrefix := "block receipts root mismatch"
 				err = tc.consent(blk)
 
-				assert.True(t, strings.HasPrefix(err.Error(), expectedPrefix))
+				assert.ErrorContains(t, err, expectedPrefix)
 			},
 		},
 	}
@@ -758,6 +757,17 @@ func TestConsent(t *testing.T) {
 				assert.Equal(t, "intrinsic gas exceeds provided gas", err.Error())
 			},
 		},
+		{
+			"TxGasExceedsLimit", func(t *testing.T) {
+				tx := txSign(txBuilder(tc.tag, tx.TypeLegacy).Gas(tc.original.Header().GasLimit() + 1))
+				blk, err := tc.sign(tc.builder(tc.original.Header()).Transaction(tx))
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = tc.consent(blk)
+				assert.ErrorContains(t, err, "tx gas exceeds block gas limit")
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -936,4 +946,30 @@ func TestNewRuntimeForReplay_ValidateStakingProposerError(t *testing.T) {
 	_, err := consensus.NewRuntimeForReplay(header, false)
 
 	assert.Error(t, err, "invalid signature length")
+}
+
+func TestExecuteBlockTxsGasExceedsLimit(t *testing.T) {
+	tc, err := newTestConsensus()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	builder := tc.builder(tc.original.Header())
+	for i := range 2 {
+		txBuilder := tx.NewBuilder(tx.TypeLegacy).
+			Gas(tc.original.Header().GasLimit()).
+			Expiration(math.MaxUint32).
+			ChainTag(tc.tag).
+			Nonce(uint64(i)).
+			Clause(tx.NewClause(nil).WithData([]byte{0x5b, 0x60, 0x00, 0x56}))
+
+		builder = builder.Transaction(txSign(txBuilder))
+	}
+
+	blk, err := tc.sign(builder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tc.consent(blk)
+	assert.ErrorContains(t, err, "executed tx gas exceeds limit: block gas limit 10000000, gas used 20000000")
 }

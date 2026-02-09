@@ -791,6 +791,7 @@ func TestExecuteTransaction(t *testing.T) {
 		block.Builder,
 	).ParentID(b0.Header().ID()).
 		Timestamp(b0.Header().Timestamp() + thor.BlockInterval()).
+		GasLimit(b0.Header().GasLimit()).
 		BaseFee(big.NewInt(thor.InitialBaseFee)).
 		StateRoot(root).
 		Build()
@@ -821,7 +822,7 @@ func TestExecuteTransaction(t *testing.T) {
 		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{}, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, fc)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
 
@@ -855,7 +856,12 @@ func TestExecuteTransaction(t *testing.T) {
 		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, fc)
+		rt := runtime.New(
+			repo.NewChain(b0.Header().ID()),
+			st,
+			&xenv.BlockContext{GasLimit: b0.Header().GasLimit(), BaseFee: big.NewInt(thor.InitialBaseFee)},
+			fc,
+		)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
 
@@ -889,7 +895,12 @@ func TestExecuteTransaction(t *testing.T) {
 		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, fc)
+		rt := runtime.New(
+			repo.NewChain(b0.Header().ID()),
+			st,
+			&xenv.BlockContext{GasLimit: b0.Header().GasLimit(), BaseFee: big.NewInt(thor.InitialBaseFee)},
+			fc,
+		)
 		receipt, err := rt.ExecuteTransaction(dynTx)
 		assert.Nil(t, err)
 
@@ -927,7 +938,12 @@ func TestExecuteTransaction(t *testing.T) {
 			rt := runtime.New(
 				repo.NewChain(b1.Header().ID()),
 				st,
-				&xenv.BlockContext{Time: b1.Header().Timestamp(), BaseFee: b1.Header().BaseFee(), Number: b1.Header().Number()},
+				&xenv.BlockContext{
+					GasLimit: b1.Header().GasLimit(),
+					Time:     b1.Header().Timestamp(),
+					BaseFee:  b1.Header().BaseFee(),
+					Number:   b1.Header().Number(),
+				},
 				&thor.SoloFork,
 			)
 
@@ -984,7 +1000,12 @@ func TestNoRewards(t *testing.T) {
 			prevEndorsorEnergy, err := builtin.Energy.Native(state, b0.Header().Timestamp()).Get(thor.Address{})
 			assert.Nil(t, err)
 
-			rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{BaseFee: big.NewInt(thor.InitialBaseFee)}, &thor.ForkConfig{})
+			rt := runtime.New(
+				repo.NewChain(b0.Header().ID()),
+				state,
+				&xenv.BlockContext{GasLimit: b0.Header().GasLimit(), BaseFee: big.NewInt(thor.InitialBaseFee)},
+				&thor.ForkConfig{},
+			)
 			receipt, err := rt.ExecuteTransaction(tt.getTx())
 
 			// Assert
@@ -1026,7 +1047,7 @@ func TestExecuteTransactionPreHayabusa(t *testing.T) {
 
 	tx := GetMockTx(repo, t)
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, forkConfig)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, forkConfig)
 
 	receipt, err := rt.ExecuteTransaction(tx)
 	if err != nil {
@@ -1067,7 +1088,7 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 	tx := GetMockTx(repo, t)
 	fc := thor.NoFork
 	fc.HAYABUSA = 0
-	bc := &xenv.BlockContext{}
+	bc := &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}
 	bc.Number = 1
 
 	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, bc, &fc)
