@@ -205,7 +205,13 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			}
 		}
 		if fromHeader.Number() > toHeader.Number() {
-			return nil, restutil.BadRequest(fmt.Errorf("time range resulted in from block (%d) greater than to block (%d) due to non-monotonic timestamps", fromHeader.Number(), toHeader.Number()))
+			return nil, restutil.BadRequest(
+				fmt.Errorf(
+					"time range resulted in from block (%d) greater than to block (%d) due to non-monotonic timestamps",
+					fromHeader.Number(),
+					toHeader.Number(),
+				),
+			)
 		}
 
 		return &logdb.Range{
