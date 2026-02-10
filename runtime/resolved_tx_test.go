@@ -329,7 +329,7 @@ func clause() *tx.Clause {
 //     by checking isUser before setting credit
 func TestMPPUserRemovedDuringTx(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g, _ := genesis.NewDevnet()
 	stater := state.NewStater(db)
 	parent, _, _, err := g.Build(stater)
 	assert.Nil(t, err)
