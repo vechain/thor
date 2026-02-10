@@ -43,6 +43,7 @@ type Options struct {
 	TargetGasLimit   uint64
 	SkipLogs         bool
 	MinTxPriorityFee uint64
+	WSCProviderURL   string
 }
 
 type Node struct {
@@ -61,6 +62,7 @@ type Node struct {
 
 	logDBFailed       bool
 	initialSynced     bool // true if the initial synchronization process is done
+	wscEnabled        bool
 	bandwidth         bandwidth.Bandwidth
 	maxBlockNum       uint32
 	processLock       sync.Mutex
@@ -109,6 +111,12 @@ func (n *Node) Run(ctx context.Context) error {
 		return err
 	}
 	n.maxBlockNum = maxBlockNum
+
+	wscEnabled, err := n.shouldCheckWeakSubjectivityCheckpoint()
+	if err != nil {
+		return err
+	}
+	n.wscEnabled = wscEnabled
 
 	db, err := leveldb.OpenFile(n.txStashPath, nil)
 	if err != nil {
