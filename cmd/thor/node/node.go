@@ -62,7 +62,7 @@ type Node struct {
 
 	logDBFailed       bool
 	initialSynced     bool // true if the initial synchronization process is done
-	wscRequired       bool
+	wscEnabled        bool
 	bandwidth         bandwidth.Bandwidth
 	maxBlockNum       uint32
 	processLock       sync.Mutex
@@ -112,11 +112,11 @@ func (n *Node) Run(ctx context.Context) error {
 	}
 	n.maxBlockNum = maxBlockNum
 
-	wscRequired, err := n.shouldCheckWeakSubjectivityCheckpoint()
+	wscEnabled, err := n.shouldCheckWeakSubjectivityCheckpoint()
 	if err != nil {
 		return err
 	}
-	n.wscRequired = wscRequired
+	n.wscEnabled = wscEnabled
 
 	db, err := leveldb.OpenFile(n.txStashPath, nil)
 	if err != nil {

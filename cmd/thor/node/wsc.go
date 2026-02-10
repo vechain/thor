@@ -23,14 +23,14 @@ const (
 )
 
 // finalizedStatus loads the finalized block and computes its safe-range status.
-func (n *Node) finalizedStatus() (id thor.Bytes32, safe bool, age time.Duration, err error) {
+func (n *Node) finalizedStatus() (thor.Bytes32, bool, time.Duration, error) {
 	summary, err := n.repo.GetBlockSummary(n.bft.Finalized())
 	if err != nil {
 		return thor.Bytes32{}, false, 0, err
 	}
-	id = summary.Header.ID()
-	safe, age, err = finalizedInSafeRange(time.Now(), summary)
-	return
+	id := summary.Header.ID()
+	safe, age, err := finalizedInSafeRange(time.Now(), summary)
+	return id, safe, age, err
 }
 
 // shouldCheckWeakSubjectivityCheckpoint only enables WSC when a provider URL is configured
