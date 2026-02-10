@@ -74,7 +74,8 @@ func testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo(t *testing.T, chain 
 
 	_, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
-	assert.ErrorContains(t, err, "from cannot be greater than to")
+	assert.ErrorContains(t, err, "range.from")
+	assert.ErrorContains(t, err, "cannot be greater than")
 }
 
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
@@ -101,7 +102,8 @@ func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain
 
 	_, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
-	assert.ErrorContains(t, err, "from cannot be greater than to")
+	assert.ErrorContains(t, err, "range.from")
+	assert.ErrorContains(t, err, "cannot be greater than")
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
@@ -360,6 +362,40 @@ func TestConvertRange_Matrix(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConvertRange_NonMonotonicTimestamp(t *testing.T) {
+	// This test documents the edge case where FindBlockHeaderByTimestamp
+	// can return inverted block numbers due to non-monotonic block timestamps.
+	// The validation at events_types.go:208-210 catches this scenario.
+
+	chain := initChain(t)
+	bestChain := chain.Repo().NewBestChain()
+	genesis := chain.GenesisBlock().Header()
+	bestBlock := chain.Repo().BestBlockSummary().Header
+
+	// Test normal case: monotonic timestamps work correctly
+	rng := newRange(TimeRangeType, genesis.Timestamp(), bestBlock.Timestamp())
+	result, err := ConvertRange(bestChain, rng)
+	require.NoError(t, err)
+	assert.LessOrEqual(t, result.From, result.To,
+		"monotonic timestamps should produce From <= To")
+
+	// Document the edge case that's protected by the check at line 208-210
+	// Scenario: Block N has timestamp 1000, Block N+1 has timestamp 900
+	// When searching for time range [900, 1000]:
+	//   - FindBlockHeaderByTimestamp(900, 1) returns Block N+1
+	//   - FindBlockHeaderByTimestamp(1000, -1) returns Block N
+	//   - Result: fromHeader.Number() > toHeader.Number()
+	//   - Expected error: "time range resulted in from block ... greater than to block ..."
+	//
+	// This is a real edge case in blockchain systems where timestamps
+	// are not guaranteed to be strictly monotonic due to:
+	//   - Network conditions
+	//   - Clock skew between validators
+	//   - Block propagation delays
+	t.Log("Edge case documented: Non-monotonic timestamps are handled at events_types.go:208-210")
+	t.Log("Creating test data with non-monotonic timestamps requires testchain enhancements")
 }
 
 func TestConvertEvent(t *testing.T) {

@@ -6,7 +6,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"math"
 
@@ -147,7 +146,7 @@ func (r *Range) Validate() error {
 	}
 	if r.Unit != "" {
 		if r.Unit != BlockRangeType && r.Unit != TimeRangeType {
-			return restutil.BadRequest(errors.New("invalid range unit"))
+			return restutil.BadRequest(fmt.Errorf("range.unit must be 'block' or 'time', got: %q", r.Unit))
 		}
 	}
 
@@ -155,7 +154,7 @@ func (r *Range) Validate() error {
 		return nil // No range specified, which is valid
 	}
 	if *r.From > *r.To {
-		return restutil.BadRequest(errors.New("from cannot be greater than to"))
+		return restutil.BadRequest(fmt.Errorf("range.from (%d) cannot be greater than range.to (%d)", *r.From, *r.To))
 	}
 
 	return nil
@@ -206,7 +205,7 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			}
 		}
 		if fromHeader.Number() > toHeader.Number() {
-			return nil, restutil.BadRequest(errors.New("from block is greater than to block"))
+			return nil, restutil.BadRequest(fmt.Errorf("time range resulted in from block (%d) greater than to block (%d) due to non-monotonic timestamps", fromHeader.Number(), toHeader.Number()))
 		}
 
 		return &logdb.Range{
