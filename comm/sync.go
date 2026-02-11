@@ -111,6 +111,7 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 	var err error
 	<-co.Parallel(func(queue chan<- func()) {
 		for batch := range rawBatches {
+			metricReceivedBlocksCount().Add(int64(len(batch.rawBlocks)))
 			for i, raw := range batch.rawBlocks {
 				var blk block.Block
 				if err = rlp.DecodeBytes(raw, &blk); err != nil {
@@ -245,6 +246,7 @@ func (c *Communicator) syncTxs(peer *Peer) {
 			peer.logger.Debug("failed to request txs", "err", err)
 			return
 		}
+		metricReceivedTxsCount().Add(int64(len(result)))
 
 		// no more txs
 		if len(result) == 0 {
