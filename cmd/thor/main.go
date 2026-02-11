@@ -187,10 +187,9 @@ func main() {
 			},
 			{
 				Name:      "reprocess",
-				Usage:     "reprocess chain from snapshot data and save to the output directory",
-				ArgsUsage: "<output-dir>",
+				Usage:     "reprocess chain from source instance directory and save to the output directory",
+				ArgsUsage: "<source-instance-dir> <output-dir>",
 				Flags: []cli.Flag{
-					instanceDirFlag,
 					skipLogsFlag,
 					disablePrunerFlag,
 					cacheFlag,
@@ -626,10 +625,11 @@ func masterKeyAction(_ context.Context, ctx *cli.Command) error {
 
 func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	// get output directory from positional argument
-	if ctx.Args().Len() != 1 {
-		return errors.New("output-dir argument is required, e.g. 'thor reprocess /path/to/output'")
+	if ctx.Args().Len() != 2 {
+		return errors.New("source-instance-dir and output-dir arguments are required, e.g. 'thor reprocess /path/to/source /path/to/output'")
 	}
-	outputDir := ctx.Args().First()
+	sourceInstanceDir := ctx.Args().Get(0)
+	outputDir := ctx.Args().Get(1)
 
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
@@ -640,7 +640,6 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	}
 
 	// initialize and verify source database
-	sourceInstanceDir := ctx.String(instanceDirFlag.Name)
 	sourceDB, gene, err := openDBFromInstanceDir(sourceInstanceDir)
 	if err != nil {
 		return errors.Wrap(err, "open source instance directory")
