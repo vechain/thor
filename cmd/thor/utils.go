@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -54,6 +56,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
+)
+
+const (
+	instanceDirVersion = "v4"
 )
 
 func initLogger(ctx *cli.Command) (*slog.LevelVar, error) {
@@ -285,26 +291,25 @@ func makeConfigDir(ctx *cli.Command) (string, error) {
 	return dir, nil
 }
 
-func makeInstanceDir(ctx *cli.Command, gene *genesis.Genesis) (string, error) {
-	dataDir := ctx.String(dataDirFlag.Name)
+func makeInstanceDir(dataDir string, gene *genesis.Genesis, disablePruner bool) (string, error) {
 	if dataDir == "" {
 		return "", fmt.Errorf("unable to infer default data dir, use -%s to specify", dataDirFlag.Name)
 	}
 
 	suffix := ""
-	if ctx.Bool(disablePrunerFlag.Name) {
+	if disablePruner {
 		suffix = "-full"
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v4", gene.ID().Bytes()[24:])+suffix)
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-%s", gene.ID().Bytes()[24:], instanceDirVersion)+suffix)
 	if err := os.MkdirAll(instanceDir, 0o700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
 	return instanceDir, nil
 }
 
-func openMainDB(ctx *cli.Command, dir string) (*muxdb.MuxDB, error) {
-	cacheMB := normalizeCacheSize(int(ctx.Uint64(cacheFlag.Name)))
+func openMainDB(dir string, cacheMB int, disablePruner bool) (*muxdb.MuxDB, error) {
+	cacheMB = normalizeCacheSize(cacheMB)
 	log.Debug("cache size(MB)", "size", cacheMB)
 
 	fdCache := suggestFDCache()
@@ -314,7 +319,7 @@ func openMainDB(ctx *cli.Command, dir string) (*muxdb.MuxDB, error) {
 		TrieNodeCacheSizeMB:        cacheMB,
 		TrieCachedNodeTTL:          30, // 5min
 		TrieDedupedPartitionFactor: math.MaxUint32,
-		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
+		TrieWillCleanHistory:       !disablePruner,
 		OpenFilesCacheCapacity:     fdCache,
 		ReadCacheMB:                256, // rely on os page cache other than huge db read cache.
 		WriteBufferMB:              128,
@@ -710,4 +715,32 @@ func logStartupMessage(message string) {
 		}
 		log.Info(line)
 	}
+}
+
+func openDBFromInstanceDir(instanceDir string) (*muxdb.MuxDB, *genesis.Genesis, error) {
+	instanceDirName := filepath.Base(instanceDir)
+	pattern := fmt.Sprintf(`^instance-([0-9a-f]{16})-%s(-full)?$`, instanceDirVersion)
+	matches := regexp.MustCompile(pattern).FindStringSubmatch(instanceDirName)
+	if matches == nil {
+		return nil, nil, fmt.Errorf("invalid instance directory format, expected format: instance-<16-hex-chars>-%s[-full]", instanceDirVersion)
+	}
+	genesisHash := matches[1]
+	isFull := matches[2] != ""
+
+	var gene *genesis.Genesis
+	switch genesisHash {
+	case hex.EncodeToString(genesis.NewMainnet().ID().Bytes()[24:]):
+		gene = genesis.NewMainnet()
+	case hex.EncodeToString(genesis.NewTestnet().ID().Bytes()[24:]):
+		gene = genesis.NewTestnet()
+	default:
+		return nil, nil, errors.New("unsupported genesis hash, expected: mainnet or testnet")
+	}
+
+	// use smaller cache here, this is the read only database
+	mainDB, err := openMainDB(instanceDir, 512, isFull)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mainDB, gene, nil
 }
