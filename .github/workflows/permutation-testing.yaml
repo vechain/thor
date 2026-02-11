@@ -12,12 +12,12 @@ permissions:
 jobs:
   permutation-test:
     name: Run Permutation Tests
-    # Uses AWS CodeBuild managed runners for higher memory capacity (16GB)
+    # Uses AWS CodeBuild managed runners for higher memory capacity (64GB)
     # The permutation tests are memory-intensive and require more resources than standard GitHub runners
     runs-on:
       - codebuild-ThorGHA-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-3.0
-      - instance-size:large # 8 vCPUs, 16 GiB memory (xlarge: 32 vCPUs, 64 GiB available if needed)
+      - instance-size:xlarge # 32 vCPUs, 64 GiB memory
     timeout-minutes: 240 # 4 hours
     steps:
       - name: Checkout code
