@@ -791,3 +791,57 @@ func TestOverallGasPrice_LegacyWithProvedWork(t *testing.T) {
 	res := trx.OverallGasPrice(baseGasPrice, provedWork)
 	assert.NotNil(t, res)
 }
+
+var (
+	// precomputed secp256k1 N/2 as bytes for benchmark
+	benchHalfNBytes = func() [32]byte {
+		n := crypto.S256().Params().N
+		halfN := new(big.Int).Rsh(n, 1)
+		var result [32]byte
+		halfN.FillBytes(result[:])
+		return result
+	}()
+	// precomputed as big.Int for benchmark
+	benchHalfNBigInt = new(big.Int).Rsh(crypto.S256().Params().N, 1)
+)
+
+func BenchmarkLowSCheck(b *testing.B) {
+	// Generate a realistic S value (32 bytes, close to halfN)
+	sBytes := make([]byte, 32)
+	copy(sBytes, []byte{
+		0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0x5D, 0x57, 0x6E, 0x73, 0x57, 0xA4, 0x50, 0x1D,
+		0xDF, 0xE9, 0x2F, 0x46, 0x68, 0x1B, 0x20, 0x00,
+	})
+
+	b.Run("BigInt", func(b *testing.B) {
+		halfN := benchHalfNBigInt
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			s := new(big.Int).SetBytes(sBytes)
+			_ = s.Cmp(halfN) > 0
+		}
+	})
+
+	b.Run("BigInt_Reuse", func(b *testing.B) {
+		halfN := benchHalfNBigInt
+		s := new(big.Int)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			s.SetBytes(sBytes)
+			_ = s.Cmp(halfN) > 0
+		}
+	})
+
+	b.Run("BytesCompare", func(b *testing.B) {
+		halfN := benchHalfNBytes[:]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			_ = bytes.Compare(sBytes, halfN) > 0
+		}
+	})
+}

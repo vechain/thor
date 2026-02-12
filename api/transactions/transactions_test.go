@@ -323,8 +323,10 @@ func sendTxWithBadFormat(t *testing.T) {
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
-	tx := tx.NewBuilder(tx.TypeLegacy).Build()
-	rlpTx, err := tx.MarshalBinary()
+	trx := tx.NewBuilder(tx.TypeLegacy).Build()
+	trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+	rlpTx, err := trx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}

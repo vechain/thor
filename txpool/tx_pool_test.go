@@ -1691,6 +1691,47 @@ func TestValidateTxBasics(t *testing.T) {
 	repo := pool.repo
 	wrongChainTag := repo.ChainTag() + 1
 
+	// High-S signature (S > secp256k1 N/2)
+	// secp256k1 N/2 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+	// We create a signature with S = 0xFF...FF which is definitely > N/2
+	createHighSTx := func(txType tx.Type) *tx.Transaction {
+		trx := tx.NewBuilder(txType).
+			ChainTag(repo.ChainTag()).
+			Gas(21000).
+			Nonce(1).
+			Build()
+		trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
+
+		// Get the signature and set S to a high value (> N/2)
+		sig := trx.Signature()
+		// Set S (bytes 32-64) to 0xFF...FF (definitely > halfN)
+		for i := 32; i < 64; i++ {
+			sig[i] = 0xFF
+		}
+		return trx.WithSignature(sig)
+	}
+
+	// High-S signature in delegator's signature (bytes 97-129)
+	createDelegatedHighSTx := func(txType tx.Type) *tx.Transaction {
+		var feat tx.Features
+		feat.SetDelegated(true)
+		trx := tx.NewBuilder(txType).
+			ChainTag(repo.ChainTag()).
+			Gas(21000).
+			Nonce(1).
+			Features(feat).
+			Build()
+		trx = tx.MustSignDelegated(trx, devAccounts[0].PrivateKey, devAccounts[1].PrivateKey)
+
+		// Get the signature and set delegator's S to a high value (> N/2)
+		sig := trx.Signature()
+		// Delegator's S is at bytes 65+32 to 65+64 (i.e., 97-129)
+		for i := 97; i < 129; i++ {
+			sig[i] = 0xFF
+		}
+		return trx.WithSignature(sig)
+	}
+
 	tests := []struct {
 		name        string
 		getTx       func() *tx.Transaction
@@ -1699,15 +1740,49 @@ func TestValidateTxBasics(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name:        "invalid legacy tx chain tag",
-			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeLegacy).ChainTag(wrongChainTag).Build() },
+			name:        "legacy tx with high-S signature",
+			getTx:       func() *tx.Transaction { return createHighSTx(tx.TypeLegacy) },
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
+		},
+		{
+			name:        "dyn fee tx with high-S signature",
+			getTx:       func() *tx.Transaction { return createHighSTx(tx.TypeDynamicFee) },
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
+		},
+		{
+			name:        "delegated legacy tx with high-S in delegator signature",
+			getTx:       func() *tx.Transaction { return createDelegatedHighSTx(tx.TypeLegacy) },
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
+		},
+		{
+			name:        "delegated dyn fee tx with high-S in delegator signature",
+			getTx:       func() *tx.Transaction { return createDelegatedHighSTx(tx.TypeDynamicFee) },
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
+		},
+		{
+			name: "invalid legacy tx chain tag",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(wrongChainTag).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
 		},
 		{
-			name:        "invalid dyn fee tx chain tag",
-			getTx:       func() *tx.Transaction { return tx.NewBuilder(tx.TypeDynamicFee).ChainTag(wrongChainTag).Build() },
+			name: "invalid dyn fee tx chain tag",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(wrongChainTag).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
@@ -1720,7 +1795,7 @@ func TestValidateTxBasics(t *testing.T) {
 				for range 50_000 {
 					b.Clause(&tx.Clause{})
 				}
-				return b.Build()
+				return tx.MustSign(b.Build(), devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
@@ -1734,7 +1809,7 @@ func TestValidateTxBasics(t *testing.T) {
 				for range 50_000 {
 					b.Clause(&tx.Clause{})
 				}
-				return b.Build()
+				return tx.MustSign(b.Build(), devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
