@@ -286,6 +286,10 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 
 		totalGasUsed += receipt.GasUsed
+		if totalGasUsed > header.GasLimit() {
+			return nil, nil, consensusError(fmt.Sprintf("executed tx gas exceeds limit: block gas limit %v, gas used %v", header.GasLimit(), totalGasUsed))
+		}
+
 		receipts = append(receipts, receipt)
 		processedTxs[tx.ID()] = receipt.Reverted
 	}

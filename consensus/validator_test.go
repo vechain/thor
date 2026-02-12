@@ -124,7 +124,7 @@ func TestValidateBlock(t *testing.T) {
 						Build(),
 					genesis.DevAccounts()[0].PrivateKey,
 				)
-				blk := new(block.Builder).BaseFee(baseFee).Transaction(tr).Build()
+				blk := new(block.Builder).BaseFee(baseFee).GasLimit(10_000_000).Transaction(tr).Build()
 
 				c := New(repo, stater, &thor.ForkConfig{GALACTICA: 0})
 				s, r, err := c.verifyBlock(blk, state, 0, false)
@@ -141,6 +141,7 @@ func TestValidateBlock(t *testing.T) {
 				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 				blk := new(block.Builder).
 					BaseFee(baseFee).
+					GasLimit(10_000_000).
 					Transaction(tr).
 					GasUsed(21000).
 					ReceiptsRoot(thor.BytesToBytes32(hexutil.MustDecode("0x18e50e1cc2cededa9037a4d89ef5c0147fa104cf15f6a1e97a5ac0cbd4f58422"))).

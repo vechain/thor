@@ -420,6 +420,11 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 		return nil, err
 	}
 
+	// ensure tx respects block boundaries
+	if trx.Gas() > rt.ctx.GasLimit {
+		return nil, errors.New("tx gas exceeds block gas limit")
+	}
+
 	legacyTxBaseGasPrice, effectiveGasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(
 		rt.state,
 		rt.ctx.Time,
