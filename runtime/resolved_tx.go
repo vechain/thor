@@ -169,8 +169,16 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseF
 					return err
 				}
 
-				usedEnergy := new(big.Int).Sub(prepaid, returnedEnergy)
-				return binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockTime)
+				isUser, err := binding.IsUser(r.Origin)
+				if err != nil {
+					return err
+				}
+				if isUser {
+					usedEnergy := new(big.Int).Sub(prepaid, returnedEnergy)
+					return binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockTime)
+				}
+
+				return nil
 			}
 			var sponsor thor.Address
 			if sponsor, err = binding.CurrentSponsor(); err != nil {
