@@ -178,6 +178,12 @@ var (
 		Usage:   "P2P network listening port",
 		Sources: envVar("P2P_PORT"),
 	}
+	disableTempDiscv5Flag = &cli.BoolFlag{
+		Name:    "disable-temp-discv5",
+		Hidden:  true,
+		Usage:   "disable legacy discovery protocol",
+		Sources: envVar("DISCOVERY_TEMP_DISCV5"),
+	}
 	natFlag = &cli.StringFlag{
 		Name:    "nat",
 		Local:   true,

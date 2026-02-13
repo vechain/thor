@@ -41,6 +41,9 @@ type Node interface {
 
 	// APIServer returns the node api server
 	APIServer() *httptest.Server
+
+	// TxPool returns the txpool of the server
+	TxPool() txpool.Pool
 }
 
 // node implements the Node interface
@@ -127,4 +130,8 @@ func (n *node) Chain() *testchain.Chain {
 // APIServer returns the node api server
 func (n *node) APIServer() *httptest.Server {
 	return n.apiServer
+}
+
+func (n *node) TxPool() txpool.Pool {
+	return n.txPool
 }

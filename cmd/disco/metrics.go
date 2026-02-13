@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/vechain/thor/v2/metrics"
-	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p/discv5/discover"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
 )
 
-var metricsPeerCount = metrics.GaugeVec("disco_peercount", []string{"id"})
+var metricsPeerCount = metrics.LazyLoadGaugeVec("disco_peercount", []string{"id", "network"})
 
-func pollMetrics(ctx context.Context, net *discv5.Network) {
+// pollMetrics periodically collects and reports metrics from both discovery networks.
+func pollMetrics(ctx context.Context, discv5 *discover.UDPv5, tempnet *tempdiscv5.Network) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -24,16 +26,26 @@ func pollMetrics(ctx context.Context, net *discv5.Network) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			nodes := make([]*discv5.Node, 1000)
-			net.ReadRandomNodes(nodes)
-			var read int64
-			for _, n := range nodes {
-				if n == nil {
-					break
-				}
-				read++
+			// Collect metrics from discv5 network
+			if discv5 != nil {
+				nodes := discv5.AllNodes()
+				localNode := discv5.LocalNode()
+				metricsPeerCount().SetWithLabel(int64(len(nodes)), map[string]string{
+					"id":      localNode.ID().String(),
+					"network": "discv5",
+				})
 			}
-			metricsPeerCount.SetWithLabel(read, map[string]string{"id": net.Self().ID.String()})
+
+			// Collect metrics from tempdiscv5 network
+			if tempnet != nil {
+				nodes := make([]*tempdiscv5.Node, 1000)
+				count := tempnet.ReadRandomNodes(nodes)
+				localNode := tempnet.Self()
+				metricsPeerCount().SetWithLabel(int64(count), map[string]string{
+					"id":      localNode.ID.String(),
+					"network": "tempdiscv5",
+				})
+			}
 		}
 	}
 }

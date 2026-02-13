@@ -10,18 +10,22 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"net"
 	"os"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v3"
 
 	"github.com/vechain/thor/v2/cmd/thor/httpserver"
+	"github.com/vechain/thor/v2/log"
+
 	"github.com/vechain/thor/v2/metrics"
-	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p/discv5/enode"
 	"github.com/vechain/thor/v2/p2p/nat"
 	"github.com/vechain/thor/v2/p2p/netutil"
+	"github.com/vechain/thor/v2/p2p/tempdiscv5"
+	"github.com/vechain/thor/v2/p2psrv"
 )
 
 var (
@@ -39,6 +43,7 @@ var (
 		verbosityFlag,
 		enableMetricsFlag,
 		metricsAddrFlag,
+		disableTempDiscv5Flag,
 	}
 )
 
@@ -49,24 +54,24 @@ func run(_ context.Context, ctx *cli.Command) error {
 	}
 	initLogger(lvl)
 
-	natm, err := nat.Parse(ctx.String("nat"))
+	natm, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "-nat")
 	}
 
 	var key *ecdsa.PrivateKey
 
-	if keyHex := ctx.String("keyhex"); keyHex != "" {
+	if keyHex := ctx.String(keyHexFlag.Name); keyHex != "" {
 		if key, err = crypto.HexToECDSA(keyHex); err != nil {
 			return errors.Wrap(err, "-keyhex")
 		}
 	} else {
-		if key, err = loadOrGenerateKeyFile(ctx.String("keyfile")); err != nil {
+		if key, err = loadOrGenerateKeyFile(ctx.String(keyFileFlag.Name)); err != nil {
 			return errors.Wrap(err, "-keyfile")
 		}
 	}
 
-	netrestrict := ctx.String("netrestrict")
+	netrestrict := ctx.String(netRestrictFlag.Name)
 	var restrictList *netutil.Netlist
 	if netrestrict != "" {
 		restrictList, err = netutil.ParseNetlist(netrestrict)
@@ -75,46 +80,52 @@ func run(_ context.Context, ctx *cli.Command) error {
 		}
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", ctx.String("addr"))
-	if err != nil {
-		return errors.Wrap(err, "-addr")
+	enableTempDiscv5 := !ctx.Bool(disableTempDiscv5Flag.Name)
+
+	opts := &p2psrv.Options{
+		Name:        common.MakeName("thor", version),
+		PrivateKey:  key,
+		ListenAddr:  ctx.String("addr"),
+		NAT:         natm,
+		DiscV5:      true,
+		TempDiscV5:  enableTempDiscv5,
+		NetRestrict: restrictList,
+		NoDial:      true,
 	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
+
+	srv := p2psrv.New(opts, func(node *enode.Node) bool {
+		// allow all nodes to be added
+		return true
+	})
+
+	topic := tempdiscv5.Topic("disco")
+	if err := srv.Start(nil, &topic); err != nil {
 		return err
 	}
 
-	realAddr := conn.LocalAddr().(*net.UDPAddr)
-	if natm != nil {
-		if !realAddr.IP.IsLoopback() {
-			go nat.Map(natm, nil, "udp", realAddr.Port, realAddr.Port, "ethereum discovery")
-		}
-		// TODO: react to external IP changes over time.
-		if ext, err := natm.ExternalIP(); err == nil {
-			realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
-		}
-	}
-	network, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
-	if err != nil {
-		return err
-	}
-	defer network.Close()
-	fmt.Println("Running", network.Self().String())
-
-	exitSignal := handleExitSignal()
-
+	// Initialize metrics if enabled
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		metricsAddr := ctx.String(metricsAddrFlag.Name)
+		url, metricsCloser, err := httpserver.StartMetricsServer(metricsAddr)
 		if err != nil {
-			return fmt.Errorf("unable to start metrics server - %w", err)
+			return errors.Wrap(err, "start metrics server")
 		}
-		fmt.Println("metrics server listening", url)
-		defer closeFunc()
-		go pollMetrics(exitSignal, network)
+		defer metricsCloser()
+		log.Info("metrics server started", "url", url)
+
+		// Start metrics polling in a goroutine
+		metricsCtx, metricsCancel := context.WithCancel(context.Background())
+		defer metricsCancel()
+		go pollMetrics(metricsCtx, srv.DiscV5(), srv.TempDiscV5())
 	}
 
+	log.Info("p2p server started", "self", srv.Self().String())
+
+	exitSignal := handleExitSignal()
 	<-exitSignal.Done()
+
+	srv.Stop()
 
 	return nil
 }

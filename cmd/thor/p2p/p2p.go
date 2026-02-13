@@ -15,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/p2p/discv5/enode"
+	"github.com/vechain/thor/v2/p2p/enr"
 	"github.com/vechain/thor/v2/p2p/nat"
 
 	"github.com/vechain/thor/v2/comm"
@@ -41,6 +43,8 @@ func New(
 	allowedPeers []*discover.Node,
 	cachedPeers []*discover.Node,
 	bootstrapNodes []*discover.Node,
+	enableTempDiscV5 bool,
+	enableDiscV5 bool,
 ) *P2P {
 	// known peers will be loaded/stored from/in this file
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
@@ -56,11 +60,14 @@ func New(
 		DiscoveryNodes:      fallbackDiscoveryNodes,
 		RemoteDiscoveryList: remoteDiscoveryNodesList,
 		NAT:                 nat,
+		DiscV5:              enableDiscV5,
+		TempDiscV5:          enableTempDiscV5,
 	}
 
 	// allowed peers flag will only allow p2psrv to connect to the designated peers
 	if len(allowedPeers) > 0 {
-		opts.NoDiscovery = true // disable discovery
+		opts.TempDiscV5 = false // disable discovery
+		opts.DiscV5 = false
 		opts.DiscoveryNodes = nil
 		opts.KnownNodes = allowedPeers
 	} else {
@@ -77,9 +84,19 @@ func New(
 		}
 	}
 
+	topic := communicator.DiscTopic()
 	return &P2P{
-		comm:           communicator,
-		p2pSrv:         p2psrv.New(opts),
+		comm: communicator,
+		p2pSrv: p2psrv.New(opts, func(node *enode.Node) bool {
+			var entry enr.EthEntry
+			if err := node.Load(&entry); err != nil {
+				return false
+			}
+			if string(entry) != string(topic) || string(entry) == "disco" {
+				return false
+			}
+			return true
+		}),
 		peersCachePath: peersCachePath,
 		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&privateKey.PublicKey).Bytes(), listenPort),
 	}
@@ -87,7 +104,8 @@ func New(
 
 func (p *P2P) Start() error {
 	log.Info("starting P2P networking")
-	if err := p.p2pSrv.Start(p.comm.Protocols(), p.comm.DiscTopic()); err != nil {
+	topic := p.comm.DiscTopic()
+	if err := p.p2pSrv.Start(p.comm.Protocols(), &topic); err != nil {
 		return errors.Wrap(err, "start P2P server")
 	}
 	p.comm.Start()
