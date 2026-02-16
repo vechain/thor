@@ -31,29 +31,32 @@ import (
 )
 
 type Accounts struct {
-	repo              *chain.Repository
-	stater            *state.Stater
-	callGasLimit      uint64
-	forkConfig        *thor.ForkConfig
-	bft               bft.Committer
-	enabledDeprecated bool
+	repo                 *chain.Repository
+	stater               *state.Stater
+	callGasLimit         uint64
+	batchResponseMaxSize uint64
+	forkConfig           *thor.ForkConfig
+	bft                  bft.Committer
+	enabledDeprecated    bool
 }
 
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	callGasLimit uint64,
+	batchResponseMaxSize uint64,
 	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
 	enabledDeprecated bool,
 ) *Accounts {
 	return &Accounts{
-		repo,
-		stater,
-		callGasLimit,
-		forkConfig,
-		bft,
-		enabledDeprecated,
+		repo:                 repo,
+		stater:               stater,
+		callGasLimit:         callGasLimit,
+		batchResponseMaxSize: batchResponseMaxSize,
+		forkConfig:           forkConfig,
+		bft:                  bft,
+		enabledDeprecated:    enabledDeprecated,
 	}
 }
 
@@ -302,6 +305,7 @@ func (a *Accounts) batchCall(
 		a.forkConfig)
 
 	results = make(api.BatchCallResults, 0)
+	var accumulatedSize int
 
 	for i, clause := range clauses {
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
@@ -331,7 +335,22 @@ func (a *Accounts) batchCall(
 			return nil, err
 		}
 
-		results = append(results, api.ConvertCallResultWithInputGas(out, gas))
+		result := api.ConvertCallResultWithInputGas(out, gas)
+		results = append(results, result)
+
+		// Check accumulated response size
+		accumulatedSize += len(result.Data)
+		for _, event := range result.Events {
+			accumulatedSize += len(event.Data)
+		}
+		// Estimate transfer size (sender + recipient + amount ~150 bytes each in JSON)
+		accumulatedSize += len(result.Transfers) * 150
+
+		if uint64(accumulatedSize) > a.batchResponseMaxSize {
+			return nil, restutil.BadRequest(
+				fmt.Errorf("batch response size exceeds limit of %d bytes", a.batchResponseMaxSize))
+		}
+
 		if out.VMErr != nil {
 			return results, nil
 		}

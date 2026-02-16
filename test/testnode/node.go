@@ -76,7 +76,7 @@ func (n *node) Start() error {
 	forkConfig := n.chain.GetForkConfig()
 	engine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
 
-	accounts.New(repo, stater, 40_000_000, forkConfig, engine, true).Mount(router, "/accounts")
+	accounts.New(repo, stater, 40_000_000, 5*1024*1024, forkConfig, engine, true).Mount(router, "/accounts")
 	events.New(repo, logDB, 1000, 10).Mount(router, "/logs/event")
 	transfers.New(repo, logDB, 1000, 10).Mount(router, "/logs/transfer")
 	blocks.New(repo, engine).Mount(router, "/blocks")

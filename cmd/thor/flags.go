@@ -78,6 +78,13 @@ var (
 		Usage:   "limit contract call gas",
 		Sources: envVar("API_CALL_GAS_LIMIT"),
 	}
+	apiBatchResponseMaxSizeFlag = &cli.Uint64Flag{
+		Name:    "api-batch-response-max-size",
+		Local:   true,
+		Value:   5 * 1024 * 1024,
+		Usage:   "maximum response size for batch calls in bytes",
+		Sources: envVar("API_BATCH_RESPONSE_MAX_SIZE"),
+	}
 	apiBacktraceLimitFlag = &cli.Uint64Flag{
 		Name:    "api-backtrace-limit",
 		Local:   true,
