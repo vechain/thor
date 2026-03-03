@@ -68,10 +68,11 @@ jobs:
           retention-days: 14
 
   run-hayabusa-tests:
-    uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@release/hayabusa
+    uses: vechain/hayabusa-e2e/.github/workflows/run-tests.yaml@main
     with:
       codebuild-name: codebuild-ThorGHA
       thor-branch: ${{ github.ref }}
+      thor-repo: ${{ github.repository }}
     permissions:
       contents: read
     secrets: inherit
