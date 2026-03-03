@@ -944,6 +944,42 @@ func TestBeforeVIP191Add(t *testing.T) {
 	assert.Equal(t, "tx rejected: unsupported features", err.Error())
 }
 
+func TestStrictlyAddMaxTxGasLimit(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
+	defer pool.Close()
+
+	acc := devAccounts[0]
+
+	err := pool.StrictlyAdd(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc))
+	assert.Equal(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+
+	err = pool.StrictlyAdd(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc))
+	assert.Equal(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+}
+
+func TestValidateTxBasicsMaxTxGasLimitForkAware(t *testing.T) {
+	fc := thor.NoFork
+	fc.INTERSTELLAR = 2
+
+	tchain, err := testchain.NewWithFork(&fc, 180)
+	require.NoError(t, err)
+
+	pool := New(tchain.Repo(), tchain.Stater(), Options{
+		Limit:           LIMIT,
+		LimitPerAccount: LIMIT_PER_ACCOUNT,
+		MaxLifetime:     time.Hour,
+	}, &fc)
+	defer pool.Close()
+
+	overLimitLegacyTx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+
+	assert.NoError(t, pool.validateTxBasics(overLimitLegacyTx))
+
+	require.NoError(t, tchain.MintBlock())
+	err = pool.validateTxBasics(overLimitLegacyTx)
+	assert.Equal(t, badTxError{"tx gas limit exceeds the maximum allowed"}, err)
+}
+
 func TestPoolLimit(t *testing.T) {
 	// synced
 	pool := newPoolWithParams(2, 1, "", "", uint64(time.Now().Unix()), &thor.NoFork)
@@ -1814,6 +1850,36 @@ func TestValidateTxBasics(t *testing.T) {
 			head:        &chain.BlockSummary{},
 			forkConfig:  &thor.NoFork,
 			expectedErr: txRejectedError{"size too large"},
+		},
+		{
+			name: "legacy tx gas at max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: nil,
+		},
+		{
+			name: "legacy tx gas exceeds max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit + 1).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
+		},
+		{
+			name: "dyn fee tx gas exceeds max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit + 1).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			forkConfig:  &thor.NoFork,
+			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
 		},
 	}
 
