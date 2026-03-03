@@ -206,14 +206,14 @@ func CustomNetWithParams(
 	proposerEndorsement HexOrDecimal256,
 ) CustomGenesis {
 	defaultFC := thor.ForkConfig{
-		VIP191:    math.MaxUint32,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: math.MaxUint32,
-		ETH_IST:   math.MaxUint32,
-		VIP214:    math.MaxUint32,
-		FINALITY:  0,
-		GALACTICA: math.MaxUint32,
-		HAYABUSA:  math.MaxUint32,
+		VIP191:       math.MaxUint32,
+		ETH_CONST:    math.MaxUint32,
+		BLOCKLIST:    math.MaxUint32,
+		ETH_IST:      math.MaxUint32,
+		VIP214:       math.MaxUint32,
+		FINALITY:     0,
+		GALACTICA:    math.MaxUint32,
+		HAYABUSA:     math.MaxUint32,
 		INTERSTELLAR: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
