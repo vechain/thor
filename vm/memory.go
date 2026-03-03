@@ -106,6 +106,18 @@ func (m *Memory) Data() []byte {
 	return m.store
 }
 
+// Copy copies data from the src position slice into the dst position.
+// The source and destination may overlap.
+func (m *Memory) Copy(dst, src, len uint64) {
+	if len == 0 {
+		return
+	}
+	if src+len > uint64(m.Len()) || dst+len > uint64(m.Len()) {
+		panic("invalid memory: store empty")
+	}
+	copy(m.store[dst:], m.store[src:src+len])
+}
+
 // Print dumps the content of the memory.
 func (m *Memory) Print() {
 	fmt.Printf("### mem %d bytes ###\n", len(m.store))
