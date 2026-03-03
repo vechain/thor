@@ -32,6 +32,7 @@ const (
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
 
+	MaxTxGasLimit             uint64 = 1 << 24                // 16,777,216 - EIP-7825 per-transaction gas cap
 	MaxTxWorkDelay            uint32 = 30                     // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
 	TolerableBlockPackingTime        = 500 * time.Millisecond // the indicator to adjust target block gas limit
 	MaxStateHistory                  = 65535                  // max guaranteed state history allowed to be accessed in EVM, presented in block number

@@ -14,14 +14,15 @@ import (
 // nolint: revive
 // ForkConfig config for a fork.
 type ForkConfig struct {
-	VIP191    uint32
-	ETH_CONST uint32
-	BLOCKLIST uint32
-	ETH_IST   uint32
-	VIP214    uint32
-	FINALITY  uint32
-	HAYABUSA  uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
-	GALACTICA uint32
+	VIP191       uint32
+	ETH_CONST    uint32
+	BLOCKLIST    uint32
+	ETH_IST      uint32
+	VIP214       uint32
+	FINALITY     uint32
+	HAYABUSA     uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
+	GALACTICA    uint32
+	INTERSTELLAR uint32
 }
 
 func (fc *ForkConfig) String() string {
@@ -40,57 +41,62 @@ func (fc *ForkConfig) String() string {
 	push("FINALITY", fc.FINALITY)
 	push("GALACTICA", fc.GALACTICA)
 	push("HAYABUSA", fc.HAYABUSA)
+	push("INTERSTELLAR", fc.INTERSTELLAR)
 
 	return strings.Join(strs, ", ")
 }
 
 // NoFork a special config without any forks.
 var NoFork = ForkConfig{
-	VIP191:    math.MaxUint32,
-	ETH_CONST: math.MaxUint32,
-	BLOCKLIST: math.MaxUint32,
-	ETH_IST:   math.MaxUint32,
-	VIP214:    math.MaxUint32,
-	FINALITY:  math.MaxUint32,
-	GALACTICA: math.MaxUint32,
-	HAYABUSA:  math.MaxUint32,
+	VIP191:       math.MaxUint32,
+	ETH_CONST:    math.MaxUint32,
+	BLOCKLIST:    math.MaxUint32,
+	ETH_IST:      math.MaxUint32,
+	VIP214:       math.MaxUint32,
+	FINALITY:     math.MaxUint32,
+	GALACTICA:    math.MaxUint32,
+	HAYABUSA:     math.MaxUint32,
+	INTERSTELLAR: math.MaxUint32,
 }
 
 // SoloFork is used to define the solo fork config.
 var SoloFork = ForkConfig{
-	VIP191:    0,
-	ETH_CONST: 0,
-	BLOCKLIST: 0,
-	ETH_IST:   0,
-	VIP214:    0,
-	FINALITY:  0,
-	GALACTICA: 0,
-	HAYABUSA:  0,
+	VIP191:       0,
+	ETH_CONST:    0,
+	BLOCKLIST:    0,
+	ETH_IST:      0,
+	VIP214:       0,
+	FINALITY:     0,
+	GALACTICA:    0,
+	HAYABUSA:     0,
+	INTERSTELLAR: 0,
 }
 
 // for well-known networks
 var forkConfigs = map[Bytes32]*ForkConfig{
 	// mainnet
 	MustParseBytes32("0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"): {
-		VIP191:    3_337_300,
-		ETH_CONST: 3_337_300,
-		BLOCKLIST: 4_817_300,
-		ETH_IST:   9_254_300,
-		VIP214:    10_653_500,
-		FINALITY:  13_815_000,
-		GALACTICA: 22_084_200, // ~ Tue, 01 Jul 2025 12:00:00 UTC
-		HAYABUSA:  23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
+		VIP191:       3_337_300,
+		ETH_CONST:    3_337_300,
+		BLOCKLIST:    4_817_300,
+		ETH_IST:      9_254_300,
+		VIP214:       10_653_500,
+		FINALITY:     13_815_000,
+		GALACTICA:    22_084_200, // ~ Tue, 01 Jul 2025 12:00:00 UTC
+		HAYABUSA:     23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
+		INTERSTELLAR: math.MaxUint32,
 	},
 	// testnet
 	MustParseBytes32("0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127"): {
-		VIP191:    2_898_800,
-		ETH_CONST: 3_192_500,
-		BLOCKLIST: math.MaxUint32,
-		ETH_IST:   9_146_700,
-		VIP214:    10_606_800,
-		FINALITY:  13_086_360,
-		GALACTICA: 21_770_500, // ~ Tue, 20 May 2025 12:00:00 UTC
-		HAYABUSA:  23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
+		VIP191:       2_898_800,
+		ETH_CONST:    3_192_500,
+		BLOCKLIST:    math.MaxUint32,
+		ETH_IST:      9_146_700,
+		VIP214:       10_606_800,
+		FINALITY:     13_086_360,
+		GALACTICA:    21_770_500, // ~ Tue, 20 May 2025 12:00:00 UTC
+		HAYABUSA:     23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
+		INTERSTELLAR: math.MaxUint32,
 	},
 }
 
