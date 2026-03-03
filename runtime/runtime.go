@@ -101,6 +101,7 @@ func New(
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
+	currentChainConfig.DencunBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
@@ -423,6 +424,10 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 	// ensure tx respects block boundaries
 	if trx.Gas() > rt.ctx.GasLimit {
 		return nil, errors.New("tx gas exceeds block gas limit")
+	}
+
+	if rt.ctx.Number >= rt.forkConfig.INTERSTELLAR && trx.Gas() > thor.MaxTxGasLimit {
+		return nil, errors.New("tx gas limit exceeds the maximum allowed")
 	}
 
 	legacyTxBaseGasPrice, effectiveGasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(

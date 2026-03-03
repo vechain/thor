@@ -83,6 +83,46 @@ func TestValidateBlockBody(t *testing.T) {
 			forkConfig:    &thor.ForkConfig{GALACTICA: 0},
 			expectedError: nil,
 		},
+		{
+			name: "tx gas at max limit after interstellar fork",
+			getBlock: func() *block.Block {
+				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Gas(thor.MaxTxGasLimit).Build()
+				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+				return new(block.Builder).Transaction(tr).Build()
+			},
+			forkConfig:    &thor.ForkConfig{INTERSTELLAR: 0},
+			expectedError: nil,
+		},
+		{
+			name: "tx gas exceeds max limit after interstellar fork",
+			getBlock: func() *block.Block {
+				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Gas(thor.MaxTxGasLimit + 1).Build()
+				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+				return new(block.Builder).Transaction(tr).Build()
+			},
+			forkConfig:    &thor.ForkConfig{INTERSTELLAR: 0},
+			expectedError: consensusError("tx gas limit exceeds the maximum allowed: 16777217"),
+		},
+		{
+			name: "tx gas exceeds max limit before interstellar fork",
+			getBlock: func() *block.Block {
+				tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Gas(thor.MaxTxGasLimit + 1).Build()
+				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+				return new(block.Builder).Transaction(tr).Build()
+			},
+			forkConfig:    &thor.ForkConfig{INTERSTELLAR: 10},
+			expectedError: nil,
+		},
+		{
+			name: "dyn fee tx gas exceeds max limit after interstellar fork",
+			getBlock: func() *block.Block {
+				tr := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Expiration(10).Gas(thor.MaxTxGasLimit + 1).Build()
+				tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+				return new(block.Builder).Transaction(tr).Build()
+			},
+			forkConfig:    &thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 0},
+			expectedError: consensusError("tx gas limit exceeds the maximum allowed: 16777217"),
+		},
 	}
 
 	for _, tt := range tests {

@@ -256,6 +256,46 @@ func TestMemoryRevert(t *testing.T) {
 	}
 }
 
+// Test for memoryMcopy function
+func TestMemoryMcopy(t *testing.T) {
+	tests := []struct {
+		name      string
+		stackData []int64
+		expected  uint64
+		overflow  bool
+	}{
+		{
+			name:      "dst > src",
+			stackData: []int64{32, 32, 0},
+			expected:  64,
+		},
+		{
+			name:      "src > dst",
+			stackData: []int64{32, 0, 32},
+			expected:  64,
+		},
+		{
+			name:      "same offset",
+			stackData: []int64{32, 0, 0},
+			expected:  32,
+		},
+		{
+			name:      "zero length",
+			stackData: []int64{0, 10, 20},
+			expected:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stack := mockStack(tt.stackData...)
+			got, overflow := memoryMcopy(stack)
+			assert.Equal(t, tt.overflow, overflow)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 // Test for memoryLog function
 func TestMemoryLog(t *testing.T) {
 	stack := mockStack(10, 32) // Example stack data

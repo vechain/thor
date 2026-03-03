@@ -108,6 +108,7 @@ func TestGasFunctions(t *testing.T) {
 		{gasPush, 0, uint64(0x3)},
 		{gasSwap, 0, uint64(0x3)},
 		{gasDup, 0, uint64(0x3)},
+		{gasMcopy, 0, uint64(0x1800000000000003)},
 	}
 
 	for _, test := range tests {
@@ -145,4 +146,99 @@ func TestGasLog(t *testing.T) {
 
 	gas, _ := gasFunc(params.GasTable{}, evm, &Contract{}, stack, &Memory{}, 0)
 	assert.Equal(t, gas, uint64(0x0))
+}
+
+func TestGasMcopyOverflow(t *testing.T) {
+	t.Run("length overflows uint64", func(t *testing.T) {
+		stack := newstack()
+		// length that doesn't fit in uint64 → Uint64WithOverflow returns true
+		hugeLength := new(uint256.Int).Lsh(uint256.NewInt(1), 64)
+		stack.push(hugeLength)        // length (stack.Back(2) after dst/src pushed)
+		stack.push(uint256.NewInt(0)) // src
+		stack.push(uint256.NewInt(0)) // dst
+
+		_, err := gasMcopy(params.GasTable{}, nil, nil, stack, &Memory{}, 0)
+		assert.ErrorIs(t, err, ErrGasUintOverflow)
+		returnStack(stack)
+	})
+
+	t.Run("memorySize overflows gas calculation", func(t *testing.T) {
+		stack := newstack()
+		stack.push(uint256.NewInt(32)) // length
+		stack.push(uint256.NewInt(0))  // src
+		stack.push(uint256.NewInt(0))  // dst
+
+		// memorySize > 0xffffffffe0 triggers overflow in memoryGasCost
+		_, err := gasMcopy(params.GasTable{}, nil, nil, stack, &Memory{}, 0xffffffffe1)
+		assert.ErrorIs(t, err, ErrGasUintOverflow)
+		returnStack(stack)
+	})
+}
+
+func TestGasMcopy(t *testing.T) {
+	tests := []struct {
+		name       string
+		dst        uint64
+		src        uint64
+		length     uint64
+		memorySize uint64
+		memLen     int
+		expected   uint64
+	}{
+		{
+			name: "zero length copy",
+			dst:  0, src: 0, length: 0,
+			memorySize: 0,
+			memLen:     0,
+			// Gverylow(3) + 0 words * CopyGas(3) = 3
+			expected: 3,
+		},
+		{
+			name: "32 bytes pre-expanded memory",
+			dst:  0, src: 32, length: 32,
+			memorySize: 64,
+			memLen:     64,
+			// Gverylow(3) + 1 word * CopyGas(3) + 0 expansion = 6
+			expected: 6,
+		},
+		{
+			name: "32 bytes needs expansion",
+			dst:  0, src: 32, length: 32,
+			memorySize: 64,
+			memLen:     0,
+			// expansion: 2 words → linCoef=6, quadCoef=0, fee=6
+			// Gverylow(3) + 1 word * CopyGas(3) + 6 expansion = 12
+			expected: 12,
+		},
+		{
+			name: "8 bytes overlapping copy pre-expanded",
+			dst:  0, src: 1, length: 8,
+			memorySize: 32,
+			memLen:     32,
+			// Gverylow(3) + 1 word * CopyGas(3) + 0 expansion = 6
+			expected: 6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stack := newstack()
+			stack.push(uint256.NewInt(tt.length))
+			stack.push(uint256.NewInt(tt.src))
+			stack.push(uint256.NewInt(tt.dst))
+
+			mem := NewMemory()
+			if tt.memLen > 0 {
+				mem.Resize(uint64(tt.memLen))
+				// Pre-charge lastGasCost to simulate prior expansion
+				memoryGasCost(mem, uint64(tt.memLen))
+			}
+
+			gas, err := gasMcopy(params.GasTable{}, nil, nil, stack, mem, tt.memorySize)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, gas)
+
+			returnStack(stack)
+		})
+	}
 }
