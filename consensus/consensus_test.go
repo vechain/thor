@@ -87,14 +87,15 @@ func newTestConsensus() (*testConsensus, error) {
 	}
 
 	forkConfig := thor.ForkConfig{
-		BLOCKLIST: 0,
-		VIP191:    1,
-		VIP214:    2,
-		ETH_CONST: math.MaxUint32,
-		ETH_IST:   math.MaxUint32,
-		FINALITY:  math.MaxUint32,
-		GALACTICA: math.MaxUint32,
-		HAYABUSA:  math.MaxUint32,
+		BLOCKLIST:    0,
+		VIP191:       1,
+		VIP214:       2,
+		ETH_CONST:    math.MaxUint32,
+		ETH_IST:      math.MaxUint32,
+		FINALITY:     math.MaxUint32,
+		GALACTICA:    math.MaxUint32,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
 	}
 	forkConfig.GALACTICA = 5
 

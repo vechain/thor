@@ -134,3 +134,36 @@ func TestInterpreterMcopy_Run(t *testing.T) {
 	}
 	assert.Equal(t, expected, ret)
 }
+
+func TestInterpreterMcopyRunWithOverflow(t *testing.T) {
+	jt := NewDencunInstructionSet()
+	interpreter := GetNewInterpreter(jt)
+
+	testCases := []struct {
+		name          string
+		typeCode      []byte
+		expectedError string
+	}{
+		{
+			name:          "no error",
+			typeCode:      []byte{byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(MCOPY), byte(STOP)},
+			expectedError: "",
+		},
+		{
+			name:          "length overflow",
+			typeCode:      []byte{byte(PUSH1), 0x01, byte(PUSH1), 0x00, byte(PUSH8), 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, byte(MCOPY), byte(STOP)},
+			expectedError: ErrGasUintOverflow.Error(),
+		},
+	}
+
+	for _, tt := range testCases {
+		contract := GetNewContractFromBytecode(tt.typeCode)
+		ret, err := interpreter.Run(contract, nil)
+		if tt.expectedError != "" {
+			assert.ErrorIs(t, err, ErrGasUintOverflow)
+		} else {
+			assert.NoError(t, err)
+			assert.Nil(t, ret)
+		}
+	}
+}

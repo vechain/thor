@@ -14,14 +14,15 @@ import (
 // nolint: revive
 // ForkConfig config for a fork.
 type ForkConfig struct {
-	VIP191    uint32
-	ETH_CONST uint32
-	BLOCKLIST uint32
-	ETH_IST   uint32
-	VIP214    uint32
-	FINALITY  uint32
-	HAYABUSA  uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
-	GALACTICA uint32
+	VIP191       uint32
+	ETH_CONST    uint32
+	BLOCKLIST    uint32
+	ETH_IST      uint32
+	VIP214       uint32
+	FINALITY     uint32
+	HAYABUSA     uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
+	GALACTICA    uint32
+	INTERSTELLAR uint32
 }
 
 func (fc *ForkConfig) String() string {
@@ -40,32 +41,35 @@ func (fc *ForkConfig) String() string {
 	push("FINALITY", fc.FINALITY)
 	push("GALACTICA", fc.GALACTICA)
 	push("HAYABUSA", fc.HAYABUSA)
+	push("INTERSTELLAR", fc.INTERSTELLAR)
 
 	return strings.Join(strs, ", ")
 }
 
 // NoFork a special config without any forks.
 var NoFork = ForkConfig{
-	VIP191:    math.MaxUint32,
-	ETH_CONST: math.MaxUint32,
-	BLOCKLIST: math.MaxUint32,
-	ETH_IST:   math.MaxUint32,
-	VIP214:    math.MaxUint32,
-	FINALITY:  math.MaxUint32,
-	GALACTICA: math.MaxUint32,
-	HAYABUSA:  math.MaxUint32,
+	VIP191:       math.MaxUint32,
+	ETH_CONST:    math.MaxUint32,
+	BLOCKLIST:    math.MaxUint32,
+	ETH_IST:      math.MaxUint32,
+	VIP214:       math.MaxUint32,
+	FINALITY:     math.MaxUint32,
+	GALACTICA:    math.MaxUint32,
+	HAYABUSA:     math.MaxUint32,
+	INTERSTELLAR: math.MaxUint32,
 }
 
 // SoloFork is used to define the solo fork config.
 var SoloFork = ForkConfig{
-	VIP191:    0,
-	ETH_CONST: 0,
-	BLOCKLIST: 0,
-	ETH_IST:   0,
-	VIP214:    0,
-	FINALITY:  0,
-	GALACTICA: 0,
-	HAYABUSA:  0,
+	VIP191:       0,
+	ETH_CONST:    0,
+	BLOCKLIST:    0,
+	ETH_IST:      0,
+	VIP214:       0,
+	FINALITY:     0,
+	GALACTICA:    0,
+	HAYABUSA:     0,
+	INTERSTELLAR: 0,
 }
 
 // for well-known networks
