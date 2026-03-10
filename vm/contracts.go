@@ -20,8 +20,12 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"maps"
 	"math/big"
 
+	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,6 +35,8 @@ import (
 	"golang.org/x/crypto/ripemd160"
 
 	"github.com/vechain/thor/v2/thor"
+
+	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -93,7 +99,28 @@ var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
+// PrecompiledContractsPectra contains the default set of pre-compiled Ethereum
+// contracts used in the Pectra release.
+// NOTE: Pectra bundles Ethereum Dencun (TLOAD/TSTORE/MCOPY opcodes, no KZG precompile)
+// and Prague (EIP-2537 BLS12-381 precompiles) into a single Thor fork (INTERSTELLAR).
+// It is built from PrecompiledContractsShanghai extended with EIP-2537 entries in init().
+//
+// Address 10 (0x0a) — EIP-4844 KZG point evaluation — is intentionally absent.
+// KZG is not applicable to VeChain (no blob transactions).
+// Addresses 11–17 (0x0b–0x11) are the EIP-2537 BLS12-381 precompiles.
+var PrecompiledContractsPectra = map[common.Address]PrecompiledContract{
+	// EIP-2537: BLS12-381 curve operations (Prague)
+	common.BytesToAddress([]byte{11}): &bls12381G1Add{},
+	common.BytesToAddress([]byte{12}): &bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{13}): &bls12381G2Add{},
+	common.BytesToAddress([]byte{14}): &bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{15}): &bls12381Pairing{},
+	common.BytesToAddress([]byte{16}): &bls12381MapG1{},
+	common.BytesToAddress([]byte{17}): &bls12381MapG2{},
+}
+
 var (
+	PrecompiledAddressesPectra    []common.Address
 	PrecompiledAddressesShanghai  []common.Address
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
@@ -113,11 +140,18 @@ func init() {
 	for k := range PrecompiledContractsShanghai {
 		PrecompiledAddressesShanghai = append(PrecompiledAddressesShanghai, k)
 	}
+	// Pectra inherits all Shanghai precompiles and adds BLS12-381 entries.
+	maps.Copy(PrecompiledContractsPectra, PrecompiledContractsShanghai)
+	for k := range PrecompiledContractsPectra {
+		PrecompiledAddressesPectra = append(PrecompiledAddressesPectra, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules Rules) []common.Address {
 	switch {
+	case rules.IsPectra:
+		return PrecompiledAddressesPectra
 	case rules.IsShanghai:
 		return PrecompiledAddressesShanghai
 	case rules.IsIstanbul:
@@ -598,4 +632,370 @@ func (c *blake2F) Run(input []byte) ([]byte, error) {
 		binary.LittleEndian.PutUint64(output[offset:offset+8], h[i])
 	}
 	return output, nil
+}
+
+// bls12381 error sentinels
+var (
+	errBLS12381InvalidInputLength          = errors.New("invalid input length")
+	errBLS12381InvalidFieldElementTopBytes = errors.New("invalid field element top bytes")
+	errBLS12381G1PointSubgroup             = errors.New("g1 point is not on correct subgroup")
+	errBLS12381G2PointSubgroup             = errors.New("g2 point is not on correct subgroup")
+)
+
+// bls12381G1Add implements EIP-2537 G1Add precompile.
+type bls12381G1Add struct{}
+
+func (c *bls12381G1Add) RequiredGas(_ []byte) uint64 {
+	return Bls12381G1AddGas
+}
+
+func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
+	// Implements EIP-2537 G1Add precompile.
+	// > G1 addition call expects `256` bytes as an input that is interpreted as byte concatenation of two G1 points (`128` bytes each).
+	// > Output is an encoding of addition operation result - single G1 point (`128` bytes).
+	if len(input) != 256 {
+		return nil, errBLS12381InvalidInputLength
+	}
+	var err error
+	var p0, p1 *bls12381.G1Affine
+
+	// Decode G1 point p_0
+	if p0, err = decodePointG1(input[:128]); err != nil {
+		return nil, err
+	}
+	// Decode G1 point p_1
+	if p1, err = decodePointG1(input[128:]); err != nil {
+		return nil, err
+	}
+
+	// No need to check the subgroup here, as specified by EIP-2537
+
+	// Compute r = p_0 + p_1
+	p0.Add(p0, p1)
+
+	// Encode the G1 point result into 128 bytes
+	return encodePointG1(p0), nil
+}
+
+// bls12381G1MultiExp implements EIP-2537 G1MultiExp precompile.
+type bls12381G1MultiExp struct{}
+
+func (c *bls12381G1MultiExp) RequiredGas(input []byte) uint64 {
+	k := len(input) / 160
+	if k == 0 {
+		return 0
+	}
+	var discount uint64
+	if dLen := len(Bls12381G1MultiExpDiscountTable); k < dLen {
+		discount = Bls12381G1MultiExpDiscountTable[k-1]
+	} else {
+		discount = Bls12381G1MultiExpDiscountTable[dLen-1]
+	}
+	return (uint64(k) * Bls12381G1MulGas * discount) / 1000
+}
+
+func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
+	// Implements EIP-2537 G1MultiExp precompile.
+	// G1 multiplication call expects `160*k` bytes as an input that is interpreted as byte concatenation of `k` slices each of them being a byte concatenation
+	// of encoding of G1 point (`128` bytes) and encoding of a scalar value (`32` bytes).
+	// Output is an encoding of multiexponentiation operation result - single G1 point (`128` bytes).
+	k := len(input) / 160
+	if len(input) == 0 || len(input)%160 != 0 {
+		return nil, errBLS12381InvalidInputLength
+	}
+	points := make([]bls12381.G1Affine, k)
+	scalars := make([]fr.Element, k)
+
+	for i := range k {
+		off := 160 * i
+		t0, t1, t2 := off, off+128, off+160
+		p, err := decodePointG1(input[t0:t1])
+		if err != nil {
+			return nil, err
+		}
+		if !p.IsInSubGroup() {
+			return nil, errBLS12381G1PointSubgroup
+		}
+		points[i] = *p
+		scalars[i] = *new(fr.Element).SetBytes(input[t1:t2])
+	}
+
+	r := new(bls12381.G1Affine)
+	r.MultiExp(points, scalars, ecc.MultiExpConfig{})
+
+	return encodePointG1(r), nil
+}
+
+// bls12381G2Add implements EIP-2537 G2Add precompile.
+type bls12381G2Add struct{}
+
+func (c *bls12381G2Add) RequiredGas(_ []byte) uint64 {
+	return Bls12381G2AddGas
+}
+
+func (c *bls12381G2Add) Run(input []byte) ([]byte, error) {
+	// Implements EIP-2537 G2Add precompile.
+	// > G2 addition call expects `512` bytes as an input that is interpreted as byte concatenation of two G2 points (`256` bytes each).
+	// > Output is an encoding of addition operation result - single G2 point (`256` bytes).
+	if len(input) != 512 {
+		return nil, errBLS12381InvalidInputLength
+	}
+	var err error
+	var p0, p1 *bls12381.G2Affine
+
+	// Decode G2 point p_0
+	if p0, err = decodePointG2(input[:256]); err != nil {
+		return nil, err
+	}
+	// Decode G2 point p_1
+	if p1, err = decodePointG2(input[256:]); err != nil {
+		return nil, err
+	}
+
+	// No need to check the subgroup here, as specified by EIP-2537
+
+	// Compute r = p_0 + p_1
+	r := new(bls12381.G2Affine)
+	r.Add(p0, p1)
+
+	// Encode the G2 point into 256 bytes
+	return encodePointG2(r), nil
+}
+
+// bls12381G2MultiExp implements EIP-2537 G2MultiExp precompile.
+type bls12381G2MultiExp struct{}
+
+func (c *bls12381G2MultiExp) RequiredGas(input []byte) uint64 {
+	k := len(input) / 288
+	if k == 0 {
+		return 0
+	}
+	var discount uint64
+	if dLen := len(Bls12381G2MultiExpDiscountTable); k < dLen {
+		discount = Bls12381G2MultiExpDiscountTable[k-1]
+	} else {
+		discount = Bls12381G2MultiExpDiscountTable[dLen-1]
+	}
+	return (uint64(k) * Bls12381G2MulGas * discount) / 1000
+}
+
+func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
+	// Implements EIP-2537 G2MultiExp precompile logic.
+	// > G2 multiplication call expects `288*k` bytes as an input that is interpreted as byte concatenation of `k` slices each of them being a byte
+	// concatenation of encoding of G2 point (`256` bytes) and encoding of a scalar value (`32` bytes).
+	// > Output is an encoding of multiexponentiation operation result - single G2 point (`256` bytes).
+	k := len(input) / 288
+	if len(input) == 0 || len(input)%288 != 0 {
+		return nil, errBLS12381InvalidInputLength
+	}
+	points := make([]bls12381.G2Affine, k)
+	scalars := make([]fr.Element, k)
+
+	for i := range k {
+		off := 288 * i
+		t0, t1, t2 := off, off+256, off+288
+		p, err := decodePointG2(input[t0:t1])
+		if err != nil {
+			return nil, err
+		}
+		if !p.IsInSubGroup() {
+			return nil, errBLS12381G2PointSubgroup
+		}
+		points[i] = *p
+		scalars[i] = *new(fr.Element).SetBytes(input[t1:t2])
+	}
+
+	r := new(bls12381.G2Affine)
+	r.MultiExp(points, scalars, ecc.MultiExpConfig{})
+
+	return encodePointG2(r), nil
+}
+
+// bls12381Pairing implements EIP-2537 Pairing precompile.
+type bls12381Pairing struct{}
+
+func (c *bls12381Pairing) RequiredGas(input []byte) uint64 {
+	return Bls12381PairingBaseGas + uint64(len(input)/384)*Bls12381PairingPerPairGas
+}
+
+func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
+	// Implements EIP-2537 Pairing precompile logic.
+	// > Pairing call expects `384*k` bytes as an input that is interpreted as byte concatenation of `k` slices. Each slice has the following structure:
+	// > - `128` bytes of G1 point encoding
+	// > - `256` bytes of G2 point encoding
+	// > Output is a `32` bytes where last single byte is `0x01` if pairing result is equal to multiplicative identity in a pairing target field and `0x00`
+	// otherwise.
+	k := len(input) / 384
+	if len(input) == 0 || len(input)%384 != 0 {
+		return nil, errBLS12381InvalidInputLength
+	}
+
+	var (
+		p []bls12381.G1Affine
+		q []bls12381.G2Affine
+	)
+
+	for i := range k {
+		off := 384 * i
+		t0, t1, t2 := off, off+128, off+384
+
+		p1, err := decodePointG1(input[t0:t1])
+		if err != nil {
+			return nil, err
+		}
+		p2, err := decodePointG2(input[t1:t2])
+		if err != nil {
+			return nil, err
+		}
+
+		if !p1.IsInSubGroup() {
+			return nil, errBLS12381G1PointSubgroup
+		}
+		if !p2.IsInSubGroup() {
+			return nil, errBLS12381G2PointSubgroup
+		}
+		p = append(p, *p1)
+		q = append(q, *p2)
+	}
+
+	out := make([]byte, 32)
+	ok, err := bls12381.PairingCheck(p, q)
+	if err == nil && ok {
+		out[31] = 1
+	}
+	return out, nil
+}
+
+// bls12381MapG1 implements EIP-2537 MapG1 precompile.
+type bls12381MapG1 struct{}
+
+func (c *bls12381MapG1) RequiredGas(_ []byte) uint64 {
+	return Bls12381MapG1Gas
+}
+
+func (c *bls12381MapG1) Run(input []byte) ([]byte, error) {
+	// Implements EIP-2537 Map_To_G1 precompile.
+	// > Field-to-curve call expects an `64` bytes input that is interpreted as an element of the base field.
+	// > Output of this call is `128` bytes and is G1 point following respective encoding rules.
+	if len(input) != 64 {
+		return nil, errBLS12381InvalidInputLength
+	}
+
+	fe, err := decodeBLS12381FieldElement(input)
+	if err != nil {
+		return nil, err
+	}
+
+	r := bls12381.MapToG1(fe)
+	return encodePointG1(&r), nil
+}
+
+// bls12381MapG2 implements EIP-2537 MapG2 precompile.
+type bls12381MapG2 struct{}
+
+func (c *bls12381MapG2) RequiredGas(_ []byte) uint64 {
+	return Bls12381MapG2Gas
+}
+
+func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
+	// Implements EIP-2537 Map_FP2_TO_G2 precompile logic.
+	// > Field-to-curve call expects an `128` bytes input that is interpreted as an element of the quadratic extension field.
+	// > Output of this call is `256` bytes and is G2 point following respective encoding rules.
+	if len(input) != 128 {
+		return nil, errBLS12381InvalidInputLength
+	}
+
+	c0, err := decodeBLS12381FieldElement(input[:64])
+	if err != nil {
+		return nil, err
+	}
+	c1, err := decodeBLS12381FieldElement(input[64:])
+	if err != nil {
+		return nil, err
+	}
+
+	r := bls12381.MapToG2(bls12381.E2{A0: c0, A1: c1})
+	return encodePointG2(&r), nil
+}
+
+// decodePointG1 decodes a G1 point from 128 bytes EVM encoding.
+func decodePointG1(in []byte) (*bls12381.G1Affine, error) {
+	if len(in) != 128 {
+		return nil, errors.New("invalid g1 point length")
+	}
+	x, err := decodeBLS12381FieldElement(in[:64])
+	if err != nil {
+		return nil, err
+	}
+	y, err := decodeBLS12381FieldElement(in[64:])
+	if err != nil {
+		return nil, err
+	}
+	elem := bls12381.G1Affine{X: x, Y: y}
+	if !elem.IsOnCurve() {
+		return nil, errors.New("invalid point: not on curve")
+	}
+	return &elem, nil
+}
+
+// decodePointG2 decodes a G2 point from 256 bytes EVM encoding.
+func decodePointG2(in []byte) (*bls12381.G2Affine, error) {
+	if len(in) != 256 {
+		return nil, errors.New("invalid g2 point length")
+	}
+	x0, err := decodeBLS12381FieldElement(in[:64])
+	if err != nil {
+		return nil, err
+	}
+	x1, err := decodeBLS12381FieldElement(in[64:128])
+	if err != nil {
+		return nil, err
+	}
+	y0, err := decodeBLS12381FieldElement(in[128:192])
+	if err != nil {
+		return nil, err
+	}
+	y1, err := decodeBLS12381FieldElement(in[192:])
+	if err != nil {
+		return nil, err
+	}
+	p := bls12381.G2Affine{X: bls12381.E2{A0: x0, A1: x1}, Y: bls12381.E2{A0: y0, A1: y1}}
+	if !p.IsOnCurve() {
+		return nil, errors.New("invalid point: not on curve")
+	}
+	return &p, nil
+}
+
+// decodeBLS12381FieldElement decodes a BLS12-381 field element from 64 bytes EVM encoding.
+// The top 16 bytes must be zero (field elements are 48 bytes, padded to 64).
+func decodeBLS12381FieldElement(in []byte) (fp.Element, error) {
+	if len(in) != 64 {
+		return fp.Element{}, errors.New("invalid field element length")
+	}
+	for i := range 16 {
+		if in[i] != 0x00 {
+			return fp.Element{}, errBLS12381InvalidFieldElementTopBytes
+		}
+	}
+	var res [48]byte
+	copy(res[:], in[16:])
+	return fp.BigEndian.Element(&res)
+}
+
+// encodePointG1 encodes a G1 point into 128 bytes EVM encoding.
+func encodePointG1(p *bls12381.G1Affine) []byte {
+	out := make([]byte, 128)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:]), p.X)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[64+16:]), p.Y)
+	return out
+}
+
+// encodePointG2 encodes a G2 point into 256 bytes EVM encoding.
+func encodePointG2(p *bls12381.G2Affine) []byte {
+	out := make([]byte, 256)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:16+48]), p.X.A0)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[80:80+48]), p.X.A1)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[144:144+48]), p.Y.A0)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[208:208+48]), p.Y.A1)
+	return out
 }

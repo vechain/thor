@@ -31,6 +31,15 @@ var (
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
+	// EmptyRuntimeBytecode is stored at every precompile address at fork activation.
+	// This makes precompile addresses "exist" in Thor's state, which prevents
+	// accidental contract deployment to those addresses (CREATE/CREATE2 will fail
+	// with ErrContractAddressCollision since the code hash differs from emptyCodeHash).
+	//
+	// NOTE: This means EXTCODESIZE/EXTCODECOPY/EXTCODEHASH on any precompile address
+	// returns 8 bytes of non-empty code on Thor, whereas on Ethereum precompile
+	// addresses have no code (EXTCODESIZE returns 0). Contracts that detect
+	// precompiles by checking extcodesize == 0 will behave differently on Thor.
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 )
 
@@ -101,7 +110,7 @@ func New(
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
-	currentChainConfig.DencunBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
+	currentChainConfig.PectraBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
@@ -109,7 +118,9 @@ func New(
 
 	// allocate precompiled contracts
 	var precompiled map[common.Address]vm.PrecompiledContract
-	if forkConfig.GALACTICA == ctx.Number {
+	if forkConfig.INTERSTELLAR == ctx.Number {
+		precompiled = vm.PrecompiledContractsPectra
+	} else if forkConfig.GALACTICA == ctx.Number {
 		precompiled = vm.PrecompiledContractsShanghai
 	} else if forkConfig.ETH_IST == ctx.Number {
 		precompiled = vm.PrecompiledContractsIstanbul

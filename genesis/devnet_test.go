@@ -39,5 +39,5 @@ func TestNewDevnet(t *testing.T) {
 func TestNewDevnet_SoloConfig(t *testing.T) {
 	genesisObj, _ := NewDevnet()
 	id := genesisObj.ID()
-	assert.Equal(t, thor.MustParseBytes32("0x00000000bb55405beed90df9fea5acdb1cb7caba61b0d7513395f42efd30e558"), id)
+	assert.Equal(t, thor.MustParseBytes32("0x0000000086b0ec542418792775c333db897fdd0542462d7684cfc548b110fa6a"), id)
 }

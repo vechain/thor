@@ -53,6 +53,8 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
+	case evm.chainRules.IsPectra:
+		precompiles = PrecompiledContractsPectra
 	case evm.chainRules.IsShanghai:
 		precompiles = PrecompiledContractsShanghai
 	case evm.chainRules.IsIstanbul:

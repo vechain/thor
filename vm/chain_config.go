@@ -24,7 +24,9 @@ type ChainConfig struct {
 	params.ChainConfig
 	IstanbulBlock *big.Int `json:"istanbulBlock,omitempty"` // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 	ShanghaiBlock *big.Int `json:"shanghaiBlock,omitempty"` // Shanghai switch block (nil = no fork, 0 = already on shanghai)
-	DencunBlock   *big.Int `json:"dencunBlock,omitempty"`   // Dencun switch block (nil = no fork, 0 = already on dencun)
+	// PectraBlock bundles Ethereum Dencun (TLOAD/TSTORE/MCOPY opcodes, no KZG precompile) and
+	// Prague (EIP-2537 BLS12-381 precompiles) into a single Thor fork (INTERSTELLAR).
+	PectraBlock *big.Int `json:"pectraBlock,omitempty"` // Pectra switch block (nil = no fork, 0 = already on pectra)
 }
 
 // IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
@@ -37,9 +39,9 @@ func (c *ChainConfig) IsShanghai(num *big.Int) bool {
 	return isForked(c.ShanghaiBlock, num)
 }
 
-// IsDencun returns whether num is either equal to the Dencun fork block or greater.
-func (c *ChainConfig) IsDencun(num *big.Int) bool {
-	return isForked(c.DencunBlock, num)
+// IsPectra returns whether num is either equal to the Pectra fork block or greater.
+func (c *ChainConfig) IsPectra(num *big.Int) bool {
+	return isForked(c.PectraBlock, num)
 }
 
 // Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
@@ -53,7 +55,7 @@ type Rules struct {
 	IsByzantium                               bool
 	IsIstanbul                                bool
 	IsShanghai                                bool
-	IsDencun                                  bool
+	IsPectra                                  bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -71,6 +73,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsByzantium: c.IsByzantium(num),
 		IsIstanbul:  c.IsIstanbul(num),
 		IsShanghai:  c.IsShanghai(num),
-		IsDencun:    c.IsDencun(num),
+		IsPectra:    c.IsPectra(num),
 	}
 }
