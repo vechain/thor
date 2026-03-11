@@ -51,9 +51,21 @@ var (
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
 	shanghaiInstructionSet       = NewShanghaiInstructionSet()
+	dencunInstructionSet         = NewDencunInstructionSet()
 )
 
 type JumpTable [256]*operation
+
+func NewDencunInstructionSet() *JumpTable {
+	instructionSet := NewShanghaiInstructionSet()
+	instructionSet[MCOPY] = &operation{
+		execute:       opMcopy,
+		gasCost:       gasMcopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryMcopy,
+	}
+	return instructionSet
+}
 
 // NewShanghaiInstructionSet returns the frontier, homestead
 // byzantium, constantinople , istanbul and shanghai instructions.
