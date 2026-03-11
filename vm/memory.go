@@ -112,9 +112,6 @@ func (m *Memory) Copy(dst, src, len uint64) {
 	if len == 0 {
 		return
 	}
-	if src+len > uint64(m.Len()) || dst+len > uint64(m.Len()) {
-		panic("invalid memory: store empty")
-	}
 	copy(m.store[dst:], m.store[src:src+len])
 }
 
