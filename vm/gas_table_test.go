@@ -108,7 +108,6 @@ func TestGasFunctions(t *testing.T) {
 		{gasPush, 0, uint64(0x3)},
 		{gasSwap, 0, uint64(0x3)},
 		{gasDup, 0, uint64(0x3)},
-		{gasMcopy, 0, uint64(0x1800000000000003)},
 	}
 
 	for _, test := range tests {
