@@ -1772,35 +1772,30 @@ func TestValidateTxBasics(t *testing.T) {
 		name        string
 		getTx       func() *tx.Transaction
 		head        *chain.BlockSummary
-		forkConfig  *thor.ForkConfig
 		expectedErr error
 	}{
 		{
 			name:        "legacy tx with high-S signature",
 			getTx:       func() *tx.Transaction { return createHighSTx(tx.TypeLegacy) },
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
 		},
 		{
 			name:        "dyn fee tx with high-S signature",
 			getTx:       func() *tx.Transaction { return createHighSTx(tx.TypeDynamicFee) },
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
 		},
 		{
 			name:        "delegated legacy tx with high-S in delegator signature",
 			getTx:       func() *tx.Transaction { return createDelegatedHighSTx(tx.TypeLegacy) },
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
 		},
 		{
 			name:        "delegated dyn fee tx with high-S in delegator signature",
 			getTx:       func() *tx.Transaction { return createDelegatedHighSTx(tx.TypeDynamicFee) },
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{tx.ErrHighSInSignature.Error()},
 		},
 		{
@@ -1810,7 +1805,6 @@ func TestValidateTxBasics(t *testing.T) {
 				return tx.MustSign(trx, devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
 		},
 		{
@@ -1820,7 +1814,6 @@ func TestValidateTxBasics(t *testing.T) {
 				return tx.MustSign(trx, devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"chain tag mismatch"},
 		},
 		{
@@ -1834,7 +1827,6 @@ func TestValidateTxBasics(t *testing.T) {
 				return tx.MustSign(b.Build(), devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: txRejectedError{"size too large"},
 		},
 		{
@@ -1848,7 +1840,6 @@ func TestValidateTxBasics(t *testing.T) {
 				return tx.MustSign(b.Build(), devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: txRejectedError{"size too large"},
 		},
 		{
@@ -1858,7 +1849,6 @@ func TestValidateTxBasics(t *testing.T) {
 				return tx.MustSign(trx, devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: nil,
 		},
 		{
@@ -1868,7 +1858,6 @@ func TestValidateTxBasics(t *testing.T) {
 				return tx.MustSign(trx, devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
 		},
 		{
@@ -1878,7 +1867,6 @@ func TestValidateTxBasics(t *testing.T) {
 				return tx.MustSign(trx, devAccounts[0].PrivateKey)
 			},
 			head:        &chain.BlockSummary{},
-			forkConfig:  &thor.NoFork,
 			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
 		},
 	}
