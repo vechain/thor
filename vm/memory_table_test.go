@@ -256,6 +256,88 @@ func TestMemoryRevert(t *testing.T) {
 	}
 }
 
+// Test for memoryMcopy function
+func TestMemoryMcopy(t *testing.T) {
+	tests := []struct {
+		name      string
+		stackData []int64
+		expected  uint64
+		overflow  bool
+	}{
+		{
+			name:      "dst > src",
+			stackData: []int64{32, 32, 0},
+			expected:  64,
+		},
+		{
+			name:      "src > dst",
+			stackData: []int64{32, 0, 32},
+			expected:  64,
+		},
+		{
+			name:      "same offset",
+			stackData: []int64{32, 0, 0},
+			expected:  32,
+		},
+		{
+			name:      "zero length",
+			stackData: []int64{0, 10, 20},
+			expected:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stack := mockStack(tt.stackData...)
+			got, overflow := memoryMcopy(stack)
+			assert.Equal(t, tt.overflow, overflow)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestMemoryMcopyOverflow(t *testing.T) {
+	t.Run("length exceeds uint64", func(t *testing.T) {
+		stack := newstack()
+		stack.push(new(uint256.Int).Lsh(uint256.NewInt(1), 128)) // length = 2^128
+		stack.push(uint256.NewInt(0))                            // src = 0
+		stack.push(uint256.NewInt(0))                            // dst = 0
+
+		_, overflow := memoryMcopy(stack)
+		assert.True(t, overflow)
+	})
+
+	t.Run("dst exceeds uint64", func(t *testing.T) {
+		stack := newstack()
+		stack.push(uint256.NewInt(1))                            // length = 1
+		stack.push(uint256.NewInt(0))                            // src = 0
+		stack.push(new(uint256.Int).Lsh(uint256.NewInt(1), 128)) // dst = 2^128
+
+		_, overflow := memoryMcopy(stack)
+		assert.True(t, overflow)
+	})
+
+	t.Run("src exceeds uint64", func(t *testing.T) {
+		stack := newstack()
+		stack.push(uint256.NewInt(1))                            // length = 1
+		stack.push(new(uint256.Int).Lsh(uint256.NewInt(1), 128)) // src = 2^128
+		stack.push(uint256.NewInt(0))                            // dst = 0
+
+		_, overflow := memoryMcopy(stack)
+		assert.True(t, overflow)
+	})
+
+	t.Run("offset plus length overflows uint64", func(t *testing.T) {
+		stack := newstack()
+		stack.push(uint256.NewInt(1))                          // length = 1
+		stack.push(uint256.NewInt(0))                          // src = 0
+		stack.push(new(uint256.Int).SetUint64(math.MaxUint64)) // dst = MaxUint64
+
+		_, overflow := memoryMcopy(stack)
+		assert.True(t, overflow)
+	})
+}
+
 // Test for memoryLog function
 func TestMemoryLog(t *testing.T) {
 	stack := mockStack(10, 32) // Example stack data

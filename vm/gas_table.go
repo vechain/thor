@@ -114,6 +114,32 @@ func gasReturnDataCopy(_ params.GasTable, _ *EVM, _ *Contract, stack *Stack, mem
 	return gas, nil
 }
 
+func gasMcopy(_ params.GasTable, _ *EVM, _ *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, GasFastestStep); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	words, overflow := stack.Back(2).Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	if gas, overflow = math.SafeAdd(gas, words); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
 func gasSStore(_ params.GasTable, evm *EVM, contract *Contract, stack *Stack, _ *Memory, _ uint64) (uint64, error) {
 	var (
 		y, x = stack.Back(1), stack.Back(0)
