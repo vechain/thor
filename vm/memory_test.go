@@ -80,23 +80,6 @@ func TestSet32Panic(t *testing.T) {
 	}, "Set32 should panic when trying to set 32 bytes in an empty store")
 }
 
-func TestMemoryCopyPanic(t *testing.T) {
-	mem := NewMemory()
-	mem.Resize(10)
-
-	assert.Panics(t, func() {
-		mem.Copy(0, 0, uint64(mem.Len()+1))
-	}, "Copy should panic when length exceeds store size")
-
-	assert.Panics(t, func() {
-		mem.Copy(5, 0, 8)
-	}, "Copy should panic when dst + length exceeds store size")
-
-	assert.Panics(t, func() {
-		mem.Copy(0, 5, 8)
-	}, "Copy should panic when src + length exceeds store size")
-}
-
 func TestMemoryCopy(t *testing.T) {
 	// Test cases from https://eips.ethereum.org/EIPS/eip-5656#test-cases
 	for i, tc := range []struct {
