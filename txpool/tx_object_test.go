@@ -220,8 +220,9 @@ func TestExecutable(t *testing.T) {
 
 func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
-		GALACTICA: 2,
-		HAYABUSA:  math.MaxUint32,
+		GALACTICA:    2,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
@@ -260,8 +261,9 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 
 func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
-		VIP191:   2,
-		HAYABUSA: math.MaxUint32,
+		VIP191:       2,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
