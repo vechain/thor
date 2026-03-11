@@ -603,6 +603,11 @@ func TestPreForkOpCode(t *testing.T) {
 			code: []byte{byte(vm.PUSH0)},
 			op:   vm.PUSH0,
 		},
+		{
+			name: "MCOPY",
+			code: []byte{byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.MCOPY)},
+			op:   vm.MCOPY,
+		},
 	}
 
 	for _, tt := range tests {

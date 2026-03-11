@@ -31,3 +31,21 @@ func TestPush0OpCode(t *testing.T) {
 	expectedValueOnStack := new(uint256.Int)
 	assert.Equal(t, expectedValueOnStack, mockStack.peek())
 }
+
+func TestMcopyForkGating(t *testing.T) {
+	t.Run("MCOPY unavailable pre-Dencun", func(t *testing.T) {
+		shanghaiJt := NewShanghaiInstructionSet()
+		assert.Nil(t, shanghaiJt[MCOPY], "MCOPY should not exist in Shanghai instruction set")
+
+		istanbulJt := NewIstanbulInstructionSet()
+		assert.Nil(t, istanbulJt[MCOPY], "MCOPY should not exist in Istanbul instruction set")
+	})
+
+	t.Run("MCOPY available on Dencun", func(t *testing.T) {
+		dencunJt := NewDencunInstructionSet()
+		assert.NotNil(t, dencunJt[MCOPY], "MCOPY should exist in Dencun instruction set")
+		assert.NotNil(t, dencunJt[MCOPY].execute)
+		assert.NotNil(t, dencunJt[MCOPY].gasCost)
+		assert.NotNil(t, dencunJt[MCOPY].memorySize)
+	})
+}
