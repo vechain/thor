@@ -127,4 +127,4 @@ jobs:
 
       - name: Run e2e tests
         working-directory: rosetta
-        run: npm run test:e2e:solo
+        run: npm run test:e2e:custom
