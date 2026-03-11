@@ -19,8 +19,6 @@ jobs:
     name: Run Solo e2e Tests
     runs-on: ubuntu-latest
     env:
-      THOR_REPO: ${{ inputs.thor_repo }}
-      THOR_VERSION: ${{ inputs.thor_version }}
       NETWORK: solo
       TEST_NETWORK: solo
       MODE: online
@@ -35,7 +33,7 @@ jobs:
           # Default fallback branch
           DEFAULT_BRANCH="master"
           REF="$DEFAULT_BRANCH"
-      
+
           if [ "$EVENT_NAME" = "pull_request" ]; then
             # For pull_request events, we only look at the PR's base branch
             if [[ "$PR_BASE_REF" == release/* ]]; then
@@ -56,30 +54,77 @@ jobs:
             echo "ref=$REF" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout
+      - name: Checkout rosetta
         uses: actions/checkout@v5
         with:
           repository: vechain/rosetta
           ref: ${{ steps.set-ref.outputs.ref }}
+          path: rosetta
+
+      - name: Derive thor repository name
+        id: thor-repo
+        env:
+          THOR_REPO_URL: ${{ inputs.thor_repo }}
+        run: |
+          # Extract owner/repo from URL like https://github.com/owner/repo.git
+          echo "name=$(echo "$THOR_REPO_URL" | sed 's|https://github.com/||' | sed 's|\.git$||')" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout thor source
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.thor-repo.outputs.name }}
+          ref: ${{ inputs.thor_version }}
+          path: thor-source
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: thor-source/go.mod
+          cache-dependency-path: thor-source/go.sum
+
+      - name: Build thor binary
+        working-directory: thor-source
+        run: make thor
+
+      - name: Build thor builder image
+        run: |
+          docker build -t local/thor-builder:ci -f - thor-source/bin <<'EOF'
+          FROM scratch
+          COPY thor /go/thor/bin/thor
+          EOF
+
+      - name: Create docker-compose override
+        working-directory: rosetta
+        run: |
+          cat > docker-compose.override.yml <<'EOF'
+          services:
+            rosetta-server:
+              build:
+                additional_contexts:
+                  thor-builder: "docker-image://local/thor-builder:ci"
+          EOF
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-            
+          cache-dependency-path: rosetta/package-lock.json
+
       - name: Install dependencies
+        working-directory: rosetta
         run: npm ci
-  
+
       - name: Prepare volume dir
+        working-directory: rosetta
         run: |
           mkdir -p rosetta_data
           chmod -R 777 rosetta_data
 
       - name: Build Docker images
+        working-directory: rosetta
         run: docker compose build
-            
-      - name: Run e2e tests
-        run: npm run test:e2e:solo
 
-  
+      - name: Run e2e tests
+        working-directory: rosetta
+        run: npm run test:e2e:custom
