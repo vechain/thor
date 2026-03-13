@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -348,6 +349,9 @@ FROM (%v) t
 
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
+		if filter.Order != "" && filter.Order != ASC && filter.Order != DESC {
+			return nil, errors.New("invalid order value")
+		}
 		if filter.Order == DESC {
 			subQuery += " ORDER BY seq DESC"
 		} else {
@@ -361,6 +365,9 @@ FROM (%v) t
 	transferQuery := fmt.Sprintf(query, subQuery)
 	// if there is no limit option, set order outside
 	if filter.Options == nil {
+		if filter.Order != "" && filter.Order != ASC && filter.Order != DESC {
+			return nil, errors.New("invalid order value")
+		}
 		if filter.Order == DESC {
 			transferQuery += " ORDER BY seq DESC "
 		} else {
