@@ -702,8 +702,8 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 
 	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
 	if nextBlockNum >= p.forkConfig.INTERSTELLAR {
-		if err := validateInterstellarTx(trx); err != nil {
-			return err
+		if trx.Gas() > thor.MaxTxGasLimit {
+			return badTxError{"tx gas limit exceeds the maximum allowed"}
 		}
 	}
 
@@ -716,11 +716,4 @@ func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
 	return timeDiff < thor.BlockInterval()*6
-}
-
-func validateInterstellarTx(trx *tx.Transaction) error {
-	if trx.Gas() > thor.MaxTxGasLimit {
-		return badTxError{"tx gas limit exceeds the maximum allowed"}
-	}
-	return nil
 }
