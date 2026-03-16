@@ -74,6 +74,8 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("tx gas exceeds block gas limit")
+	case nextBlockNum >= forkConfig.INTERSTELLAR && o.Gas() > thor.MaxTxGasLimit:
+		return false, errors.New("tx gas limit exceeds the maximum allowed")
 	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, errors.New("expired")
 	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval()):
