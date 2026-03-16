@@ -150,8 +150,6 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 	switch {
 	case t.ChainTag() != f.packer.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
-	case f.Number() >= f.packer.forkConfig.INTERSTELLAR && t.Gas() > thor.MaxTxGasLimit:
-		return badTxError{"tx gas limit exceeds the maximum allowed"}
 	case f.Number() < t.BlockRef().Number():
 		return errTxNotAdoptableNow
 	case t.IsExpired(f.Number()):

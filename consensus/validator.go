@@ -202,8 +202,6 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
 		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.TypeLegacy:
 			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
-		case header.Number() >= c.forkConfig.INTERSTELLAR && tr.Gas() > thor.MaxTxGasLimit:
-			return consensusError(fmt.Sprintf("tx gas limit exceeds the maximum allowed: %v", tr.Gas()))
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {

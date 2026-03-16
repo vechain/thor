@@ -121,6 +121,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 	stater := state.NewStater(db)
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
 		ForkConfig: fc,
+		GasLimit:   thor.MaxTxGasLimit * 2,
 	})
 
 	// Build genesis block
