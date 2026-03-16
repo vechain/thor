@@ -76,25 +76,27 @@ var SoloFork = ForkConfig{
 var forkConfigs = map[Bytes32]*ForkConfig{
 	// mainnet
 	MustParseBytes32("0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"): {
-		VIP191:    3_337_300,
-		ETH_CONST: 3_337_300,
-		BLOCKLIST: 4_817_300,
-		ETH_IST:   9_254_300,
-		VIP214:    10_653_500,
-		FINALITY:  13_815_000,
-		GALACTICA: 22_084_200, // ~ Tue, 01 Jul 2025 12:00:00 UTC
-		HAYABUSA:  23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
+		VIP191:       3_337_300,
+		ETH_CONST:    3_337_300,
+		BLOCKLIST:    4_817_300,
+		ETH_IST:      9_254_300,
+		VIP214:       10_653_500,
+		FINALITY:     13_815_000,
+		GALACTICA:    22_084_200, // ~ Tue, 01 Jul 2025 12:00:00 UTC
+		HAYABUSA:     23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
+		INTERSTELLAR: math.MaxUint32,
 	},
 	// testnet
 	MustParseBytes32("0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127"): {
-		VIP191:    2_898_800,
-		ETH_CONST: 3_192_500,
-		BLOCKLIST: math.MaxUint32,
-		ETH_IST:   9_146_700,
-		VIP214:    10_606_800,
-		FINALITY:  13_086_360,
-		GALACTICA: 21_770_500, // ~ Tue, 20 May 2025 12:00:00 UTC
-		HAYABUSA:  23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
+		VIP191:       2_898_800,
+		ETH_CONST:    3_192_500,
+		BLOCKLIST:    math.MaxUint32,
+		ETH_IST:      9_146_700,
+		VIP214:       10_606_800,
+		FINALITY:     13_086_360,
+		GALACTICA:    21_770_500, // ~ Tue, 20 May 2025 12:00:00 UTC
+		HAYABUSA:     23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
+		INTERSTELLAR: math.MaxUint32,
 	},
 }
 
