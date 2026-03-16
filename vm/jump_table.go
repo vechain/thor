@@ -51,13 +51,16 @@ var (
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
 	shanghaiInstructionSet       = NewShanghaiInstructionSet()
-	dencunInstructionSet         = NewDencunInstructionSet()
+	fusakaInstructionSet         = NewFusakaInstructionSet()
 )
 
 type JumpTable [256]*operation
 
-func NewDencunInstructionSet() *JumpTable {
+// NewFusakaInstructionSet returns the instruction set for the VeChain INTERSTELLAR fork.
+// INTERSTELLAR is the VeChain umbrella covering Dencun (EIP-5656 MCOPY), Pectra and Osaka EVM changes.
+func NewFusakaInstructionSet() *JumpTable {
 	instructionSet := NewShanghaiInstructionSet()
+	// EIP-5656 (Dencun): MCOPY opcode
 	instructionSet[MCOPY] = &operation{
 		execute:       opMcopy,
 		gasCost:       gasMcopy,
