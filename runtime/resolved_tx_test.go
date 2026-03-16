@@ -12,8 +12,11 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -88,6 +91,107 @@ func TestTxBasics(t *testing.T) {
 	trx = txBuilder(0x0, tx.TypeDynamicFee).MaxPriorityFeePerGas(math.MaxBig256).Build()
 	_, err = runtime.ResolveTransaction(txSign(trx))
 	assert.EqualError(t, err, "maxFeePerGas is less than maxPriorityFeePerGas")
+
+	// EthDynamicFee — empty access list resolves OK.
+	addr := thor.BytesToAddress([]byte("addr"))
+	ethTx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
+		ChainID(0).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxPriorityFeePerGas(big.NewInt(0)).
+		To(&addr).
+		Value(big.NewInt(1)).
+		Build(),
+		genesis.DevAccounts()[0].PrivateKey)
+	_, err = runtime.ResolveTransaction(ethTx)
+	assert.Nil(t, err, "empty access list must resolve OK")
+
+	// EthDynamicFee — non-empty access list rejected at resolve time
+	// (EIP-2930 warm/cold gas accounting not yet implemented). Construct
+	// wire bytes with a non-empty list by encoding our own struct mirror
+	// then decoding through tx.UnmarshalBinary.
+	rawWithAccessList := buildEthTxWithAccessList(t, addr)
+	_, err = runtime.ResolveTransaction(rawWithAccessList)
+	assert.EqualError(t, err, "access list not supported")
+}
+
+// buildEthTxWithAccessList constructs a signed 0x02 tx with one access tuple
+// by RLP-encoding a body shape that mirrors tx.ethDynamicFeeTransaction and
+// decoding it back into a *tx.Transaction. The builder always emits an empty
+// access list; this helper sidesteps that to exercise the runtime rejection.
+func buildEthTxWithAccessList(t *testing.T, to thor.Address) *tx.Transaction {
+	t.Helper()
+
+	type accessTuple struct {
+		Address     thor.Address
+		StorageKeys []thor.Bytes32
+	}
+	type ethBody struct {
+		ChainID              *big.Int
+		Nonce                uint64
+		MaxPriorityFeePerGas *big.Int
+		MaxFeePerGas         *big.Int
+		Gas                  uint64
+		To                   *thor.Address `rlp:"nil"`
+		Value                *big.Int
+		Data                 []byte
+		AccessList           []accessTuple
+		YParity              uint8
+		R, S                 *big.Int
+	}
+	type signingFields struct {
+		ChainID              *big.Int
+		Nonce                uint64
+		MaxPriorityFeePerGas *big.Int
+		MaxFeePerGas         *big.Int
+		Gas                  uint64
+		To                   *thor.Address `rlp:"nil"`
+		Value                *big.Int
+		Data                 []byte
+		AccessList           []accessTuple
+	}
+
+	body := &ethBody{
+		ChainID:              big.NewInt(0),
+		Nonce:                1,
+		MaxPriorityFeePerGas: big.NewInt(0),
+		MaxFeePerGas:         big.NewInt(thor.InitialBaseFee),
+		Gas:                  21000,
+		To:                   &to,
+		Value:                big.NewInt(1),
+		AccessList:           []accessTuple{{Address: thor.Address{0x01}, StorageKeys: []thor.Bytes32{{0x02}}}},
+		R:                    new(big.Int),
+		S:                    new(big.Int),
+	}
+	sf := &signingFields{
+		ChainID:              body.ChainID,
+		Nonce:                body.Nonce,
+		MaxPriorityFeePerGas: body.MaxPriorityFeePerGas,
+		MaxFeePerGas:         body.MaxFeePerGas,
+		Gas:                  body.Gas,
+		To:                   body.To,
+		Value:                body.Value,
+		Data:                 body.Data,
+		AccessList:           body.AccessList,
+	}
+	rlpBytes, err := rlp.EncodeToBytes(sf)
+	require.NoError(t, err)
+	hashInput := append([]byte{tx.TypeEthDynamicFee}, rlpBytes...)
+	hash := crypto.Keccak256Hash(hashInput)
+
+	sig, err := crypto.Sign(hash[:], genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
+	body.R = new(big.Int).SetBytes(sig[:32])
+	body.S = new(big.Int).SetBytes(sig[32:64])
+	body.YParity = sig[64]
+
+	bodyRLP, err := rlp.EncodeToBytes(body)
+	require.NoError(t, err)
+	rawBytes := append([]byte{tx.TypeEthDynamicFee}, bodyRLP...)
+
+	var trx tx.Transaction
+	require.NoError(t, trx.UnmarshalBinary(rawBytes))
+	return &trx
 }
 
 func TestGaspriceLessThanBaseFee(t *testing.T) {

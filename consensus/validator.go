@@ -199,7 +199,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		}
 
 		switch {
-		case tr.ChainTag() != c.repo.ChainTag():
+		case tr.ChainTag() != c.repo.ChainTag() && tr.Type() != tx.TypeEthDynamicFee:
+			// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
 		case header.Number() < tr.BlockRef().Number():
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
@@ -207,6 +208,19 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
 		case !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) && tr.Type() != tx.TypeLegacy:
 			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+		// Ethereum EIP-1559 transactions require the INTERSTELLAR fork.
+		case !thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && tr.Type() == tx.TypeEthDynamicFee:
+			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+		}
+
+		// Validate the Ethereum chain ID embedded in EIP-1559 transactions.
+		// Pre-INTERSTELLAR eth txs were already rejected by the switch above.
+		if tr.Type() == tx.TypeEthDynamicFee {
+			cid := tr.ChainID()
+			if cid == nil || cid.BitLen() > 64 || cid.Uint64() != c.repo.ChainID() {
+				return consensusError(fmt.Sprintf("tx Ethereum chain ID %v does not match network chain ID %d",
+					cid, c.repo.ChainID()))
+			}
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {

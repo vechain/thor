@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 
@@ -113,8 +114,13 @@ func New(
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
-		// use genesis id as chain id
-		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+		// Pre-INTERSTELLAR: full 32-byte genesis id (legacy). Post-INTERSTELLAR:
+		// 64-bit chain id (EIP-155) shared by all tx types.
+		if thor.IsForked(ctx.Number, forkConfig.INTERSTELLAR) {
+			currentChainConfig.ChainID = new(big.Int).SetUint64(chain.ChainID())
+		} else {
+			currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+		}
 	}
 
 	// allocate precompiled contracts
@@ -226,8 +232,17 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			return common.Hash(id)
 		},
-		NewContractAddress: func(_ *vm.EVM, counter uint32) common.Address {
-			return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
+		NewContractAddress: func(_ *vm.EVM, caller common.Address, counter uint32) common.Address {
+			switch txCtx.Type {
+			case tx.TypeEthDynamicFee:
+				// Ethereum formula: keccak256(rlp([caller, nonce])). counter is unused here —
+				// nonces play the equivalent role for Ethereum txs. With nonce tracking stubbed,
+				// stateDB.GetNonce always returns 0; sequential creates from the same caller
+				// will collide on the second call until real nonce tracking is implemented.
+				return crypto.CreateAddress(caller, stateDB.GetNonce(caller))
+			default:
+				return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
+			}
 		},
 		InterceptContractCall: func(evm *vm.EVM, contract *vm.Contract, readonly bool) ([]byte, error, bool) {
 			if evm.Depth() < 2 {
@@ -454,7 +469,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 		return nil, errors.New("tx gas exceeds block gas limit")
 	}
 
-	if rt.ctx.Number >= rt.forkConfig.INTERSTELLAR && trx.Gas() > thor.MaxTxGasLimit {
+	if thor.IsForked(rt.ctx.Number, rt.forkConfig.INTERSTELLAR) && trx.Gas() > thor.MaxTxGasLimit {
 		return nil, errors.New("tx gas limit exceeds the maximum allowed")
 	}
 

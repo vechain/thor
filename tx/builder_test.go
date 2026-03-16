@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -129,4 +130,49 @@ func TestBuilder_Build_DynamicFee(t *testing.T) {
 	tx := builder.Build()
 	assert.NotNil(t, tx)
 	assert.IsType(t, &dynamicFeeTransaction{}, tx.body)
+}
+
+func TestBuilder_Build_EthDynamicFee(t *testing.T) {
+	to := thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+	trx := NewBuilder(TypeEthDynamicFee).
+		ChainID(1337).
+		Nonce(7).
+		MaxPriorityFeePerGas(big.NewInt(1e9)).
+		MaxFeePerGas(big.NewInt(10e9)).
+		Gas(21000).
+		To(&to).
+		Value(big.NewInt(42)).
+		Build()
+
+	require.NotNil(t, trx)
+	body, ok := trx.body.(*ethDynamicFeeTransaction)
+	require.True(t, ok, "body must be *ethDynamicFeeTransaction")
+
+	assert.Equal(t, big.NewInt(1337), body.ChainID)
+	assert.Equal(t, uint64(7), body.Nonce)
+	assert.Equal(t, big.NewInt(1e9), body.MaxPriorityFeePerGas)
+	assert.Equal(t, big.NewInt(10e9), body.MaxFeePerGas)
+	assert.Equal(t, uint64(21000), body.GasLimit)
+	require.NotNil(t, body.To)
+	assert.Equal(t, to, *body.To)
+	assert.Equal(t, big.NewInt(42), body.Value)
+}
+
+// TestBuilder_Build_EthDynamicFee_NoFields verifies that a TypeEthDynamicFee
+// can be built without To/Value/Data — this is the contract-creation, zero-value
+// shape and is a valid 0x02 envelope.
+func TestBuilder_Build_EthDynamicFee_NoFields(t *testing.T) {
+	trx := NewBuilder(TypeEthDynamicFee).
+		ChainID(1).
+		MaxFeePerGas(big.NewInt(1)).
+		MaxPriorityFeePerGas(big.NewInt(0)).
+		Gas(21000).
+		Build()
+
+	require.NotNil(t, trx)
+	body, ok := trx.body.(*ethDynamicFeeTransaction)
+	require.True(t, ok)
+	assert.Nil(t, body.To)
+	assert.Equal(t, big.NewInt(0), body.Value)
+	assert.Empty(t, body.Data)
 }

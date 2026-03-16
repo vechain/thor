@@ -158,7 +158,8 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 	}
 
 	switch {
-	case t.ChainTag() != f.packer.repo.ChainTag():
+	case t.ChainTag() != f.packer.repo.ChainTag() && t.Type() != tx.TypeEthDynamicFee:
+		// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 		return badTxError{"chain tag mismatch"}
 	case f.Number() < t.BlockRef().Number():
 		return errTxNotAdoptableNow
@@ -177,11 +178,19 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		return errBlockSizeLimitReached
 	}
 
-	if !thor.IsForked(f.Number(), f.packer.forkConfig.GALACTICA) {
-		if t.Type() != tx.TypeLegacy {
-			return badTxError{"invalid tx type"}
-		}
-	} else {
+	// Type gating by fork:
+	//   pre-GALACTICA    → only TypeLegacy
+	//   pre-INTERSTELLAR → TypeLegacy + TypeDynamicFee (0x02 needs INTERSTELLAR)
+	//   post-INTERSTELLAR → all three
+	switch {
+	case !thor.IsForked(f.Number(), f.packer.forkConfig.GALACTICA) && t.Type() != tx.TypeLegacy:
+		return badTxError{"invalid tx type"}
+	case !thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) && t.Type() == tx.TypeEthDynamicFee:
+		return badTxError{"invalid tx type"}
+	}
+
+	// Fee validation only applies post-GALACTICA (legacy txs use gasPriceCoef).
+	if thor.IsForked(f.Number(), f.packer.forkConfig.GALACTICA) {
 		if err := f.validateTxFee(t); err != nil {
 			return err
 		}

@@ -26,6 +26,14 @@ type Builder struct {
 	nonce                uint64
 	dependsOn            *thor.Bytes32
 	reserved             reserved
+
+	// TypeEthDynamicFee-only fields. The 0x02 wire envelope carries an
+	// EIP-155 chain id and one (To, Value, Data) tuple; set them via
+	// ChainID/To/Value/Data. Ignored by VeChain-native types.
+	chainID uint64
+	to      *thor.Address
+	value   *big.Int
+	data    []byte
 }
 
 func NewBuilder(txType Type) *Builder {
@@ -110,9 +118,51 @@ func (b *Builder) Features(feat Features) *Builder {
 	return b
 }
 
+// ChainID sets the EIP-155 chain id for TypeEthDynamicFee.
+// Ignored by VeChain-native types (which use ChainTag).
+func (b *Builder) ChainID(id uint64) *Builder {
+	b.chainID = id
+	return b
+}
+
+// To sets the recipient for TypeEthDynamicFee. nil means contract creation.
+// Ignored by VeChain-native types (which use Clause).
+func (b *Builder) To(to *thor.Address) *Builder {
+	if to == nil {
+		b.to = nil
+	} else {
+		cpy := *to
+		b.to = &cpy
+	}
+	return b
+}
+
+// Value sets the call value for TypeEthDynamicFee.
+// Ignored by VeChain-native types (which use Clause).
+func (b *Builder) Value(v *big.Int) *Builder {
+	if v == nil {
+		b.value = nil
+	} else {
+		b.value = new(big.Int).Set(v)
+	}
+	return b
+}
+
+// Data sets the call data for TypeEthDynamicFee.
+// Ignored by VeChain-native types (which use Clause).
+func (b *Builder) Data(d []byte) *Builder {
+	if d == nil {
+		b.data = nil
+	} else {
+		b.data = append([]byte(nil), d...)
+	}
+	return b
+}
+
 // Build builds a tx object.
 func (b *Builder) Build() *Transaction {
-	if b.txType == TypeLegacy {
+	switch b.txType {
+	case TypeLegacy:
 		return &Transaction{
 			body: &legacyTransaction{
 				ChainTag:     b.chainTag,
@@ -126,20 +176,56 @@ func (b *Builder) Build() *Transaction {
 				Reserved:     b.reserved,
 			},
 		}
-	}
-
-	return &Transaction{
-		body: &dynamicFeeTransaction{
-			ChainTag:             b.chainTag,
-			Clauses:              b.clauses,
-			MaxFeePerGas:         b.maxFeePerGas,
-			MaxPriorityFeePerGas: b.maxPriorityFeePerGas,
-			Gas:                  b.gas,
-			BlockRef:             b.blockRef,
-			Expiration:           b.expiration,
-			Nonce:                b.nonce,
-			DependsOn:            b.dependsOn,
-			Reserved:             b.reserved,
-		},
+	case TypeEthDynamicFee:
+		// 0x02 envelope carries one (To, Value, Data) tuple, set via
+		// Builder.To/Value/Data. Clauses (if any) are silently ignored,
+		// matching how ChainID is ignored on VeChain-native types.
+		var to *thor.Address
+		if b.to != nil {
+			cpy := *b.to
+			to = &cpy
+		}
+		value := new(big.Int)
+		if b.value != nil {
+			value.Set(b.value)
+		}
+		maxFee := new(big.Int)
+		if b.maxFeePerGas != nil {
+			maxFee.Set(b.maxFeePerGas)
+		}
+		maxPriority := new(big.Int)
+		if b.maxPriorityFeePerGas != nil {
+			maxPriority.Set(b.maxPriorityFeePerGas)
+		}
+		return &Transaction{
+			body: &ethDynamicFeeTransaction{
+				ChainID:              new(big.Int).SetUint64(b.chainID),
+				Nonce:                b.nonce,
+				MaxPriorityFeePerGas: maxPriority,
+				MaxFeePerGas:         maxFee,
+				GasLimit:             b.gas,
+				To:                   to,
+				Value:                value,
+				Data:                 append([]byte(nil), b.data...),
+				YParity:              0,
+				R:                    new(big.Int),
+				S:                    new(big.Int),
+			},
+		}
+	default:
+		return &Transaction{
+			body: &dynamicFeeTransaction{
+				ChainTag:             b.chainTag,
+				Clauses:              b.clauses,
+				MaxFeePerGas:         b.maxFeePerGas,
+				MaxPriorityFeePerGas: b.maxPriorityFeePerGas,
+				Gas:                  b.gas,
+				BlockRef:             b.blockRef,
+				Expiration:           b.expiration,
+				Nonce:                b.nonce,
+				DependsOn:            b.dependsOn,
+				Reserved:             b.reserved,
+			},
+		}
 	}
 }

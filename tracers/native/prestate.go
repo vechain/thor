@@ -234,7 +234,7 @@ func (t *prestateTracer) CaptureState(
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		t.lookupAccount(addr)
 	case op == vm.CREATE:
-		addr := t.env.NewContractAddress(t.env, t.contractCreationCount)
+		addr := t.env.NewContractAddress(t.env, caller, t.contractCreationCount)
 		t.contractCreationCount++
 		t.lookupAccount(addr)
 		t.created[addr] = true

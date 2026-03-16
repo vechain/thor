@@ -136,13 +136,28 @@ func TestEVMFunction(t *testing.T) {
 					t.Fatal(err)
 				}
 
+				// forkFromStart has all fork fields = 0 (including INTERSTELLAR = 0),
+				// so block 0 is already past INTERSTELLAR. The CHAINID opcode must
+				// return the configured Ethereum chain ID, not the old genesis big.Int.
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkFromStart).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
 
-				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(out.Data))
+				expectedChainID := ctx.chain.ChainID()
+				expectedBI := new(big.Int).SetUint64(expectedChainID)
+				assert.Equal(t, thor.BytesToBytes32(expectedBI.Bytes()), thor.BytesToBytes32(out.Data))
+
+				// Pre-INTERSTELLAR: SoloFork has INTERSTELLAR = 1, so block 0 has not
+				// yet crossed the fork. The CHAINID opcode must still return the old
+				// genesis-derived big.Int value for historical correctness.
+				execPre, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Number: 0}, &thor.SoloFork).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				outPre, _, errPre := execPre()
+				assert.Nil(t, errPre)
+				assert.Nil(t, outPre.VMErr)
+				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(outPre.Data))
 			},
 		},
 		{
@@ -1025,6 +1040,63 @@ func TestCall(t *testing.T) {
 	assert.NotNil(t, out)
 	assert.True(t, interrupted)
 	assert.Nil(t, err)
+}
+
+// TestCreateAddressDerivation verifies that the NewContractAddress hook dispatches to the
+// correct formula based on the transaction type:
+//   - TypeEthDynamicFee → crypto.CreateAddress(caller, nonce)
+//   - VeChain types (TypeLegacy, TypeDynamicFee) → thor.CreateContractAddress(txID, clauseIndex, counter)
+func TestCreateAddressDerivation(t *testing.T) {
+	db := muxdb.NewMem()
+	g, _ := genesis.NewDevnet()
+	stater := state.NewStater(db)
+	b0, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b0)
+
+	ch := repo.NewChain(b0.Header().ID())
+	st := stater.NewState(trie.Root{Hash: b0.Header().StateRoot()})
+
+	origin := thor.BytesToAddress([]byte("deployer"))
+
+	// Minimal initcode: PUSH1 0x00  PUSH1 0x00  RETURN
+	// Deploys an empty contract without reverting.
+	initcode := []byte{0x60, 0x00, 0x60, 0x00, 0xf3}
+
+	txID := thor.Bytes32{0xde, 0xad, 0xbe, 0xef}
+
+	tests := []struct {
+		name   string
+		txType tx.Type
+		want   thor.Address
+	}{
+		{
+			name:   "VeChain TypeLegacy uses txID formula",
+			txType: tx.TypeLegacy,
+			want:   thor.CreateContractAddress(txID, 0, 0),
+		},
+		{
+			name:   "EthDynamicFee uses crypto.CreateAddress",
+			txType: tx.TypeEthDynamicFee,
+			want:   thor.Address(crypto.CreateAddress(common.Address(origin), 0)),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			txCtx := &xenv.TransactionContext{
+				ID:     txID,
+				Origin: origin,
+				Type:   tt.txType,
+			}
+			exec, _ := runtime.New(ch, st, &xenv.BlockContext{}, forkFromStart).
+				PrepareClause(tx.NewClause(nil).WithData(initcode), 0, math.MaxUint64, txCtx)
+			out, _, err := exec()
+			assert.NoError(t, err)
+			assert.Nil(t, out.VMErr)
+			assert.NotNil(t, out.ContractAddress, "contract should have been deployed")
+			assert.Equal(t, tt.want, *out.ContractAddress)
+		})
+	}
 }
 
 func getMockTx(repo *chain.Repository, txType tx.Type, t *testing.T) *tx.Transaction {

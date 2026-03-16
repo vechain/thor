@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newContractAddress(_ *EVM, _ uint32) common.Address {
+func newContractAddress(_ *EVM, _ common.Address, _ uint32) common.Address {
 	return common.HexToAddress("0x012345657ABC")
 }
 

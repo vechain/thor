@@ -8,10 +8,12 @@ package chain
 import (
 	"bytes"
 	"context"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/kv"
@@ -192,6 +194,77 @@ func TestScanHeads(t *testing.T) {
 	}
 }
 
+// ethRepoTestKey is a deterministic secp256k1 private key for signing Ethereum txs in
+// repository tests. Using a fixed key makes ethTxHash values stable across test runs.
+var ethRepoTestKey, _ = crypto.HexToECDSA("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+// TestRepository_EthReceiptColdRead verifies that Ethereum-typed receipts (TypeEthDynamicFee)
+// survive a full storage round-trip when the in-memory cache is cold — the scenario that
+// occurs on every node restart.
+//
+// Setup: repo1 adds a block containing one EthDynamicFee tx with a matching receipt.
+// repo2 is opened from the same underlying database with an empty cache, simulating the
+// node restarting.  All receipt reads on repo2 must go through loadRLP → DecodeRLP.
+func TestRepository_EthReceiptColdRead(t *testing.T) {
+	db, repo1 := newTestRepo()
+	b0 := repo1.GenesisBlock()
+	ethChainID := repo1.ChainID()
+
+	to := new(thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e"))
+
+	// Build a real EthDynamicFee tx.
+	eth1559Tx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
+		ChainID(ethChainID).
+		Nonce(1).
+		MaxPriorityFeePerGas(big.NewInt(1e9)).
+		MaxFeePerGas(big.NewInt(10e9)).
+		Gas(21000).
+		To(to).
+		Value(big.NewInt(0)).
+		Build(),
+		ethRepoTestKey)
+
+	b1 := newBlock(b0, 10, eth1559Tx)
+
+	// Craft a receipt that positionally matches the transaction.
+	receipt1559 := &tx.Receipt{
+		Type:     tx.TypeEthDynamicFee,
+		GasUsed:  21000,
+		GasPayer: thor.Address{},
+		Paid:     big.NewInt(210e9),
+		Reward:   big.NewInt(21e9),
+		Reverted: false,
+		Outputs:  []*tx.Output{},
+	}
+	receipts := tx.Receipts{receipt1559}
+
+	require.NoError(t, repo1.AddBlock(b1, receipts, 0, true))
+
+	// Open a fresh repository from the same database — this simulates a node restart.
+	// repo2's in-memory receipt cache is empty; every read goes through the storage
+	// decode path (loadRLP → DecodeRLP), which was broken for Ethereum types before fix.
+	repo2, err := NewRepository(db, b0)
+	require.NoError(t, err)
+
+	// --- GetBlockReceipts: reads all receipts for the block by position ---
+	gotReceipts, err := repo2.GetBlockReceipts(b1.Header().ID())
+	require.NoError(t, err)
+	require.Len(t, gotReceipts, 1)
+
+	assert.Equal(t, tx.TypeEthDynamicFee, gotReceipts[0].Type)
+	assert.Equal(t, uint64(21000), gotReceipts[0].GasUsed)
+	assert.Equal(t, big.NewInt(21e9), gotReceipts[0].Reward)
+
+	// --- GetTransactionReceipt: resolves receipt via tx ID (= ethTxHash) ---
+	// This exercises the chain-trie path: ethTxHash → tx position → receipt key → decode.
+	chain2 := repo2.NewBestChain()
+
+	got1559Receipt, err := chain2.GetTransactionReceipt(eth1559Tx.ID())
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeEthDynamicFee, got1559Receipt.Type)
+	assert.Equal(t, big.NewInt(21e9), got1559Receipt.Reward)
+}
+
 type errorStore struct {
 	putErr    error
 	getErr    error
@@ -269,4 +342,37 @@ func TestRepository_ErrorBranches(t *testing.T) {
 		err := repo2.AddBlock(b, nil, 0, false)
 		assert.Error(t, err)
 	})
+}
+
+// TestRepository_ChainIDDerivation verifies that Repository.ChainID() returns
+// the big-endian uint16 of genesisID[30:32], and that its low byte equals the
+// VeChain ChainTag (genesisID[31]) by construction.
+//
+// Genesis block ID is hash-derived, so we vary ParentID to get genesis blocks
+// with different hashes, then check the relationship for each.
+func TestRepository_ChainIDDerivation(t *testing.T) {
+	// ParentID's first 4 bytes encode parent block number; 0xffffffff wraps
+	// to 0 in the child, which is required for genesis. Vary the trailing
+	// bytes to produce different hashes (and hence different genesis IDs).
+	parents := []thor.Bytes32{
+		{0xff, 0xff, 0xff, 0xff},
+		{0xff, 0xff, 0xff, 0xff, 0x01, 0x02, 0x03},
+		{0xff, 0xff, 0xff, 0xff, 0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe},
+		{0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff},
+	}
+	for i, parent := range parents {
+		db := muxdb.NewMem()
+		b0 := new(block.Builder).ParentID(parent).Build()
+		genesisID := b0.Header().ID()
+		expected := uint64(genesisID[30])<<8 | uint64(genesisID[31])
+
+		repo, err := NewRepository(db, b0)
+		require.NoError(t, err, "case %d", i)
+		assert.Equal(t, expected, repo.ChainID(),
+			"case %d: ChainID must equal big-endian uint16 of genesisID[30:32]", i)
+		assert.Equal(t, genesisID[31], repo.ChainTag(),
+			"case %d: ChainTag must equal genesisID[31]", i)
+		assert.Equal(t, repo.ChainTag(), byte(repo.ChainID()&0xff),
+			"case %d: ChainID low byte must equal ChainTag", i)
+	}
 }
