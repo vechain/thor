@@ -121,6 +121,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 	stater := state.NewStater(db)
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
 		ForkConfig: fc,
+		GasLimit:   thor.MaxTxGasLimit * 2,
 	})
 
 	// Build genesis block
@@ -165,6 +166,18 @@ func TestAdoptTypedTxs(t *testing.T) {
 	expectedErrorMessage = "tx not adoptable now"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// INTERSTELLAR active: over-limit tx should be rejected by EIP-7825.
+	txOverLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit+1, 3, nil, clause, tx.NewBlockRef(0))
+	err = flow.Adopt(txOverLimit)
+	assert.Equal(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+
+	// INTERSTELLAR active: at-limit tx should not fail for EIP-7825.
+	txAtLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit, 4, nil, clause, tx.NewBlockRef(0))
+	err = flow.Adopt(txAtLimit)
+	if err != nil {
+		assert.NotEqual(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
 	}
 }
 
@@ -341,6 +354,13 @@ func TestAdoptErr(t *testing.T) {
 	expectedErrorMessage = "bad tx: tx delegator blocked"
 	if err := flow.Adopt(tx5); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// INTERSTELLAR inactive: over-limit tx should not return EIP-7825 error.
+	txOverLimitPreFork := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 10, thor.MaxTxGasLimit+1, 2, nil, clause, tx.NewBlockRef(0))
+	err := flow.Adopt(txOverLimitPreFork)
+	if err != nil {
+		assert.NotEqual(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
 	}
 }
 
