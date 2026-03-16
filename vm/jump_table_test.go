@@ -42,7 +42,7 @@ func TestMcopyForkGating(t *testing.T) {
 	})
 
 	t.Run("MCOPY available on Dencun", func(t *testing.T) {
-		dencunJt := NewDencunInstructionSet()
+		dencunJt := NewPectraInstructionSet()
 		assert.NotNil(t, dencunJt[MCOPY], "MCOPY should exist in Dencun instruction set")
 		assert.NotNil(t, dencunJt[MCOPY].execute)
 		assert.NotNil(t, dencunJt[MCOPY].gasCost)

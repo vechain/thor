@@ -51,12 +51,12 @@ var (
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
 	shanghaiInstructionSet       = NewShanghaiInstructionSet()
-	dencunInstructionSet         = NewDencunInstructionSet()
+	pectraInstructionSet         = NewPectraInstructionSet()
 )
 
 type JumpTable [256]*operation
 
-func NewDencunInstructionSet() *JumpTable {
+func NewPectraInstructionSet() *JumpTable {
 	instructionSet := NewShanghaiInstructionSet()
 	instructionSet[MCOPY] = &operation{
 		execute:       opMcopy,

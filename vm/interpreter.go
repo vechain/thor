@@ -60,7 +60,7 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	if cfg.JumpTable == nil {
 		switch {
 		case evm.ChainConfig().IsPectra(evm.BlockNumber):
-			cfg.JumpTable = dencunInstructionSet
+			cfg.JumpTable = pectraInstructionSet
 		case evm.ChainConfig().IsShanghai(evm.BlockNumber):
 			cfg.JumpTable = shanghaiInstructionSet
 		case evm.ChainConfig().IsIstanbul(evm.BlockNumber):
