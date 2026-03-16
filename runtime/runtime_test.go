@@ -1109,6 +1109,108 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
 }
 
+func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
+	db := muxdb.NewMem()
+	fc := &thor.SoloFork
+	hayabusaTP := uint32(math.MaxUint32)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+	fc.HAYABUSA = math.MaxUint32
+
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: fc})
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+	repo, _ := chain.NewRepository(db, b0)
+
+	t.Run("reject tx over MaxTxGasLimit after INTERSTELLAR", func(t *testing.T) {
+		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+
+		trx := tx.NewBuilder(tx.TypeLegacy).
+			ChainTag(repo.ChainTag()).
+			Gas(thor.MaxTxGasLimit + 1).
+			Expiration(100).
+			Build()
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+		bc := &xenv.BlockContext{
+			GasLimit: thor.MaxTxGasLimit + 100,
+			Number:   1,
+		}
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		_, err := rt.ExecuteTransaction(trx)
+		assert.ErrorContains(t, err, "tx gas limit exceeds the maximum allowed")
+	})
+
+	t.Run("accept tx at MaxTxGasLimit after INTERSTELLAR", func(t *testing.T) {
+		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+
+		trx := tx.NewBuilder(tx.TypeLegacy).
+			ChainTag(repo.ChainTag()).
+			Gas(thor.MaxTxGasLimit).
+			Expiration(100).
+			Build()
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+		bc := &xenv.BlockContext{
+			GasLimit: thor.MaxTxGasLimit + 100,
+			Number:   1,
+			BaseFee:  big.NewInt(thor.InitialBaseFee),
+		}
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		receipt, err := rt.ExecuteTransaction(trx)
+		assert.NoError(t, err)
+		assert.NotNil(t, receipt)
+	})
+
+	t.Run("allow over MaxTxGasLimit before INTERSTELLAR", func(t *testing.T) {
+		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+
+		fcPreInterstellar := thor.SoloFork
+		fcPreInterstellar.INTERSTELLAR = math.MaxUint32
+		fcPreInterstellar.HAYABUSA = math.MaxUint32
+
+		trx := tx.NewBuilder(tx.TypeLegacy).
+			ChainTag(repo.ChainTag()).
+			Gas(thor.MaxTxGasLimit + 1).
+			Expiration(100).
+			Build()
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+		bc := &xenv.BlockContext{
+			GasLimit: thor.MaxTxGasLimit + 100,
+			Number:   1,
+			BaseFee:  big.NewInt(thor.InitialBaseFee),
+		}
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, &fcPreInterstellar)
+		_, err := rt.ExecuteTransaction(trx)
+		// Should not get the EIP-7825 error; may get other errors
+		if err != nil {
+			assert.NotContains(t, err.Error(), "tx gas limit exceeds the maximum allowed")
+		}
+	})
+
+	t.Run("reject dyn fee tx over MaxTxGasLimit after INTERSTELLAR", func(t *testing.T) {
+		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+
+		trx := tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(repo.ChainTag()).
+			Gas(thor.MaxTxGasLimit + 1).
+			MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+			MaxPriorityFeePerGas(big.NewInt(10000)).
+			Expiration(100).
+			Build()
+		trx = tx.MustSign(trx, genesis.DevAccounts()[0].PrivateKey)
+
+		bc := &xenv.BlockContext{
+			GasLimit: thor.MaxTxGasLimit + 100,
+			Number:   1,
+			BaseFee:  big.NewInt(thor.InitialBaseFee),
+		}
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		_, err := rt.ExecuteTransaction(trx)
+		assert.ErrorContains(t, err, "tx gas limit exceeds the maximum allowed")
+	})
+}
+
 func GetMockTx(repo *chain.Repository, t *testing.T) *tx.Transaction {
 	blockRef := tx.NewBlockRef(0)
 	chainTag := repo.ChainTag()
