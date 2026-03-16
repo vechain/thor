@@ -21,6 +21,7 @@ type DevConfig struct {
 	BaseGasPrice *big.Int
 	LaunchTime   uint64
 	Config       *thor.Config
+	GasLimit     uint64
 }
 
 // DefaultHayabusaTP is the default Hayabusa transition period (0 = immediate PoS).
@@ -106,6 +107,10 @@ func NewDevnetWithConfig(config DevConfig) *Genesis {
 		gene.LaunchTime = config.LaunchTime
 	} else {
 		gene.LaunchTime = DefaultDevnetLaunchTime
+	}
+
+	if config.GasLimit > 0 {
+		gene.GasLimit = config.GasLimit
 	}
 
 	if config.Config != nil {
