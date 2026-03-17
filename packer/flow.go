@@ -131,7 +131,7 @@ func (f *Flow) validateTxFee(t *tx.Transaction) error {
 // it will be adopted by the new block.
 func (f *Flow) Adopt(t *tx.Transaction) error {
 	origin, _ := t.Origin()
-	if f.Number() >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
+	if thor.IsForked(f.Number(), f.packer.forkConfig.BLOCKLIST) && thor.IsOriginBlocked(origin) {
 		return badTxError{"tx origin blocked"}
 	}
 
@@ -139,7 +139,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 	if err != nil {
 		return badTxError{"delegator cannot be extracted"}
 	}
-	if f.Number() >= f.packer.forkConfig.BLOCKLIST && delegator != nil && thor.IsOriginBlocked(*delegator) {
+	if thor.IsForked(f.Number(), f.packer.forkConfig.BLOCKLIST) && delegator != nil && thor.IsOriginBlocked(*delegator) {
 		return badTxError{"tx delegator blocked"}
 	}
 
@@ -162,7 +162,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 		return errGasLimitReached
 	}
-	if f.Number() < f.packer.forkConfig.GALACTICA {
+	if !thor.IsForked(f.Number(), f.packer.forkConfig.GALACTICA) {
 		if t.Type() != tx.TypeLegacy {
 			return badTxError{"invalid tx type"}
 		}
@@ -244,11 +244,11 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		builder.Transaction(tx)
 	}
 
-	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {
+	if thor.IsForked(f.Number(), f.packer.forkConfig.FINALITY) && shouldVote {
 		builder.COM()
 	}
 
-	if f.Number() < f.packer.forkConfig.VIP214 {
+	if !thor.IsForked(f.Number(), f.packer.forkConfig.VIP214) {
 		newBlock := builder.Build()
 
 		sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
