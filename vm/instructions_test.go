@@ -562,8 +562,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 	memStart := new(uint256.Int)
 	value := new(uint256.Int).SetUint64(0x1337)
 
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+	for bench.Loop() {
 		stack.push(value)
 		stack.push(memStart)
 		opMstore(&pc, env, nil, mem, stack)

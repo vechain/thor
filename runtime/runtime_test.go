@@ -33,7 +33,7 @@ import (
 
 var forkFromStart = &thor.ForkConfig{}
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -566,8 +566,10 @@ func TestEVMFunction(t *testing.T) {
 			},
 		},
 		{
-			name:       "TLOAD empty value",
-			code:       hex.EncodeToString([]byte{byte(vm.PUSH0), byte(vm.TLOAD), byte(vm.PUSH1), 0x80, byte(vm.MSTORE), byte(vm.PUSH1), 0x20, byte(vm.PUSH1), 0x80, byte(vm.RETURN)}),
+			name: "TLOAD empty value",
+			code: hex.EncodeToString(
+				[]byte{byte(vm.PUSH0), byte(vm.TLOAD), byte(vm.PUSH1), 0x80, byte(vm.MSTORE), byte(vm.PUSH1), 0x20, byte(vm.PUSH1), 0x80, byte(vm.RETURN)},
+			),
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
@@ -582,7 +584,25 @@ func TestEVMFunction(t *testing.T) {
 		{
 			name: "TLOAD after TSTORE",
 			// tstore(0, 1153) tload(0)
-			code:       hex.EncodeToString([]byte{byte(vm.PUSH2), 0x04, 0x81, byte(vm.PUSH0), byte(vm.TSTORE), byte(vm.PUSH0), byte(vm.TLOAD), byte(vm.PUSH1), 0x80, byte(vm.MSTORE), byte(vm.PUSH1), 0x20, byte(vm.PUSH1), 0x80, byte(vm.RETURN)}),
+			code: hex.EncodeToString(
+				[]byte{
+					byte(vm.PUSH2),
+					0x04,
+					0x81,
+					byte(vm.PUSH0),
+					byte(vm.TSTORE),
+					byte(vm.PUSH0),
+					byte(vm.TLOAD),
+					byte(vm.PUSH1),
+					0x80,
+					byte(vm.MSTORE),
+					byte(vm.PUSH1),
+					0x20,
+					byte(vm.PUSH1),
+					0x80,
+					byte(vm.RETURN),
+				},
+			),
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
@@ -601,9 +621,39 @@ func TestEVMFunction(t *testing.T) {
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
 				// tstore(1, 1153) tload(1)
-				code1 := []byte{byte(vm.PUSH2), 0x04, 0x81, byte(vm.PUSH1), 0x1, byte(vm.TSTORE), byte(vm.PUSH1), 0x1, byte(vm.TLOAD), byte(vm.PUSH1), 0x80, byte(vm.MSTORE), byte(vm.PUSH1), 0x20, byte(vm.PUSH1), 0x80, byte(vm.RETURN)}
+				code1 := []byte{
+					byte(vm.PUSH2),
+					0x04,
+					0x81,
+					byte(vm.PUSH1),
+					0x1,
+					byte(vm.TSTORE),
+					byte(vm.PUSH1),
+					0x1,
+					byte(vm.TLOAD),
+					byte(vm.PUSH1),
+					0x80,
+					byte(vm.MSTORE),
+					byte(vm.PUSH1),
+					0x20,
+					byte(vm.PUSH1),
+					0x80,
+					byte(vm.RETURN),
+				}
 				// tload(1)
-				code2 := []byte{byte(vm.PUSH1), 0x1, byte(vm.TLOAD), byte(vm.PUSH1), 0x80, byte(vm.MSTORE), byte(vm.PUSH1), 0x20, byte(vm.PUSH1), 0x80, byte(vm.RETURN)}
+				code2 := []byte{
+					byte(vm.PUSH1),
+					0x1,
+					byte(vm.TLOAD),
+					byte(vm.PUSH1),
+					0x80,
+					byte(vm.MSTORE),
+					byte(vm.PUSH1),
+					0x20,
+					byte(vm.PUSH1),
+					0x80,
+					byte(vm.RETURN),
+				}
 
 				ctx.state.SetCode(target, code1)
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkFromStart).
@@ -624,7 +674,7 @@ func TestEVMFunction(t *testing.T) {
 		},
 	}
 
-	var tests = []testcase{}
+	tests := []testcase{}
 
 	tests = append(tests, baseTests...)
 	tests = append(tests, shanghaiTests...)
@@ -698,7 +748,8 @@ func TestPreForkOpCode(t *testing.T) {
 			name: "MCOPY",
 			code: []byte{byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.MCOPY)},
 			op:   vm.MCOPY,
-		}, {
+		},
+		{
 			name: "TLOAD",
 			code: []byte{byte(vm.PUSH1), 0x0, byte(vm.TLOAD)},
 			op:   vm.TLOAD,
