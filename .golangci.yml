@@ -49,6 +49,9 @@ linters:
       - builtin$
       - examples$
       - p2p/*
+      # temp copies of go-ethereum
+      - common/*
+      - rlp/*
 issues:
   max-issues-per-linter: 1000
 formatters:
@@ -76,3 +79,4 @@ formatters:
       - builtin$
       - examples$
       - p2p/*
+      - common/*

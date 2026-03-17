@@ -46,7 +46,7 @@ var (
 	}
 	verbosityFlag = &cli.Uint64Flag{
 		Name:    "verbosity",
-		Value:   log.LegacyLevelWarn,
+		Value:   log.LegacyLevelInfo,
 		Usage:   "log verbosity (0-9)",
 		Sources: envVar("VERBOSITY"),
 	}
@@ -60,5 +60,11 @@ var (
 		Value:   "localhost:2112",
 		Usage:   "metrics service listening address",
 		Sources: envVar("METRICS_ADDR"),
+	}
+	disableTempDiscv5Flag = &cli.BoolFlag{
+		Name:    "disable-temp-discv5",
+		Hidden:  true,
+		Usage:   "disable legacy discovery protocol",
+		Sources: envVar("TEMP_DISCV5"),
 	}
 )
