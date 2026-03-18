@@ -51,9 +51,22 @@ var (
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
 	shanghaiInstructionSet       = NewShanghaiInstructionSet()
+	dencunInstructionSet         = NewDencunInstructionSet()
 )
 
 type JumpTable [256]*operation
+
+func NewDencunInstructionSet() *JumpTable {
+	instructionSet := NewShanghaiInstructionSet()
+	instructionSet[SELFDESTRUCT] = &operation{
+		execute:       opSuicide6780,
+		gasCost:       gasSuicide,
+		validateStack: makeStackFunc(1, 0),
+		halts:         true,
+		writes:        true,
+	}
+	return instructionSet
+}
 
 // NewShanghaiInstructionSet returns the frontier, homestead
 // byzantium, constantinople , istanbul and shanghai instructions.

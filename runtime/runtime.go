@@ -273,7 +273,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				Data:    data,
 			})
 		},
-		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
+
+		// NOTE: THIS IS CLOUSER FUNCTION.
+		// IF YOU WANT TO CHANGE THIS FUNCTION, PLEASE MAKE SURE THE LOGIC IS CORRECT.
+		// AND CHANGE THE TEST CASES IN vm/instructions_test.go ACCORDINGLY.
+		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
 			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
@@ -286,14 +290,26 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				if err != nil {
 					panic(err)
 				}
+
 				// touch the receiver's energy
-				// no need to clear contract's energy, vm will delete the whole contract later.
-				if err := rt.state.SetEnergy(
-					thor.Address(tokenReceiver),
-					new(big.Int).Add(receiverEnergy, energy),
-					rt.ctx.Time); err != nil {
-					panic(err)
+				// after EIP6780, MUST to clear contract's energy, vm delete contarct operation is optional.
+				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
+				if contractAddr.String() != tokenReceiver.String() {
+					if err := rt.state.SetEnergy(
+						thor.Address(tokenReceiver),
+						new(big.Int).Add(receiverEnergy, energy),
+						rt.ctx.Time); err != nil {
+						panic(err)
+					}
+
+					if err = rt.state.SetEnergy(
+						thor.Address(contractAddr),
+						big.NewInt(0),
+						rt.ctx.Time); err != nil {
+						panic(err)
+					}
 				}
+
 				// emit event if there is energy in the account
 				if energy.Sign() != 0 {
 					// see ERC20's Transfer event
@@ -317,7 +333,12 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 
 			if bal.Sign() != 0 {
-				stateDB.AddBalance(tokenReceiver, bal)
+				// after EIP6780, MUST to clear contract's VET, vm delete contarct operation is optional.
+				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
+				if contractAddr.String() != tokenReceiver.String() {
+					stateDB.AddBalance(tokenReceiver, bal)
+					stateDB.SubBalance(contractAddr, bal)
+				}
 
 				stateDB.AddTransfer(&tx.Transfer{
 					Sender:    thor.Address(contractAddr),
@@ -325,6 +346,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 					Amount:    bal,
 				})
 			}
+
 		},
 		Origin:      common.Address(txCtx.Origin),
 		GasPrice:    txCtx.GasPrice,
