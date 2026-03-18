@@ -171,7 +171,7 @@ func (tc *testConsensus) sign(builder *block.Builder) (*block.Block, error) {
 func (tc *testConsensus) signWithKey(builder *block.Builder, pk *ecdsa.PrivateKey) (*block.Block, error) {
 	h := builder.Build().Header()
 
-	if h.Number() >= tc.forkConfig.VIP214 {
+	if thor.IsForked(h.Number(), tc.forkConfig.VIP214) {
 		var alpha []byte
 		if h.Number() == tc.forkConfig.VIP214 {
 			alpha = tc.parent.Header().StateRoot().Bytes()
