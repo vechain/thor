@@ -156,7 +156,7 @@ func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error)
 	}
 
 	var shouldVote bool
-	if flow.Number() >= n.forkConfig.FINALITY {
+	if thor.IsForked(flow.Number(), n.forkConfig.FINALITY) {
 		shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 		if err != nil {
 			return errors.Wrap(err, "get vote")

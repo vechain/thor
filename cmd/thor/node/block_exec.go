@@ -185,8 +185,8 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 	}
 
 	// commit block in bft engine
-	if ctx.newBlock.Header().Number() >= n.forkConfig.FINALITY {
-		if err := n.bft.CommitBlock(ctx.newBlock.Header(), ctx.conflicts, ctx.packing); err != nil {
+	if thor.IsForked(ctx.newBlock.Header().Number(), n.forkConfig.FINALITY) {
+		if err := n.bft.CommitBlock(ctx.newBlock.Header(), ctx.packing); err != nil {
 			return errors.Wrap(err, "bft commits")
 		}
 	}

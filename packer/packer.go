@@ -63,7 +63,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (*Flo
 	st := p.stater.NewState(parent.Root())
 
 	var features tx.Features
-	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
+	if thor.IsForked(parent.Header.Number()+1, p.forkConfig.VIP191) {
 		features |= tx.DelegationFeature
 	}
 
@@ -109,7 +109,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 	state := p.stater.NewState(parent.Root())
 
 	var features tx.Features
-	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
+	if thor.IsForked(parent.Header.Number()+1, p.forkConfig.VIP191) {
 		features |= tx.DelegationFeature
 	}
 
@@ -175,7 +175,7 @@ func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit ui
 	}
 
 	var baseFee *big.Int
-	if parent.Header.Number()+1 >= p.forkConfig.GALACTICA {
+	if thor.IsForked(parent.Header.Number()+1, p.forkConfig.GALACTICA) {
 		baseFee = galactica.CalcBaseFee(parent.Header, p.forkConfig)
 	}
 

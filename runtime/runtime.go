@@ -525,7 +525,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 				return nil, err
 			}
 
-			if rt.ctx.Number < rt.forkConfig.GALACTICA {
+			if !thor.IsForked(rt.ctx.Number, rt.forkConfig.GALACTICA) {
 				provedWork, err := trx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
 				if err != nil {
 					return nil, err
