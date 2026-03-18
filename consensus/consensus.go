@@ -57,7 +57,7 @@ func (c *Consensus) Process(
 	state := c.stater.NewState(parentSummary.Root())
 
 	var features tx.Features
-	if header.Number() >= c.forkConfig.VIP191 {
+	if thor.IsForked(header.Number(), c.forkConfig.VIP191) {
 		features |= tx.DelegationFeature
 	}
 

@@ -52,7 +52,7 @@ func (p *Packer) schedulePOA(parent *chain.BlockSummary, nowTimestamp uint64, st
 
 	// calc the time when it's turn to produce block
 	var sched scheduler.Scheduler
-	if parent.Header.Number()+1 < p.forkConfig.VIP214 {
+	if !thor.IsForked(parent.Header.Number()+1, p.forkConfig.VIP214) {
 		sched, err = scheduler.NewPoASchedulerV1(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp())
 	} else {
 		var seed []byte
