@@ -65,6 +65,12 @@ func NewDencunInstructionSet() *JumpTable {
 		halts:         true,
 		writes:        true,
 	}
+	instructionSet[MCOPY] = &operation{
+		execute:       opMcopy,
+		gasCost:       gasMcopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryMcopy,
+	}
 	return instructionSet
 }
 

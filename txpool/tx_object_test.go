@@ -190,13 +190,19 @@ func TestExecutable(t *testing.T) {
 		expectedErr string
 	}{
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
-		{newTx(tx.TypeLegacy, 0, nil, b0.Header().GasLimit(), tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "tx gas limit exceeds the maximum allowed"},
 		{newTx(tx.TypeLegacy, 0, nil, b0.Header().GasLimit()+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "tx gas exceeds block gas limit"},
 		{newTx(tx.TypeLegacy, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "tx gas exceeds block gas limit"},
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
 		{newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, tx.Features(0), acc), false, ""},
 		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), true, ""},
+		{
+			newTx(tx.TypeDynamicFee, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc),
+			false,
+			"tx gas limit exceeds the maximum allowed",
+		},
 		{newTx(tx.TypeDynamicFee, 0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, tx.Features(0), acc), false, "tx gas exceeds block gas limit"},
 		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{1}, 100, nil, tx.Features(0), acc), true, "block ref out of schedule"},
 		{newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 0, nil, tx.Features(0), acc), true, "expired"},
@@ -218,10 +224,75 @@ func TestExecutable(t *testing.T) {
 	}
 }
 
+func TestExecutableMaxTxGasLimit(t *testing.T) {
+	acc := genesis.DevAccounts()[0]
+
+	// Test with INTERSTELLAR active (block 0) - genesis gas limit is 40M > MaxTxGasLimit
+	interstellarActive := &thor.SoloFork
+	tchain, err := testchain.NewWithFork(interstellarActive, 180)
+	assert.Nil(t, err)
+	repo := tchain.Repo()
+	db := tchain.Database()
+
+	b0 := repo.GenesisBlock()
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	baseFee := galactica.CalcBaseFee(b0.Header(), interstellarActive)
+
+	// At limit: should pass the EIP-7825 check (block gas limit is 40M, so also passes that)
+	txAtLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj, err := ResolveTx(txAtLimit, false)
+	assert.Nil(t, err)
+	exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	assert.True(t, exe)
+	assert.Nil(t, err)
+
+	// Over limit: should fail with EIP-7825 error (not block gas limit, since 40M > MaxTxGasLimit+1)
+	txOverLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj, err = ResolveTx(txOverLimit, false)
+	assert.Nil(t, err)
+	exe, err = txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	assert.False(t, exe)
+	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
+
+	// DynamicFee over limit
+	txDynOverLimit := newTx(tx.TypeDynamicFee, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj, err = ResolveTx(txDynOverLimit, false)
+	assert.Nil(t, err)
+	exe, err = txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	assert.False(t, exe)
+	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
+
+	// Test with INTERSTELLAR not active: EIP-7825 check does not apply
+	interstellarInactive := &thor.ForkConfig{
+		INTERSTELLAR: math.MaxUint32,
+		HAYABUSA:     math.MaxUint32,
+		GALACTICA:    0,
+	}
+	hayabusaTP := uint32(math.MaxUint32)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	tchain2, err := testchain.NewWithFork(interstellarInactive, 180)
+	assert.Nil(t, err)
+	repo2 := tchain2.Repo()
+	db2 := tchain2.Database()
+	b0_2 := repo2.GenesisBlock()
+	st2 := state.New(db2, trie.Root{Hash: b0_2.Header().StateRoot()})
+	baseFee2 := galactica.CalcBaseFee(b0_2.Header(), interstellarInactive)
+
+	// Over MaxTxGasLimit but INTERSTELLAR not active and under block gas limit (40M): should pass
+	txOverLimitPreFork := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj2, err := ResolveTx(txOverLimitPreFork, false)
+	assert.Nil(t, err)
+	exe, err = txObj2.Executable(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2)
+	assert.True(t, exe)
+	assert.Nil(t, err)
+}
+
 func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
-		GALACTICA: 2,
-		HAYABUSA:  math.MaxUint32,
+		GALACTICA:    2,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
@@ -260,8 +331,9 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 
 func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
-		VIP191:   2,
-		HAYABUSA: math.MaxUint32,
+		VIP191:       2,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})

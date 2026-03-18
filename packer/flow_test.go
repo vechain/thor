@@ -121,6 +121,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 	stater := state.NewStater(db)
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
 		ForkConfig: fc,
+		GasLimit:   thor.MaxTxGasLimit * 2,
 	})
 
 	// Build genesis block
@@ -165,6 +166,18 @@ func TestAdoptTypedTxs(t *testing.T) {
 	expectedErrorMessage = "tx not adoptable now"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// INTERSTELLAR active: over-limit tx should be rejected by EIP-7825.
+	txOverLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit+1, 3, nil, clause, tx.NewBlockRef(0))
+	err = flow.Adopt(txOverLimit)
+	assert.Equal(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+
+	// INTERSTELLAR active: at-limit tx should not fail for EIP-7825.
+	txAtLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit, 4, nil, clause, tx.NewBlockRef(0))
+	err = flow.Adopt(txAtLimit)
+	if err != nil {
+		assert.NotEqual(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
 	}
 }
 
@@ -342,10 +355,17 @@ func TestAdoptErr(t *testing.T) {
 	if err := flow.Adopt(tx5); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
+
+	// INTERSTELLAR inactive: over-limit tx should not return EIP-7825 error.
+	txOverLimitPreFork := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 10, thor.MaxTxGasLimit+1, 2, nil, clause, tx.NewBlockRef(0))
+	err := flow.Adopt(txOverLimitPreFork)
+	if err != nil {
+		assert.NotEqual(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+	}
 }
 
 func TestAdoptErrorAfterGalactica(t *testing.T) {
-	forks := thor.ForkConfig{GALACTICA: 2, HAYABUSA: math.MaxUint32}
+	forks := thor.ForkConfig{GALACTICA: 2, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32}
 	chain, err := testchain.NewWithFork(&forks, 180)
 	assert.NoError(t, err)
 
@@ -407,7 +427,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 }
 
 func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
-	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32}, 180)
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32}, 180)
 	assert.NoError(t, err)
 
 	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
@@ -436,7 +456,7 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 
 func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	config := genesis.DevConfig{
-		ForkConfig:   &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32},
+		ForkConfig:   &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32},
 		BaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
 	}
 	chain, err := testchain.NewIntegrationTestChain(config, 180)

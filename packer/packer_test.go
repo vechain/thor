@@ -194,11 +194,12 @@ func TestBlocklist(t *testing.T) {
 	stater := state.NewStater(db)
 
 	forkConfig := &thor.ForkConfig{
-		VIP191:    math.MaxUint32,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 0,
-		GALACTICA: math.MaxUint32,
-		HAYABUSA:  math.MaxUint32,
+		VIP191:       math.MaxUint32,
+		ETH_CONST:    math.MaxUint32,
+		BLOCKLIST:    0,
+		GALACTICA:    math.MaxUint32,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
 	}
 
 	thor.MockBlocklist([]string{a0.Address.String()})

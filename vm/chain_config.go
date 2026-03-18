@@ -37,6 +37,7 @@ func (c *ChainConfig) IsShanghai(num *big.Int) bool {
 	return isForked(c.ShanghaiBlock, num)
 }
 
+// IsDencun returns whether num is either equal to the Dencun fork block or greater.
 func (c *ChainConfig) IsDencun(num *big.Int) bool {
 	return isForked(c.DencunBlock, num)
 }
@@ -68,8 +69,8 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsEIP155:    c.IsEIP155(num),
 		IsEIP158:    c.IsEIP158(num),
 		IsByzantium: c.IsByzantium(num),
-		IsIstanbul:  c.IsIstanbul((num)),
-		IsShanghai:  c.IsShanghai((num)),
+		IsIstanbul:  c.IsIstanbul(num),
+		IsShanghai:  c.IsShanghai(num),
 		IsDencun:    c.IsDencun(num),
 	}
 }

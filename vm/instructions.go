@@ -835,6 +835,18 @@ func opPush0(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *St
 	return nil, nil
 }
 
+// opMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
+func opMcopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		dst    = stack.popptr()
+		src    = stack.popptr()
+		length = stack.popptr()
+	)
+	// These values are checked for overflow during memory expansion calculation
+	memory.Copy(dst.Uint64(), src.Uint64(), length.Uint64())
+	return nil, nil
+}
+
 // following functions are used by the instruction jump  table
 
 // make log instruction function
