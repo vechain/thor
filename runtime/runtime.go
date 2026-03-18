@@ -346,8 +346,8 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 					Amount:    bal,
 				})
 			}
-
 		},
+
 		Origin:      common.Address(txCtx.Origin),
 		GasPrice:    txCtx.GasPrice,
 		Coinbase:    common.Address(rt.ctx.Beneficiary),

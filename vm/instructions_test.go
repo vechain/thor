@@ -600,7 +600,11 @@ func TestOpSuicide6780(t *testing.T) {
 	masterAddress := common.HexToAddress("0x01")
 	contractAddr := common.HexToAddress("0x02")
 	tokenReceiver := common.HexToAddress("0x03")
-	energyABI, _ := abi.New([]byte(`[{"anonymous":false,"inputs":[{"indexed":true,"name":"_from","type":"address"},{"indexed":true,"name":"_to","type":"address"},{"indexed":false,"name":"_value","type":"uint256"}],"name":"Transfer","type":"event"}]`))
+	energyABI, _ := abi.New(
+		[]byte(
+			`[{"anonymous":false,"inputs":[{"indexed":true,"name":"_from","type":"address"},{"indexed":true,"name":"_to","type":"address"},{"indexed":false,"name":"_value","type":"uint256"}],"name":"Transfer","type":"event"}]`,
+		),
+	)
 	energyTransferEvent, _ := energyABI.EventByName("Transfer")
 
 	type testcase struct {
@@ -611,7 +615,7 @@ func TestOpSuicide6780(t *testing.T) {
 
 	tests := []testcase{}
 
-	var newEVMInstance = func(state *State.State) *EVM {
+	newEVMInstance := func(state *State.State) *EVM {
 		stateDB := Statedb.New(state)
 		evm := NewEVM(Context{
 			BlockNumber: big.NewInt(1),
