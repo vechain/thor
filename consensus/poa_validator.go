@@ -46,7 +46,7 @@ func (c *Consensus) validateAuthorityProposer(header *block.Header, parent *bloc
 	}
 
 	var sched scheduler.Scheduler
-	if header.Number() < c.forkConfig.VIP214 {
+	if !thor.IsForked(header.Number(), c.forkConfig.VIP214) {
 		sched, err = scheduler.NewPoASchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
 	} else {
 		var seed []byte
@@ -115,7 +115,7 @@ func (p *poaCacher) Handle(header *block.Header, receipts tx.Receipts) (any, err
 				for _, ev := range o.Events {
 					// after HAYABUSA, authorities are allowed to migrate to staker contract,
 					// so any staker contract event(AddValidation, StakeIncreased/Decreased/Withdrawn) will need to invalidate cache
-					if header.Number() >= p.forkConfig.HAYABUSA && ev.Address == builtin.Staker.Address {
+					if thor.IsForked(header.Number(), p.forkConfig.HAYABUSA) && ev.Address == builtin.Staker.Address {
 						return true
 					}
 					if ev.Address == builtin.Params.Address {

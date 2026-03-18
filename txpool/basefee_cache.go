@@ -30,7 +30,7 @@ func newBaseFeeCache(forkConfig *thor.ForkConfig) *baseFeeCache {
 // Get returns the base fee with the given parent block.
 // Before GALACTICA, the base fee is not set, so it returns nil.
 func (p *baseFeeCache) Get(parent *block.Header) *big.Int {
-	if parent.Number()+1 < p.forkConfig.GALACTICA {
+	if !thor.IsForked(parent.Number()+1, p.forkConfig.GALACTICA) {
 		return nil
 	}
 

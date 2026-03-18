@@ -109,7 +109,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 
 	signature := header.Signature()
 
-	if header.Number() < c.forkConfig.VIP214 {
+	if !thor.IsForked(header.Number(), c.forkConfig.VIP214) {
 		if len(header.Alpha()) > 0 {
 			return consensusError("invalid block, alpha should be empty before VIP214")
 		}
@@ -142,13 +142,13 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		}
 	}
 
-	if header.Number() < c.forkConfig.FINALITY {
+	if !thor.IsForked(header.Number(), c.forkConfig.FINALITY) {
 		if header.COM() {
 			return consensusError("invalid block: COM should not set before fork FINALITY")
 		}
 	}
 
-	if header.Number() < c.forkConfig.GALACTICA {
+	if !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) {
 		if header.BaseFee() != nil {
 			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
 		}
@@ -181,7 +181,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
 		}
 
-		if header.Number() >= c.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
+		if thor.IsForked(header.Number(), c.forkConfig.BLOCKLIST) && thor.IsOriginBlocked(origin) {
 			return consensusError(fmt.Sprintf("tx origin blocked got packed: %v", origin))
 		}
 
@@ -189,7 +189,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		if err != nil {
 			return consensusError(fmt.Sprintf("tx delegator unavailable: %v", err))
 		}
-		if header.Number() >= c.forkConfig.BLOCKLIST && delegator != nil && thor.IsOriginBlocked(*delegator) {
+		if thor.IsForked(header.Number(), c.forkConfig.BLOCKLIST) && delegator != nil && thor.IsOriginBlocked(*delegator) {
 			return consensusError(fmt.Sprintf("tx delegator blocked got packed: %v", delegator))
 		}
 
@@ -200,7 +200,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
 		case tr.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
-		case header.Number() < c.forkConfig.GALACTICA && tr.Type() != tx.TypeLegacy:
+		case !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) && tr.Type() != tx.TypeLegacy:
 			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
 		}
 

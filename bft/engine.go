@@ -424,7 +424,7 @@ func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
 		return cached.(*bftState), nil
 	}
 
-	if header.Number() == 0 || header.Number() < engine.forkConfig.FINALITY {
+	if header.Number() == 0 || !thor.IsForked(header.Number(), engine.forkConfig.FINALITY) {
 		return &bftState{}, nil
 	}
 
@@ -455,8 +455,7 @@ func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
 	}
 
 	h := header
-	// stop iterating at the genesis block, whose signer is the zero address
-	for h.Number() > 0 && h.Number() >= engine.forkConfig.FINALITY {
+	for thor.IsForked(h.Number(), engine.forkConfig.FINALITY) {
 		signer, _ := h.Signer()
 
 		var weight uint64
@@ -662,7 +661,7 @@ func (e *soloMockedEngine) Finalized() thor.Bytes32 {
 	bestNum := best.Header.Number()
 
 	// Before FINALITY activation, return genesis
-	if bestNum < e.forkConfig.FINALITY {
+	if !thor.IsForked(bestNum, e.forkConfig.FINALITY) {
 		return e.repo.GenesisBlock().Header().ID()
 	}
 
@@ -697,7 +696,7 @@ func (e *soloMockedEngine) Justified() (thor.Bytes32, error) {
 	bestNum := best.Header.Number()
 
 	// Before FINALITY activation, return genesis
-	if bestNum < e.forkConfig.FINALITY {
+	if !thor.IsForked(bestNum, e.forkConfig.FINALITY) {
 		return e.repo.GenesisBlock().Header().ID(), nil
 	}
 
