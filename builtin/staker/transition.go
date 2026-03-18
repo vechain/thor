@@ -73,7 +73,7 @@ func (s *Staker) TransitionPeriodBalanceCheck(fc *thor.ForkConfig, currentBlock 
 		if balance.Cmp(endorsement) >= 0 {
 			return true, nil
 		}
-		if currentBlock < fc.HAYABUSA { // before HAYABUSA fork, we only check the account balance
+		if !thor.IsForked(currentBlock, fc.HAYABUSA) { // before HAYABUSA fork, we only check the account balance
 			return false, nil
 		}
 		validation, err := s.validationService.GetValidation(validator)
