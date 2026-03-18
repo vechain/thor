@@ -17,7 +17,7 @@ import (
 
 // CalcBaseFee calculates the base fee of the next block with the given parent block header.
 func CalcBaseFee(parent *block.Header, forkConfig *thor.ForkConfig) *big.Int {
-	if parent.Number()+1 < forkConfig.GALACTICA {
+	if !thor.IsForked(parent.Number()+1, forkConfig.GALACTICA) {
 		return nil
 	} else if parent.Number()+1 == forkConfig.GALACTICA {
 		// If the current block is the first Galactica block, return the InitialBaseFee.

@@ -20,8 +20,8 @@ type ForkConfig struct {
 	ETH_IST      uint32
 	VIP214       uint32
 	FINALITY     uint32
-	HAYABUSA     uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
 	GALACTICA    uint32
+	HAYABUSA     uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
 	INTERSTELLAR uint32
 }
 
@@ -82,7 +82,7 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		ETH_IST:      9_254_300,
 		VIP214:       10_653_500,
 		FINALITY:     13_815_000,
-		GALACTICA:    22_084_200, // ~ Tue, 01 Jul 2025 12:00:00 UTC
+		GALACTICA:    22_084_200,
 		HAYABUSA:     23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
 		INTERSTELLAR: math.MaxUint32,
 	},
@@ -94,7 +94,7 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		ETH_IST:      9_146_700,
 		VIP214:       10_606_800,
 		FINALITY:     13_086_360,
-		GALACTICA:    21_770_500, // ~ Tue, 20 May 2025 12:00:00 UTC
+		GALACTICA:    21_770_500,
 		HAYABUSA:     23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
 		INTERSTELLAR: math.MaxUint32,
 	},
@@ -104,4 +104,9 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 // Only works for the well-known networks.Custom network will get nil.
 func GetForkConfig(genesisID Bytes32) *ForkConfig {
 	return forkConfigs[genesisID]
+}
+
+// IsForked returns true if the given block number is already forked comparing to the given fork number.
+func IsForked(blockNum uint32, forkNum uint32) bool {
+	return blockNum >= forkNum
 }
