@@ -61,15 +61,16 @@ var NoFork = ForkConfig{
 
 // SoloFork is used to define the solo fork config.
 var SoloFork = ForkConfig{
-	VIP191:       0,
-	ETH_CONST:    0,
-	BLOCKLIST:    0,
-	ETH_IST:      0,
-	VIP214:       0,
-	FINALITY:     0,
-	GALACTICA:    0,
-	HAYABUSA:     0,
-	INTERSTELLAR: 0,
+	VIP191:    0,
+	ETH_CONST: 0,
+	BLOCKLIST: 0,
+	ETH_IST:   0,
+	VIP214:    0,
+	FINALITY:  0,
+	GALACTICA: 0,
+	HAYABUSA:  0,
+
+	INTERSTELLAR: 1, // set to 1 to make genesis stable during development
 }
 
 // for well-known networks
