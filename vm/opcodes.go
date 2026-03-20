@@ -65,6 +65,7 @@ const (
 	SHL
 	SHR
 	SAR
+	CLZ
 
 	SHA3 = 0x20
 )
@@ -246,6 +247,7 @@ var opCodeToString = map[OpCode]string{
 	SHL:    "SHL",
 	SHR:    "SHR",
 	SAR:    "SAR",
+	CLZ:    "CLZ",
 	ADDMOD: "ADDMOD",
 	MULMOD: "MULMOD",
 
@@ -422,6 +424,7 @@ var stringToOp = map[string]OpCode{
 	"SHL":            SHL,
 	"SHR":            SHR,
 	"SAR":            SAR,
+	"CLZ":            CLZ,
 	"ADDMOD":         ADDMOD,
 	"MULMOD":         MULMOD,
 	"SHA3":           SHA3,
