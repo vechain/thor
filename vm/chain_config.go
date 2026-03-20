@@ -24,7 +24,7 @@ type ChainConfig struct {
 	params.ChainConfig
 	IstanbulBlock *big.Int `json:"istanbulBlock,omitempty"` // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 	ShanghaiBlock *big.Int `json:"shanghaiBlock,omitempty"` // Shanghai switch block (nil = no fork, 0 = already on shanghai)
-	FusakaBlock   *big.Int `json:"fusakaBlock,omitempty"`   // Fusaka switch block (nil = no fork, 0 = already on fusaka)
+	OsakaBlock    *big.Int `json:"osakaBlock,omitempty"`    // Osaka switch block (nil = no fork, 0 = already on osaka)
 }
 
 // IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
@@ -37,10 +37,9 @@ func (c *ChainConfig) IsShanghai(num *big.Int) bool {
 	return isForked(c.ShanghaiBlock, num)
 }
 
-// IsFusaka returns whether num is either equal to the Fusaka fork block or greater.
-// Fusaka is the VeChain INTERSTELLAR umbrella covering Dencun, Pectra and Osaka EVM changes.
-func (c *ChainConfig) IsFusaka(num *big.Int) bool {
-	return isForked(c.FusakaBlock, num)
+// IsOsaka returns whether num is either equal to the Osaka fork block or greater.
+func (c *ChainConfig) IsOsaka(num *big.Int) bool {
+	return isForked(c.OsakaBlock, num)
 }
 
 // Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
@@ -54,7 +53,7 @@ type Rules struct {
 	IsByzantium                               bool
 	IsIstanbul                                bool
 	IsShanghai                                bool
-	IsFusaka                                  bool
+	IsOsaka                                   bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -72,6 +71,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsByzantium: c.IsByzantium(num),
 		IsIstanbul:  c.IsIstanbul(num),
 		IsShanghai:  c.IsShanghai(num),
-		IsFusaka:    c.IsFusaka(num),
+		IsOsaka:     c.IsOsaka(num),
 	}
 }

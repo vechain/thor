@@ -293,7 +293,7 @@ func ReprocessChainFromSnapshot(
 			}
 
 			// commit block in bft engine
-			if blk.Header().Number() >= forkConfig.FINALITY {
+			if thor.IsForked(blk.Header().Number(), forkConfig.FINALITY) {
 				if err := bftEngine.CommitBlock(blk.Header(), false); err != nil {
 					return errors.Wrap(err, "bft commits")
 				}
