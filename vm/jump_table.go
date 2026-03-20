@@ -68,6 +68,13 @@ func NewOsakaInstructionSet() *JumpTable {
 // byzantium, constantinople, istanbul, london, shanghai and cancun instructions.
 func NewCancunInstructionSet() *JumpTable {
 	instructionSet := NewShanghaiInstructionSet()
+	instructionSet[SELFDESTRUCT] = &operation{
+		execute:       opSuicide6780,
+		gasCost:       gasSuicide,
+		validateStack: makeStackFunc(1, 0),
+		halts:         true,
+		writes:        true,
+	}
 	instructionSet[MCOPY] = &operation{
 		execute:       opMcopy,
 		gasCost:       gasMcopy,

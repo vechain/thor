@@ -135,6 +135,10 @@ type EVM struct {
 	// contract created during execution.
 	// this value is important for generating contract address.
 	contractCreationCount uint32
+
+	// contractStatusMap is used to record the contract address created or suicided during execution in a clause.
+	// the value is status tag, 0 is not exist (default value), 1 means created, 2 means suicided.
+	contractStatusMap map[common.Address]int
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -149,6 +153,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *ChainConfig, vmConfig Con
 	}
 
 	evm.interpreter = NewInterpreter(evm, vmConfig)
+	evm.contractStatusMap = make(map[common.Address]int)
 	return evm
 }
 
@@ -462,7 +467,9 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	// Increase counter, same behavior as Create()
 	// We already have address, just need to increase the counter.
+	// set contract status to map, it can check the contract status created or suicided in the clause
 	evm.contractCreationCount++
+	evm.SetContractStatus(contractAddr, 1)
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
@@ -522,7 +529,9 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
+		// clear the map when revert to snapshot, otherwise the map will be inconsistent with stateDB after revert to snapshot.
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.contractStatusMap = make(map[common.Address]int)
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas)
 		}
@@ -536,3 +545,15 @@ func (evm *EVM) ChainConfig() *ChainConfig { return evm.chainConfig }
 
 // Interpreter returns the EVM interpreter
 func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
+
+func (evm *EVM) GetContractStatus(addr common.Address) (status int) {
+	status, exists := evm.contractStatusMap[addr]
+	if !exists {
+		return 0
+	}
+	return status
+}
+
+func (evm *EVM) SetContractStatus(addr common.Address, status int) {
+	evm.contractStatusMap[addr] = status
+}

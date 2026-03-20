@@ -781,6 +781,31 @@ func opSuicide(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack)
 	}
 
 	evm.StateDB.Suicide(contract.Address())
+	evm.SetContractStatus(contract.Address(), 2)
+	return nil, nil
+}
+
+func opSuicide6780(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack) ([]byte, error) {
+	receiver := stack.popptr().Bytes20()
+
+	if evm.vmConfig.Tracer != nil {
+		bal := evm.StateDB.GetBalance(contract.Address())
+		evm.vmConfig.Tracer.CaptureEnter(SELFDESTRUCT, contract.Address(), receiver, []byte{}, 0, bal)
+		evm.vmConfig.Tracer.CaptureExit([]byte{}, 0, nil)
+	}
+
+	if evm.OnSuicideContract != nil {
+		// let runtime do transfer things
+		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver))
+	}
+
+	status := evm.GetContractStatus(contract.Address())
+
+	if status == 1 {
+		evm.StateDB.Suicide(contract.Address())
+		evm.SetContractStatus(contract.Address(), 2)
+	}
+
 	return nil, nil
 }
 
