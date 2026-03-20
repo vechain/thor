@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"maps"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -99,16 +98,23 @@ var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
-// PrecompiledContractsPectra contains the default set of pre-compiled Ethereum
-// contracts used in the Pectra release.
-// NOTE: Pectra bundles Ethereum Dencun (TLOAD/TSTORE/MCOPY opcodes, no KZG precompile)
-// and Prague (EIP-2537 BLS12-381 precompiles) into a single Thor fork (INTERSTELLAR).
-// It is built from PrecompiledContractsShanghai extended with EIP-2537 entries in init().
-//
-// Address 10 (0x0a) — EIP-4844 KZG point evaluation — is intentionally absent.
-// KZG is not applicable to VeChain (no blob transactions).
-// Addresses 11–17 (0x0b–0x11) are the EIP-2537 BLS12-381 precompiles.
-var PrecompiledContractsPectra = map[common.Address]PrecompiledContract{
+// PrecompiledContractsPrague contains the set of pre-compiled Ethereum
+// contracts used in the Prague release.
+var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &safeEcrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true}, // eip7883
+	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
+	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
+	common.BytesToAddress([]byte{9}): &blake2F{},
+
+	// Address 10 (0x0a) — EIP-4844 KZG point evaluation — is intentionally absent.
+	// KZG is not applicable to VeChain (no blob transactions).
+	// Addresses 11–17 (0x0b–0x11) are the EIP-2537 BLS12-381 precompiles.
+
 	// EIP-2537: BLS12-381 curve operations (Prague)
 	common.BytesToAddress([]byte{11}): &bls12381G1Add{},
 	common.BytesToAddress([]byte{12}): &bls12381G1MultiExp{},
@@ -119,8 +125,25 @@ var PrecompiledContractsPectra = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{17}): &bls12381MapG2{},
 }
 
+// PrecompiledContractsOsaka contains the set of pre-compiled Ethereum
+// contracts used in the Osaka release.
+var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &safeEcrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true}, // eip7823
+	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
+	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
+	common.BytesToAddress([]byte{9}): &blake2F{},
+	// bls12381 precompiles
+
+	// secp256r1 precompiles
+}
+
 var (
-	PrecompiledAddressesPectra    []common.Address
+	PrecompiledAddressesOsaka     []common.Address
 	PrecompiledAddressesShanghai  []common.Address
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
@@ -140,18 +163,16 @@ func init() {
 	for k := range PrecompiledContractsShanghai {
 		PrecompiledAddressesShanghai = append(PrecompiledAddressesShanghai, k)
 	}
-	// Pectra inherits all Shanghai precompiles and adds BLS12-381 entries.
-	maps.Copy(PrecompiledContractsPectra, PrecompiledContractsShanghai)
-	for k := range PrecompiledContractsPectra {
-		PrecompiledAddressesPectra = append(PrecompiledAddressesPectra, k)
+	for k := range PrecompiledContractsOsaka {
+		PrecompiledAddressesOsaka = append(PrecompiledAddressesOsaka, k)
 	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules Rules) []common.Address {
 	switch {
-	case rules.IsPectra:
-		return PrecompiledAddressesPectra
+	case rules.IsOsaka:
+		return PrecompiledAddressesOsaka
 	case rules.IsShanghai:
 		return PrecompiledAddressesShanghai
 	case rules.IsIstanbul:

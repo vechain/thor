@@ -33,7 +33,7 @@ func TestPush0OpCode(t *testing.T) {
 }
 
 func TestMcopyForkGating(t *testing.T) {
-	t.Run("MCOPY unavailable pre-Dencun", func(t *testing.T) {
+	t.Run("MCOPY unavailable pre-Cancun", func(t *testing.T) {
 		shanghaiJt := NewShanghaiInstructionSet()
 		assert.Nil(t, shanghaiJt[MCOPY], "MCOPY should not exist in Shanghai instruction set")
 
@@ -41,11 +41,11 @@ func TestMcopyForkGating(t *testing.T) {
 		assert.Nil(t, istanbulJt[MCOPY], "MCOPY should not exist in Istanbul instruction set")
 	})
 
-	t.Run("MCOPY available on Dencun", func(t *testing.T) {
-		dencunJt := NewPectraInstructionSet()
-		assert.NotNil(t, dencunJt[MCOPY], "MCOPY should exist in Dencun instruction set")
-		assert.NotNil(t, dencunJt[MCOPY].execute)
-		assert.NotNil(t, dencunJt[MCOPY].gasCost)
-		assert.NotNil(t, dencunJt[MCOPY].memorySize)
+	t.Run("MCOPY available on Cancun", func(t *testing.T) {
+		cancunJt := NewCancunInstructionSet()
+		assert.NotNil(t, cancunJt[MCOPY], "MCOPY should exist in Cancun instruction set")
+		assert.NotNil(t, cancunJt[MCOPY].execute)
+		assert.NotNil(t, cancunJt[MCOPY].gasCost)
+		assert.NotNil(t, cancunJt[MCOPY].memorySize)
 	})
 }

@@ -99,7 +99,7 @@ func TestInterpreterInvalidOpcode_Run(t *testing.T) {
 }
 
 func TestInterpreterMcopy_Run(t *testing.T) {
-	jt := NewPectraInstructionSet()
+	jt := NewCancunInstructionSet()
 	interpreter := GetNewInterpreter(jt)
 
 	// EIP-5656 test: MCOPY 0 32 32
@@ -136,7 +136,7 @@ func TestInterpreterMcopy_Run(t *testing.T) {
 }
 
 func TestInterpreterMcopyRunWithOverflow(t *testing.T) {
-	jt := NewPectraInstructionSet()
+	jt := NewCancunInstructionSet()
 	interpreter := GetNewInterpreter(jt)
 
 	testCases := []struct {

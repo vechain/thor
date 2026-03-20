@@ -51,12 +51,27 @@ var (
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
 	shanghaiInstructionSet       = NewShanghaiInstructionSet()
-	pectraInstructionSet         = NewPectraInstructionSet()
+	osakaInstructionSet          = NewOsakaInstructionSet()
 )
 
 type JumpTable [256]*operation
 
+// NewOsakaInstructionSet returns the frontier, homestead
+// byzantium, constantinople, istanbul, london, shanghai, cancun, prague and osaka instructions.
+func NewOsakaInstructionSet() *JumpTable {
+	instructionSet := NewPectraInstructionSet()
+
+	return instructionSet
+}
+
 func NewPectraInstructionSet() *JumpTable {
+	instructionSet := NewCancunInstructionSet()
+	return instructionSet
+}
+
+// NewCancunInstructionSet returns the frontier, homestead
+// byzantium, constantinople, istanbul, london, shanghai and cancun instructions.
+func NewCancunInstructionSet() *JumpTable {
 	instructionSet := NewShanghaiInstructionSet()
 	instructionSet[MCOPY] = &operation{
 		execute:       opMcopy,
@@ -68,16 +83,23 @@ func NewPectraInstructionSet() *JumpTable {
 }
 
 // NewShanghaiInstructionSet returns the frontier, homestead
-// byzantium, constantinople , istanbul and shanghai instructions.
+// byzantium, constantinople , istanbul, london and shanghai instructions.
 func NewShanghaiInstructionSet() *JumpTable {
-	instructionSet := NewIstanbulInstructionSet()
-	instructionSet[BASEFEE] = &operation{
-		execute:       opBaseFee,
+	instructionSet := NewLondonInstructionSet()
+	instructionSet[PUSH0] = &operation{ // PUSH0 instruction
+		execute:       opPush0,
 		gasCost:       constGasFunc(GasQuickStep),
 		validateStack: makeStackFunc(0, 1),
 	}
-	instructionSet[PUSH0] = &operation{
-		execute:       opPush0,
+	return instructionSet
+}
+
+// NewLondonInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul and london instructions.
+func NewLondonInstructionSet() *JumpTable {
+	instructionSet := NewIstanbulInstructionSet()
+	instructionSet[BASEFEE] = &operation{ // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
+		execute:       opBaseFee,
 		gasCost:       constGasFunc(GasQuickStep),
 		validateStack: makeStackFunc(0, 1),
 	}

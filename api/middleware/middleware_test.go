@@ -233,7 +233,7 @@ func TestHandleXThorestVersionWithDifferentHTTPMethods(t *testing.T) {
 	// Test that the middleware works with different HTTP methods
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(r.Method))
+		w.Write([]byte(r.Method)) // #nosec G705
 	})
 
 	wrappedHandler := HandleXThorestVersion(handler)
