@@ -57,7 +57,7 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false, eip7823: false},
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: false},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: false},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: false},
@@ -70,7 +70,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false, eip7823: false},
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: false},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: false},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: false},
@@ -86,7 +86,7 @@ var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: false},
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
@@ -100,7 +100,7 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true}, // eip7883
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: false},
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
@@ -110,12 +110,13 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 
 // PrecompiledContractsOsaka contains the set of pre-compiled Ethereum
 // contracts used in the Osaka release.
+// Osaka introduces EIP-7823 (upper bounds for MODEXP).
 var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &safeEcrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true}, // eip7823
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: true},
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
@@ -298,6 +299,7 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
 	eip2565 bool
+	eip7823 bool
 }
 
 var (
@@ -419,14 +421,21 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32)).Uint64()
+		baseLenBig       = new(big.Int).SetBytes(getData(input, 0, 32))
+		expLenBig        = new(big.Int).SetBytes(getData(input, 32, 32))
+		modLenBig        = new(big.Int).SetBytes(getData(input, 64, 32))
+		baseLen          = baseLenBig.Uint64()
+		expLen           = expLenBig.Uint64()
+		modLen           = modLenBig.Uint64()
+		inputLenOverflow = max(baseLenBig.BitLen(), expLenBig.BitLen(), modLenBig.BitLen()) > 64
 	)
 	if len(input) > 96 {
 		input = input[96:]
 	} else {
 		input = input[:0]
+	}
+	if c.eip7823 && (inputLenOverflow || max(baseLen, expLen, modLen) > 1024) {
+		return nil, errors.New("one or more of base/exponent/modulus length exceeded 1024 bytes")
 	}
 	// Handle a special case when both the base and mod length is zero
 	if baseLen == 0 && modLen == 0 {
