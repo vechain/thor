@@ -101,7 +101,7 @@ func New(
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
-	currentChainConfig.DencunBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
+	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
@@ -109,7 +109,9 @@ func New(
 
 	// allocate precompiled contracts
 	var precompiled map[common.Address]vm.PrecompiledContract
-	if forkConfig.GALACTICA == ctx.Number {
+	if forkConfig.INTERSTELLAR == ctx.Number {
+		precompiled = vm.PrecompiledContractsOsaka
+	} else if forkConfig.GALACTICA == ctx.Number {
 		precompiled = vm.PrecompiledContractsShanghai
 	} else if forkConfig.ETH_IST == ctx.Number {
 		precompiled = vm.PrecompiledContractsIstanbul
