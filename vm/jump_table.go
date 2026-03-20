@@ -60,7 +60,11 @@ type JumpTable [256]*operation
 // byzantium, constantinople, istanbul, london, shanghai, cancun and osaka instructions.
 func NewOsakaInstructionSet() *JumpTable {
 	instructionSet := NewCancunInstructionSet()
-
+	instructionSet[CLZ] = &operation{
+		execute:       opCLZ,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(1, 1),
+	}
 	return instructionSet
 }
 
