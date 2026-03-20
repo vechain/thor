@@ -528,3 +528,72 @@ func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	err = flow.Adopt(txLegacyWithGasPriceCoef)
 	assert.NoError(t, err)
 }
+
+func TestAdoptBlockSizeLimit(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = math.MaxUint32
+
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
+		ForkConfig: &fc,
+		GasLimit:   thor.MaxTxGasLimit * 2,
+	})
+
+	b, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b)
+
+	chainTag := repo.ChainTag()
+	addr := thor.BytesToAddress([]byte("to"))
+	proposer := genesis.DevAccounts()[0]
+
+	t.Run("large tx rejected by block size limit after INTERSTELLAR", func(t *testing.T) {
+		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
+		sum, err := repo.GetBlockSummary(b.Header().ID())
+		assert.NoError(t, err)
+
+		flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+		assert.NoError(t, err)
+
+		largeData := make([]byte, thor.MaxRLPBlockSize)
+		clause := tx.NewClause(&addr).WithData(largeData)
+		largeTx := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+
+		err = flow.Adopt(largeTx)
+		assert.True(t, packer.IsBlockSizeLimitReached(err))
+	})
+
+	t.Run("large tx accepted before INTERSTELLAR (no block size limit)", func(t *testing.T) {
+		preForkConfig := fc
+		preForkConfig.INTERSTELLAR = math.MaxUint32
+
+		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &preForkConfig, 0)
+		sum, err := repo.GetBlockSummary(b.Header().ID())
+		assert.NoError(t, err)
+
+		flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+		assert.NoError(t, err)
+
+		largeData := make([]byte, thor.MaxRLPBlockSize)
+		clause := tx.NewClause(&addr).WithData(largeData)
+		largeTx := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+
+		err = flow.Adopt(largeTx)
+		assert.False(t, packer.IsBlockSizeLimitReached(err))
+	})
+
+	t.Run("normal tx accepted after INTERSTELLAR", func(t *testing.T) {
+		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
+		sum, err := repo.GetBlockSummary(b.Header().ID())
+		assert.NoError(t, err)
+
+		flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+		assert.NoError(t, err)
+
+		clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+		normalTx := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+
+		err = flow.Adopt(normalTx)
+		assert.NoError(t, err)
+	})
+}
