@@ -10,9 +10,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/thorclient"
 	"io"
 	"math"
 	"net/http"
@@ -27,11 +24,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -190,7 +190,7 @@ func TestBatchCallResponseSizeLimit(t *testing.T) {
 	// Each call returns ~66 bytes hex, total: 10 × 66 = 660 bytes
 	// This exceeds our 200 byte limit
 	clauses := make(api.Clauses, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// balanceOf(address) signature
 		data := "0x70a08231" + "0000000000000000000000000000000000000000000000000000000000000000"
 		clauses[i] = &api.Clause{
@@ -212,7 +212,7 @@ func TestBatchCallResponseSizeLimit(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode, "should reject request exceeding response size limit")
 
 	// Verify error message mentions the limit
-	var errorResp map[string]interface{}
+	var errorResp map[string]any
 	if err := json.Unmarshal(res, &errorResp); err == nil {
 		errorMsg := fmt.Sprintf("%v", errorResp["error"])
 		assert.Contains(t, errorMsg, "exceeds limit", "error should mention size limit")
