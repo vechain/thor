@@ -845,3 +845,49 @@ func BenchmarkLowSCheck(b *testing.B) {
 		}
 	})
 }
+
+// rawLegacyTxWithClauses builds a raw RLP-encoded legacy transaction with n clauses.
+// Used to test decode limits without going through the Builder signing path.
+func rawLegacyTxWithClauses(t *testing.T, n int) []byte {
+	t.Helper()
+	clauses := make([]*Clause, n)
+	for i := range clauses {
+		clauses[i] = &Clause{}
+	}
+	trx := &legacyTransaction{
+		ChainTag:   1,
+		Expiration: 100,
+		Clauses:    clauses,
+		Gas:        21000,
+	}
+	data, err := rlp.EncodeToBytes(trx)
+	assert.NoError(t, err)
+	return data
+}
+
+func TestClausesDecodeLimit(t *testing.T) {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee} {
+		t.Run(fmt.Sprintf("txType-%d", txType), func(t *testing.T) {
+			// Build an unsigned tx with MaxClausesPerTx+1 clauses.
+			b := NewBuilder(txType).ChainTag(1).Gas(21000)
+			for range MaxClausesPerTx + 1 {
+				b.Clause(&Clause{})
+			}
+			data, err := b.Build().MarshalBinary()
+			assert.NoError(t, err)
+
+			// Clauses.DecodeRLP enforces the limit on all decode paths.
+			var trx Transaction
+			err = trx.UnmarshalBinary(data)
+			assert.ErrorContains(t, err, "clause count exceeds limit")
+		})
+	}
+}
+
+func TestClausesDecodeAtLimit(t *testing.T) {
+	// Exactly MaxClausesPerTx clauses must be accepted.
+	data := rawLegacyTxWithClauses(t, MaxClausesPerTx)
+	var trx Transaction
+	assert.NoError(t, trx.UnmarshalBinary(data))
+}
+
