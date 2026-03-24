@@ -206,7 +206,12 @@ func (s *Staker) applyEpochTransition(transition *EpochTransition) error {
 	for _, validator := range transition.Evictions {
 		logger.Info("evicting validator", "validator", validator)
 		// signal exit to the eviction validator for the next epoch, since exit process is already done in this flow
-		if err := s.validationService.SignalExit(validator, transition.Block, transition.Block+thor.EpochLength(), int(thor.InitialMaxBlockProposers)); err != nil {
+		if err := s.validationService.SignalExit(
+			validator,
+			transition.Block,
+			transition.Block+thor.EpochLength(),
+			int(thor.InitialMaxBlockProposers),
+		); err != nil {
 			return err
 		}
 	}
