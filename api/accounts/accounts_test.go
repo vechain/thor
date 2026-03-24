@@ -311,7 +311,7 @@ func initAccountServer(t *testing.T, enabledDeprecated bool) {
 	require.NoError(t, thorChain.MintBlock(transaction, transactionCall))
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), 5*1024*1024, &thor.NoFork, thorChain.Engine(), enabledDeprecated).
+	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), 5*1024*1024/2, &thor.NoFork, thorChain.Engine(), enabledDeprecated).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)
@@ -653,7 +653,7 @@ func TestRawStorageStaker(t *testing.T) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), 5*1024*1024, forkConfig, nil, true).
+	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), 5*1024*1024/2, forkConfig, nil, true).
 		Mount(router, "/accounts")
 
 	ts = httptest.NewServer(router)

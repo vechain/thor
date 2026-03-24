@@ -31,32 +31,32 @@ import (
 )
 
 type Accounts struct {
-	repo                 *chain.Repository
-	stater               *state.Stater
-	callGasLimit         uint64
-	batchResponseMaxSize uint64
-	forkConfig           *thor.ForkConfig
-	bft                  bft.Committer
-	enabledDeprecated    bool
+	repo              *chain.Repository
+	stater            *state.Stater
+	callGasLimit      uint64
+	batchDataMaxSize  uint64
+	forkConfig        *thor.ForkConfig
+	bft               bft.Committer
+	enabledDeprecated bool
 }
 
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	callGasLimit uint64,
-	batchResponseMaxSize uint64,
+	batchDataMaxSize uint64,
 	forkConfig *thor.ForkConfig,
 	bft bft.Committer,
 	enabledDeprecated bool,
 ) *Accounts {
 	return &Accounts{
-		repo:                 repo,
-		stater:               stater,
-		callGasLimit:         callGasLimit,
-		batchResponseMaxSize: batchResponseMaxSize,
-		forkConfig:           forkConfig,
-		bft:                  bft,
-		enabledDeprecated:    enabledDeprecated,
+		repo:              repo,
+		stater:            stater,
+		callGasLimit:      callGasLimit,
+		batchDataMaxSize:  batchDataMaxSize,
+		forkConfig:        forkConfig,
+		bft:               bft,
+		enabledDeprecated: enabledDeprecated,
 	}
 }
 
@@ -335,19 +335,22 @@ func (a *Accounts) batchCall(
 			return nil, err
 		}
 
-		// Check accumulated response size using JSON-encoded sizes.
-		// Data fields are hex-encoded ("0x" + 2 chars per byte).
-		// Topics are thor.Bytes32 (32 bytes), each serialised as "0x" + 64 hex chars = 66 chars.
-		// Transfers: sender (42) + recipient (42) + amount (up to 66) + JSON keys/punctuation ≈ 200 bytes.
-		accumulatedSize += len(out.Data)*2 + 2
+		// Track accumulated raw EVM output bytes.
+		// Data and event data are exact; topics are exactly 32 bytes each (thor.Bytes32);
+		// event address is exactly 20 bytes (thor.Address);
+		// transfer uses a fixed upper bound: 20 (sender) + 20 (recipient) + 32 (amount) = 72 bytes.
+		accumulatedSize += len(out.Data)
 		for _, event := range out.Events {
-			accumulatedSize += len(event.Topics) * 66
-			accumulatedSize += len(event.Data)*2 + 2
+			accumulatedSize += 20 // Address
+			accumulatedSize += len(event.Topics) * 32
+			accumulatedSize += len(event.Data)
 		}
-		accumulatedSize += len(out.Transfers) * 200
-		if uint64(accumulatedSize) > a.batchResponseMaxSize {
+		for range out.Transfers {
+			accumulatedSize += 72
+		}
+		if uint64(accumulatedSize) > a.batchDataMaxSize {
 			return nil, restutil.BadRequest(
-				fmt.Errorf("batch response size exceeds limit of %d bytes", a.batchResponseMaxSize))
+				fmt.Errorf("batch call data exceeds limit of %d bytes", a.batchDataMaxSize))
 		}
 
 		result := api.ConvertCallResultWithInputGas(out, gas)

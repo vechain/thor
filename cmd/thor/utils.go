@@ -262,7 +262,7 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool)
 		AllowedOrigins:             ctx.String(apiCorsFlag.Name),
 		BacktraceLimit:             uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
 		CallGasLimit:               ctx.Uint64(apiCallGasLimitFlag.Name),
-		BatchResponseMaxSize:       ctx.Uint64(apiBatchResponseMaxSizeFlag.Name),
+		BatchDataMaxSize:           ctx.Uint64(apiBatchDataMaxSizeFlag.Name),
 		PprofOn:                    ctx.Bool(pprofFlag.Name),
 		SkipLogs:                   ctx.Bool(skipLogsFlag.Name),
 		APIBacktraceLimit:          int(ctx.Uint64(apiBacktraceLimitFlag.Name)),

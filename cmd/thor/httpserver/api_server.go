@@ -51,7 +51,7 @@ type APIConfig struct {
 	AllowedOrigins             string
 	BacktraceLimit             uint32
 	CallGasLimit               uint64
-	BatchResponseMaxSize       uint64
+	BatchDataMaxSize           uint64
 	PprofOn                    bool
 	SkipLogs                   bool
 	AllowCustomTracer          bool
@@ -109,7 +109,7 @@ func StartAPIServer(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, config.CallGasLimit, config.BatchResponseMaxSize, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
+	accounts.New(repo, stater, config.CallGasLimit, config.BatchDataMaxSize, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
 	if !config.SkipLogs {
 		events.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/event")
 		transfers.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
