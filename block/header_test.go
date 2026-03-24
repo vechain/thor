@@ -427,7 +427,7 @@ func TestHeaderHash(t *testing.T) {
 		}
 		h := builder.Build().Header()
 
-		expectedFieldsLen := reflect.TypeFor[headerBody]().NumField() - 1
+		expectedFieldsLen := reflect.TypeOf(h.body).NumField() - 1
 		if h.body.Extension.BaseFee == nil {
 			expectedFieldsLen--
 		}
@@ -441,7 +441,7 @@ func TestHeaderHash(t *testing.T) {
 // signingHash returns the signing hash the block header.
 // this is a reflect based implementation used for cross checking.
 func signingHash(h *Header, t *testing.T) thor.Bytes32 {
-	types := reflect.TypeFor[headerBody]()
+	types := reflect.TypeOf(h.body)
 	values := reflect.ValueOf(h.body)
 
 	fields := make([]any, 0)

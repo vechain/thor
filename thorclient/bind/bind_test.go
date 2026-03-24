@@ -106,7 +106,7 @@ func TestContract_Send(t *testing.T) {
 		receipt, _, err := env.bindContract.Method("setValue", big.NewInt(100)).
 			Send().
 			WithSigner(env.owner).
-			WithOptions(&TxOptions{Gas: new(uint64(100000))}).
+			WithOptions(&TxOptions{Gas: ptr(uint64(100000))}).
 			SubmitAndConfirm(ctx)
 		require.NoError(t, err)
 		assert.False(t, receipt.Reverted)
@@ -128,7 +128,7 @@ func TestContract_Send(t *testing.T) {
 		receipt, _, err := env.bindContract.Method("transferOwnership", env.user.Address()).
 			Send().
 			WithSigner(env.user).
-			WithOptions(&TxOptions{Gas: new(uint64(100000))}).
+			WithOptions(&TxOptions{Gas: ptr(uint64(100000))}).
 			SubmitAndConfirm(ctx)
 		require.NoError(t, err)
 		assert.True(t, receipt.Reverted)
@@ -137,7 +137,7 @@ func TestContract_Send(t *testing.T) {
 		receipt, _, err = env.bindContract.Method("transferOwnership", env.user.Address()).
 			Send().
 			WithSigner(env.owner).
-			WithOptions(&TxOptions{Gas: new(uint64(100000))}).
+			WithOptions(&TxOptions{Gas: ptr(uint64(100000))}).
 			SubmitAndConfirm(ctx)
 		require.NoError(t, err)
 		assert.False(t, receipt.Reverted)
@@ -164,7 +164,7 @@ func TestContract_Filter(t *testing.T) {
 		receipt, _, err := env.bindContract.Method("setValue", big.NewInt(200)).
 			Send().
 			WithSigner(env.owner).
-			WithOptions(&TxOptions{Gas: new(uint64(100000))}).
+			WithOptions(&TxOptions{Gas: ptr(uint64(100000))}).
 			SubmitAndConfirm(ctx)
 		require.NoError(t, err)
 		assert.False(t, receipt.Reverted)
@@ -201,8 +201,6 @@ func TestContract_Filter(t *testing.T) {
 }
 
 // Helper function to create a pointer to uint64
-//
-//go:fix inline
 func ptr(v uint64) *uint64 {
-	return new(v)
+	return &v
 }

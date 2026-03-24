@@ -81,7 +81,7 @@ func unpackPack(abi ABI, method string, input []byte) ([]any, bool) {
 
 func packUnpack(abi ABI, method string, input *[]any) bool {
 	if packed, err := abi.Pack(method, input); err == nil {
-		outptr := reflect.New(reflect.TypeFor[*[]any]())
+		outptr := reflect.New(reflect.TypeOf(input))
 		err := abi.UnpackIntoInterface(outptr.Interface(), method, packed)
 		if err != nil {
 			panic(err)
@@ -101,35 +101,34 @@ type arg struct {
 }
 
 func createABI(name string, stateMutability, payable *string, inputs []arg) (ABI, error) {
-	var sig strings.Builder
-	sig.WriteString(fmt.Sprintf(`[{ "type" : "function", "name" : "%v" `, name))
+	sig := fmt.Sprintf(`[{ "type" : "function", "name" : "%v" `, name)
 	if stateMutability != nil {
-		sig.WriteString(fmt.Sprintf(`, "stateMutability": "%v" `, *stateMutability))
+		sig += fmt.Sprintf(`, "stateMutability": "%v" `, *stateMutability)
 	}
 	if payable != nil {
-		sig.WriteString(fmt.Sprintf(`, "payable": %v `, *payable))
+		sig += fmt.Sprintf(`, "payable": %v `, *payable)
 	}
 	if len(inputs) > 0 {
-		sig.WriteString(`, "inputs" : [ {`)
+		sig += `, "inputs" : [ {`
 		for i, inp := range inputs {
-			sig.WriteString(fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ))
+			sig += fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ)
 			if i+1 < len(inputs) {
-				sig.WriteString(",")
+				sig += ","
 			}
 		}
-		sig.WriteString("} ]")
-		sig.WriteString(`, "outputs" : [ {`)
+		sig += "} ]"
+		sig += `, "outputs" : [ {`
 		for i, inp := range inputs {
-			sig.WriteString(fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ))
+			sig += fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ)
 			if i+1 < len(inputs) {
-				sig.WriteString(",")
+				sig += ","
 			}
 		}
-		sig.WriteString("} ]")
+		sig += "} ]"
 	}
-	sig.WriteString(`}]`)
+	sig += `}]`
 	// fmt.Printf("sig: %s\n", sig)
-	return JSON(strings.NewReader(sig.String()))
+	return JSON(strings.NewReader(sig))
 }
 
 func fuzzAbi(input []byte) {
