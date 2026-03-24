@@ -254,7 +254,7 @@ func (h *encHandshake) secrets(auth, authResp []byte) (secrets, error) {
 		MAC:      crypto.Keccak256(ecdheSecret, aesSecret),
 	}
 
-	// setup sha3 instances for the MACs
+	// setup legacy Keccak-256 instances for the MACs
 	mac1 := keccak.NewLegacyKeccak256()
 	mac1.Write(xor(s.MAC, h.respNonce))
 	mac1.Write(auth)
