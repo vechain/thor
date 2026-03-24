@@ -335,14 +335,16 @@ func (a *Accounts) batchCall(
 			return nil, err
 		}
 
-		// Check accumulated response size
-		accumulatedSize += len(out.Data)
+		// Check accumulated response size using JSON-encoded sizes.
+		// Data fields are hex-encoded ("0x" + 2 chars per byte).
+		// Topics are thor.Bytes32 (32 bytes), each serialised as "0x" + 64 hex chars = 66 chars.
+		// Transfers: sender (42) + recipient (42) + amount (up to 66) + JSON keys/punctuation ≈ 200 bytes.
+		accumulatedSize += len(out.Data)*2 + 2
 		for _, event := range out.Events {
-			accumulatedSize += len(event.Topics) * 32
-			accumulatedSize += len(event.Data)
+			accumulatedSize += len(event.Topics) * 66
+			accumulatedSize += len(event.Data)*2 + 2
 		}
-		// Estimate transfer size (sender + recipient + amount ~150 bytes each in JSON)
-		accumulatedSize += len(out.Transfers) * 150
+		accumulatedSize += len(out.Transfers) * 200
 		if uint64(accumulatedSize) > a.batchResponseMaxSize {
 			return nil, restutil.BadRequest(
 				fmt.Errorf("batch response size exceeds limit of %d bytes", a.batchResponseMaxSize))
