@@ -335,21 +335,21 @@ func (a *Accounts) batchCall(
 			return nil, err
 		}
 
-		result := api.ConvertCallResultWithInputGas(out, gas)
-		results = append(results, result)
-
 		// Check accumulated response size
-		accumulatedSize += len(result.Data)
-		for _, event := range result.Events {
+		accumulatedSize += len(out.Data)
+		for _, event := range out.Events {
+			accumulatedSize += len(event.Topics) * 32
 			accumulatedSize += len(event.Data)
 		}
 		// Estimate transfer size (sender + recipient + amount ~150 bytes each in JSON)
-		accumulatedSize += len(result.Transfers) * 150
-
+		accumulatedSize += len(out.Transfers) * 150
 		if uint64(accumulatedSize) > a.batchResponseMaxSize {
 			return nil, restutil.BadRequest(
 				fmt.Errorf("batch response size exceeds limit of %d bytes", a.batchResponseMaxSize))
 		}
+
+		result := api.ConvertCallResultWithInputGas(out, gas)
+		results = append(results, result)
 
 		if out.VMErr != nil {
 			return results, nil

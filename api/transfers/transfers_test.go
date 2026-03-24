@@ -298,6 +298,7 @@ func newReceipt() *tx.Receipt {
 	}
 }
 
+//go:fix inline
 func ptr(v uint64) *uint64 {
-	return &v
+	return new(v)
 }
