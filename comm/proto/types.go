@@ -7,12 +7,23 @@ package proto
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+)
+
+const (
+	// MaxBlockByIDResult is the maximum number of blocks that can be returned
+	// by GetBlockByID. Since block IDs are unique, only 0 or 1 is valid.
+	MaxBlockByIDResult = 1
+
+	// MaxBlocksFromNumber is the maximum number of blocks that can be returned
+	// by GetBlocksFromNumber. This matches the sender's limit in handle_rpc.go.
+	MaxBlocksFromNumber = 1024
 )
 
 type (
@@ -63,6 +74,9 @@ func GetBlockByID(ctx context.Context, rpc RPC, id thor.Bytes32) (rlp.RawValue, 
 	if err := rpc.Call(ctx, MsgGetBlockByID, id, &result); err != nil {
 		return nil, err
 	}
+	if len(result) > MaxBlockByIDResult {
+		return nil, errors.New("result size exceeds limit")
+	}
 	if len(result) == 0 {
 		return nil, nil
 	}
@@ -83,6 +97,9 @@ func GetBlocksFromNumber(ctx context.Context, rpc RPC, num uint32) ([]rlp.RawVal
 	var blocks []rlp.RawValue
 	if err := rpc.Call(ctx, MsgGetBlocksFromNumber, num, &blocks); err != nil {
 		return nil, err
+	}
+	if len(blocks) > MaxBlocksFromNumber {
+		return nil, errors.New("result size exceeds limit")
 	}
 	return blocks, nil
 }
