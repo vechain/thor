@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -67,7 +67,7 @@ func SignV4(r *Record, privkey *ecdsa.PrivateKey) error {
 	cpy.Set(ID("v4"))
 	cpy.Set(Secp256k1(privkey.PublicKey))
 
-	h := sha3.NewKeccak256()
+	h := keccak.NewLegacyKeccak256()
 	rlp.Encode(h, cpy.AppendElements(nil))
 	sig, err := crypto.Sign(h.Sum(nil), privkey)
 	if err != nil {
@@ -93,7 +93,7 @@ func (v4ID) Verify(r *Record, sig []byte) error {
 		return fmt.Errorf("invalid public key")
 	}
 
-	h := sha3.NewKeccak256()
+	h := keccak.NewLegacyKeccak256()
 	rlp.Encode(h, r.AppendElements(nil))
 	if !crypto.VerifySignature(entry, h.Sum(nil), sig) {
 		return errInvalidSig

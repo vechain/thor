@@ -33,19 +33,20 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
 	github.com/urfave/cli/v3 v3.6.1
 	github.com/vechain/go-ecvrf v0.0.0-20251211112124-5d5a3ef70fc9
-	golang.org/x/crypto v0.45.0
-	golang.org/x/sync v0.18.0
+	golang.org/x/crypto v0.49.0
+	golang.org/x/sync v0.20.0
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
+	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260311194731-d5b7577c683d // indirect
 	github.com/aristanetworks/goarista v0.0.0-20180222005525-c41ed3986faa // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
+	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
@@ -58,13 +59,13 @@ require (
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951 // indirect
 )
 
 replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655
 
-replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20250708104014-34fea45fc2b7
+replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20260324060835-4fc778eca93e

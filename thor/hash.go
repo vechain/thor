@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
-	"golang.org/x/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 )
 
 // NewBlake2b return blake2b-256 hash.
@@ -74,7 +74,7 @@ type keccak256 struct {
 var keccak256Pool = sync.Pool{
 	New: func() any {
 		return &keccak256{
-			state: sha3.NewLegacyKeccak256().(keccakState),
+			state: keccak.NewLegacyKeccak256().(keccakState),
 		}
 	},
 }

@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/v2/p2p/discover"
 )
@@ -47,8 +47,8 @@ func newTestTransport(id discover.NodeID, fd net.Conn) transport {
 	wrapped.rw = newRLPXFrameRW(fd, secrets{
 		MAC:        zero16,
 		AES:        zero16,
-		IngressMAC: sha3.NewKeccak256(),
-		EgressMAC:  sha3.NewKeccak256(),
+		IngressMAC: keccak.NewLegacyKeccak256(),
+		EgressMAC:  keccak.NewLegacyKeccak256(),
 	})
 	return &testTransport{id: id, rlpx: wrapped}
 }
