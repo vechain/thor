@@ -113,15 +113,21 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 		for batch := range rawBatches {
 			metricReceivedBlocksCount().Add(int64(len(batch.rawBlocks)))
 			for i, raw := range batch.rawBlocks {
-				var blk block.Block
-				if err = rlp.DecodeBytes(raw, &blk); err != nil {
-					err = errors.Wrap(err, "invalid block")
+				var rawBlk *block.RawBlock
+				if rawBlk, err = block.DecodeRawBlock(raw); err != nil {
+					err = errors.Wrap(err, "invalid block structure")
 					return
 				}
 
 				expectedNum := batch.startNum + uint32(i)
-				if blk.Header().Number() != expectedNum {
+				if rawBlk.Header().Number() != expectedNum {
 					err = errors.New("broken sequence")
+					return
+				}
+
+				var blk *block.Block
+				if blk, err = rawBlk.Decode(); err != nil {
+					err = errors.Wrap(err, "invalid block body")
 					return
 				}
 
@@ -143,7 +149,7 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 				case <-ctx.Done():
 					err = ctx.Err()
 					return
-				case warmedUp <- &blk:
+				case warmedUp <- blk:
 					// when queued blocks count > 10% warmed up channel cap,
 					// send nil block to throttle to reduce mem pressure.
 					if len(warmedUp)*10 > cap(warmedUp) {
