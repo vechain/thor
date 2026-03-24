@@ -80,4 +80,3 @@ func TestReservedDecoding(t *testing.T) {
 	err = rlp.DecodeBytes([]byte{0xc2, 0x1, 0x80}, &r)
 	assert.EqualError(t, err, "invalid reserved fields: not trimmed")
 }
-

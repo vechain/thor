@@ -890,4 +890,3 @@ func TestClausesDecodeAtLimit(t *testing.T) {
 	var trx Transaction
 	assert.NoError(t, trx.UnmarshalBinary(data))
 }
-
