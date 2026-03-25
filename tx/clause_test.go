@@ -10,10 +10,99 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/thor"
 )
+
+func makeClausesRLP(n int) []byte {
+	clauses := make([]*Clause, n)
+	for i := range clauses {
+		clauses[i] = NewClause(nil).WithValue(big.NewInt(int64(i)))
+	}
+	data, err := rlp.EncodeToBytes(clauses)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+// Benchmarks for Clauses (custom type with MaxClausesPerTx enforcement).
+
+func BenchmarkClausesDecodeRLP_Few(b *testing.B) {
+	data := makeClausesRLP(3)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs Clauses
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
+
+func BenchmarkClausesDecodeRLP_Some20(b *testing.B) {
+	data := makeClausesRLP(20)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs Clauses
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
+
+func BenchmarkClausesDecodeRLP_AtLimit(b *testing.B) {
+	data := makeClausesRLP(MaxClausesPerTx)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs Clauses
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
+
+func BenchmarkClausesDecodeRLP_OverLimit(b *testing.B) {
+	data := makeClausesRLP(MaxClausesPerTx + 1)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs Clauses
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
+
+// Benchmarks for plain []*Clause (no limit enforcement) — baseline for comparison.
+
+func BenchmarkRawClauseSliceDecodeRLP_Few(b *testing.B) {
+	data := makeClausesRLP(3)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs []*Clause
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
+
+func BenchmarkRawClauseSliceDecodeRLP_Some20(b *testing.B) {
+	data := makeClausesRLP(20)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs []*Clause
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
+
+func BenchmarkRawClauseSliceDecodeRLP_AtLimit(b *testing.B) {
+	data := makeClausesRLP(MaxClausesPerTx)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs []*Clause
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
+
+func BenchmarkRawClauseSliceDecodeRLP_OverLimit(b *testing.B) {
+	data := makeClausesRLP(MaxClausesPerTx + 1)
+	b.ResetTimer()
+	for b.Loop() {
+		var cs []*Clause
+		_ = rlp.DecodeBytes(data, &cs)
+	}
+}
 
 func TestClauseTo(t *testing.T) {
 	var toAddress thor.Address

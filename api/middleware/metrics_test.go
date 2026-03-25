@@ -8,6 +8,8 @@ package middleware
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -22,11 +24,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -49,7 +54,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	assert.NotNil(t, err)
 
 	router := mux.NewRouter()
-	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, &thor.NoFork, thorChain.Engine(), true)
+	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, 5*1024*1024, &thor.NoFork, thorChain.Engine(), true)
 	acc.Mount(router, "/accounts")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	router.Use(MetricsMiddleware)
@@ -162,6 +167,57 @@ func TestWebsocketMetrics(t *testing.T) {
 	labels = m[1].GetLabel()
 	assert.Equal(t, "name", labels[0].GetName())
 	assert.Equal(t, "WS /subscriptions/block", labels[0].GetValue())
+}
+
+func TestBatchCallResponseSizeLimit(t *testing.T) {
+	thorChain, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	// Create Accounts with a very small response limit (200 bytes)
+	router := mux.NewRouter()
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(50000000), 200, &thor.NoFork, thorChain.Engine(), true).
+		Mount(router, "/accounts")
+
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	tclient := thorclient.New(ts.URL)
+
+	// Using builtin Energy contract - each balanceOf call returns ~66 bytes of hex data
+	energyAddr := builtin.Energy.Address
+
+	// Create a batch call with 10 clauses
+	// Each call returns ~66 bytes hex, total: 10 × 66 = 660 bytes
+	// This exceeds our 200 byte limit
+	clauses := make(api.Clauses, 10)
+	for i := range 10 {
+		// balanceOf(address) signature
+		data := "0x70a08231" + "0000000000000000000000000000000000000000000000000000000000000000"
+		clauses[i] = &api.Clause{
+			To:   &energyAddr,
+			Data: data,
+		}
+	}
+
+	reqBody := &api.BatchCallData{
+		Clauses: clauses,
+		Gas:     50000000,
+	}
+
+	// Make the batch call - should fail due to response size limit
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", reqBody)
+	require.NoError(t, err)
+
+	// Should get HTTP 400 Bad Request
+	assert.Equal(t, http.StatusBadRequest, statusCode, "should reject request exceeding response size limit")
+
+	// Verify error message mentions the limit
+	var errorResp map[string]any
+	if err := json.Unmarshal(res, &errorResp); err == nil {
+		errorMsg := fmt.Sprintf("%v", errorResp["error"])
+		assert.Contains(t, errorMsg, "exceeds limit", "error should mention size limit")
+		assert.Contains(t, errorMsg, "200", "error should mention the limit value")
+	}
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {

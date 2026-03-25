@@ -73,12 +73,12 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 		if msg.Size > maxTxSize {
 			return errors.New("payload size: exceeds limit")
 		}
-		var newTx *tx.Transaction
+		var newTx tx.Transaction
 		if err := msg.Decode(&newTx); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkTransaction(newTx.Hash())
-		_ = c.txPool.Add(newTx)
+		_ = c.txPool.Add(&newTx)
 		write(&struct{}{})
 	case proto.MsgGetBlockByID:
 		var blockID thor.Bytes32
