@@ -33,7 +33,7 @@ type Flow struct {
 	runtime      *runtime.Runtime
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
 	gasUsed      uint64
-	blockSize    uint64
+	blockSize    uint64 // accumulated block size by adopting txs
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
