@@ -138,6 +138,15 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	return false
 }
 
+func (m *txObjectMap) PendingCostOf(payer thor.Address) *big.Int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	if cost := m.cost[payer]; cost != nil {
+		return new(big.Int).Set(cost)
+	}
+	return new(big.Int)
+}
+
 func (m *txObjectMap) UpdatePendingCost(txObj *TxObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()

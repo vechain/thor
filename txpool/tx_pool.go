@@ -502,7 +502,6 @@ func (p *TxPool) wash(
 ) {
 	all := p.all.ToTxObjects()
 	var toRemove []*TxObject
-	var toUpdateCost []*TxObject
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -527,13 +526,9 @@ func (p *TxPool) wash(
 				}
 			}
 		}
-		// update pending cost
-		for _, txObj := range toUpdateCost {
-			p.all.UpdatePendingCost(txObj)
-		}
 	}()
 
-	// recreate state every time to avoid high RAM usage when the pool at hight water-mark.
+	// recreate state every time to avoid high RAM usage when the pool at high water-mark.
 	newState := func() *state.State {
 		return p.stater.NewState(headSummary.Root())
 	}
@@ -660,16 +655,24 @@ func (p *TxPool) wash(
 	var toBroadcast tx.Transactions
 
 	for _, obj := range executableObjs {
-		executables = append(executables, obj.Transaction)
-		// the tx is not executable previously
+		// the tx was not executable previously: validate payer energy before promoting
 		if !obj.executable {
+			payer := *obj.Payer()
+			needs := new(big.Int).Add(p.all.PendingCostOf(payer), obj.Cost())
+			energy, err := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+			if err != nil || energy.Cmp(needs) < 0 {
+				toRemove = append(toRemove, obj)
+				logger.Trace("tx washed out", "id", obj.ID(), "err", "insufficient energy for overall pending cost")
+				continue
+			}
 			obj.executable = true
-			toUpdateCost = append(toUpdateCost, obj)
+			p.all.UpdatePendingCost(obj)
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		} else if obj.localSubmitted {
 			// broadcast local submitted even it's already executable
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
+		executables = append(executables, obj.Transaction)
 	}
 
 	p.goes.Go(func() {
@@ -681,7 +684,7 @@ func (p *TxPool) wash(
 	return executables, 0, 0, nil
 }
 
-// Get length of the `all` field
+// Len returns the length of the `all` field
 func (p *TxPool) Len() int {
 	return p.all.Len()
 }

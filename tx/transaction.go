@@ -663,10 +663,8 @@ func (t *Transaction) EnforceSignatureLowS() error {
 	sig := t.body.signature()
 
 	// Check first signature's S (bytes 32:64)
-	if len(sig) == 65 {
-		if bytes.Compare(sig[32:64], secp256k1HalfN[:]) > 0 {
-			return ErrHighSInSignature
-		}
+	if bytes.Compare(sig[32:64], secp256k1HalfN[:]) > 0 {
+		return ErrHighSInSignature
 	}
 
 	// Check delegator signature's S if present (bytes 97:129)
