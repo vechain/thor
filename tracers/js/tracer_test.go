@@ -49,8 +49,10 @@ type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64                    { return 1337 }
-func (*dummyStatedb) GetBalance(_ common.Address) *big.Int { return new(big.Int) }
+func (*dummyStatedb) GetRefund() uint64                                          { return 1337 }
+func (*dummyStatedb) GetBalance(addr common.Address) *big.Int                    { return new(big.Int) }
+func (*dummyStatedb) GetTransientState(common.Address, common.Hash) common.Hash  { return common.Hash{} }
+func (*dummyStatedb) SetTransientState(common.Address, common.Hash, common.Hash) {}
 
 func testCtx() vm.Context {
 	return vm.Context{
