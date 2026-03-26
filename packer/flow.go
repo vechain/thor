@@ -24,7 +24,8 @@ import (
 
 // blockSizeBufferZone is a safety buffer subtracted from MaxRLPBlockSize during block production
 // to avoid going over the maximum with auxiliary data (header finalization, RLP overhead, etc.).
-const blockSizeBufferZone uint64 = 1_000_000
+// 2K is accounting for the theoretical maximum size of block header RLP size which is 415 bytes.
+const blockSizeBufferZone uint64 = 2_000
 
 // Flow the flow of packing a new block.
 type Flow struct {
