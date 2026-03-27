@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -596,4 +597,50 @@ func TestAdoptBlockSizeLimit(t *testing.T) {
 		err = flow.Adopt(normalTx)
 		assert.NoError(t, err)
 	})
+}
+
+func TestBlockSizeBufferZoneSufficiency(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = math.MaxUint32
+
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
+		ForkConfig: &fc,
+		GasLimit:   math.MaxUint64,
+	})
+
+	b, _, _, err := g.Build(stater)
+	require.NoError(t, err)
+	repo, err := chain.NewRepository(db, b)
+	require.NoError(t, err)
+
+	proposer := genesis.DevAccounts()[0]
+	pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
+	sum, err := repo.GetBlockSummary(b.Header().ID())
+	require.NoError(t, err)
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	require.NoError(t, err)
+
+	chainTag := repo.ChainTag()
+	addr := thor.BytesToAddress([]byte("to"))
+	data := make([]byte, 100_000)
+
+	var adopted int
+	for nonce := uint64(1); ; nonce++ {
+		clause := tx.NewClause(&addr).WithData(data)
+		trx := createTx(tx.TypeLegacy, chainTag, 1, 10, 500_000, nonce, nil, clause, tx.NewBlockRef(0))
+		err := flow.Adopt(trx)
+		if packer.IsBlockSizeLimitReached(err) {
+			break
+		}
+		require.NoError(t, err)
+		adopted++
+	}
+
+	blk, _, _, err := flow.Pack(proposer.PrivateKey, 0, false)
+	require.NoError(t, err)
+
+	assert.LessOrEqual(t, uint64(blk.Size()), thor.MaxRLPBlockSize,
+		"packed block RLP size %d exceeds MaxRLPBlockSize %d", blk.Size(), thor.MaxRLPBlockSize)
 }
