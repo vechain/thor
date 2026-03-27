@@ -9,6 +9,7 @@ import "errors"
 
 var (
 	errGasLimitReached       = errors.New("gas limit reached")
+	errBlockSizeLimitReached = errors.New("block size limit reached")
 	errTxNotAdoptableNow     = errors.New("tx not adoptable now")
 	errTxNotAdoptableForever = errors.New("tx not adoptable forever")
 	errKnownTx               = errors.New("known tx")
@@ -17,6 +18,11 @@ var (
 // IsGasLimitReached block if full of txs.
 func IsGasLimitReached(err error) bool {
 	return errors.Is(err, errGasLimitReached)
+}
+
+// IsBlockSizeLimitReached block RLP size limit reached.
+func IsBlockSizeLimitReached(err error) bool {
+	return errors.Is(err, errBlockSizeLimitReached)
 }
 
 // IsTxNotAdoptableNow tx can not be adopted now.
