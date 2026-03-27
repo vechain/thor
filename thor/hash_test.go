@@ -11,8 +11,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/sha3"
 )
 
 func BenchmarkHash(b *testing.B) {
@@ -29,7 +29,7 @@ func BenchmarkHash(b *testing.B) {
 			Read([]byte) (int, error)
 		}
 
-		k := sha3.NewLegacyKeccak256().(keccakState)
+		k := keccak.NewLegacyKeccak256().(keccakState)
 		var b32 Bytes32
 		for b.Loop() {
 			k.Write(data)

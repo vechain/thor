@@ -73,12 +73,12 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 		if msg.Size > maxTxSize {
 			return errors.New("payload size: exceeds limit")
 		}
-		var newTx *tx.Transaction
+		var newTx tx.Transaction
 		if err := msg.Decode(&newTx); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkTransaction(newTx.Hash())
-		_ = c.txPool.Add(newTx)
+		_ = c.txPool.Add(&newTx)
 		write(&struct{}{})
 	case proto.MsgGetBlockByID:
 		var blockID thor.Bytes32
@@ -117,12 +117,11 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 			return errors.WithMessage(err, "decode msg")
 		}
 
-		const maxBlocks = 1024
 		const maxSize = 512 * 1024
-		result := make([]rlp.RawValue, 0, maxBlocks)
+		result := make([]rlp.RawValue, 0, proto.MaxBlocksFromNumber)
 		var size thor.StorageSize
 		chain := c.repo.NewBestChain()
-		for size < maxSize && len(result) < maxBlocks {
+		for size < maxSize && len(result) < proto.MaxBlocksFromNumber {
 			b, err := chain.GetBlock(num)
 			if err != nil {
 				if !c.repo.IsNotFound(err) {

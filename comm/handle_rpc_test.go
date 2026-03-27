@@ -135,6 +135,43 @@ func TestHandleRPC_MsgNewTx(t *testing.T) {
 		assert.False(t, writeCalled, "write should not be called on error")
 	})
 
+	t.Run("too many clauses", func(t *testing.T) {
+		writeCalled := false
+
+		write := func(data any) {
+			writeCalled = true
+		}
+
+		b := tx.NewBuilder(tx.TypeLegacy).
+			ChainTag(chainTag).
+			BlockRef(tx.NewBlockRef(0)).
+			Expiration(100).
+			GasPriceCoef(0).
+			Gas(21000).
+			Nonce(2)
+		for i := 0; i <= tx.MaxClausesPerTx; i++ {
+			b = b.Clause(tx.NewClause(nil))
+		}
+		manyClauseTx := b.Build()
+
+		manyClauseTxData, err := rlp.EncodeToBytes(manyClauseTx)
+		require.NoError(t, err)
+
+		msg := &p2p.Msg{
+			Code:    proto.MsgNewTx,
+			Size:    uint32(len(manyClauseTxData)),
+			Payload: bytes.NewReader(manyClauseTxData),
+		}
+
+		txsToSync := &txsToSync{}
+
+		err = comm.handleRPC(peer, msg, write, txsToSync)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "clause count exceeds limit")
+
+		assert.False(t, writeCalled, "write should not be called on error")
+	})
+
 	t.Run("transaction at size limit boundary", func(t *testing.T) {
 		writeCalled := false
 		var writtenData any

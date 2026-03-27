@@ -31,6 +31,31 @@ func TestReservedEncoding(t *testing.T) {
 	}
 }
 
+func TestReservedCountLimit(t *testing.T) {
+	// MaxUnusedReservedFields+1 unused fields (MaxUnusedReservedFields+2 raws including Features) must be rejected.
+	n := MaxUnusedReservedFields + 2
+	raws := make([]rlp.RawValue, n)
+	for i := range raws {
+		raws[i] = rlp.RawValue{0x01}
+	}
+	data, err := rlp.EncodeToBytes(raws)
+	assert.NoError(t, err)
+
+	var r reserved
+	err = rlp.DecodeBytes(data, &r)
+	assert.ErrorContains(t, err, "reserved field count exceeds limit")
+
+	// Exactly at limit (MaxUnusedReservedFields unused + 1 Features) must pass.
+	raws = make([]rlp.RawValue, MaxUnusedReservedFields+1)
+	for i := range raws {
+		raws[i] = rlp.RawValue{0x01}
+	}
+	data, err = rlp.EncodeToBytes(raws)
+	assert.NoError(t, err)
+	err = rlp.DecodeBytes(data, &r)
+	assert.NoError(t, err)
+}
+
 func TestReservedDecoding(t *testing.T) {
 	cases := []struct {
 		input    []byte
