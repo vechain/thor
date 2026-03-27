@@ -8,6 +8,7 @@ package tx
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -37,6 +38,10 @@ func (r *reserved) DecodeRLP(s *rlp.Stream) error {
 	var raws []rlp.RawValue
 	if err := s.Decode(&raws); err != nil {
 		return err
+	}
+
+	if len(raws) > MaxUnusedReservedFields+1 { // +1 for Features itself
+		return fmt.Errorf("reserved field count exceeds limit: %d > %d", len(raws)-1, MaxUnusedReservedFields)
 	}
 
 	if len := len(raws); len > 0 {

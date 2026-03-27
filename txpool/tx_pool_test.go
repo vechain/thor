@@ -1720,6 +1720,110 @@ func TestAddOverPendingCostDynamicFee(t *testing.T) {
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 }
 
+func TestWashDeferredTxPendingCostEnforcement(t *testing.T) {
+	// This test asserts the correct behaviour: only 2 of 3 deferred txs
+	// should be promoted; the third exceeds the payer's energy and must be evicted.
+	now := uint64(time.Now().Unix() - time.Now().Unix()%10 - 10)
+	db := muxdb.NewMem()
+
+	// energy = 42*10^18 covers exactly 2 txs at gas=21000, InitialBaseGasPrice=1e15.
+	energy, _ := new(big.Int).SetString("42000000000000000000", 10)
+
+	builder := new(genesis.Builder).
+		GasLimit(thor.InitialGasLimit).
+		ForkConfig(&thor.NoFork).
+		Timestamp(now).
+		State(func(st *state.State) error {
+			if err := st.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			st.SetEnergy(devAccounts[0].Address, energy, now)
+			return nil
+		})
+
+	setMethod, found := builtin.Params.ABI.MethodByName("set")
+	require.True(t, found)
+	var executor thor.Address
+	data, err := setMethod.EncodeInput(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
+	require.NoError(t, err)
+	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
+	data, err = setMethod.EncodeInput(thor.KeyLegacyTxBaseGasPrice, thor.InitialBaseGasPrice)
+	require.NoError(t, err)
+	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+
+	b0, _, _, err := builder.Build(state.NewStater(db))
+	require.NoError(t, err)
+
+	// Commit genesis state so the pool stater can read it.
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	stage, err := st.Stage(trie.Version{Major: 1})
+	require.NoError(t, err)
+	root, err := stage.Commit()
+	require.NoError(t, err)
+
+	b1 := new(block.Builder).
+		ParentID(b0.Header().ID()).
+		StateRoot(root).
+		TotalScore(100).
+		Timestamp(now + 10).
+		GasLimit(thor.InitialGasLimit).
+		Build()
+
+	repo, _ := chain.NewRepository(db, b0)
+	require.NoError(t, repo.AddBlock(b1, tx.Receipts{}, 0, true))
+
+	pool := New(repo, state.NewStater(db), Options{
+		Limit:           50, // non-executable cap = 50*2/10 = 10, enough for 3 deferred txs
+		LimitPerAccount: 10,
+		MaxLifetime:     time.Hour,
+	}, &thor.NoFork)
+	defer pool.Close()
+
+	// BlockRef=3: deferred while best is b1 (nextBlockNum=2), executable when best is b2 (nextBlockNum=3).
+	deferredRef := tx.NewBlockRef(b1.Header().Number() + 2)
+	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, deferredRef, 100, nil, tx.Features(0), devAccounts[0])
+	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, deferredRef, 100, nil, tx.Features(0), devAccounts[0])
+	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, deferredRef, 100, nil, tx.Features(0), devAccounts[0])
+
+	// All 3 are admitted: cost==nil for deferred txs so Add() skips the energy check.
+	require.NoError(t, pool.AddLocal(tx1))
+	require.NoError(t, pool.AddLocal(tx2))
+	require.NoError(t, pool.AddLocal(tx3))
+	require.Equal(t, 3, pool.Len(), "all 3 deferred txs must be admitted without energy check")
+
+	// Advance chain to block 2: nextBlockNum becomes 3, so BlockRef=3 is no longer deferred.
+	// Commit the same state at version 2 so wash() can read it at the new head.
+	st2 := state.New(db, trie.Root{Hash: root})
+	stage2, err := st2.Stage(trie.Version{Major: 2})
+	require.NoError(t, err)
+	root2, err := stage2.Commit()
+	require.NoError(t, err)
+	b2 := new(block.Builder).
+		ParentID(b1.Header().ID()).
+		StateRoot(root2).
+		TotalScore(200).
+		Timestamp(now + 20).
+		GasLimit(thor.InitialGasLimit).
+		Build()
+	require.NoError(t, repo.AddBlock(b2, tx.Receipts{}, 0, true))
+
+	executables, _, _, err := pool.wash(repo.BestBlockSummary(), true)
+	require.NoError(t, err)
+
+	promoted := 0
+	for _, etx := range executables {
+		if etx.ID() == tx1.ID() || etx.ID() == tx2.ID() || etx.ID() == tx3.ID() {
+			promoted++
+		}
+	}
+	// Payer energy covers only 2 txs; the 3rd must be evicted during promotion.
+	assert.Equal(t, 2, promoted, "only 2 deferred txs should be promoted; payer energy is exhausted after 2")
+	assert.Equal(t, 2, pool.Len(), "over-budget tx should be evicted from the pool during wash")
+}
+
 func TestValidateTxBasics(t *testing.T) {
 	pool := newPool(1, LIMIT_PER_ACCOUNT, &thor.ForkConfig{GALACTICA: 0})
 	defer pool.Close()
