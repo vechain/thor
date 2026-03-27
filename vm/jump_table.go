@@ -57,10 +57,15 @@ var (
 type JumpTable [256]*operation
 
 // NewOsakaInstructionSet returns the frontier, homestead
-// byzantium, constantinople, istanbul, london, shanghai, cancun and osaka instructions.
+// byzantium, constantinople, istanbul, london, shanghai, cancun, prague and osaka instructions.
 func NewOsakaInstructionSet() *JumpTable {
-	instructionSet := NewCancunInstructionSet()
+	instructionSet := NewPectraInstructionSet()
 
+	return instructionSet
+}
+
+func NewPectraInstructionSet() *JumpTable {
+	instructionSet := NewCancunInstructionSet()
 	return instructionSet
 }
 
