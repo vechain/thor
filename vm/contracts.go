@@ -115,12 +115,11 @@ var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true}, // eip7823
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7883: true}, // eip7823
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
 	common.BytesToAddress([]byte{9}): &blake2F{},
-	// bls12381 precompiles
 
 	// secp256r1 precompiles
 }
