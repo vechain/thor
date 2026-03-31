@@ -170,6 +170,11 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 
 func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	header := blk.Header()
+
+	if thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && uint64(blk.Size()) > thor.MaxRLPBlockSize {
+		return consensusError(fmt.Sprintf("block RLP-encoded size exceeds maximum: size %v, limit %v", blk.Size(), thor.MaxRLPBlockSize))
+	}
+
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
 		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))

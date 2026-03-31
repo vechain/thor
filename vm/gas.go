@@ -38,7 +38,7 @@ const (
 	Bn256PairingBaseGasEIP1108     uint64 = 45000 // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGasEIP1108 uint64 = 34000 // Per-point price for an elliptic curve pairing check
 
-	// EIP-2537 BLS12-381 gas costs (Pectra/Prague)
+	// EIP-2537 BLS12-381 gas costs (Prague)
 	Bls12381G1AddGas          uint64 = 375   // Price for BLS12-381 elliptic curve G1 point addition
 	Bls12381G1MulGas          uint64 = 12000 // Price for BLS12-381 elliptic curve G1 point scalar multiplication
 	Bls12381G2AddGas          uint64 = 600   // Price for BLS12-381 elliptic curve G2 point addition
@@ -47,6 +47,8 @@ const (
 	Bls12381PairingPerPairGas uint64 = 32600 // Per-point pair gas price for BLS12-381 elliptic curve pairing check
 	Bls12381MapG1Gas          uint64 = 5500  // Gas price for BLS12-381 mapping field element to G1 operation
 	Bls12381MapG2Gas          uint64 = 23800 // Gas price for BLS12-381 mapping field element to G2 operation
+
+	WarmStorageReadCost = uint64(100) // WARM_STORAGE_READ_COST
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation.

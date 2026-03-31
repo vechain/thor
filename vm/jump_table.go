@@ -59,12 +59,12 @@ type JumpTable [256]*operation
 // NewOsakaInstructionSet returns the frontier, homestead
 // byzantium, constantinople, istanbul, london, shanghai, cancun, prague and osaka instructions.
 func NewOsakaInstructionSet() *JumpTable {
-	instructionSet := NewPectraInstructionSet()
+	instructionSet := NewPragueInstructionSet()
 
 	return instructionSet
 }
 
-func NewPectraInstructionSet() *JumpTable {
+func NewPragueInstructionSet() *JumpTable {
 	instructionSet := NewCancunInstructionSet()
 	return instructionSet
 }
@@ -73,6 +73,17 @@ func NewPectraInstructionSet() *JumpTable {
 // byzantium, constantinople, istanbul, london, shanghai and cancun instructions.
 func NewCancunInstructionSet() *JumpTable {
 	instructionSet := NewShanghaiInstructionSet()
+	instructionSet[TLOAD] = &operation{
+		execute:       opTload,
+		gasCost:       constGasFunc(WarmStorageReadCost),
+		validateStack: makeStackFunc(1, 1),
+	}
+	instructionSet[TSTORE] = &operation{
+		execute:       opTstore,
+		gasCost:       constGasFunc(WarmStorageReadCost),
+		validateStack: makeStackFunc(2, 0),
+		writes:        true,
+	}
 	instructionSet[MCOPY] = &operation{
 		execute:       opMcopy,
 		gasCost:       gasMcopy,

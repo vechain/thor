@@ -105,7 +105,7 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true}, // eip7883
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7883: true}, // eip7883
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
@@ -132,12 +132,24 @@ var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true}, // eip7823
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7883: true}, // eip7823
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
 	common.BytesToAddress([]byte{9}): &blake2F{},
-	// bls12381 precompiles
+
+	// Address 10 (0x0a) — EIP-4844 KZG point evaluation — is intentionally absent.
+	// KZG is not applicable to VeChain (no blob transactions).
+	// Addresses 11–17 (0x0b–0x11) are the EIP-2537 BLS12-381 precompiles.
+
+	// EIP-2537: BLS12-381 curve operations (Prague)
+	common.BytesToAddress([]byte{11}): &bls12381G1Add{},
+	common.BytesToAddress([]byte{12}): &bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{13}): &bls12381G2Add{},
+	common.BytesToAddress([]byte{14}): &bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{15}): &bls12381Pairing{},
+	common.BytesToAddress([]byte{16}): &bls12381MapG1{},
+	common.BytesToAddress([]byte{17}): &bls12381MapG2{},
 
 	// secp256r1 precompiles
 }
@@ -315,11 +327,13 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
 	eip2565 bool
+	eip7883 bool // EIP-7883: ModExp gas cost increase (Osaka)
 }
 
 var (
 	big0      = big.NewInt(0)
 	big1      = big.NewInt(1)
+	big2      = big.NewInt(2)
 	big3      = big.NewInt(3)
 	big4      = big.NewInt(4)
 	big7      = big.NewInt(7)
@@ -363,6 +377,25 @@ func modexpMultComplexity(x *big.Int) *big.Int {
 	return x
 }
 
+// osakaMultComplexity implements the multiplication complexity formula for EIP-7883 (Osaka).
+//
+//	For x <= 32: returns 16
+//	For x > 32:  returns 2 * ceiling(x/8)^2
+//
+// where x is max(length_of_MODULUS, length_of_BASE)
+func osakaMultComplexity(x *big.Int) *big.Int {
+	if x.Cmp(big32) <= 0 {
+		return new(big.Int).Set(big16)
+	}
+	// ceiling(x/8)^2
+	c := new(big.Int).Add(x, big7)
+	c.Div(c, big8)
+	c.Mul(c, c)
+	// multiply by 2
+	c.Mul(c, big2)
+	return c
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	var (
@@ -399,6 +432,29 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
 	gas := new(big.Int).Set(math.BigMax(modLen, baseLen))
+	if c.eip7883 {
+		// EIP-7883 (Osaka) changes vs EIP-2565 (Berlin):
+		// 1. Different multComplexity: 16 for x<=32, else 2*ceiling(x/8)^2
+		// 2. Adjusted exponent length uses multiplier 16 (was 8)
+		// 3. No divisor (was /3)
+		// 4. Minimum gas of 500 (was 200)
+		adjExpLen7883 := new(big.Int)
+		if expLen.Cmp(big32) > 0 { // exponent is longer than 32 bytes
+			adjExpLen7883.Sub(expLen, big32)        //   extra bytes beyond the first 32
+			adjExpLen7883.Mul(big16, adjExpLen7883) // × 16  (each extra byte = 8 bits, × multiplier 16 = 128)
+		}
+		adjExpLen7883.Add(adjExpLen7883, big.NewInt(int64(msb))) // + position of highest set bit in first 32 byte
+
+		gas = osakaMultComplexity(gas)
+		gas.Mul(gas, math.BigMax(adjExpLen7883, big1))
+		if gas.BitLen() > 64 {
+			return math.MaxUint64
+		}
+		if gas.Uint64() < 500 {
+			return 500
+		}
+		return gas.Uint64()
+	}
 	if c.eip2565 {
 		// EIP-2565 has three changes
 		// 1. Different multComplexity (inlined here)

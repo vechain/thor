@@ -55,6 +55,7 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{4}):    &dataCopy{},
 	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
 	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{0xf9}): &bigModExp{eip2565: true, eip7883: true},
 	common.BytesToAddress([]byte{6}):    &bn256Add{eip1108: false},
 	common.BytesToAddress([]byte{0xf6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}):    &bn256ScalarMul{eip1108: false},
@@ -62,7 +63,8 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{8}):    &bn256Pairing{eip1108: false},
 	common.BytesToAddress([]byte{0xf8}): &bn256Pairing{eip1108: true},
 	common.BytesToAddress([]byte{9}):    &blake2F{},
-	// EIP-2537: BLS12-381 curve operations (Pectra)
+
+	// EIP-2537: BLS12-381 curve operations (Prague)
 	common.BytesToAddress([]byte{11}): &bls12381G1Add{},
 	common.BytesToAddress([]byte{12}): &bls12381G1MultiExp{},
 	common.BytesToAddress([]byte{13}): &bls12381G2Add{},
@@ -224,6 +226,10 @@ func BenchmarkPrecompiledModExp(b *testing.B) { benchJSON("modexp", "05", b) }
 func TestPrecompiledModExpEip2565(t *testing.T)      { testJSON("modexp_eip2565", "f5", t) }
 func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJSON("modexp_eip2565", "f5", b) }
 
+// Tests the ModExp precompile with EIP-7883 gas repricing (Osaka/Fusaka).
+func TestPrecompiledModExpEip7883(t *testing.T)      { testJSON("modexp_eip7883", "f9", t) }
+func BenchmarkPrecompiledModExpEip7883(b *testing.B) { benchJSON("modexp_eip7883", "f9", b) }
+
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T)      { testJSON("bn256Add", "06", t) }
 func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJSON("bn256Add", "06", b) }
@@ -268,7 +274,7 @@ func TestPrecompiledEcrecover(t *testing.T) { testJSON("ecRecover", "01", t) }
 // Failure tests
 func TestPrecompiledBlake2FFailure(t *testing.T) { testJSONFail("blake2F", "09", t) }
 
-// Tests the sample inputs from EIP-2537: BLS12-381 curve operations (Pectra).
+// Tests the sample inputs from EIP-2537: BLS12-381 curve operations (Prague).
 func TestPrecompiledBLS12381G1Add(t *testing.T)      { testJSON("blsG1Add", "0b", t) }
 func BenchmarkPrecompiledBLS12381G1Add(b *testing.B) { benchJSON("blsG1Add", "0b", b) }
 
