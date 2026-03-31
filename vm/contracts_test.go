@@ -55,6 +55,7 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{4}):    &dataCopy{},
 	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
 	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{0xf9}): &bigModExp{eip2565: true, eip7883: true},
 	common.BytesToAddress([]byte{6}):    &bn256Add{eip1108: false},
 	common.BytesToAddress([]byte{0xf6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}):    &bn256ScalarMul{eip1108: false},
@@ -215,6 +216,10 @@ func BenchmarkPrecompiledModExp(b *testing.B) { benchJSON("modexp", "05", b) }
 
 func TestPrecompiledModExpEip2565(t *testing.T)      { testJSON("modexp_eip2565", "f5", t) }
 func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJSON("modexp_eip2565", "f5", b) }
+
+// Tests the ModExp precompile with EIP-7883 gas repricing (Osaka/Fusaka).
+func TestPrecompiledModExpEip7883(t *testing.T)      { testJSON("modexp_eip7883", "f9", t) }
+func BenchmarkPrecompiledModExpEip7883(b *testing.B) { benchJSON("modexp_eip7883", "f9", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T)      { testJSON("bn256Add", "06", t) }
