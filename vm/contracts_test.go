@@ -55,6 +55,7 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{4}):    &dataCopy{},
 	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
 	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{0xe5}): &bigModExp{eip2565: true, eip7823: true},
 	common.BytesToAddress([]byte{0xf9}): &bigModExp{eip2565: true, eip7883: true},
 	common.BytesToAddress([]byte{6}):    &bn256Add{eip1108: false},
 	common.BytesToAddress([]byte{0xf6}): &bn256Add{eip1108: true},
@@ -220,6 +221,34 @@ func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJSON("modexp_eip2565
 // Tests the ModExp precompile with EIP-7883 gas repricing (Osaka/Fusaka).
 func TestPrecompiledModExpEip7883(t *testing.T)      { testJSON("modexp_eip7883", "f9", t) }
 func BenchmarkPrecompiledModExpEip7883(b *testing.B) { benchJSON("modexp_eip7883", "f9", b) }
+
+// EIP-7823 tests: existing modexp tests should still pass with eip7823 enabled
+// (all standard test vectors use inputs within the 1024-byte limit)
+func TestPrecompiledModExpEip7823(t *testing.T)      { testJSON("modexp_eip2565", "e5", t) }
+func BenchmarkPrecompiledModExpEip7823(b *testing.B) { benchJSON("modexp_eip2565", "e5", b) }
+
+func TestPrecompiledModExpEip7823Failure(t *testing.T) {
+	testJSONFail("modexp_eip7823", "e5", t)
+}
+
+func TestPrecompiledModExpEip7823_LengthOverflow(t *testing.T) {
+	p := allPrecompiles[common.HexToAddress("e5")]
+
+	// base length overflows uint64 (33 bytes = 264 bits > 64 bits)
+	// This triggers the inputLenOverflow check from the PR #32363 fix.
+	// 32-byte length field with value > 2^64
+	input := common.Hex2Bytes(
+		"0000000000000000000000000000000000000000000000010000000000000001" + // baseLen = 2^64 + 1 (overflows uint64)
+			"0000000000000000000000000000000000000000000000000000000000000001" + // expLen = 1
+			"0000000000000000000000000000000000000000000000000000000000000001", // modLen = 1
+	)
+	gas := p.RequiredGas(input)
+	contract := NewContract(AccountRef(common.HexToAddress("1337")),
+		nil, new(big.Int), gas)
+	_, err := RunPrecompiledContract(p, input, contract)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeded 1024 bytes")
+}
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T)      { testJSON("bn256Add", "06", t) }
