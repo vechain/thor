@@ -145,7 +145,7 @@ func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error)
 	// adopt txs
 	for _, tx := range txs {
 		if err := flow.Adopt(tx); err != nil {
-			if packer.IsGasLimitReached(err) {
+			if packer.IsGasLimitReached(err) || packer.IsBlockSizeLimitReached(err) {
 				break
 			}
 			if packer.IsTxNotAdoptableNow(err) {

@@ -22,6 +22,11 @@ import (
 	"github.com/vechain/thor/v2/vrf"
 )
 
+// blockSizeBufferZone is a safety buffer subtracted from MaxRLPBlockSize during block production
+// to avoid going over the maximum with auxiliary data (header finalization, RLP overhead, etc.).
+// 2K is accounting for the theoretical maximum size of block header RLP size which is 415 bytes.
+const blockSizeBufferZone uint64 = 2_000
+
 // Flow the flow of packing a new block.
 type Flow struct {
 	packer       *Packer
@@ -29,6 +34,7 @@ type Flow struct {
 	runtime      *runtime.Runtime
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
 	gasUsed      uint64
+	blockSize    uint64 // accumulated block size by adopting txs
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
@@ -91,6 +97,10 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 		return true, nil
 	}
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
+}
+
+func (f *Flow) txFitsBlockSize(t *tx.Transaction) bool {
+	return f.blockSize+uint64(t.Size()) < thor.MaxRLPBlockSize-blockSizeBufferZone
 }
 
 // only works after galactica fork
@@ -162,6 +172,11 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 		return errGasLimitReached
 	}
+
+	if thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) && !f.txFitsBlockSize(t) {
+		return errBlockSizeLimitReached
+	}
+
 	if !thor.IsForked(f.Number(), f.packer.forkConfig.GALACTICA) {
 		if t.Type() != tx.TypeLegacy {
 			return badTxError{"invalid tx type"}
@@ -202,6 +217,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 	}
 	f.processedTxs[t.ID()] = receipt.Reverted
 	f.gasUsed += receipt.GasUsed
+	f.blockSize += uint64(t.Size())
 	f.receipts = append(f.receipts, receipt)
 	f.txs = append(f.txs, t)
 	return nil

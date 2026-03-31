@@ -42,6 +42,8 @@ const (
 	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 
 	MaxPosScore = 10000 // max total score after PoS fork
+
+	MaxRLPBlockSize uint64 = 8_388_608 // maximum size of an RLP-encoded block
 )
 
 // Keys of governance params.
