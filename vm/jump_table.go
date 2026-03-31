@@ -68,6 +68,17 @@ func NewOsakaInstructionSet() *JumpTable {
 // byzantium, constantinople, istanbul, london, shanghai and cancun instructions.
 func NewCancunInstructionSet() *JumpTable {
 	instructionSet := NewShanghaiInstructionSet()
+	instructionSet[TLOAD] = &operation{
+		execute:       opTload,
+		gasCost:       constGasFunc(WarmStorageReadCost),
+		validateStack: makeStackFunc(1, 1),
+	}
+	instructionSet[TSTORE] = &operation{
+		execute:       opTstore,
+		gasCost:       constGasFunc(WarmStorageReadCost),
+		validateStack: makeStackFunc(2, 0),
+		writes:        true,
+	}
 	instructionSet[MCOPY] = &operation{
 		execute:       opMcopy,
 		gasCost:       gasMcopy,

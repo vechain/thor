@@ -18,14 +18,27 @@ package vm
 
 import (
 	"bytes"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/runtime/statedb"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
+
+type contractRef struct {
+	addr common.Address
+}
+
+func (c contractRef) Address() common.Address {
+	return c.addr
+}
 
 type twoOperandTest struct {
 	x        string
@@ -511,6 +524,90 @@ func BenchmarkOpSAR(b *testing.B) {
 func BenchmarkOpIsZero(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	opBenchmark(b, opIszero, x)
+}
+
+func TestOpMstore(t *testing.T) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+
+	mem.Resize(64)
+	pc := uint64(0)
+	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
+	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
+	stack.push(new(uint256.Int))
+	opMstore(&pc, env, nil, mem, stack)
+	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
+		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
+	}
+	stack.push(new(uint256.Int).SetUint64(0x1))
+	stack.push(new(uint256.Int))
+	opMstore(&pc, env, nil, mem, stack)
+	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+		t.Fatalf("Mstore failed to overwrite previous value")
+	}
+}
+
+func BenchmarkOpMstore(bench *testing.B) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+
+	mem.Resize(64)
+	pc := uint64(0)
+	memStart := new(uint256.Int)
+	value := new(uint256.Int).SetUint64(0x1337)
+
+	for bench.Loop() {
+		stack.push(value)
+		stack.push(memStart)
+		opMstore(&pc, env, nil, mem, stack)
+	}
+}
+
+func TestOpTstore(t *testing.T) {
+	var (
+		db          = muxdb.NewMem()
+		state       = state.New(db, trie.Root{Hash: thor.Bytes32{}})
+		stateDB     = statedb.New(state)
+		env         = NewEVM(Context{}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack       = newstack()
+		mem         = NewMemory()
+		caller      = common.Address{0}
+		to          = common.Address{1}
+		contractRef = contractRef{caller}
+		contract    = NewContract(contractRef, AccountRef(to), big.NewInt(0), 0)
+		value       = common.Hex2Bytes("abcdef00000000000000abba000000000deaf000000c0de00100000000133700")
+	)
+
+	// Add a stateObject for the caller and the contract being called
+	stateDB.CreateAccount(caller)
+	stateDB.CreateAccount(to)
+
+	pc := uint64(0)
+	// push the value to the stack
+	stack.push(new(uint256.Int).SetBytes(value))
+	// push the location to the stack
+	stack.push(new(uint256.Int))
+	opTstore(&pc, env, contract, mem, stack)
+	// there should be no elements on the stack after TSTORE
+	if stack.len() != 0 {
+		t.Fatal("stack wrong size")
+	}
+	// push the location to the stack
+	stack.push(new(uint256.Int))
+	opTload(&pc, env, contract, mem, stack) // there should be one element on the stack after TLOAD
+	if stack.len() != 1 {
+		t.Fatal("stack wrong size")
+	}
+	val := stack.peek()
+	if !bytes.Equal(val.Bytes(), value) {
+		t.Fatal("incorrect element read from transient storage")
+	}
 }
 
 func TestCreate2Addreses(t *testing.T) {
