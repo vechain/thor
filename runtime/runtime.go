@@ -61,6 +61,7 @@ var baseChainConfig = vm.ChainConfig{
 	},
 	IstanbulBlock: nil,
 	ShanghaiBlock: nil,
+	OsakaBlock:    nil,
 }
 
 // Output output of clause execution.
