@@ -62,6 +62,14 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	// ForEachStorage(common.Address, func(common.Hash, common.Hash) bool)
+
+	// SetTransientState sets transient storage for a given account. It
+	// adds the change to the journal so that it can be rolled back
+	// to its previous value if there is a revert.
+	SetTransientState(common.Address, common.Hash, common.Hash)
+
+	// GetTransientState gets transient storage for a given account.
+	GetTransientState(common.Address, common.Hash) common.Hash
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM EVM

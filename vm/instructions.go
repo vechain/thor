@@ -810,6 +810,23 @@ func opPush0(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *St
 	return nil, nil
 }
 
+// opTload implements TLOAD opcode
+func opTload(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	loc := stack.peek()
+	hash := common.Hash(loc.Bytes32())
+	val := evm.StateDB.GetTransientState(contract.Address(), hash)
+	loc.SetBytes(val.Bytes())
+	return nil, nil
+}
+
+// opTstore implements TSTORE opcode
+func opTstore(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	loc := stack.pop()
+	val := stack.pop()
+	evm.StateDB.SetTransientState(contract.Address(), loc.Bytes32(), val.Bytes32())
+	return nil, nil
+}
+
 // opMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
 func opMcopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	var (
