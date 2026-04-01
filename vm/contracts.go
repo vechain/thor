@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
+	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 
@@ -143,15 +144,14 @@ var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
 	// Addresses 11–17 (0x0b–0x11) are the EIP-2537 BLS12-381 precompiles.
 
 	// EIP-2537: BLS12-381 curve operations (Prague)
-	common.BytesToAddress([]byte{11}): &bls12381G1Add{},
-	common.BytesToAddress([]byte{12}): &bls12381G1MultiExp{},
-	common.BytesToAddress([]byte{13}): &bls12381G2Add{},
-	common.BytesToAddress([]byte{14}): &bls12381G2MultiExp{},
-	common.BytesToAddress([]byte{15}): &bls12381Pairing{},
-	common.BytesToAddress([]byte{16}): &bls12381MapG1{},
-	common.BytesToAddress([]byte{17}): &bls12381MapG2{},
-
-	// secp256r1 precompiles
+	common.BytesToAddress([]byte{11}):        &bls12381G1Add{},
+	common.BytesToAddress([]byte{12}):        &bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{13}):        &bls12381G2Add{},
+	common.BytesToAddress([]byte{14}):        &bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{15}):        &bls12381Pairing{},
+	common.BytesToAddress([]byte{16}):        &bls12381MapG1{},
+	common.BytesToAddress([]byte{17}):        &bls12381MapG2{},
+	common.BytesToAddress([]byte{0x1, 0x00}): &p256Verify{},
 }
 
 var (
@@ -1075,4 +1075,32 @@ func encodePointG2(p *bls12381.G2Affine) []byte {
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[144:144+48]), p.Y.A0)
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[208:208+48]), p.Y.A1)
 	return out
+}
+
+// P256VERIFY (secp256r1 signature verification)
+// implemented as a native contract
+type p256Verify struct{}
+
+// RequiredGas returns the gas required to execute the precompiled contract
+func (c *p256Verify) RequiredGas(input []byte) uint64 {
+	return P256VerifyGas
+}
+
+// Run executes the precompiled contract with given 160 bytes of param, returning the output and the used gas
+func (c *p256Verify) Run(input []byte) ([]byte, error) {
+	const p256VerifyInputLength = 160
+	if len(input) != p256VerifyInputLength {
+		return nil, nil
+	}
+
+	// Extract hash, r, s, x, y from the input.
+	hash := input[0:32]
+	r, s := new(big.Int).SetBytes(input[32:64]), new(big.Int).SetBytes(input[64:96])
+	x, y := new(big.Int).SetBytes(input[96:128]), new(big.Int).SetBytes(input[128:160])
+
+	// Verify the signature.
+	if secp256r1.Verify(hash, r, s, x, y) {
+		return true32Byte, nil
+	}
+	return nil, nil
 }
