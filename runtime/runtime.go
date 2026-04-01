@@ -31,6 +31,15 @@ var (
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
+	// EmptyRuntimeBytecode is stored at every precompile address at fork activation.
+	// This makes precompile addresses "exist" in Thor's state, which prevents
+	// accidental contract deployment to those addresses (CREATE/CREATE2 will fail
+	// with ErrContractAddressCollision since the code hash differs from emptyCodeHash).
+	//
+	// NOTE: This means EXTCODESIZE/EXTCODECOPY/EXTCODEHASH on any precompile address
+	// returns 8 bytes of non-empty code on Thor, whereas on Ethereum precompile
+	// addresses have no code (EXTCODESIZE returns 0). Contracts that detect
+	// precompiles by checking extcodesize == 0 will behave differently on Thor.
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 )
 

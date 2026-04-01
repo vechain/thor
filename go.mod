@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/beevik/ntp v0.2.0
+	github.com/consensys/gnark-crypto v0.18.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
 	github.com/dop251/goja v0.0.0-20230707174833-636fdf960de1
@@ -46,7 +47,6 @@ require (
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
