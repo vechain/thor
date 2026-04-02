@@ -781,7 +781,6 @@ func opSuicide(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack)
 	}
 
 	evm.StateDB.Suicide(contract.Address())
-	evm.SetContractStatus(contract.Address(), 2)
 	return nil, nil
 }
 
@@ -799,11 +798,10 @@ func opSuicide6780(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *St
 		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver))
 	}
 
-	status := evm.GetContractStatus(contract.Address())
+	isNew := evm.StateDB.IsNewContract(contract.Address())
 
-	if status == 1 {
+	if isNew {
 		evm.StateDB.Suicide(contract.Address())
-		evm.SetContractStatus(contract.Address(), 2)
 	}
 
 	return nil, nil

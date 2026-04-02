@@ -853,7 +853,7 @@ func TestOpSuicide6780(t *testing.T) {
 			stack.push(new(uint256.Int).SetBytes(tokenReceiver.Bytes()))
 
 			// simulate the contract create in the same clause
-			evm.SetContractStatus(contractAddr, 1)
+			evm.StateDB.CreateContract(contractAddr)
 
 			state.SetStorage(thor.Address(contractAddr), thor.BytesToBytes32([]byte("key1")), thor.BytesToBytes32([]byte("value1")))
 			state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
@@ -945,7 +945,7 @@ func TestOpSuicide6780(t *testing.T) {
 			stack.push(new(uint256.Int).SetBytes(contractAddr.Bytes()))
 
 			// simulate the contract create in the same clause
-			evm.SetContractStatus(contractAddr, 1)
+			evm.StateDB.CreateContract(contractAddr)
 
 			state.SetStorage(thor.Address(contractAddr), thor.BytesToBytes32([]byte("key1")), thor.BytesToBytes32([]byte("value1")))
 			state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
