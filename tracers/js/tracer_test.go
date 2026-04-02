@@ -49,8 +49,12 @@ type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64                    { return 1337 }
-func (*dummyStatedb) GetBalance(_ common.Address) *big.Int { return new(big.Int) }
+func (*dummyStatedb) GetRefund() uint64                                          { return 1337 }
+func (*dummyStatedb) GetBalance(addr common.Address) *big.Int                    { return new(big.Int) }
+func (*dummyStatedb) GetTransientState(common.Address, common.Hash) common.Hash  { return common.Hash{} }
+func (*dummyStatedb) SetTransientState(common.Address, common.Hash, common.Hash) {}
+func (*dummyStatedb) CreateContract(common.Address)                              {}
+func (*dummyStatedb) IsNewContract(common.Address) bool                          { return false }
 
 func testCtx() vm.Context {
 	return vm.Context{
@@ -297,7 +301,10 @@ func TestEnterExit(t *testing.T) {
 	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", nil); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
 	}
-	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", nil); err != nil {
+	if _, err := newJsTracer(
+		"{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}",
+		nil,
+	); err != nil {
 		t.Fatal(err)
 	}
 	// test that the enter and exit method are correctly invoked and the values passed

@@ -784,6 +784,29 @@ func opSuicide(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack)
 	return nil, nil
 }
 
+func opSuicide6780(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack) ([]byte, error) {
+	receiver := stack.popptr().Bytes20()
+
+	if evm.vmConfig.Tracer != nil {
+		bal := evm.StateDB.GetBalance(contract.Address())
+		evm.vmConfig.Tracer.CaptureEnter(SELFDESTRUCT, contract.Address(), receiver, []byte{}, 0, bal)
+		evm.vmConfig.Tracer.CaptureExit([]byte{}, 0, nil)
+	}
+
+	if evm.OnSuicideContract != nil {
+		// let runtime do transfer things
+		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver))
+	}
+
+	isNew := evm.StateDB.IsNewContract(contract.Address())
+
+	if isNew {
+		evm.StateDB.Suicide(contract.Address())
+	}
+
+	return nil, nil
+}
+
 // opChainID implements CHAINID opcode
 func opChainID(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
 	chainID, _ := uint256.FromBig(evm.chainConfig.ChainID)
@@ -807,6 +830,23 @@ func opBaseFee(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 // opPush0 implements the PUSH0 opcode
 func opPush0(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(new(uint256.Int))
+	return nil, nil
+}
+
+// opTload implements TLOAD opcode
+func opTload(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	loc := stack.peek()
+	hash := common.Hash(loc.Bytes32())
+	val := evm.StateDB.GetTransientState(contract.Address(), hash)
+	loc.SetBytes(val.Bytes())
+	return nil, nil
+}
+
+// opTstore implements TSTORE opcode
+func opTstore(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	loc := stack.pop()
+	val := stack.pop()
+	evm.StateDB.SetTransientState(contract.Address(), loc.Bytes32(), val.Bytes32())
 	return nil, nil
 }
 

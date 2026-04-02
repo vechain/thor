@@ -31,6 +31,15 @@ var (
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
+	// EmptyRuntimeBytecode is stored at every precompile address at fork activation.
+	// This makes precompile addresses "exist" in Thor's state, which prevents
+	// accidental contract deployment to those addresses (CREATE/CREATE2 will fail
+	// with ErrContractAddressCollision since the code hash differs from emptyCodeHash).
+	//
+	// NOTE: This means EXTCODESIZE/EXTCODECOPY/EXTCODEHASH on any precompile address
+	// returns 8 bytes of non-empty code on Thor, whereas on Ethereum precompile
+	// addresses have no code (EXTCODESIZE returns 0). Contracts that detect
+	// precompiles by checking extcodesize == 0 will behave differently on Thor.
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 )
 
@@ -61,6 +70,7 @@ var baseChainConfig = vm.ChainConfig{
 	},
 	IstanbulBlock: nil,
 	ShanghaiBlock: nil,
+	OsakaBlock:    nil,
 }
 
 // Output output of clause execution.
@@ -276,7 +286,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				Data:    data,
 			})
 		},
-		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
+
+		// NOTE: THIS IS CLOUSER FUNCTION.
+		// IF YOU WANT TO CHANGE THIS FUNCTION, PLEASE MAKE SURE THE LOGIC IS CORRECT.
+		// AND CHANGE THE TEST CASES IN vm/instructions_test.go ACCORDINGLY.
+		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
 			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
@@ -289,14 +303,26 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				if err != nil {
 					panic(err)
 				}
+
 				// touch the receiver's energy
-				// no need to clear contract's energy, vm will delete the whole contract later.
-				if err := rt.state.SetEnergy(
-					thor.Address(tokenReceiver),
-					new(big.Int).Add(receiverEnergy, energy),
-					rt.ctx.Time); err != nil {
-					panic(err)
+				// after EIP6780, MUST to clear contract's energy, vm delete contarct operation is optional.
+				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
+				if contractAddr != tokenReceiver {
+					if err := rt.state.SetEnergy(
+						thor.Address(tokenReceiver),
+						new(big.Int).Add(receiverEnergy, energy),
+						rt.ctx.Time); err != nil {
+						panic(err)
+					}
+
+					if err = rt.state.SetEnergy(
+						thor.Address(contractAddr),
+						big.NewInt(0),
+						rt.ctx.Time); err != nil {
+						panic(err)
+					}
 				}
+
 				// emit event if there is energy in the account
 				if energy.Sign() != 0 {
 					// see ERC20's Transfer event
@@ -320,7 +346,12 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 
 			if bal.Sign() != 0 {
-				stateDB.AddBalance(tokenReceiver, bal)
+				// after EIP6780, MUST to clear contract's VET, vm delete contarct operation is optional.
+				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
+				if contractAddr != tokenReceiver {
+					stateDB.AddBalance(tokenReceiver, bal)
+					stateDB.SubBalance(contractAddr, bal)
+				}
 
 				stateDB.AddTransfer(&tx.Transfer{
 					Sender:    thor.Address(contractAddr),
@@ -329,6 +360,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				})
 			}
 		},
+
 		Origin:      common.Address(txCtx.Origin),
 		GasPrice:    txCtx.GasPrice,
 		Coinbase:    common.Address(rt.ctx.Beneficiary),

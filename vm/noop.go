@@ -71,3 +71,7 @@ func (NoopStateDB) Snapshot() int                                               
 func (NoopStateDB) AddLog(*types.Log)                                                  {}
 func (NoopStateDB) AddPreimage(common.Hash, []byte)                                    {}
 func (NoopStateDB) ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) {}
+func (NoopStateDB) GetTransientState(common.Address, common.Hash) common.Hash          { return common.Hash{} }
+func (NoopStateDB) SetTransientState(common.Address, common.Hash, common.Hash)         {}
+func (NoopStateDB) CreateContract(common.Address)                                      {}
+func (NoopStateDB) IsNewContract(common.Address) bool                                  { return false }

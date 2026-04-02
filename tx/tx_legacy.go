@@ -22,7 +22,7 @@ type legacyTransaction struct {
 	ChainTag     byte
 	BlockRef     uint64
 	Expiration   uint32
-	Clauses      []*Clause
+	Clauses      Clauses
 	GasPriceCoef uint8
 	Gas          uint64
 	DependsOn    *thor.Bytes32 `rlp:"nil"`

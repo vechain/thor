@@ -462,6 +462,7 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	// Increase counter, same behavior as Create()
 	// We already have address, just need to increase the counter.
+	// set contract status to map, it can check the contract status created or suicided in the clause
 	evm.contractCreationCount++
 
 	// Ensure there's no existing contract already at the designated address
@@ -471,7 +472,14 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
+
 	evm.StateDB.CreateAccount(contractAddr)
+	// CreateContract means that regardless of whether the account previously existed
+	// in the state trie or not, it _now_ becomes created as a _contract_ account.
+	// This is performed _prior_ to executing the initcode,  since the initcode
+	// acts inside that account.
+	evm.StateDB.CreateContract(contractAddr)
+
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(contractAddr, 1)
 	}
@@ -522,6 +530,7 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
+		// clear the map when revert to snapshot, otherwise the map will be inconsistent with stateDB after revert to snapshot.
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas)

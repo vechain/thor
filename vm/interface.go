@@ -62,6 +62,25 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	// ForEachStorage(common.Address, func(common.Hash, common.Hash) bool)
+
+	// SetTransientState sets transient storage for a given account. It
+	// adds the change to the journal so that it can be rolled back
+	// to its previous value if there is a revert.
+	SetTransientState(common.Address, common.Hash, common.Hash)
+
+	// GetTransientState gets transient storage for a given account.
+	GetTransientState(common.Address, common.Hash) common.Hash
+
+	// CreateContract is used whenever a contract is created. This may be preceded
+	// by CreateAccount, but that is not required if it already existed in the
+	// state due to funds sent beforehand.
+	// This operation sets the 'newContract'-flag, which is required in order to
+	// correctly handle EIP-6780 'delete-in-same-evm-execution' logic.
+	CreateContract(common.Address)
+
+	// IsNewContract reports whether the contract at the given address was deployed
+	// during the current evm execution.
+	IsNewContract(addr common.Address) bool
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM EVM

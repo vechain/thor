@@ -297,33 +297,40 @@ func TestNodeDBPersistency(t *testing.T) {
 	db.close()
 }
 
-var nodeDBExpirationNodes = []struct {
+func makeNodeDBExpirationNodes(now time.Time) []struct {
 	node *Node
 	pong time.Time
 	exp  bool
-}{
-	{
-		node: NewNode(
-			MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			net.IP{127, 0, 0, 1},
-			30303,
-			30303,
-		),
-		pong: time.Now().Add(-nodeDBNodeExpiration + time.Minute),
-		exp:  false,
-	}, {
-		node: NewNode(
-			MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			net.IP{127, 0, 0, 2},
-			30303,
-			30303,
-		),
-		pong: time.Now().Add(-nodeDBNodeExpiration - time.Minute),
-		exp:  true,
-	},
+} {
+	return []struct {
+		node *Node
+		pong time.Time
+		exp  bool
+	}{
+		{
+			node: NewNode(
+				MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+				net.IP{127, 0, 0, 1},
+				30303,
+				30303,
+			),
+			pong: now.Add(-nodeDBNodeExpiration + time.Minute),
+			exp:  false,
+		}, {
+			node: NewNode(
+				MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+				net.IP{127, 0, 0, 2},
+				30303,
+				30303,
+			),
+			pong: now.Add(-nodeDBNodeExpiration - time.Minute),
+			exp:  true,
+		},
+	}
 }
 
 func TestNodeDBExpiration(t *testing.T) {
+	nodeDBExpirationNodes := makeNodeDBExpirationNodes(time.Now())
 	db, _ := newNodeDB("", nodeDBVersion, NodeID{})
 	defer db.close()
 
@@ -349,6 +356,7 @@ func TestNodeDBExpiration(t *testing.T) {
 }
 
 func TestNodeDBSelfExpiration(t *testing.T) {
+	nodeDBExpirationNodes := makeNodeDBExpirationNodes(time.Now())
 	// Find a node in the tests that shouldn't expire, and assign it as self
 	var self NodeID
 	for _, node := range nodeDBExpirationNodes {

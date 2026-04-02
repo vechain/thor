@@ -16,11 +16,11 @@ permissions:
 
 jobs:
   run-solo-tests:
-    name: Run Solo e2e Tests
+    name: Run Rosetta e2e Tests
     runs-on: ubuntu-latest
     env:
-      NETWORK: solo
-      TEST_NETWORK: solo
+      NETWORK: custom
+      TEST_NETWORK: custom
       MODE: online
     steps:
       - name: Set Rosetta repo reference

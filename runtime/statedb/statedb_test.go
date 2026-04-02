@@ -20,6 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/v2/muxdb"
 	State "github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/trie"
@@ -244,4 +246,53 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 			state.GetRefund(), checkstate.GetRefund())
 	}
 	return nil
+}
+
+func TestTransientState(t *testing.T) {
+	addr := common.Address{0x1}
+	key := common.BytesToHash([]byte("key1"))
+	v1 := common.BytesToHash([]byte("value1"))
+	v2 := common.BytesToHash([]byte("value2"))
+
+	db := muxdb.NewMem()
+	state := State.NewStater(db).NewState(trie.Root{})
+
+	stateDB := New(state)
+	val := stateDB.GetTransientState(addr, key)
+	assert.Equal(t, common.Hash{}, val)
+
+	stateDB.SetTransientState(addr, key, v1)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v1, val)
+
+	snap := stateDB.Snapshot()
+	stateDB.SetTransientState(addr, key, v2)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v2, val)
+
+	stateDB.RevertToSnapshot(snap)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v1, val)
+
+	stateDB.SetTransientState(addr, key, v2)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v2, val)
+}
+
+func TestCreateContract(t *testing.T) {
+	addr := common.Address{0x1}
+	stateDB := New(State.New(muxdb.NewMem(), trie.Root{}))
+	assert.False(t, stateDB.IsNewContract(addr))
+	stateDB.CreateContract(addr)
+	assert.True(t, stateDB.IsNewContract(addr))
+
+	rev := stateDB.Snapshot()
+	addr2 := common.Address{0x2}
+	assert.False(t, stateDB.IsNewContract(addr2))
+	stateDB.CreateContract(addr2)
+	assert.True(t, stateDB.IsNewContract(addr2))
+
+	stateDB.RevertToSnapshot(rev)
+	assert.False(t, stateDB.IsNewContract(addr2))
+	assert.True(t, stateDB.IsNewContract(addr))
 }
