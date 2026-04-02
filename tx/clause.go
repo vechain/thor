@@ -16,6 +16,49 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+// Clauses is a slice of *Clause with limitation on RLP decode.
+// DecodeRLP pre-scans raw items to enforce MaxClausesPerTx before
+// allocating any Clause structs, preventing invalid clause list.
+type Clauses []*Clause
+
+// DecodeRLP implements rlp.Decoder.
+// It captures the raw list bytes in a single allocation, counts items using
+// rlp.SplitList + rlp.Split (zero additional allocations), enforces
+// MaxClausesPerTx, then decodes into []*Clause only if within the limit.
+func (cs *Clauses) DecodeRLP(s *rlp.Stream) error {
+	// Capture the entire list as raw bytes (one allocation).
+	raw, err := s.Raw()
+	if err != nil {
+		return err
+	}
+
+	// Count clause items using byte-level split — zero allocation.
+	content, _, err := rlp.SplitList(raw)
+	if err != nil {
+		return err
+	}
+	count := 0
+	for rest := content; len(rest) > 0; {
+		_, _, rest, err = rlp.Split(rest)
+		if err != nil {
+			return err
+		}
+		count++
+		if count > MaxClausesPerTx {
+			return fmt.Errorf("clause count exceeds limit: %d > %d", count, MaxClausesPerTx)
+		}
+	}
+
+	// Decode into []*Clause (not Clauses) to use the default slice decoder
+	// and avoid re-entering this method.
+	var result []*Clause
+	if err := rlp.DecodeBytes(raw, &result); err != nil {
+		return err
+	}
+	*cs = result
+	return nil
+}
+
 type clauseBody struct {
 	To    *thor.Address `rlp:"nil"`
 	Value *big.Int

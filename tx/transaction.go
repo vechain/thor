@@ -51,6 +51,20 @@ const (
 	TypeDynamicFee = Type(0x51)
 )
 
+const (
+	// MaxClausesPerTx is the maximum number of clauses allowed in a transaction.
+	// This is a DoS-protection limit enforced during RLP decode of Clauses.
+	// Derived from current mainnet block gas limit (~40M) / ClauseGas (16000).
+	// Will be superseded by MaxTxGasLimit (EIP-7825) once activated.
+	MaxClausesPerTx = 2500
+
+	// MaxUnusedReservedFields is the maximum number of unused reserved fields
+	// allowed in a transaction. DoS-protection enforced during RLP decode of reserved.
+	// This limit is a DoS-protection measure and does not apply to wallet clients constructing
+	// transactions locally.
+	MaxUnusedReservedFields = 2
+)
+
 // Transaction is an immutable tx type.
 type Transaction struct {
 	body txData
@@ -649,10 +663,8 @@ func (t *Transaction) EnforceSignatureLowS() error {
 	sig := t.body.signature()
 
 	// Check first signature's S (bytes 32:64)
-	if len(sig) == 65 {
-		if bytes.Compare(sig[32:64], secp256k1HalfN[:]) > 0 {
-			return ErrHighSInSignature
-		}
+	if bytes.Compare(sig[32:64], secp256k1HalfN[:]) > 0 {
+		return ErrHighSInSignature
 	}
 
 	// Check delegator signature's S if present (bytes 97:129)

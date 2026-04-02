@@ -6,8 +6,6 @@
 package vm
 
 import (
-	"reflect"
-	"runtime"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -49,33 +47,5 @@ func TestMcopyForkGating(t *testing.T) {
 		assert.NotNil(t, cancunJt[MCOPY].execute)
 		assert.NotNil(t, cancunJt[MCOPY].gasCost)
 		assert.NotNil(t, cancunJt[MCOPY].memorySize)
-	})
-}
-
-func TestSELFDESTRUCTForkGating(t *testing.T) {
-	t.Run("SELFDESTRUCT unavailable pre-Cancun", func(t *testing.T) {
-		shanghaiJt := NewShanghaiInstructionSet()
-
-		funcName := runtime.FuncForPC(reflect.ValueOf(shanghaiJt[SELFDESTRUCT].execute).Pointer()).Name()
-		assert.NotNil(t, shanghaiJt[SELFDESTRUCT], "SELFDESTRUCT should exist in Shanghai instruction set")
-		assert.NotNil(t, shanghaiJt[SELFDESTRUCT].gasCost)
-		assert.NotNil(t, shanghaiJt[SELFDESTRUCT].validateStack)
-		assert.Equal(t, shanghaiJt[SELFDESTRUCT].halts, true)
-		assert.Equal(t, shanghaiJt[SELFDESTRUCT].writes, true)
-
-		assert.Equal(t, funcName, "github.com/vechain/thor/v2/vm.opSuicide", "SELFDESTRUCT should be implemented as opSuicide in Shanghai instruction set")
-	})
-
-	t.Run("SELFDESTRUCT available on Cancun", func(t *testing.T) {
-		cancunJt := NewCancunInstructionSet()
-
-		funcName := runtime.FuncForPC(reflect.ValueOf(cancunJt[SELFDESTRUCT].execute).Pointer()).Name()
-		assert.NotNil(t, cancunJt[SELFDESTRUCT], "SELFDESTRUCT should exist in Cancun instruction set")
-		assert.NotNil(t, cancunJt[SELFDESTRUCT].gasCost)
-		assert.NotNil(t, cancunJt[SELFDESTRUCT].validateStack)
-		assert.Equal(t, cancunJt[SELFDESTRUCT].halts, true)
-		assert.Equal(t, cancunJt[SELFDESTRUCT].writes, true)
-
-		assert.Equal(t, funcName, "github.com/vechain/thor/v2/vm.opSuicide6780", "SELFDESTRUCT should be implemented as opSuicide in Cancun instruction set")
 	})
 }

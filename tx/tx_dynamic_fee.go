@@ -18,7 +18,7 @@ type dynamicFeeTransaction struct {
 	ChainTag             byte
 	BlockRef             uint64
 	Expiration           uint32
-	Clauses              []*Clause
+	Clauses              Clauses
 	MaxPriorityFeePerGas *big.Int
 	MaxFeePerGas         *big.Int
 	Gas                  uint64

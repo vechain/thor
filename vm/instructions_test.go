@@ -28,12 +28,20 @@ import (
 
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/muxdb"
-	Statedb "github.com/vechain/thor/v2/runtime/statedb"
-	State "github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/runtime/statedb"
+	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 )
+
+type contractRef struct {
+	addr common.Address
+}
+
+func (c contractRef) Address() common.Address {
+	return c.addr
+}
 
 type twoOperandTest struct {
 	x        string
@@ -521,6 +529,90 @@ func BenchmarkOpIsZero(b *testing.B) {
 	opBenchmark(b, opIszero, x)
 }
 
+func TestOpMstore(t *testing.T) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+
+	mem.Resize(64)
+	pc := uint64(0)
+	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
+	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
+	stack.push(new(uint256.Int))
+	opMstore(&pc, env, nil, mem, stack)
+	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
+		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
+	}
+	stack.push(new(uint256.Int).SetUint64(0x1))
+	stack.push(new(uint256.Int))
+	opMstore(&pc, env, nil, mem, stack)
+	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+		t.Fatalf("Mstore failed to overwrite previous value")
+	}
+}
+
+func BenchmarkOpMstore(bench *testing.B) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+
+	mem.Resize(64)
+	pc := uint64(0)
+	memStart := new(uint256.Int)
+	value := new(uint256.Int).SetUint64(0x1337)
+
+	for bench.Loop() {
+		stack.push(value)
+		stack.push(memStart)
+		opMstore(&pc, env, nil, mem, stack)
+	}
+}
+
+func TestOpTstore(t *testing.T) {
+	var (
+		db          = muxdb.NewMem()
+		state       = state.New(db, trie.Root{Hash: thor.Bytes32{}})
+		stateDB     = statedb.New(state)
+		env         = NewEVM(Context{}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack       = newstack()
+		mem         = NewMemory()
+		caller      = common.Address{0}
+		to          = common.Address{1}
+		contractRef = contractRef{caller}
+		contract    = NewContract(contractRef, AccountRef(to), big.NewInt(0), 0)
+		value       = common.Hex2Bytes("abcdef00000000000000abba000000000deaf000000c0de00100000000133700")
+	)
+
+	// Add a stateObject for the caller and the contract being called
+	stateDB.CreateAccount(caller)
+	stateDB.CreateAccount(to)
+
+	pc := uint64(0)
+	// push the value to the stack
+	stack.push(new(uint256.Int).SetBytes(value))
+	// push the location to the stack
+	stack.push(new(uint256.Int))
+	opTstore(&pc, env, contract, mem, stack)
+	// there should be no elements on the stack after TSTORE
+	if stack.len() != 0 {
+		t.Fatal("stack wrong size")
+	}
+	// push the location to the stack
+	stack.push(new(uint256.Int))
+	opTload(&pc, env, contract, mem, stack) // there should be one element on the stack after TLOAD
+	if stack.len() != 1 {
+		t.Fatal("stack wrong size")
+	}
+	val := stack.peek()
+	if !bytes.Equal(val.Bytes(), value) {
+		t.Fatal("incorrect element read from transient storage")
+	}
+}
+
 func TestCreate2Addreses(t *testing.T) {
 	type testcase struct {
 		origin   string
@@ -609,14 +701,14 @@ func TestOpSuicide6780(t *testing.T) {
 
 	type testcase struct {
 		name     string
-		initFunc func() (evm *EVM, state *State.State, stack *Stack)
-		testFunc func(evm *EVM, state *State.State, t *testing.T)
+		initFunc func() (evm *EVM, state *state.State, stack *Stack)
+		testFunc func(evm *EVM, state *state.State, t *testing.T)
 	}
 
 	tests := []testcase{}
 
-	newEVMInstance := func(state *State.State) *EVM {
-		stateDB := Statedb.New(state)
+	newEVMInstance := func(state *state.State) *EVM {
+		stateDB := statedb.New(state)
 		evm := NewEVM(Context{
 			BlockNumber: big.NewInt(1),
 			GasPrice:    big.NewInt(1),
@@ -700,10 +792,10 @@ func TestOpSuicide6780(t *testing.T) {
 
 	case1 := testcase{
 		name: "Different Clause,different receiver",
-		initFunc: func() (*EVM, *State.State, *Stack) {
+		initFunc: func() (*EVM, *state.State, *Stack) {
 			var (
 				db    = muxdb.NewMem()
-				state = State.New(db, trie.Root{})
+				state = state.New(db, trie.Root{})
 				stack = newstack()
 			)
 
@@ -720,7 +812,7 @@ func TestOpSuicide6780(t *testing.T) {
 
 			return evm, state, stack
 		},
-		testFunc: func(evm *EVM, state *State.State, t *testing.T) {
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
 			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 || evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
 				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
 			}
@@ -749,10 +841,10 @@ func TestOpSuicide6780(t *testing.T) {
 
 	case2 := testcase{
 		name: "Same Clause, different receiver",
-		initFunc: func() (*EVM, *State.State, *Stack) {
+		initFunc: func() (*EVM, *state.State, *Stack) {
 			var (
 				db    = muxdb.NewMem()
-				state = State.New(db, trie.Root{})
+				state = state.New(db, trie.Root{})
 				stack = newstack()
 			)
 
@@ -771,7 +863,7 @@ func TestOpSuicide6780(t *testing.T) {
 
 			return evm, state, stack
 		},
-		testFunc: func(evm *EVM, state *State.State, t *testing.T) {
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
 			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 || evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
 				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
 			}
@@ -800,10 +892,10 @@ func TestOpSuicide6780(t *testing.T) {
 
 	case3 := testcase{
 		name: "Different Clause,same receiver",
-		initFunc: func() (*EVM, *State.State, *Stack) {
+		initFunc: func() (*EVM, *state.State, *Stack) {
 			var (
 				db    = muxdb.NewMem()
-				state = State.New(db, trie.Root{})
+				state = state.New(db, trie.Root{})
 				stack = newstack()
 			)
 
@@ -820,7 +912,7 @@ func TestOpSuicide6780(t *testing.T) {
 
 			return evm, state, stack
 		},
-		testFunc: func(evm *EVM, state *State.State, t *testing.T) {
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
 			if evm.StateDB.GetBalance(contractAddr).Cmp(big.NewInt(100)) != 0 {
 				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
 			}
@@ -841,10 +933,10 @@ func TestOpSuicide6780(t *testing.T) {
 
 	case4 := testcase{
 		name: "Same Clause,same receiver",
-		initFunc: func() (*EVM, *State.State, *Stack) {
+		initFunc: func() (*EVM, *state.State, *Stack) {
 			var (
 				db    = muxdb.NewMem()
-				state = State.New(db, trie.Root{})
+				state = state.New(db, trie.Root{})
 				stack = newstack()
 			)
 
@@ -863,7 +955,7 @@ func TestOpSuicide6780(t *testing.T) {
 
 			return evm, state, stack
 		},
-		testFunc: func(evm *EVM, state *State.State, t *testing.T) {
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
 			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
 				t.Fatalf("expected contract balance to be burnt, got %v", evm.StateDB.GetBalance(contractAddr))
 			}
