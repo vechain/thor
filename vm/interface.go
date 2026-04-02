@@ -70,6 +70,17 @@ type StateDB interface {
 
 	// GetTransientState gets transient storage for a given account.
 	GetTransientState(common.Address, common.Hash) common.Hash
+
+	// CreateContract is used whenever a contract is created. This may be preceded
+	// by CreateAccount, but that is not required if it already existed in the
+	// state due to funds sent beforehand.
+	// This operation sets the 'newContract'-flag, which is required in order to
+	// correctly handle EIP-6780 'delete-in-same-evm-execution' logic.
+	CreateContract(common.Address)
+
+	// IsNewContract reports whether the contract at the given address was deployed
+	// during the current evm execution.
+	IsNewContract(addr common.Address) bool
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM EVM

@@ -478,7 +478,14 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
+
 	evm.StateDB.CreateAccount(contractAddr)
+	// CreateContract means that regardless of whether the account previously existed
+	// in the state trie or not, it _now_ becomes created as a _contract_ account.
+	// This is performed _prior_ to executing the initcode,  since the initcode
+	// acts inside that account.
+	evm.StateDB.CreateContract(contractAddr)
+
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(contractAddr, 1)
 	}
