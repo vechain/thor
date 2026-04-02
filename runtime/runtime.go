@@ -307,7 +307,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				// touch the receiver's energy
 				// after EIP6780, MUST to clear contract's energy, vm delete contarct operation is optional.
 				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
-				if contractAddr.String() != tokenReceiver.String() {
+				if contractAddr != tokenReceiver {
 					if err := rt.state.SetEnergy(
 						thor.Address(tokenReceiver),
 						new(big.Int).Add(receiverEnergy, energy),
@@ -348,7 +348,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			if bal.Sign() != 0 {
 				// after EIP6780, MUST to clear contract's VET, vm delete contarct operation is optional.
 				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
-				if contractAddr.String() != tokenReceiver.String() {
+				if contractAddr != tokenReceiver {
 					stateDB.AddBalance(tokenReceiver, bal)
 					stateDB.SubBalance(contractAddr, bal)
 				}
