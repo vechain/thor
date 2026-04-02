@@ -333,8 +333,6 @@ type bigModExp struct {
 	eip7883 bool // EIP-7883: ModExp gas cost increase (Osaka)
 }
 
-var big0 = big.NewInt(0)
-
 // byzantiumMultComplexity implements the bigModexp multComplexity formula, as defined in EIP-198.
 //
 //	def mult_complexity(x):
@@ -1092,7 +1090,7 @@ func decodePointG2(in []byte) (*bls12381.G2Affine, error) {
 	if !p.IsOnCurve() {
 		return nil, errors.New("invalid point: not on curve")
 	}
-	return &p, err
+	return &p, nil
 }
 
 // decodeBLS12381FieldElement decodes BLS12-381 elliptic curve field element.
