@@ -103,7 +103,7 @@ jobs:
   run-interstellar-tests:
     needs: detect-interstellar
     if: needs.detect-interstellar.outputs.enabled == 'true'
-    uses: vechain/interstellar-e2e/.github/workflows/test.yml@main
+    uses: vechain/interstellar-e2e/.github/workflows/test.yml@main # zizmor: ignore[unpinned-uses]
     with:
       thor-branch: ${{ github.head_ref || github.ref_name }}
       thor-repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
