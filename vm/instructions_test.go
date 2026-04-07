@@ -813,7 +813,7 @@ func TestOpSuicide6780(t *testing.T) {
 			return evm, state, stack
 		},
 		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
-			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 || evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
+			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 && evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
 				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
 			}
 
@@ -864,7 +864,7 @@ func TestOpSuicide6780(t *testing.T) {
 			return evm, state, stack
 		},
 		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
-			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 || evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
+			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 && evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
 				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
 			}
 

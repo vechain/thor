@@ -78,6 +78,7 @@ func NewCancunInstructionSet() *JumpTable {
 		gasCost:       gasSuicide,
 		validateStack: makeStackFunc(1, 0),
 		halts:         true,
+		writes:        true,
 	}
 	instructionSet[TLOAD] = &operation{
 		execute:       opTload,
