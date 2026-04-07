@@ -64,7 +64,7 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{0x4}): &dataCopy{},
-  common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: false, eip7823:false, eip7883: false},
+	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: false, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{0x6}): &bn256Add{eip1108: false},
 	common.BytesToAddress([]byte{0x7}): &bn256ScalarMul{eip1108: false},
 	common.BytesToAddress([]byte{0x8}): &bn256Pairing{eip1108: false},
@@ -77,7 +77,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{0x4}): &dataCopy{},
-	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: false, eip7823:false, eip7883: false},
+	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: false, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{0x6}): &bn256Add{eip1108: false},
 	common.BytesToAddress([]byte{0x7}): &bn256ScalarMul{eip1108: false},
 	common.BytesToAddress([]byte{0x8}): &bn256Pairing{eip1108: false},
@@ -93,7 +93,7 @@ var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{0x4}): &dataCopy{},
-	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: false, eip7823:false, eip7883: false},
+	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: true, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{0x6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{0x7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{0x8}): &bn256Pairing{eip1108: true},
@@ -107,17 +107,13 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{0x4}): &dataCopy{},
-	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: true, eip7823: true, eip7883: true},
+	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: true, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{0x6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{0x7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{0x8}): &bn256Pairing{eip1108: true},
 	common.BytesToAddress([]byte{0x9}): &blake2F{},
-
 	// Address 10 (0x0a) — EIP-4844 KZG point evaluation — is intentionally absent.
 	// KZG is not applicable to VeChain (no blob transactions).
-	// Addresses 11–17 (0x0b–0x11) are the EIP-2537 BLS12-381 precompiles.
-
-	// EIP-2537: BLS12-381 curve operations (Prague)
 	common.BytesToAddress([]byte{0x0b}): &bls12381G1Add{},
 	common.BytesToAddress([]byte{0x0c}): &bls12381G1MultiExp{},
 	common.BytesToAddress([]byte{0x0d}): &bls12381G2Add{},
@@ -129,23 +125,18 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 
 // PrecompiledContractsOsaka contains the set of pre-compiled Ethereum
 // contracts used in the Osaka release.
-// Osaka introduces EIP-7823 (upper bounds for MODEXP).
 var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &safeEcrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false, eip7823:true, eip7883: false},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: true, eip7883: true},
 	common.BytesToAddress([]byte{6}): &bn256Add{eip1108: true},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{eip1108: true},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{eip1108: true},
 	common.BytesToAddress([]byte{9}): &blake2F{},
-
 	// Address 10 (0x0a) — EIP-4844 KZG point evaluation — is intentionally absent.
 	// KZG is not applicable to VeChain (no blob transactions).
-	// Addresses 11–17 (0x0b–0x11) are the EIP-2537 BLS12-381 precompiles.
-
-	// EIP-2537: BLS12-381 curve operations (Prague)
 	common.BytesToAddress([]byte{0x0b}): &bls12381G1Add{},
 	common.BytesToAddress([]byte{0x0c}): &bls12381G1MultiExp{},
 	common.BytesToAddress([]byte{0x0d}): &bls12381G2Add{},
@@ -153,7 +144,6 @@ var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x0f}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{0x10}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{0x11}): &bls12381MapG2{},
-
 	// secp256r1 precompiles
 }
 
