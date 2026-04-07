@@ -11,3 +11,4 @@ rules:
         actions/stale: ref-pin
         # Trust vecahin maintained action
         vechain/hayabusa-e2e/.github/workflows/run-tests.yaml: ref-pin
+        vechain/interstellar-e2e/.github/workflows/run-tests.yaml: ref-pin
