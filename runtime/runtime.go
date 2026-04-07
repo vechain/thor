@@ -295,9 +295,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			bal := stateDB.GetBalance(contractAddr)
 
 			if energy.Sign() != 0 || bal.Sign() != 0 {
-				// when receiver is the contract itself, skip the actual transfer —
-				// balance and energy are cleared by the caller (not the hook) after the hook.
-				// logs are always emitted to record the event.
+				// Skip the actual fund transfer when the receiver is the contract itself; only emit the log.
+				// If the contract will be destroyed (pre-EIP6780, or created in the current execution under EIP6780),
+				// its balance is cleared by the EVM — no transfer needed.
+				// If not (pre-existing contract under EIP6780), the balance is retained and a self-transfer
+				// would be a no-op.
 				toSelf := contractAddr == tokenReceiver
 
 				if energy.Sign() != 0 {
