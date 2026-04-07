@@ -237,6 +237,13 @@ func opSAR(_ *uint64, _ *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, err
 	return nil, nil
 }
 
+// opCLZ implements EIP-7939: count leading zero bits in a 256-bit word.
+func opCLZ(_ *uint64, _ *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
+	x := stack.peek()
+	x.SetUint64(256 - uint64(x.BitLen()))
+	return nil, nil
+}
+
 func opSha3(_ *uint64, evm *EVM, _ *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.popptr(), stack.peek()
 	data := memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
