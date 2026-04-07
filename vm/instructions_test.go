@@ -914,7 +914,7 @@ func TestOpSuicide6780(t *testing.T) {
 		},
 		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
 			if evm.StateDB.GetBalance(contractAddr).Cmp(big.NewInt(100)) != 0 {
-				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
+				t.Fatalf("expected contract balance to remain unchanged, got %v", evm.StateDB.GetBalance(contractAddr))
 			}
 
 			contractEnergy, err := state.GetEnergy(thor.Address(contractAddr), 1, 1)
@@ -922,11 +922,11 @@ func TestOpSuicide6780(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if contractEnergy.Cmp(big.NewInt(100)) != 0 {
-				t.Fatalf("expected contract energy to be transfer all to receiver, got %v", contractEnergy)
+				t.Fatalf("expected contract energy to remain unchanged, got %v", contractEnergy)
 			}
 
 			if evm.StateDB.Empty(contractAddr) {
-				t.Fatalf("expected contract will be deleted, but it is not")
+				t.Fatalf("expected contract to still exist, but it has been deleted")
 			}
 		},
 	}

@@ -286,10 +286,6 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				Data:    data,
 			})
 		},
-
-		// NOTE: THIS IS CLOUSER FUNCTION.
-		// IF YOU WANT TO CHANGE THIS FUNCTION, PLEASE MAKE SURE THE LOGIC IS CORRECT.
-		// AND CHANGE THE TEST CASES IN vm/instructions_test.go ACCORDINGLY.
 		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
 			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
@@ -298,66 +294,54 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			bal := stateDB.GetBalance(contractAddr)
 
-			if bal.Sign() != 0 || energy.Sign() != 0 {
-				receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
-				if err != nil {
-					panic(err)
-				}
+			if energy.Sign() != 0 || bal.Sign() != 0 {
+				// when receiver is the contract itself, skip the actual transfer —
+				// balance and energy are cleared by the caller (not the hook) after the hook.
+				// logs are always emitted to record the event.
+				toSelf := contractAddr == tokenReceiver
 
-				// touch the receiver's energy
-				// after EIP6780, MUST to clear contract's energy, vm delete contarct operation is optional.
-				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
-				if contractAddr != tokenReceiver {
-					if err := rt.state.SetEnergy(
-						thor.Address(tokenReceiver),
-						new(big.Int).Add(receiverEnergy, energy),
-						rt.ctx.Time); err != nil {
-						panic(err)
-					}
-
-					if err = rt.state.SetEnergy(
-						thor.Address(contractAddr),
-						big.NewInt(0),
-						rt.ctx.Time); err != nil {
-						panic(err)
-					}
-				}
-
-				// emit event if there is energy in the account
 				if energy.Sign() != 0 {
+					if !toSelf {
+						receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
+						if err != nil {
+							panic(err)
+						}
+						// touch the receiver's energy, only if the receiver is not the contract itself.						if err := rt.state.SetEnergy(
+						if err := rt.state.SetEnergy(
+							thor.Address(tokenReceiver),
+							new(big.Int).Add(receiverEnergy, energy),
+							rt.ctx.Time); err != nil {
+							panic(err)
+						}
+					}
 					// see ERC20's Transfer event
 					topics := []common.Hash{
 						common.Hash(energyTransferEvent.ID()),
 						common.BytesToHash(contractAddr[:]),
 						common.BytesToHash(tokenReceiver[:]),
 					}
-
 					data, err := energyTransferEvent.Encode(energy)
 					if err != nil {
 						panic(err)
 					}
-
 					stateDB.AddLog(&types.Log{
 						Address: common.Address(builtin.Energy.Address),
 						Topics:  topics,
 						Data:    data,
 					})
 				}
-			}
 
-			if bal.Sign() != 0 {
-				// after EIP6780, MUST to clear contract's VET, vm delete contarct operation is optional.
-				// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
-				if contractAddr != tokenReceiver {
-					stateDB.AddBalance(tokenReceiver, bal)
-					stateDB.SubBalance(contractAddr, bal)
+				if bal.Sign() != 0 {
+					// update the receiver's balance, only if the receiver is not the contract itself.
+					if !toSelf {
+						stateDB.AddBalance(tokenReceiver, bal)
+					}
+					stateDB.AddTransfer(&tx.Transfer{
+						Sender:    thor.Address(contractAddr),
+						Recipient: thor.Address(tokenReceiver),
+						Amount:    bal,
+					})
 				}
-
-				stateDB.AddTransfer(&tx.Transfer{
-					Sender:    thor.Address(contractAddr),
-					Recipient: thor.Address(tokenReceiver),
-					Amount:    bal,
-				})
 			}
 		},
 
