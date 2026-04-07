@@ -66,6 +66,8 @@ formatters:
     golines:
       max-len: 160
       tab-len: 4
+      shorten-comments: true
+      # Default: true
       reformat-tags: false
   exclusions:
     generated: lax

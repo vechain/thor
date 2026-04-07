@@ -9,7 +9,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
 	github.com/dop251/goja v0.0.0-20230707174833-636fdf960de1
 	github.com/elastic/gosigar v0.10.5
-	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/golang/snappy v0.0.4
 	github.com/google/gofuzz v1.2.0
