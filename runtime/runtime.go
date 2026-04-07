@@ -306,10 +306,16 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 						if err != nil {
 							panic(err)
 						}
-						// touch the receiver's energy, only if the receiver is not the contract itself.
+						// update energy accordingly, only if the receiver is not the contract itself.
 						if err := rt.state.SetEnergy(
 							thor.Address(tokenReceiver),
 							new(big.Int).Add(receiverEnergy, energy),
+							rt.ctx.Time); err != nil {
+							panic(err)
+						}
+						if err := rt.state.SetEnergy(
+							thor.Address(contractAddr),
+							big.NewInt(0),
 							rt.ctx.Time); err != nil {
 							panic(err)
 						}
@@ -332,9 +338,10 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				}
 
 				if bal.Sign() != 0 {
-					// update the receiver's balance, only if the receiver is not the contract itself.
+					// update the balance accordingly, only if the receiver is not the contract itself.
 					if !toSelf {
 						stateDB.AddBalance(tokenReceiver, bal)
+						stateDB.SubBalance(contractAddr, bal)
 					}
 					stateDB.AddTransfer(&tx.Transfer{
 						Sender:    thor.Address(contractAddr),
