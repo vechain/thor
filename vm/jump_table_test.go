@@ -48,4 +48,22 @@ func TestMcopyForkGating(t *testing.T) {
 		assert.NotNil(t, cancunJt[MCOPY].gasCost)
 		assert.NotNil(t, cancunJt[MCOPY].memorySize)
 	})
+
+	t.Run("CLZ unavailable pre-Osaka", func(t *testing.T) {
+		shanghaiJt := NewShanghaiInstructionSet()
+		assert.Nil(t, shanghaiJt[CLZ], "CLZ should not exist in Shanghai instruction set")
+
+		istanbulJt := NewIstanbulInstructionSet()
+		assert.Nil(t, istanbulJt[CLZ], "CLZ should not exist in Istanbul instruction set")
+
+		cancunJt := NewCancunInstructionSet()
+		assert.Nil(t, cancunJt[CLZ], "CLZ should not exist in Cancun instruction set")
+	})
+
+	t.Run("CLZ available on Osaka", func(t *testing.T) {
+		osakaJt := NewOsakaInstructionSet()
+		assert.NotNil(t, osakaJt[CLZ], "CLZ should exist in Osaka instruction set")
+		assert.NotNil(t, osakaJt[CLZ].execute)
+		assert.NotNil(t, osakaJt[CLZ].gasCost)
+	})
 }
