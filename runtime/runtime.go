@@ -306,7 +306,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 						if err != nil {
 							panic(err)
 						}
-						// touch the receiver's energy, only if the receiver is not the contract itself.						if err := rt.state.SetEnergy(
+						// touch the receiver's energy, only if the receiver is not the contract itself.
 						if err := rt.state.SetEnergy(
 							thor.Address(tokenReceiver),
 							new(big.Int).Add(receiverEnergy, energy),
