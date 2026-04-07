@@ -61,6 +61,11 @@ type JumpTable [256]*operation
 func NewOsakaInstructionSet() *JumpTable {
 	instructionSet := NewPragueInstructionSet()
 
+	instructionSet[CLZ] = &operation{
+		execute:       opCLZ,
+		gasCost:       constGasFunc(GasFastStep),
+		validateStack: makeStackFunc(1, 1),
+	}
 	return instructionSet
 }
 
