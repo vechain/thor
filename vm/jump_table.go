@@ -63,7 +63,7 @@ func NewOsakaInstructionSet() *JumpTable {
 
 	instructionSet[CLZ] = &operation{
 		execute:       opCLZ,
-		gasCost:       constGasFunc(GasFastestStep),
+		gasCost:       constGasFunc(GasFastStep),
 		validateStack: makeStackFunc(1, 1),
 	}
 	return instructionSet
