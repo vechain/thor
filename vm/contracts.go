@@ -27,7 +27,7 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
-	patched_big "github.com/ethereum/go-bigmodexpfix/src/math/big"
+	patched_big "github.com/ethereum/go-bigmodexpfix/src/math/big" // https://github.com/golang/go/issues/77707
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
