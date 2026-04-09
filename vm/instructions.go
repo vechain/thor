@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -24,6 +26,8 @@ import (
 
 	"github.com/vechain/thor/v2/thor"
 )
+
+var big0 = big.NewInt(0)
 
 func opAdd(_ *uint64, _ *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.popptr(), stack.peek()
