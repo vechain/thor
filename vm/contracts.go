@@ -389,7 +389,7 @@ func berlinMultComplexity(x uint64) uint64 {
 	return x
 }
 
-// osakaMultComplexity implements the multiplication complexity formula for Osaka.
+// osakaMultComplexity implements the multiplication complexity formula for Osaka (EIP-7883).
 //
 // For x <= 32: returns 16
 // For x > 32: returns 2 * ceiling(x/8)^2
