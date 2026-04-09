@@ -162,6 +162,39 @@ func TestSAR(t *testing.T) {
 	testTwoOperandOp(t, tests, opSAR)
 }
 
+func TestCLZ(t *testing.T) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		pc    = uint64(0)
+	)
+
+	tests := []struct {
+		input    string
+		expected uint64
+	}{
+		{"0000000000000000000000000000000000000000000000000000000000000000", 256},
+		{"0000000000000000000000000000000000000000000000000000000000000001", 255},
+		{"00000000000000000000000000000000000000000000000000000000000006ff", 245},
+		{"000000000000000000000000000000000000000000000000000000ffffffffff", 216},
+		{"4000000000000000000000000000000000000000000000000000000000000000", 1},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 1},
+		{"8000000000000000000000000000000000000000000000000000000000000000", 0},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0},
+	}
+
+	for _, tc := range tests {
+		val := new(uint256.Int).SetBytes(common.FromHex(tc.input))
+		stack.push(val)
+		opCLZ(&pc, env, nil, nil, stack)
+
+		result := stack.pop()
+		if got := result.Uint64(); got != tc.expected {
+			t.Errorf("clz(0x%s) = %d; want %d", tc.input, got, tc.expected)
+		}
+	}
+}
+
 func TestSGT(t *testing.T) {
 	tests := []twoOperandTest{
 		{
@@ -522,6 +555,11 @@ func BenchmarkOpSAR(b *testing.B) {
 	y := "ff"
 
 	opBenchmark(b, opSAR, x, y)
+}
+
+func BenchmarkOpCLZ(b *testing.B) {
+	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
+	opBenchmark(b, opCLZ, x)
 }
 
 func BenchmarkOpIsZero(b *testing.B) {
