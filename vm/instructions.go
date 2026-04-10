@@ -799,8 +799,7 @@ func opSuicide6780(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *St
 	receiver := stack.popptr().Bytes20()
 
 	if evm.vmConfig.Tracer != nil {
-		bal := evm.StateDB.GetBalance(contract.Address())
-		evm.vmConfig.Tracer.CaptureEnter(SELFDESTRUCT, contract.Address(), receiver, []byte{}, 0, bal)
+		evm.vmConfig.Tracer.CaptureEnter(SELFDESTRUCT, contract.Address(), receiver, []byte{}, 0, evm.StateDB.GetBalance(contract.Address()))
 		evm.vmConfig.Tracer.CaptureExit([]byte{}, 0, nil)
 	}
 
