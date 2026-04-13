@@ -47,7 +47,7 @@ type (
 	OnCreateContractFunc func(evm *EVM, contractAddr common.Address, caller common.Address)
 
 	// OnSuicideContractFunc callback when suicide contract.
-	OnSuicideContractFunc func(evm *EVM, contractAddr common.Address, tokenReceiver common.Address, shouldDestruct bool)
+	OnSuicideContractFunc func(evm *EVM, contractAddr common.Address, tokenReceiver common.Address, shouldDestroy bool)
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {

@@ -788,7 +788,7 @@ func opSuicide(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack)
 
 	if evm.OnSuicideContract != nil {
 		// let runtime do transfer things, here shouldDestruct is always true as eip6780 is not enabled
-		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver), true)
+		evm.OnSuicideContract(evm, contract.Address(), receiver, true)
 	}
 
 	evm.StateDB.Suicide(contract.Address())
@@ -807,7 +807,7 @@ func opSuicide6780(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *St
 
 	if evm.OnSuicideContract != nil {
 		// let runtime do transfer things
-		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver), newContract)
+		evm.OnSuicideContract(evm, contract.Address(), receiver, newContract)
 	}
 
 	if newContract {

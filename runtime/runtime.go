@@ -286,73 +286,71 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				Data:    data,
 			})
 		},
-		// shouldDestruct indicates if the contract will be destroyed in the current execution, introduced by EIP6780
-		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address, shouldDestruct bool) {
+		// shouldDestroy indicates if the contract will be destroyed in the current execution, introduced by EIP6780
+		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address, shouldDestroy bool) {
 			// it's IMPORTANT to process energy before token
 			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
 				panic(err)
 			}
 			bal := stateDB.GetBalance(contractAddr)
+			toSelf := contractAddr == tokenReceiver
 
-			if energy.Sign() != 0 || bal.Sign() != 0 {
-				toSelf := contractAddr == tokenReceiver
-
-				if energy.Sign() != 0 {
-					// take care of the energy transfer for both contract and the receiver, skip if transfer to self
-					if !toSelf {
-						receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
-						if err != nil {
-							panic(err)
-						}
-						if err := rt.state.SetEnergy(
-							thor.Address(tokenReceiver),
-							new(big.Int).Add(receiverEnergy, energy),
-							rt.ctx.Time); err != nil {
-							panic(err)
-						}
-						if err := rt.state.SetEnergy(
-							thor.Address(contractAddr),
-							big.NewInt(0),
-							rt.ctx.Time); err != nil {
-							panic(err)
-						}
-					}
-					// see ERC20's Transfer event
-					topics := []common.Hash{
-						common.Hash(energyTransferEvent.ID()),
-						common.BytesToHash(contractAddr[:]),
-						common.BytesToHash(tokenReceiver[:]),
-					}
-					data, err := energyTransferEvent.Encode(energy)
+			if energy.Sign() != 0 {
+				// take care of the energy transfer for both contract and the receiver, skip if transfer to self
+				if !toSelf {
+					receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
 					if err != nil {
 						panic(err)
 					}
-
-					// do not emit log if transfer to self and shouldDestruct is false
-					if !toSelf || shouldDestruct {
-						stateDB.AddLog(&types.Log{
-							Address: common.Address(builtin.Energy.Address),
-							Topics:  topics,
-							Data:    data,
-						})
+					if err := rt.state.SetEnergy(
+						thor.Address(tokenReceiver),
+						new(big.Int).Add(receiverEnergy, energy),
+						rt.ctx.Time); err != nil {
+						panic(err)
+					}
+					if err := rt.state.SetEnergy(
+						thor.Address(contractAddr),
+						big.NewInt(0),
+						rt.ctx.Time,
+					); err != nil {
+						panic(err)
 					}
 				}
+				// see ERC20's Transfer event
+				topics := []common.Hash{
+					common.Hash(energyTransferEvent.ID()),
+					common.BytesToHash(contractAddr[:]),
+					common.BytesToHash(tokenReceiver[:]),
+				}
+				data, err := energyTransferEvent.Encode(energy)
+				if err != nil {
+					panic(err)
+				}
 
-				if bal.Sign() != 0 {
-					// take care of the balance transfer for both contract and the receiver, skip if transfer to self
-					if !toSelf {
-						stateDB.AddBalance(tokenReceiver, bal)
-						stateDB.SubBalance(contractAddr, bal)
-					}
-					// do not emit log if transfer to self and shouldDestruct is false
-					if !toSelf || shouldDestruct {
-						stateDB.AddTransfer(&tx.Transfer{
-							Sender:    thor.Address(contractAddr),
-							Recipient: thor.Address(tokenReceiver),
-							Amount:    bal,
-						})
-					}
+				// do not emit log if transfer to self and shouldDestroy is false
+				if !toSelf || shouldDestroy {
+					stateDB.AddLog(&types.Log{
+						Address: common.Address(builtin.Energy.Address),
+						Topics:  topics,
+						Data:    data,
+					})
+				}
+			}
+
+			if bal.Sign() != 0 {
+				// take care of the balance transfer for both contract and the receiver, skip if transfer to self
+				if !toSelf {
+					stateDB.AddBalance(tokenReceiver, bal)
+					stateDB.SubBalance(contractAddr, bal)
+				}
+				// do not emit log if transfer to self and shouldDestroy is false
+				if !toSelf || shouldDestroy {
+					stateDB.AddTransfer(&tx.Transfer{
+						Sender:    thor.Address(contractAddr),
+						Recipient: thor.Address(tokenReceiver),
+						Amount:    bal,
+					})
 				}
 			}
 		},
