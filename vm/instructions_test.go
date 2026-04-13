@@ -751,7 +751,7 @@ func TestOpSuicide6780(t *testing.T) {
 			BlockNumber: big.NewInt(1),
 			GasPrice:    big.NewInt(1),
 
-			// NOTE: THIS IS CLOUSER FUNCTION.
+			// NOTE: THIS IS A CLOUSURE FUNCTION.
 			// IF YOU WANT TO CHANGE THIS TEST CASE, PLEASE MAKE SURE THE LOGIC IS CORRECT.
 			// AND CHANGE THE FUNCTION IN runtime/runtime.go ACCORDINGLY.
 			OnSuicideContract: func(evm *EVM, contract common.Address, receiver common.Address, shouldDestruct bool) {
