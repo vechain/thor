@@ -787,7 +787,7 @@ func opSuicide(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack)
 	}
 
 	if evm.OnSuicideContract != nil {
-		// let runtime do transfer things, here eip6780OneExecution is always true as eip6780 is not enabled
+		// let runtime do transfer things, here shouldDestruct is always true as eip6780 is not enabled
 		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver), true)
 	}
 

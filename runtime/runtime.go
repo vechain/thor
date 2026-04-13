@@ -286,7 +286,8 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				Data:    data,
 			})
 		},
-		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address, eip6780OneExecution bool) {
+		// shouldDestruct indicates if the contract will be destroyed in the current execution, introduced by EIP6780
+		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address, shouldDestruct bool) {
 			// it's IMPORTANT to process energy before token
 			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
@@ -328,8 +329,8 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 						panic(err)
 					}
 
-					// do not emit log if transfer to self and eip6780OneExecution is false
-					if !toSelf || eip6780OneExecution {
+					// do not emit log if transfer to self and shouldDestruct is false
+					if !toSelf || shouldDestruct {
 						stateDB.AddLog(&types.Log{
 							Address: common.Address(builtin.Energy.Address),
 							Topics:  topics,
@@ -344,8 +345,8 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 						stateDB.AddBalance(tokenReceiver, bal)
 						stateDB.SubBalance(contractAddr, bal)
 					}
-					// do not emit log if transfer to self and eip6780OneExecution is false
-					if !toSelf || eip6780OneExecution {
+					// do not emit log if transfer to self and shouldDestruct is false
+					if !toSelf || shouldDestruct {
 						stateDB.AddTransfer(&tx.Transfer{
 							Sender:    thor.Address(contractAddr),
 							Recipient: thor.Address(tokenReceiver),
