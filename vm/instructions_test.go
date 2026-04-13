@@ -754,7 +754,7 @@ func TestOpSuicide6780(t *testing.T) {
 			// NOTE: THIS IS CLOUSER FUNCTION.
 			// IF YOU WANT TO CHANGE THIS TEST CASE, PLEASE MAKE SURE THE LOGIC IS CORRECT.
 			// AND CHANGE THE FUNCTION IN runtime/runtime.go ACCORDINGLY.
-			OnSuicideContract: func(evm *EVM, contract common.Address, receiver common.Address) {
+			OnSuicideContract: func(evm *EVM, contract common.Address, receiver common.Address, eip6780OneExecution bool) {
 				// it's IMPORTANT to process energy before token
 				energy, err := state.GetEnergy(thor.Address(contract), 1, 1)
 				if err != nil {
@@ -762,66 +762,65 @@ func TestOpSuicide6780(t *testing.T) {
 				}
 				bal := stateDB.GetBalance(contract)
 
-				if bal.Sign() != 0 || energy.Sign() != 0 {
-					receiverEnergy, err := state.GetEnergy(thor.Address(receiver), 1, 1)
-					if err != nil {
-						panic(err)
-					}
+				if energy.Sign() != 0 || bal.Sign() != 0 {
+					toSelf := contract == receiver
 
-					// touch the receiver's energy
-					// after EIP6780, MUST to clear contract's energy, vm delete contarct operation is optional.
-					// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
-					if contract.String() != receiver.String() {
-						if err := state.SetEnergy(
-							thor.Address(receiver),
-							new(big.Int).Add(receiverEnergy, energy),
-							1); err != nil {
-							panic(err)
-						}
-
-						if err = state.SetEnergy(
-							thor.Address(contract),
-							big.NewInt(0),
-							1); err != nil {
-							panic(err)
-						}
-					}
-
-					// emit event if there is energy in the account
 					if energy.Sign() != 0 {
+						// take care of the energy transfer for both contract and the receiver, skip if transfer to self
+						if !toSelf {
+							receiverEnergy, err := state.GetEnergy(thor.Address(receiver), 1, 1)
+							if err != nil {
+								panic(err)
+							}
+							if err := state.SetEnergy(
+								thor.Address(receiver),
+								new(big.Int).Add(receiverEnergy, energy),
+								1); err != nil {
+								panic(err)
+							}
+							if err = state.SetEnergy(
+								thor.Address(contract),
+								big.NewInt(0),
+								1); err != nil {
+								panic(err)
+							}
+						}
 						// see ERC20's Transfer event
 						topics := []common.Hash{
 							common.Hash(energyTransferEvent.ID()),
 							common.BytesToHash(contract[:]),
 							common.BytesToHash(receiver[:]),
 						}
-
 						data, err := energyTransferEvent.Encode(energy)
 						if err != nil {
 							panic(err)
 						}
 
-						stateDB.AddLog(&types.Log{
-							Address: common.Address(thor.BytesToAddress([]byte("0x0000000000000000000000000000456E65726779"))),
-							Topics:  topics,
-							Data:    data,
-						})
-					}
-				}
-
-				if bal.Sign() != 0 {
-					// after EIP6780, MUST to clear contract's VET, vm delete contarct operation is optional.
-					// if token receiver is same as contract itself, skip no-op transfer when self-destructing to self.
-					if contract.String() != receiver.String() {
-						stateDB.AddBalance(receiver, bal)
-						stateDB.SubBalance(contract, bal)
+						// do not emit log if transfer to self and eip6780OneExecution is false
+						if !(toSelf && !eip6780OneExecution) {
+							stateDB.AddLog(&types.Log{
+								Address: common.Address(thor.BytesToAddress([]byte("0x0000000000000000000000000000456E65726779"))),
+								Topics:  topics,
+								Data:    data,
+							})
+						}
 					}
 
-					stateDB.AddTransfer(&tx.Transfer{
-						Sender:    thor.Address(contract),
-						Recipient: thor.Address(receiver),
-						Amount:    bal,
-					})
+					if bal.Sign() != 0 {
+						// take care of the balance transfer for both contract and the receiver, skip if transfer to self
+						if !toSelf {
+							stateDB.AddBalance(receiver, bal)
+							stateDB.SubBalance(contract, bal)
+						}
+						// do not emit log if transfer to self and eip6780OneExecution is false
+						if !(toSelf && !eip6780OneExecution) {
+							stateDB.AddTransfer(&tx.Transfer{
+								Sender:    thor.Address(contract),
+								Recipient: thor.Address(receiver),
+								Amount:    bal,
+							})
+						}
+					}
 				}
 			},
 		}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})

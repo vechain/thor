@@ -286,7 +286,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				Data:    data,
 			})
 		},
-		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
+		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address, eip6780OneExecution bool) {
 			// it's IMPORTANT to process energy before token
 			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
@@ -295,20 +295,15 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			bal := stateDB.GetBalance(contractAddr)
 
 			if energy.Sign() != 0 || bal.Sign() != 0 {
-				// Skip the actual fund transfer when the receiver is the contract itself; only emit the log.
-				// If the contract will be destroyed (pre-EIP6780, or created in the current execution under EIP6780),
-				// its balance is cleared by the EVM — no transfer needed.
-				// If not (pre-existing contract under EIP6780), the balance is retained and a self-transfer
-				// would be a no-op.
 				toSelf := contractAddr == tokenReceiver
 
 				if energy.Sign() != 0 {
+					// take care of the energy transfer for both contract and the receiver, skip if transfer to self
 					if !toSelf {
 						receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
 						if err != nil {
 							panic(err)
 						}
-						// update energy accordingly, only if the receiver is not the contract itself.
 						if err := rt.state.SetEnergy(
 							thor.Address(tokenReceiver),
 							new(big.Int).Add(receiverEnergy, energy),
@@ -332,24 +327,31 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 					if err != nil {
 						panic(err)
 					}
-					stateDB.AddLog(&types.Log{
-						Address: common.Address(builtin.Energy.Address),
-						Topics:  topics,
-						Data:    data,
-					})
+
+					// do not emit log if transfer to self and eip6780OneExecution is false
+					if !(toSelf && !eip6780OneExecution) {
+						stateDB.AddLog(&types.Log{
+							Address: common.Address(builtin.Energy.Address),
+							Topics:  topics,
+							Data:    data,
+						})
+					}
 				}
 
 				if bal.Sign() != 0 {
-					// update the balance accordingly, only if the receiver is not the contract itself.
+					// take care of the balance transfer for both contract and the receiver, skip if transfer to self
 					if !toSelf {
 						stateDB.AddBalance(tokenReceiver, bal)
 						stateDB.SubBalance(contractAddr, bal)
 					}
-					stateDB.AddTransfer(&tx.Transfer{
-						Sender:    thor.Address(contractAddr),
-						Recipient: thor.Address(tokenReceiver),
-						Amount:    bal,
-					})
+					// do not emit log if transfer to self and eip6780OneExecution is false
+					if !(toSelf && !eip6780OneExecution) {
+						stateDB.AddTransfer(&tx.Transfer{
+							Sender:    thor.Address(contractAddr),
+							Recipient: thor.Address(tokenReceiver),
+							Amount:    bal,
+						})
+					}
 				}
 			}
 		},
