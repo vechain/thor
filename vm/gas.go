@@ -48,7 +48,8 @@ const (
 	Bls12381MapG1Gas          uint64 = 5500  // Gas price for BLS12-381 mapping field element to G1 operation
 	Bls12381MapG2Gas          uint64 = 23800 // Gas price for BLS12-381 mapping field element to G2 operation
 
-	WarmStorageReadCost = uint64(100) // WARM_STORAGE_READ_COST
+	WarmStorageReadCost uint64 = 100  // WARM_STORAGE_READ_COST
+	P256VerifyGas       uint64 = 6900 // secp256r1 elliptic curve signature verifier gas price
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation.

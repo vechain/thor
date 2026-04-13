@@ -674,11 +674,72 @@ func TestEVMFunction(t *testing.T) {
 		},
 	}
 
+	osakaTests := []testcase{
+		{
+			name: "Precompile p256Verify",
+			// Compiled with solc 0.8.24 --evm-version shanghai (no MCOPY).
+			// Uses assembly to ensure equal gas paths before/after INTERSTELLAR:
+			// pragma solidity >=0.8.20 <0.9.0;
+			// contract P256Verify {
+			//   function p256VerifyBytes(bytes memory input) public view returns (uint256 ret) {
+			//     assembly {
+			//       let p := mload(0x40)
+			//       let ok := staticcall(gas(), 0x100, add(input, 32), mload(input), p, 32)
+			//       if ok { ret := mload(p) }
+			//     }
+			//   }
+			// }
+			code:       "608060405234801561000f575f80fd5b5060043610610029575f3560e01c80633ed4e7d61461002d575b5f80fd5b61004061003b36600461008a565b610052565b60405190815260200160405180910390f35b5f6040516020818451602086016101005afa801561006f57815192505b5050919050565b634e487b7160e01b5f52604160045260245ffd5b5f6020828403121561009a575f80fd5b813567ffffffffffffffff808211156100b1575f80fd5b818401915084601f8301126100c4575f80fd5b8135818111156100d6576100d6610076565b604051601f8201601f19908116603f011681019083821181831017156100fe576100fe610076565b81604052828152876020848701011115610116575f80fd5b826020860160208301375f92810160200192909252509594505050505056fea264697066735822122032c52793fb9d70df956cbaf79030d76e52225d5b1d9adc7a7b26606ef9d4c54a64736f6c63430008180033",
+			abi:        `[{"inputs":[{"internalType":"bytes","name":"input","type":"bytes"}],"name":"p256VerifyBytes","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "p256VerifyBytes",
+			testFunc: func(ctx *context, t *testing.T) {
+				// test case from vm/testdata/precompiles/p256Verify.json, Gas=6900
+				input := common.FromHex("4cee90eb86eaa050036147a12d49004b6b9c72bd725d39d4785011fe190f0b4d" +
+					"a73bd4903f0ce3b639bbbf6e8e80d16931ff4bcf5993d58468e8fb19086e8cac" +
+					"36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d60" +
+					"4aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44eff3" +
+					"7618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e",
+				)
+				methodData, err := ctx.method.EncodeInput(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				forkConfig := thor.NoFork
+				forkConfig.ETH_IST = 0
+				forkConfig.GALACTICA = 0
+
+				// Pre-INTERSTELLAR: 0x0100 is not a precompile
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, &forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasBefore := math.MaxUint64 - out.LeftOverGas
+
+				// Post-INTERSTELLAR: 0x0100 is p256Verify precompile
+				forkConfig.INTERSTELLAR = 0
+				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, &forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err = exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasAfter := math.MaxUint64 - out.LeftOverGas
+				assert.True(t, gasAfter > gasBefore)
+				// gas diff = P256VerifyGas = 6900 (from vm/testdata/precompiles/p256Verify.json)
+				assert.Zero(t, gasAfter-gasBefore-6900)
+			},
+		},
+	}
+
 	tests := []testcase{}
 
 	tests = append(tests, baseTests...)
 	tests = append(tests, shanghaiTests...)
 	tests = append(tests, cancunTests...)
+	tests = append(tests, osakaTests...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
