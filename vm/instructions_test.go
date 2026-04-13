@@ -754,7 +754,7 @@ func TestOpSuicide6780(t *testing.T) {
 			// NOTE: THIS IS CLOUSER FUNCTION.
 			// IF YOU WANT TO CHANGE THIS TEST CASE, PLEASE MAKE SURE THE LOGIC IS CORRECT.
 			// AND CHANGE THE FUNCTION IN runtime/runtime.go ACCORDINGLY.
-			OnSuicideContract: func(evm *EVM, contract common.Address, receiver common.Address, eip6780OneExecution bool) {
+			OnSuicideContract: func(evm *EVM, contract common.Address, receiver common.Address, shouldDestruct bool) {
 				// it's IMPORTANT to process energy before token
 				energy, err := state.GetEnergy(thor.Address(contract), 1, 1)
 				if err != nil {
@@ -796,8 +796,8 @@ func TestOpSuicide6780(t *testing.T) {
 							panic(err)
 						}
 
-						// do not emit log if transfer to self and eip6780OneExecution is false
-						if !toSelf || eip6780OneExecution {
+						// do not emit log if transfer to self and shouldDestruct is false
+						if !toSelf || shouldDestruct {
 							stateDB.AddLog(&types.Log{
 								Address: common.Address(thor.BytesToAddress([]byte("0x0000000000000000000000000000456E65726779"))),
 								Topics:  topics,
@@ -812,8 +812,8 @@ func TestOpSuicide6780(t *testing.T) {
 							stateDB.AddBalance(receiver, bal)
 							stateDB.SubBalance(contract, bal)
 						}
-						// do not emit log if transfer to self and eip6780OneExecution is false
-						if !toSelf || eip6780OneExecution {
+						// do not emit log if transfer to self and shouldDestruct is false
+						if !toSelf || shouldDestruct {
 							stateDB.AddTransfer(&tx.Transfer{
 								Sender:    thor.Address(contract),
 								Recipient: thor.Address(receiver),
@@ -850,8 +850,11 @@ func TestOpSuicide6780(t *testing.T) {
 			return evm, state, stack
 		},
 		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
-			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 && evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
-				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
+			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
+				t.Fatalf("expected contract balance to be 0, got %v", evm.StateDB.GetBalance(contractAddr))
+			}
+			if evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected receiver balance to be 100, got %v", evm.StateDB.GetBalance(tokenReceiver))
 			}
 
 			contractEnergy, err := state.GetEnergy(thor.Address(contractAddr), 1, 1)
@@ -901,8 +904,11 @@ func TestOpSuicide6780(t *testing.T) {
 			return evm, state, stack
 		},
 		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
-			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 && evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
-				t.Fatalf("expected contract balance to be transfer all to receiver, got %v", evm.StateDB.GetBalance(contractAddr))
+			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
+				t.Fatalf("expected contract balance to be 0, got %v", evm.StateDB.GetBalance(contractAddr))
+			}
+			if evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected receiver balance to be 100, got %v", evm.StateDB.GetBalance(tokenReceiver))
 			}
 
 			contractEnergy, err := state.GetEnergy(thor.Address(contractAddr), 1, 1)
