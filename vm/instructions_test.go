@@ -797,7 +797,7 @@ func TestOpSuicide6780(t *testing.T) {
 						}
 
 						// do not emit log if transfer to self and eip6780OneExecution is false
-						if !(toSelf && !eip6780OneExecution) {
+						if !toSelf || eip6780OneExecution {
 							stateDB.AddLog(&types.Log{
 								Address: common.Address(thor.BytesToAddress([]byte("0x0000000000000000000000000000456E65726779"))),
 								Topics:  topics,
@@ -813,7 +813,7 @@ func TestOpSuicide6780(t *testing.T) {
 							stateDB.SubBalance(contract, bal)
 						}
 						// do not emit log if transfer to self and eip6780OneExecution is false
-						if !(toSelf && !eip6780OneExecution) {
+						if !toSelf || eip6780OneExecution {
 							stateDB.AddTransfer(&tx.Transfer{
 								Sender:    thor.Address(contract),
 								Recipient: thor.Address(receiver),

@@ -329,7 +329,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 					}
 
 					// do not emit log if transfer to self and eip6780OneExecution is false
-					if !(toSelf && !eip6780OneExecution) {
+					if !toSelf || eip6780OneExecution {
 						stateDB.AddLog(&types.Log{
 							Address: common.Address(builtin.Energy.Address),
 							Topics:  topics,
@@ -345,7 +345,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 						stateDB.SubBalance(contractAddr, bal)
 					}
 					// do not emit log if transfer to self and eip6780OneExecution is false
-					if !(toSelf && !eip6780OneExecution) {
+					if !toSelf || eip6780OneExecution {
 						stateDB.AddTransfer(&tx.Transfer{
 							Sender:    thor.Address(contractAddr),
 							Recipient: thor.Address(tokenReceiver),
