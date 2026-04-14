@@ -231,7 +231,6 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, nil
 	}
-
 	// the first byte of pubkey is bitcoin heritage
 	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
 }
