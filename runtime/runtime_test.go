@@ -672,6 +672,140 @@ func TestEVMFunction(t *testing.T) {
 				assert.Equal(t, new(big.Int).SetBytes(out.Data).Uint64(), uint64(0))
 			},
 		},
+		{
+			// EIP-6780: SELFDESTRUCT on a pre-existing contract (not created in this clause)
+			// must NOT call Suicide() — only balance and energy are transferred to the receiver.
+			// The contract's code and storage must survive.
+			name:       "EIP-6780 selfdestruct pre-existing contract preserves code",
+			code:       "608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063085da1b3146044575b600080fd5b348015604f57600080fd5b5060566058565b005b3373ffffffffffffffffffffffffffffffffffffffff16ff00a165627a7a723058204cb70b653a3d1821e00e6ade869638e80fa99719931c9fa045cec2189d94086f0029",
+			abi:        `[{"constant":false,"inputs":[],"name":"testSuicide","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`,
+			methodName: "testSuicide",
+			testFunc: func(ctx *context, t *testing.T) {
+				// Contract at `target` was pre-set by the test runner via ctx.state.SetCode,
+				// not deployed through the EVM CREATE path — so IsNewContract(target) = false
+				// in any fresh statedb. With EIP-6780 active (INTERSTELLAR=0 in forkFromStart),
+				// opSuicide6780 sees shouldDestruct=false and skips Suicide().
+
+				head, _ := ctx.chain.GetBlockSummary(0)
+				time := head.Header.Timestamp()
+
+				ctx.state.SetEnergy(target, big.NewInt(100), time)
+				ctx.state.SetBalance(target, big.NewInt(200))
+
+				codeBeforeSuicide, err := ctx.state.GetCode(target)
+				assert.Nil(t, err)
+				assert.NotEmpty(t, codeBeforeSuicide)
+
+				methodData, err := ctx.method.EncodeInput()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				origin := genesis.DevAccounts()[0].Address
+
+				// forkFromStart has INTERSTELLAR=0 → osakaInstructionSet → EIP-6780 (opSuicide6780)
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Time: time}, forkFromStart).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				// EIP-6780: pre-existing contract → shouldDestruct=false → Suicide() NOT called → code persists
+				codeAfterSuicide, err := ctx.state.GetCode(target)
+				assert.Nil(t, err)
+				assert.Equal(t, codeBeforeSuicide, codeAfterSuicide, "EIP-6780: code must persist for pre-existing contract")
+
+				// Balance and energy ARE transferred to origin (toSelf=false).
+				// Use Cmp instead of DeepEqual: SubBalance/SetEnergy produce big.Int{abs:{}} for 0,
+				// while big.NewInt(0) has abs:nil — they're numerically equal but not reflect-equal.
+				bal, _ := ctx.state.GetBalance(target)
+				assert.Zero(t, bal.Sign(), "balance must be 0 after EIP-6780 selfdestruct")
+				energy, _ := builtin.Energy.Native(ctx.state, time).Get(target)
+				assert.Zero(t, energy.Sign(), "energy must be 0 after EIP-6780 selfdestruct")
+
+				// Transfer record and energy event are both emitted (receiver != contract)
+				assert.Equal(t, 1, len(out.Transfers))
+				assert.Equal(t, 1, len(out.Events))
+
+				expectedTransfer := &tx.Transfer{
+					Sender:    target,
+					Recipient: origin,
+					Amount:    big.NewInt(200),
+				}
+				assert.Equal(t, expectedTransfer, out.Transfers[0])
+			},
+		},
+		{
+			// EIP-6780 cross-clause scoping: a contract deployed in clause-0 is NOT considered
+			// "new" in clause-1's fresh statedb. Calling SELFDESTRUCT in clause-1 must not
+			// destroy the contract — only its balance is transferred (shouldDestruct=false).
+			name:       "EIP-6780 cross-clause create-in-clause-0 selfdestruct-in-clause-1 preserves code",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				// Hand-crafted initcode that deploys runtime code [CALLER(0x33) SELFDESTRUCT(0xff)].
+				//   PUSH2 0x33ff    → push the 2-byte runtime code as a 32-byte word
+				//   PUSH1 0x00      → memory dest offset
+				//   MSTORE          → mem[0:32] = 0x00…00 0x33 0xff
+				//   PUSH1 0x02      → return size = 2
+				//   PUSH1 0x1e      → return offset = 30 (last 2 bytes of the 32-byte word)
+				//   RETURN
+				initcode := []byte{0x61, 0x33, 0xff, 0x60, 0x00, 0x52, 0x60, 0x02, 0x60, 0x1e, 0xf3}
+				runtimeCode := []byte{byte(vm.CALLER), byte(vm.SELFDESTRUCT)}
+
+				head, _ := ctx.chain.GetBlockSummary(0)
+				time := head.Header.Timestamp()
+				origin := genesis.DevAccounts()[0].Address
+
+				// ── Clause 0 (clauseIndex=0): deploy the contract ──────────────────────────────
+				// A new statedb is created here; CreateContract(contractAddr) is called internally,
+				// marking IsNewContract(contractAddr)=true in *this* statedb only.
+				exec0, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Time: time}, forkFromStart).
+					PrepareClause(tx.NewClause(nil).WithData(initcode), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
+				out0, _, err := exec0()
+				assert.Nil(t, err)
+				assert.Nil(t, out0.VMErr)
+				assert.NotNil(t, out0.ContractAddress)
+
+				contractAddr := *out0.ContractAddress
+
+				// Confirm the runtime code [CALLER SELFDESTRUCT] was stored
+				deployedCode, err := ctx.state.GetCode(contractAddr)
+				assert.Nil(t, err)
+				assert.Equal(t, runtimeCode, deployedCode, "contract must have [CALLER SELFDESTRUCT] code after deployment")
+
+				// Fund the contract so the transfer assertions are meaningful
+				ctx.state.SetBalance(contractAddr, big.NewInt(300))
+
+				// ── Clause 1 (clauseIndex=1): call the deployed contract ─────────────────────────
+				// A fresh statedb is created per clause; IsNewContract(contractAddr)=false here.
+				// The runtime code [CALLER SELFDESTRUCT] runs unconditionally on any call.
+				// EIP-6780 (opSuicide6780): shouldDestruct=false → Suicide() NOT called → code persists.
+				exec1, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Time: time}, forkFromStart).
+					PrepareClause(tx.NewClause(&contractAddr), 1, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
+				out1, _, err := exec1()
+				assert.Nil(t, err)
+				assert.Nil(t, out1.VMErr)
+
+				// Cross-clause EIP-6780: contract survives — code must still be present
+				codeAfter, err := ctx.state.GetCode(contractAddr)
+				assert.Nil(t, err)
+				assert.Equal(t, deployedCode, codeAfter, "EIP-6780: code must persist when selfdestruct crosses clause boundary")
+
+				// Balance is transferred despite shouldDestruct=false (toSelf=false)
+				bal, _ := ctx.state.GetBalance(contractAddr)
+				assert.Zero(t, bal.Sign(), "balance must be 0 after transfer")
+
+				assert.Equal(t, 1, len(out1.Transfers))
+				expectedTransfer := &tx.Transfer{
+					Sender:    contractAddr,
+					Recipient: origin,
+					Amount:    big.NewInt(300),
+				}
+				assert.Equal(t, expectedTransfer, out1.Transfers[0])
+			},
+		},
 	}
 
 	osakaTests := []testcase{
