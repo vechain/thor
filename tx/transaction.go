@@ -31,12 +31,14 @@ var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 	errShortTypedTx         = errors.New("typed transaction too short")
 
-	// secp256k1HalfN is N/2 precomputed as 32-byte big-endian array for efficient low-s check.
+	// secp256k1N is the order of the secp256k1 curve.
 	// N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+	secp256k1N = crypto.S256().Params().N
+
+	// secp256k1HalfN is N/2 precomputed as 32-byte big-endian array for efficient low-s check.
 	// N/2 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
 	secp256k1HalfN = func() [32]byte {
-		n := crypto.S256().Params().N
-		halfN := new(big.Int).Rsh(n, 1)
+		halfN := new(big.Int).Rsh(secp256k1N, 1)
 		var result [32]byte
 		halfN.FillBytes(result[:])
 		return result
@@ -45,10 +47,17 @@ var (
 
 type Type = byte
 
-// Starting from 0x51 to avoid ambiguity with Ethereum tx type codes.
+// VeChainTx type constants start at 0x51 to avoid ambiguity with Ethereum type codes.
 const (
 	TypeLegacy     = Type(0x00)
 	TypeDynamicFee = Type(0x51)
+
+	// EthereumTx type constants.
+
+	// TypeEthLegacy uses 0x52 as an internal block-body marker; the external wire format
+	// is a raw RLP list (no prefix). See encoding-hashing.md §8.2.
+	TypeEthLegacy    = Type(0x52)
+	TypeEthTyped1559 = Type(0x02)
 )
 
 const (
