@@ -286,41 +286,50 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				Data:    data,
 			})
 		},
-		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
+		// shouldDestroy indicates if the contract will be destroyed in the current execution, introduced by EIP6780
+		OnSuicideContract: func(evm *vm.EVM, contractAddr, tokenReceiver common.Address, shouldDestroy bool) {
 			// it's IMPORTANT to process energy before token
 			energy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(contractAddr))
 			if err != nil {
 				panic(err)
 			}
 			bal := stateDB.GetBalance(contractAddr)
+			toSelf := contractAddr == tokenReceiver
 
-			if bal.Sign() != 0 || energy.Sign() != 0 {
-				receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
-				if err != nil {
-					panic(err)
-				}
-				// touch the receiver's energy
-				// no need to clear contract's energy, vm will delete the whole contract later.
-				if err := rt.state.SetEnergy(
-					thor.Address(tokenReceiver),
-					new(big.Int).Add(receiverEnergy, energy),
-					rt.ctx.Time); err != nil {
-					panic(err)
-				}
-				// emit event if there is energy in the account
-				if energy.Sign() != 0 {
-					// see ERC20's Transfer event
-					topics := []common.Hash{
-						common.Hash(energyTransferEvent.ID()),
-						common.BytesToHash(contractAddr[:]),
-						common.BytesToHash(tokenReceiver[:]),
-					}
-
-					data, err := energyTransferEvent.Encode(energy)
+			if energy.Sign() != 0 {
+				// take care of the energy transfer for both contract and the receiver, skip if transfer to self
+				if !toSelf {
+					receiverEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(tokenReceiver))
 					if err != nil {
 						panic(err)
 					}
+					if err := rt.state.SetEnergy(
+						thor.Address(tokenReceiver),
+						new(big.Int).Add(receiverEnergy, energy),
+						rt.ctx.Time); err != nil {
+						panic(err)
+					}
+					if err := rt.state.SetEnergy(
+						thor.Address(contractAddr),
+						big.NewInt(0),
+						rt.ctx.Time,
+					); err != nil {
+						panic(err)
+					}
+				}
+				// see ERC20's Transfer event
+				topics := []common.Hash{
+					common.Hash(energyTransferEvent.ID()),
+					common.BytesToHash(contractAddr[:]),
+					common.BytesToHash(tokenReceiver[:]),
+				}
+				data, err := energyTransferEvent.Encode(energy)
+				if err != nil {
+					panic(err)
+				}
 
+				// do not emit log if transfer to self and shouldDestroy is false
+				if !toSelf || shouldDestroy {
 					stateDB.AddLog(&types.Log{
 						Address: common.Address(builtin.Energy.Address),
 						Topics:  topics,
@@ -330,15 +339,22 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 
 			if bal.Sign() != 0 {
-				stateDB.AddBalance(tokenReceiver, bal)
-
-				stateDB.AddTransfer(&tx.Transfer{
-					Sender:    thor.Address(contractAddr),
-					Recipient: thor.Address(tokenReceiver),
-					Amount:    bal,
-				})
+				// take care of the balance transfer for both contract and the receiver, skip if transfer to self
+				if !toSelf {
+					stateDB.AddBalance(tokenReceiver, bal)
+					stateDB.SubBalance(contractAddr, bal)
+				}
+				// do not emit log if transfer to self and shouldDestroy is false
+				if !toSelf || shouldDestroy {
+					stateDB.AddTransfer(&tx.Transfer{
+						Sender:    thor.Address(contractAddr),
+						Recipient: thor.Address(tokenReceiver),
+						Amount:    bal,
+					})
+				}
 			}
 		},
+
 		Origin:      common.Address(txCtx.Origin),
 		GasPrice:    txCtx.GasPrice,
 		Coinbase:    common.Address(rt.ctx.Beneficiary),
