@@ -53,6 +53,8 @@ func (*dummyStatedb) GetRefund() uint64                                         
 func (*dummyStatedb) GetBalance(addr common.Address) *big.Int                    { return new(big.Int) }
 func (*dummyStatedb) GetTransientState(common.Address, common.Hash) common.Hash  { return common.Hash{} }
 func (*dummyStatedb) SetTransientState(common.Address, common.Hash, common.Hash) {}
+func (*dummyStatedb) CreateContract(common.Address)                              {}
+func (*dummyStatedb) IsNewContract(common.Address) bool                          { return false }
 
 func testCtx() vm.Context {
 	return vm.Context{
