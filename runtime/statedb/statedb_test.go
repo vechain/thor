@@ -278,3 +278,21 @@ func TestTransientState(t *testing.T) {
 	val = stateDB.GetTransientState(addr, key)
 	assert.Equal(t, v2, val)
 }
+
+func TestCreateContract(t *testing.T) {
+	addr := common.Address{0x1}
+	stateDB := New(State.New(muxdb.NewMem(), trie.Root{}))
+	assert.False(t, stateDB.IsNewContract(addr))
+	stateDB.CreateContract(addr)
+	assert.True(t, stateDB.IsNewContract(addr))
+
+	rev := stateDB.Snapshot()
+	addr2 := common.Address{0x2}
+	assert.False(t, stateDB.IsNewContract(addr2))
+	stateDB.CreateContract(addr2)
+	assert.True(t, stateDB.IsNewContract(addr2))
+
+	stateDB.RevertToSnapshot(rev)
+	assert.False(t, stateDB.IsNewContract(addr2))
+	assert.True(t, stateDB.IsNewContract(addr))
+}

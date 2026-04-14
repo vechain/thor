@@ -34,6 +34,7 @@ type (
 	eventKey            struct{}
 	transferKey         struct{}
 	stateRevKey         struct{}
+	newContractKey      common.Address
 	transientStorageKey struct {
 		addr thor.Address
 		key  thor.Bytes32
@@ -50,6 +51,8 @@ func New(state *state.State) *StateDB {
 			return uint64(0), true, nil
 		case transientStorageKey:
 			return common.Hash{}, true, nil
+		case newContractKey:
+			return false, true, nil
 		}
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
@@ -265,6 +268,15 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
 	v, _, _ := s.repo.Get(transientStorageKey{thor.Address(addr), thor.Bytes32(key)})
 	return v.(common.Hash)
+}
+
+func (s *StateDB) CreateContract(addr common.Address) {
+	s.repo.Put(newContractKey(addr), true)
+}
+
+func (s *StateDB) IsNewContract(addr common.Address) bool {
+	v, _, _ := s.repo.Get(newContractKey(addr))
+	return v.(bool)
 }
 
 // Snapshot stub.
