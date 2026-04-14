@@ -22,14 +22,17 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 
+	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/runtime/statedb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
 )
 
 type contractRef struct {
@@ -720,5 +723,310 @@ func TestCreate2Addreses(t *testing.T) {
 		if !bytes.Equal(expected.Bytes(), address.Bytes()) {
 			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
 		}
+	}
+}
+
+func TestOpSuicide6780(t *testing.T) {
+	masterAddress := common.HexToAddress("0x01")
+	contractAddr := common.HexToAddress("0x02")
+	tokenReceiver := common.HexToAddress("0x03")
+	energyABI, _ := abi.New(
+		[]byte(
+			`[{"anonymous":false,"inputs":[{"indexed":true,"name":"_from","type":"address"},{"indexed":true,"name":"_to","type":"address"},{"indexed":false,"name":"_value","type":"uint256"}],"name":"Transfer","type":"event"}]`,
+		),
+	)
+	energyTransferEvent, _ := energyABI.EventByName("Transfer")
+
+	type testcase struct {
+		name     string
+		initFunc func() (evm *EVM, state *state.State, stack *Stack)
+		testFunc func(evm *EVM, state *state.State, t *testing.T)
+	}
+
+	tests := []testcase{}
+
+	newEVMInstance := func(state *state.State) *EVM {
+		stateDB := statedb.New(state)
+		evm := NewEVM(Context{
+			BlockNumber: big.NewInt(1),
+			GasPrice:    big.NewInt(1),
+
+			// NOTE: THIS IS A CLOUSURE FUNCTION.
+			// IF YOU WANT TO CHANGE THIS TEST CASE, PLEASE MAKE SURE THE LOGIC IS CORRECT.
+			// AND CHANGE THE FUNCTION IN runtime/runtime.go ACCORDINGLY.
+			OnSuicideContract: func(evm *EVM, contract common.Address, receiver common.Address, shouldDestruct bool) {
+				// it's IMPORTANT to process energy before token
+				energy, err := state.GetEnergy(thor.Address(contract), 1, 1)
+				if err != nil {
+					panic(err)
+				}
+				bal := stateDB.GetBalance(contract)
+
+				if energy.Sign() != 0 || bal.Sign() != 0 {
+					toSelf := contract == receiver
+
+					if energy.Sign() != 0 {
+						// take care of the energy transfer for both contract and the receiver, skip if transfer to self
+						if !toSelf {
+							receiverEnergy, err := state.GetEnergy(thor.Address(receiver), 1, 1)
+							if err != nil {
+								panic(err)
+							}
+							if err := state.SetEnergy(
+								thor.Address(receiver),
+								new(big.Int).Add(receiverEnergy, energy),
+								1); err != nil {
+								panic(err)
+							}
+							if err = state.SetEnergy(
+								thor.Address(contract),
+								big.NewInt(0),
+								1); err != nil {
+								panic(err)
+							}
+						}
+						// see ERC20's Transfer event
+						topics := []common.Hash{
+							common.Hash(energyTransferEvent.ID()),
+							common.BytesToHash(contract[:]),
+							common.BytesToHash(receiver[:]),
+						}
+						data, err := energyTransferEvent.Encode(energy)
+						if err != nil {
+							panic(err)
+						}
+
+						// do not emit log if transfer to self and shouldDestruct is false
+						if !toSelf || shouldDestruct {
+							stateDB.AddLog(&types.Log{
+								Address: common.Address(thor.BytesToAddress([]byte("0x0000000000000000000000000000456E65726779"))),
+								Topics:  topics,
+								Data:    data,
+							})
+						}
+					}
+
+					if bal.Sign() != 0 {
+						// take care of the balance transfer for both contract and the receiver, skip if transfer to self
+						if !toSelf {
+							stateDB.AddBalance(receiver, bal)
+							stateDB.SubBalance(contract, bal)
+						}
+						// do not emit log if transfer to self and shouldDestruct is false
+						if !toSelf || shouldDestruct {
+							stateDB.AddTransfer(&tx.Transfer{
+								Sender:    thor.Address(contract),
+								Recipient: thor.Address(receiver),
+								Amount:    bal,
+							})
+						}
+					}
+				}
+			},
+		}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		return evm
+	}
+
+	case1 := testcase{
+		name: "Different Clause,different receiver",
+		initFunc: func() (*EVM, *state.State, *Stack) {
+			var (
+				db    = muxdb.NewMem()
+				state = state.New(db, trie.Root{})
+				stack = newstack()
+			)
+
+			evm := newEVMInstance(state)
+
+			stack.push(new(uint256.Int).SetBytes(tokenReceiver.Bytes()))
+
+			// simulate the contract create in the other clause
+			state.SetStorage(thor.Address(contractAddr), thor.BytesToBytes32([]byte("key1")), thor.BytesToBytes32([]byte("value1")))
+			state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
+			state.SetEnergy(thor.Address(contractAddr), big.NewInt(100), 1)
+			state.SetMaster(thor.Address(contractAddr), thor.Address(masterAddress))
+			state.SetCode(thor.Address(contractAddr), []byte("code"))
+
+			return evm, state, stack
+		},
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
+			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
+				t.Fatalf("expected contract balance to be 0, got %v", evm.StateDB.GetBalance(contractAddr))
+			}
+			if evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected receiver balance to be 100, got %v", evm.StateDB.GetBalance(tokenReceiver))
+			}
+
+			contractEnergy, err := state.GetEnergy(thor.Address(contractAddr), 1, 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if contractEnergy.Sign() != 0 {
+				t.Fatalf("expected contract energy to be transfer all to receiver, got %v", contractEnergy)
+			}
+
+			receiverEnergy, err := state.GetEnergy(thor.Address(tokenReceiver), 1, 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if receiverEnergy.Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected receiver energy to be transfer all from contract, got %v", receiverEnergy)
+			}
+
+			if evm.StateDB.Empty(contractAddr) {
+				t.Fatalf("expected contract still in stateDB, but it still have been deleted")
+			}
+		},
+	}
+
+	case2 := testcase{
+		name: "Same Clause, different receiver",
+		initFunc: func() (*EVM, *state.State, *Stack) {
+			var (
+				db    = muxdb.NewMem()
+				state = state.New(db, trie.Root{})
+				stack = newstack()
+			)
+
+			evm := newEVMInstance(state)
+
+			stack.push(new(uint256.Int).SetBytes(tokenReceiver.Bytes()))
+
+			// simulate the contract create in the same clause
+			evm.StateDB.CreateContract(contractAddr)
+
+			state.SetStorage(thor.Address(contractAddr), thor.BytesToBytes32([]byte("key1")), thor.BytesToBytes32([]byte("value1")))
+			state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
+			state.SetEnergy(thor.Address(contractAddr), big.NewInt(100), 1)
+			state.SetMaster(thor.Address(contractAddr), thor.Address(masterAddress))
+			state.SetCode(thor.Address(contractAddr), []byte("code"))
+
+			return evm, state, stack
+		},
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
+			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
+				t.Fatalf("expected contract balance to be 0, got %v", evm.StateDB.GetBalance(contractAddr))
+			}
+			if evm.StateDB.GetBalance(tokenReceiver).Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected receiver balance to be 100, got %v", evm.StateDB.GetBalance(tokenReceiver))
+			}
+
+			contractEnergy, err := state.GetEnergy(thor.Address(contractAddr), 1, 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if contractEnergy.Sign() != 0 {
+				t.Fatalf("expected contract energy to be transfer all to receiver, got %v", contractEnergy)
+			}
+
+			receiverEnergy, err := state.GetEnergy(thor.Address(tokenReceiver), 1, 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if receiverEnergy.Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected receiver energy to be transfer all from contract, got %v", receiverEnergy)
+			}
+
+			if !evm.StateDB.Empty(contractAddr) {
+				t.Fatalf("expected contract will be deleted, but it is not")
+			}
+		},
+	}
+
+	case3 := testcase{
+		name: "Different Clause,same receiver",
+		initFunc: func() (*EVM, *state.State, *Stack) {
+			var (
+				db    = muxdb.NewMem()
+				state = state.New(db, trie.Root{})
+				stack = newstack()
+			)
+
+			evm := newEVMInstance(state)
+
+			stack.push(new(uint256.Int).SetBytes(contractAddr.Bytes()))
+
+			// simulate the contract create in the other clause
+			state.SetStorage(thor.Address(contractAddr), thor.BytesToBytes32([]byte("key1")), thor.BytesToBytes32([]byte("value1")))
+			state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
+			state.SetEnergy(thor.Address(contractAddr), big.NewInt(100), 1)
+			state.SetMaster(thor.Address(contractAddr), thor.Address(masterAddress))
+			state.SetCode(thor.Address(contractAddr), []byte("code"))
+
+			return evm, state, stack
+		},
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
+			if evm.StateDB.GetBalance(contractAddr).Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected contract balance to remain unchanged, got %v", evm.StateDB.GetBalance(contractAddr))
+			}
+
+			contractEnergy, err := state.GetEnergy(thor.Address(contractAddr), 1, 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if contractEnergy.Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("expected contract energy to remain unchanged, got %v", contractEnergy)
+			}
+
+			if evm.StateDB.Empty(contractAddr) {
+				t.Fatalf("expected contract to still exist, but it has been deleted")
+			}
+		},
+	}
+
+	case4 := testcase{
+		name: "Same Clause,same receiver",
+		initFunc: func() (*EVM, *state.State, *Stack) {
+			var (
+				db    = muxdb.NewMem()
+				state = state.New(db, trie.Root{})
+				stack = newstack()
+			)
+
+			evm := newEVMInstance(state)
+
+			stack.push(new(uint256.Int).SetBytes(contractAddr.Bytes()))
+
+			// simulate the contract create in the same clause
+			evm.StateDB.CreateContract(contractAddr)
+
+			state.SetStorage(thor.Address(contractAddr), thor.BytesToBytes32([]byte("key1")), thor.BytesToBytes32([]byte("value1")))
+			state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
+			state.SetEnergy(thor.Address(contractAddr), big.NewInt(100), 1)
+			state.SetMaster(thor.Address(contractAddr), thor.Address(masterAddress))
+			state.SetCode(thor.Address(contractAddr), []byte("code"))
+
+			return evm, state, stack
+		},
+		testFunc: func(evm *EVM, state *state.State, t *testing.T) {
+			if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
+				t.Fatalf("expected contract balance to be burnt, got %v", evm.StateDB.GetBalance(contractAddr))
+			}
+
+			contractEnergy, err := state.GetEnergy(thor.Address(contractAddr), 1, 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if contractEnergy.Sign() != 0 {
+				t.Fatalf("expected contract energy to be burnt, got %v", contractEnergy)
+			}
+
+			if !evm.StateDB.Empty(contractAddr) {
+				t.Fatalf("expected contract will be deleted, but it is not")
+			}
+		},
+	}
+
+	tests = append(tests, case1, case2, case3, case4)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			evm, state, stack := tc.initFunc()
+			_, err := opSuicide6780(nil, evm, NewContract(AccountRef(masterAddress), AccountRef(contractAddr), big.NewInt(0), 0), nil, stack)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			tc.testFunc(evm, state, t)
+		})
 	}
 }
