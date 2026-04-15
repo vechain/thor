@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,8 @@ import (
 )
 
 func TestEth1559_ValidDecodeHashAndSender(t *testing.T) {
-	rawBytes := buildEth1559Raw(t, default1559Params())
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -37,43 +39,50 @@ func TestEth1559_ValidDecodeHashAndSender(t *testing.T) {
 }
 
 func TestEth1559_ChainIDMismatch(t *testing.T) {
-	rawBytes := buildEth1559Raw(t, default1559Params()) // signed for 1337
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey) // signed for 1337
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, 1)
+	_, err = NormalizeEthereumTx(rawBytes, 1)
 	require.Error(t, err)
 	assert.Equal(t, EthErrChainIDMismatch, err.(*EthTxError).Code)
 }
 
 func TestEth1559_MaxPriorityFeeExceedsMaxFeeRejected(t *testing.T) {
-	p := default1559Params()
-	p.MaxPriorityFeePerGas = new(big.Int).Add(p.MaxFeePerGas, big.NewInt(1)) // priority > max
-	rawBytes := buildEth1559Raw(t, p)
+	// maxFeePerGas default is 10e9; set priority = maxFee + 1 so priority > max.
+	rawBytes, err := defaultEth1559Builder().
+		MaxPriorityFeePerGas(new(big.Int).Add(big.NewInt(10e9), big.NewInt(1))).
+		BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.Error(t, err)
 	assert.Equal(t, EthErrFeeInconsistency, err.(*EthTxError).Code)
 }
 
 func TestEth1559_MaxPriorityFeeEqualMaxFeeAccepted(t *testing.T) {
-	p := default1559Params()
-	p.MaxPriorityFeePerGas = new(big.Int).Set(p.MaxFeePerGas) // equal is valid
-	rawBytes := buildEth1559Raw(t, p)
+	rawBytes, err := defaultEth1559Builder().
+		MaxPriorityFeePerGas(big.NewInt(10e9)). // equal to maxFeePerGas
+		BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
 }
 
 func TestEth1559_MaxPriorityFeeZeroAccepted(t *testing.T) {
-	p := default1559Params()
-	p.MaxPriorityFeePerGas = big.NewInt(0) // zero tip is valid
-	rawBytes := buildEth1559Raw(t, p)
+	rawBytes, err := defaultEth1559Builder().
+		MaxPriorityFeePerGas(big.NewInt(0)). // zero tip is valid
+		BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
 }
 
 func TestEth1559_InvalidYParity(t *testing.T) {
-	rawBytes := buildEth1559Raw(t, default1559Params())
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
+
 	// Strip 0x02 prefix, decode, tamper yParity, re-encode.
 	var body eth1559Transaction
 	require.NoError(t, rlp.DecodeBytes(rawBytes[1:], &body))
@@ -89,7 +98,9 @@ func TestEth1559_InvalidYParity(t *testing.T) {
 }
 
 func TestEth1559_NonCanonicalRLPRejected(t *testing.T) {
-	rawBytes := buildEth1559Raw(t, default1559Params())
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
+
 	var valid eth1559Transaction
 	require.NoError(t, rlp.DecodeBytes(rawBytes[1:], &valid))
 
@@ -131,9 +142,8 @@ func TestEth1559_NonCanonicalRLPRejected(t *testing.T) {
 }
 
 func TestEth1559_ContractCreation(t *testing.T) {
-	p := default1559Params()
-	p.To = nil
-	rawBytes := buildEth1559Raw(t, p)
+	rawBytes, err := defaultEth1559Builder().To(nil).BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -143,28 +153,48 @@ func TestEth1559_ContractCreation(t *testing.T) {
 func TestEth1559_NonEmptyAccessListRejected(t *testing.T) {
 	to := thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
 	storageKey := thor.MustParseBytes32("0x0000000000000000000000000000000000000000000000000000000000000001")
-	p := default1559Params()
-	p.AccessList = []AccessListEntry{
-		{Address: to, StorageKeys: []thor.Bytes32{storageKey}},
-	}
-	rawBytes := buildEth1559Raw(t, p)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	// EthBuilder always encodes an empty access list. Build a correctly-signed
+	// EIP-1559 tx with a non-empty access list directly using internal types so
+	// that NormalizeEthereumTx can reach the access-list validation check.
+	body := &eth1559Transaction{
+		ChainID:              new(big.Int).SetUint64(testChainID),
+		Nonce:                3,
+		MaxPriorityFeePerGas: big.NewInt(1e9),
+		MaxFeePerGas:         big.NewInt(10e9),
+		GasLimit:             21000,
+		To:                   &to,
+		Value:                big.NewInt(1e9),
+		AccessList:           []AccessListEntry{{Address: to, StorageKeys: []thor.Bytes32{storageKey}}},
+	}
+	sig, err := crypto.Sign(body.ethSigningHash().Bytes(), ethTestKey)
+	require.NoError(t, err)
+	body.YParity = sig[64]
+	body.R = new(big.Int).SetBytes(sig[:32])
+	body.S = new(big.Int).SetBytes(sig[32:64])
+
+	bodyRLP, err := rlp.EncodeToBytes(body)
+	require.NoError(t, err)
+	rawBytes := append([]byte{TypeEthTyped1559}, bodyRLP...)
+
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.Error(t, err)
 	assert.Equal(t, EthErrAccessListUnsupported, err.(*EthTxError).Code)
 }
 
 func TestEth1559_EmptyAccessListAccepted(t *testing.T) {
-	p := default1559Params()
-	p.AccessList = []AccessListEntry{} // explicit empty slice (wallets often send this)
-	rawBytes := buildEth1559Raw(t, p)
+	// EthBuilder always encodes an empty access list; verify that NormalizeEthereumTx
+	// accepts the resulting wire bytes (wallets often send an explicit empty list).
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
 }
 
 func TestEth1559_HashIsStable(t *testing.T) {
-	rawBytes := buildEth1559Raw(t, default1559Params())
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx1, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -175,7 +205,8 @@ func TestEth1559_HashIsStable(t *testing.T) {
 }
 
 func TestEth1559_HashNotEqualSigningHash(t *testing.T) {
-	rawBytes := buildEth1559Raw(t, default1559Params())
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -188,7 +219,9 @@ func TestEth1559_HashNotEqualSigningHash(t *testing.T) {
 }
 
 func TestEth1559_HighSRejected(t *testing.T) {
-	rawBytes := buildEth1559Raw(t, default1559Params())
+	rawBytes, err := defaultEth1559Builder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
+
 	var body eth1559Transaction
 	require.NoError(t, rlp.DecodeBytes(rawBytes[1:], &body))
 	body.S = new(big.Int).Set(secp256k1N)

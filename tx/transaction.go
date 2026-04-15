@@ -109,6 +109,11 @@ type txData interface {
 	setSignature(sig []byte)
 	signingFields() []any // signingFields returns the fields that are used to compute the signing hash.
 
+	// ethTxHash returns the Ethereum wire hash (Keccak256 of raw wire bytes) for Ethereum
+	// tx types, and the zero value for VeChain-native tx types.
+	// See Transaction.ID() for why this is used as the tx identifier for Ethereum txs.
+	ethTxHash() thor.Bytes32
+
 	// Encode/decode encodes/decodes the tx body into binary format, the format is defined by the tx data itself.
 	// This allows different tx types to have different encoding formats. The coding function are designed only
 	// for typed txs and the type identifier is not included in the encoding.
@@ -179,6 +184,16 @@ func (t *Transaction) decodeTyped(b []byte) (txData, error) {
 	switch b[0] {
 	case TypeDynamicFee:
 		var body dynamicFeeTransaction
+		err := body.decode(b[1:])
+		return &body, err
+	case TypeEthLegacy:
+		// Block-body format: 0x52 || rawEthBytes (raw RLP list, no prefix).
+		var body ethLegacyTxData
+		err := body.decode(b[1:])
+		return &body, err
+	case TypeEthTyped1559:
+		// Block-body format: 0x02 || rlpBody — identical to the EIP-1559 wire format.
+		var body eth1559TxData
 		err := body.decode(b[1:])
 		return &body, err
 	default:
@@ -279,13 +294,21 @@ func (t *Transaction) IsExpired(blockNum uint32) bool {
 }
 
 // ID returns id of tx.
-// ID = hash(signingHash, origin).
+// For VeChain-native txs: ID = Blake2b(signingHash, origin).
+// For Ethereum txs: ID = Keccak256(rawEthBytes) — the standard ethTxHash.
+// TODO: the Ethereum branch diverges from the VeChain txID formula; revisit if a
+// separate ethTxHash→VeChain-txID index is ever needed for internal lookups.
 // It returns zero Bytes32 if origin not available.
 func (t *Transaction) ID() (id thor.Bytes32) {
 	if cached := t.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.id.Store(id) }()
+
+	// Ethereum transactions identify themselves by their wire hash.
+	if hash := t.body.ethTxHash(); hash != (thor.Bytes32{}) {
+		return hash
+	}
 
 	origin, err := t.Origin()
 	if err != nil {
@@ -302,6 +325,13 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 	}
 	defer func() { t.cache.hash.Store(hash) }()
 
+	// Ethereum tx types have unexported fields; rlp.Encode would silently produce an
+	// empty encoding and every Ethereum tx would share the same Hash(). Use ethTxHash
+	// (Keccak256 of raw wire bytes) instead — same as ID() — so pool deduplication works.
+	if h := t.body.ethTxHash(); h != (thor.Bytes32{}) {
+		return h
+	}
+
 	// Legacy tx don't have type prefix.
 	if t.Type() == TypeLegacy {
 		return rlpHash(t.body)
@@ -316,10 +346,24 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { t.cache.signingHash.Store(hash) }()
 
+	// Ethereum tx types use Keccak256-based signing hashes. We type-assert to the
+	// concrete types so computeEthSigningHash() can use rlp:"nil"-tagged structs,
+	// which is required to correctly encode a nil To field (contract creation).
+	switch body := t.body.(type) {
+	case *ethLegacyTxData:
+		// EIP-155: Keccak256(RLP([nonce, gasPrice, gasLimit, to, value, data, chainID, 0, 0]))
+		// No type prefix — the EIP-155 preimage is a plain RLP list.
+		return body.computeEthSigningHash()
+	case *eth1559TxData:
+		// EIP-1559: Keccak256(0x02 || RLP([chainId, nonce, maxPriorityFeePerGas, ...]))
+		return body.computeEthSigningHash()
+	}
+
+	// VeChain-native tx types use Blake2b.
 	if t.Type() == TypeLegacy {
 		return rlpHash(t.body.signingFields())
 	}
-	// Include type prefix for typed tx.
+	// Include type prefix for typed VeChain tx.
 	return prefixedRlpHash(t.Type(), t.body.signingFields())
 }
 
@@ -469,7 +513,8 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
 	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
-	return math.BigMin(t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas().Add(t.body.maxPriorityFeePerGas(), baseFee))
+	tip := new(big.Int).Add(t.body.maxPriorityFeePerGas(), baseFee)
+	return math.BigMin(t.body.maxFeePerGas(), tip)
 }
 
 // EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction. If maxFeePerGas is less than

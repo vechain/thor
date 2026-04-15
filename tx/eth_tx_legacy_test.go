@@ -18,7 +18,8 @@ import (
 )
 
 func TestEthLegacy_ValidDecodeHashAndSender(t *testing.T) {
-	rawBytes := buildEthLegacyRaw(t, defaultLegacyParams())
+	rawBytes, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -43,9 +44,8 @@ func TestEthLegacy_ValidDecodeHashAndSender(t *testing.T) {
 func TestEthLegacy_ChainIDExtractedFromV(t *testing.T) {
 	// Build with chain ID 100 — different from testChainID.
 	const altChainID = uint64(100)
-	p := defaultLegacyParams()
-	p.ChainID = altChainID
-	rawBytes := buildEthLegacyRaw(t, p)
+	rawBytes, err := defaultEthLegacyBuilder().ChainID(altChainID).BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx, err := NormalizeEthereumTx(rawBytes, altChainID)
 	require.NoError(t, err)
@@ -53,9 +53,10 @@ func TestEthLegacy_ChainIDExtractedFromV(t *testing.T) {
 }
 
 func TestEthLegacy_ChainIDMismatch(t *testing.T) {
-	rawBytes := buildEthLegacyRaw(t, defaultLegacyParams()) // signed for chainID=1337
+	rawBytes, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey) // signed for chainID=1337
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, 1) // wrong chain
+	_, err = NormalizeEthereumTx(rawBytes, 1) // wrong chain
 	require.Error(t, err)
 	ethErr := err.(*EthTxError)
 	assert.Equal(t, EthErrChainIDMismatch, ethErr.Code)
@@ -93,8 +94,8 @@ func TestEthLegacy_PreEIP155Rejected(t *testing.T) {
 }
 
 func TestEthLegacy_HighSRejected(t *testing.T) {
-	p := defaultLegacyParams()
-	rawBytes := buildEthLegacyRaw(t, p)
+	rawBytes, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	// Decode, flip s to secp256k1N (which is > HN), re-encode.
 	var body ethLegacyTransaction
@@ -121,7 +122,8 @@ func TestEthLegacy_NonCanonicalRLPRejected(t *testing.T) {
 	// This is 0x82, 0x00, 0x01.
 
 	// Build valid raw bytes first.
-	validRaw := buildEthLegacyRaw(t, defaultLegacyParams())
+	validRaw, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	// Re-encode with a manually constructed body that has leading zeros in gasPrice.
 	// We use rlp.RawValue to inject a non-canonical integer.
@@ -160,39 +162,35 @@ func TestEthLegacy_NonCanonicalRLPRejected(t *testing.T) {
 }
 
 func TestEthLegacy_OversizedRejected(t *testing.T) {
-	p := defaultLegacyParams()
-	p.Data = bytes.Repeat([]byte{0xAB}, maxEthTxSize+1)
-	rawBytes := buildEthLegacyRaw(t, p)
+	rawBytes, err := defaultEthLegacyBuilder().Data(bytes.Repeat([]byte{0xAB}, maxEthTxSize+1)).BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.Error(t, err)
 	assert.Equal(t, EthErrOversized, err.(*EthTxError).Code)
 }
 
 func TestEthLegacy_GasPriceZeroRejected(t *testing.T) {
-	p := defaultLegacyParams()
-	p.GasPrice = big.NewInt(0)
-	rawBytes := buildEthLegacyRaw(t, p)
+	rawBytes, err := defaultEthLegacyBuilder().GasPrice(big.NewInt(0)).BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.Error(t, err)
 	assert.Equal(t, EthErrInvalidField, err.(*EthTxError).Code)
 }
 
 func TestEthLegacy_GasLimitZeroRejected(t *testing.T) {
-	p := defaultLegacyParams()
-	p.GasLimit = 0
-	rawBytes := buildEthLegacyRaw(t, p)
+	rawBytes, err := defaultEthLegacyBuilder().GasLimit(0).BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
-	_, err := NormalizeEthereumTx(rawBytes, testChainID)
+	_, err = NormalizeEthereumTx(rawBytes, testChainID)
 	require.Error(t, err)
 	assert.Equal(t, EthErrInvalidField, err.(*EthTxError).Code)
 }
 
 func TestEthLegacy_ContractCreation(t *testing.T) {
-	p := defaultLegacyParams()
-	p.To = nil // contract creation
-	rawBytes := buildEthLegacyRaw(t, p)
+	rawBytes, err := defaultEthLegacyBuilder().To(nil).BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -200,7 +198,8 @@ func TestEthLegacy_ContractCreation(t *testing.T) {
 }
 
 func TestEthLegacy_HashIsStable(t *testing.T) {
-	rawBytes := buildEthLegacyRaw(t, defaultLegacyParams())
+	rawBytes, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx1, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -211,7 +210,8 @@ func TestEthLegacy_HashIsStable(t *testing.T) {
 }
 
 func TestEthLegacy_HashNotEqualSigningHash(t *testing.T) {
-	rawBytes := buildEthLegacyRaw(t, defaultLegacyParams())
+	rawBytes, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
 
 	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
@@ -225,7 +225,9 @@ func TestEthLegacy_HashNotEqualSigningHash(t *testing.T) {
 }
 
 func TestEthLegacy_InvalidR(t *testing.T) {
-	rawBytes := buildEthLegacyRaw(t, defaultLegacyParams())
+	rawBytes, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
+
 	var body ethLegacyTransaction
 	require.NoError(t, rlp.DecodeBytes(rawBytes, &body))
 
@@ -242,7 +244,9 @@ func TestEthLegacy_InvalidR(t *testing.T) {
 }
 
 func TestEthLegacy_InvalidS_Zero(t *testing.T) {
-	rawBytes := buildEthLegacyRaw(t, defaultLegacyParams())
+	rawBytes, err := defaultEthLegacyBuilder().BuildRaw(ethTestKey)
+	require.NoError(t, err)
+
 	var body ethLegacyTransaction
 	require.NoError(t, rlp.DecodeBytes(rawBytes, &body))
 	body.S = big.NewInt(0)
