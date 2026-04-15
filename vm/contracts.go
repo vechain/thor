@@ -29,6 +29,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	patched_big "github.com/ethereum/go-bigmodexpfix/src/math/big" // https://github.com/golang/go/issues/77707
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
@@ -37,8 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/ripemd160"
-
-	"github.com/vechain/thor/v2/thor"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -74,7 +73,7 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
 var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x1}): &safeEcrecover{},
+	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{0x4}): &dataCopy{},
@@ -90,7 +89,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // NOTE: Shanghai release does not introduce any changes in precompiled contracts.
 // We are catching up from Istanbul, so Shanghai in thor includes eip1108 and eip2565.
 var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x1}): &safeEcrecover{},
+	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{0x4}): &dataCopy{},
@@ -104,7 +103,7 @@ var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
 // PrecompiledContractsPrague contains the set of pre-compiled Ethereum
 // contracts used in the Prague release.
 var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x1}): &safeEcrecover{},
+	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{0x4}): &dataCopy{},
@@ -127,7 +126,7 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 // PrecompiledContractsOsaka contains the set of pre-compiled Ethereum
 // contracts used in the Osaka release.
 var PrecompiledContractsOsaka = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &safeEcrecover{},
+	common.BytesToAddress([]byte{1}): &ecrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
@@ -199,7 +198,7 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contr
 	return nil, ErrOutOfGas
 }
 
-// ECRECOVER implemented as a native contract.
+// ecrecover implemented as a native contract.
 type ecrecover struct{}
 
 func (c *ecrecover) RequiredGas(input []byte) uint64 {
@@ -218,56 +217,22 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	v := input[63] - 27
 
 	// tighter sig s values input homestead only apply to tx sigs
-	if !allZero(input[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
-		return nil, nil
-	}
-	// v needs to be at the end for libsecp256k1
-	pubKey, err := crypto.Ecrecover(input[:32], append(input[64:128], v))
-	// make sure the public key is a valid one
-	if err != nil {
-		return nil, nil
-	}
-
-	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(thor.Keccak256(pubKey[1:]).Bytes()[12:], 32), nil
-}
-
-// safeEcrecover prevent touching the input buffer.
-type safeEcrecover struct{}
-
-func (c *safeEcrecover) RequiredGas(_ []byte) uint64 {
-	return params.EcrecoverGas
-}
-
-func (c *safeEcrecover) Run(input []byte) ([]byte, error) {
-	const ecRecoverInputLength = 128
-
-	input = common.RightPadBytes(input, ecRecoverInputLength)
-	// "input" is (hash, v, r, s), each 32 bytes
-	// but for ecrecover we want (r, s, v)
-
-	r := new(big.Int).SetBytes(input[64:96])
-	s := new(big.Int).SetBytes(input[96:128])
-	v := input[63] - 27
-
-	// tighter sig s values input homestead only apply to tx sigs
-	if !allZero(input[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
+	if bitutil.TestBytes(input[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
 		return nil, nil
 	}
 	// We must make sure not to modify the 'input', so placing the 'v' along with
 	// the signature needs to be done on a new allocation
-	sig := make([]byte, 65)
-	copy(sig, input[64:128])
+	var sig [65]byte
+	copy(sig[:], input[64:128])
 	sig[64] = v
 	// v needs to be at the end for libsecp256k1
-	pubKey, err := crypto.Ecrecover(input[:32], sig)
+	pubKey, err := crypto.Ecrecover(input[:32], sig[:])
 	// make sure the public key is a valid one
 	if err != nil {
 		return nil, nil
 	}
-
 	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(thor.Keccak256(pubKey[1:]).Bytes()[12:], 32), nil
+	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
 }
 
 // SHA256 implemented as a native contract.
