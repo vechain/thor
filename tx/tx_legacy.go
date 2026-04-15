@@ -78,6 +78,8 @@ func (t *legacyTransaction) signingFields() []any {
 	}
 }
 
+func (t *legacyTransaction) ethTxHash() thor.Bytes32 { return thor.Bytes32{} }
+
 // Below are methods that only apply to legacy transactions
 func (t *legacyTransaction) gasPrice(baseGasPrice *big.Int) *big.Int {
 	x := big.NewInt(int64(t.GasPriceCoef))

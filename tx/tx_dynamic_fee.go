@@ -77,6 +77,8 @@ func (t *dynamicFeeTransaction) maxPriorityFeePerGas() *big.Int {
 	return new(big.Int).Set(t.MaxPriorityFeePerGas)
 }
 
+func (t *dynamicFeeTransaction) ethTxHash() thor.Bytes32 { return thor.Bytes32{} }
+
 func (t *dynamicFeeTransaction) setSignature(sig []byte) {
 	t.Signature = sig
 }
