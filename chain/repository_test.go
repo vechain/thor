@@ -8,10 +8,12 @@ package chain
 import (
 	"bytes"
 	"context"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/kv"
@@ -190,6 +192,110 @@ func TestScanHeads(t *testing.T) {
 	} else {
 		assert.Equal(t, []thor.Bytes32{b3x.Header().ID(), b3.Header().ID(), b2x.Header().ID()}, heads)
 	}
+}
+
+// ethChainID is an arbitrary Ethereum replay-protection chain ID used in repository tests.
+// TODO: revisit once chain ID is derivable from network config rather than hard-coded.
+const ethChainID = uint64(1337)
+
+// ethRepoTestKey is a deterministic secp256k1 private key for signing Ethereum txs in
+// repository tests.  Using a fixed key makes ethTxHash values stable across test runs.
+var ethRepoTestKey, _ = crypto.HexToECDSA("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+// TestRepository_EthReceiptColdRead verifies that Ethereum-typed receipts (TypeEthLegacy
+// and TypeEthTyped1559) survive a full storage round-trip when the in-memory cache is
+// cold — the scenario that occurs on every node restart.
+//
+// Setup: repo1 adds a block containing one EthLegacy tx and one EthTyped1559 tx, each
+// with a matching receipt.  repo2 is opened from the same underlying database with an
+// empty cache, simulating the node restarting.  All receipt reads on repo2 must go
+// through loadRLP → DecodeRLP — the path that was broken before the fix.
+func TestRepository_EthReceiptColdRead(t *testing.T) {
+	db, repo1 := newTestRepo()
+	b0 := repo1.GenesisBlock()
+
+	to := thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+
+	// Build a real EthLegacy tx so its ID (= ethTxHash) is indexed in the tx store.
+	ethLegacyTx, err := tx.NewEthBuilder(tx.TypeEthLegacy).
+		ChainID(ethChainID). // TODO: derive from network config
+		Nonce(1).
+		GasPrice(big.NewInt(20e9)).
+		GasLimit(21000).
+		To(&to).
+		Value(big.NewInt(0)).
+		Build(ethRepoTestKey)
+	require.NoError(t, err)
+
+	// Build a real EthTyped1559 tx.
+	eth1559Tx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+		ChainID(ethChainID). // TODO: derive from network config
+		Nonce(2).
+		MaxPriorityFeePerGas(big.NewInt(1e9)).
+		MaxFeePerGas(big.NewInt(10e9)).
+		GasLimit(21000).
+		To(&to).
+		Value(big.NewInt(0)).
+		Build(ethRepoTestKey)
+	require.NoError(t, err)
+
+	b1 := newBlock(b0, 10, ethLegacyTx, eth1559Tx)
+
+	// Craft receipts that positionally match the transactions.
+	legacyReceipt := &tx.Receipt{
+		Type:     tx.TypeEthLegacy,
+		GasUsed:  21000,
+		GasPayer: thor.Address{},
+		Paid:     big.NewInt(420e9),
+		Reward:   big.NewInt(0),
+		Reverted: false,
+		Outputs:  []*tx.Output{},
+	}
+	receipt1559 := &tx.Receipt{
+		Type:     tx.TypeEthTyped1559,
+		GasUsed:  21000,
+		GasPayer: thor.Address{},
+		Paid:     big.NewInt(210e9),
+		Reward:   big.NewInt(21e9),
+		Reverted: false,
+		Outputs:  []*tx.Output{},
+	}
+	receipts := tx.Receipts{legacyReceipt, receipt1559}
+
+	require.NoError(t, repo1.AddBlock(b1, receipts, 0, true))
+
+	// Open a fresh repository from the same database — this simulates a node restart.
+	// repo2's in-memory receipt cache is empty; every read goes through the storage
+	// decode path (loadRLP → DecodeRLP), which was broken for Ethereum types before fix.
+	repo2, err := NewRepository(db, b0)
+	require.NoError(t, err)
+
+	// --- GetBlockReceipts: reads all receipts for the block by position ---
+	gotReceipts, err := repo2.GetBlockReceipts(b1.Header().ID())
+	require.NoError(t, err)
+	require.Len(t, gotReceipts, 2)
+
+	assert.Equal(t, tx.TypeEthLegacy, gotReceipts[0].Type)
+	assert.Equal(t, uint64(21000), gotReceipts[0].GasUsed)
+	assert.Equal(t, big.NewInt(420e9), gotReceipts[0].Paid)
+
+	assert.Equal(t, tx.TypeEthTyped1559, gotReceipts[1].Type)
+	assert.Equal(t, uint64(21000), gotReceipts[1].GasUsed)
+	assert.Equal(t, big.NewInt(21e9), gotReceipts[1].Reward)
+
+	// --- GetTransactionReceipt: resolves receipt via tx ID (= ethTxHash) ---
+	// This exercises the chain-trie path: ethTxHash → tx position → receipt key → decode.
+	chain2 := repo2.NewBestChain()
+
+	gotLegacyReceipt, err := chain2.GetTransactionReceipt(ethLegacyTx.ID())
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeEthLegacy, gotLegacyReceipt.Type)
+	assert.Equal(t, big.NewInt(420e9), gotLegacyReceipt.Paid)
+
+	got1559Receipt, err := chain2.GetTransactionReceipt(eth1559Tx.ID())
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeEthTyped1559, got1559Receipt.Type)
+	assert.Equal(t, big.NewInt(21e9), got1559Receipt.Reward)
 }
 
 type errorStore struct {

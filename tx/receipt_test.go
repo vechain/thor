@@ -88,7 +88,7 @@ func TestEmptyRootHash(t *testing.T) {
 }
 
 func TestMarshalAndUnmarshalBinary(t *testing.T) {
-	for _, txType := range []Type{TypeLegacy, TypeDynamicFee} {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthLegacy, TypeEthTyped1559} {
 		originalReceipt := getMockReceipt(txType)
 
 		data, err := originalReceipt.MarshalBinary()
@@ -103,7 +103,7 @@ func TestMarshalAndUnmarshalBinary(t *testing.T) {
 }
 
 func TestEncodeAndDecodeReceipt(t *testing.T) {
-	for _, txType := range []Type{TypeLegacy, TypeDynamicFee} {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthLegacy, TypeEthTyped1559} {
 		originalReceipt := getMockReceipt(txType)
 		receiptBuf := new(bytes.Buffer)
 		// Encoding
@@ -201,3 +201,34 @@ func TestDerivableReceipts_EncodeIndex_PanicsOnMarshalError(t *testing.T) {
 	}()
 	_ = dr.EncodeIndex(0)
 }
+
+// TestReceiptRootHashRoundtrip verifies that a Receipts slice containing all four
+// tx type families produces the same RootHash before and after a MarshalBinary →
+// UnmarshalBinary round-trip.  This guards the consensus invariant that block
+// receipt-root hashes are reproducible after reading receipts back from storage.
+func TestReceiptRootHashRoundtrip(t *testing.T) {
+	originals := Receipts{
+		ptr(getMockReceipt(TypeLegacy)),
+		ptr(getMockReceipt(TypeDynamicFee)),
+		ptr(getMockReceipt(TypeEthLegacy)),
+		ptr(getMockReceipt(TypeEthTyped1559)),
+	}
+	originalRoot := originals.RootHash()
+
+	// Round-trip each receipt through MarshalBinary → UnmarshalBinary.
+	decoded := make(Receipts, len(originals))
+	for i, r := range originals {
+		b, err := r.MarshalBinary()
+		assert.NoError(t, err, "MarshalBinary type 0x%02x", r.Type)
+
+		var dr Receipt
+		assert.NoError(t, dr.UnmarshalBinary(b), "UnmarshalBinary type 0x%02x", r.Type)
+		assert.Equal(t, r.Type, dr.Type)
+		decoded[i] = &dr
+	}
+
+	assert.Equal(t, originalRoot, decoded.RootHash(),
+		"RootHash must be identical before and after MarshalBinary/UnmarshalBinary round-trip")
+}
+
+func ptr(r Receipt) *Receipt { return &r }

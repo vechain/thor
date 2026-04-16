@@ -60,7 +60,6 @@ func (t *ethLegacyTransaction) ethSigningHash() thor.Bytes32 {
 	})
 }
 
-// TODO review this
 // signature returns the normalised 65-byte ECDSA signature [R(32) || S(32) || yParity(1)].
 func (t *ethLegacyTransaction) signature() []byte {
 	sig := make([]byte, 65)
@@ -77,6 +76,12 @@ func (t *ethLegacyTransaction) chainID() *big.Int {
 }
 
 // yParity extracts the recovery bit from V: yParity = (V − 35) & 1.
+//
+// TODO: consider switching to .Bit(0) for semantic clarity.
+// Mathematical justification for .Uint64() & 1: V = yParity + 2*chainID + 35, so
+// V−35 = 2*chainID + yParity. Since 2*chainID is always even, the LSB of (V−35) is
+// always yParity. .Uint64() truncates to the lower 64 bits but preserves the LSB,
+// so .Uint64() & 1 == yParity regardless of chainID magnitude.
 func (t *ethLegacyTransaction) yParity() byte {
 	return byte(new(big.Int).Sub(t.V, big.NewInt(35)).Uint64() & 1)
 }
