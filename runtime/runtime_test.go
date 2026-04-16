@@ -1027,6 +1027,68 @@ func TestCall(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+// TestCreateAddressDerivation verifies that the NewContractAddress hook dispatches to the
+// correct formula based on the transaction type:
+//   - TypeEthLegacy / TypeEthTyped1559 → crypto.CreateAddress(caller, nonce)
+//   - VeChain types (TypeLegacy, TypeDynamicFee) → thor.CreateContractAddress(txID, clauseIndex, counter)
+func TestCreateAddressDerivation(t *testing.T) {
+	db := muxdb.NewMem()
+	g, _ := genesis.NewDevnet()
+	stater := state.NewStater(db)
+	b0, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b0)
+
+	ch := repo.NewChain(b0.Header().ID())
+	st := stater.NewState(trie.Root{Hash: b0.Header().StateRoot()})
+
+	origin := thor.BytesToAddress([]byte("deployer"))
+
+	// Minimal initcode: PUSH1 0x00  PUSH1 0x00  RETURN
+	// Deploys an empty contract without reverting.
+	initcode := []byte{0x60, 0x00, 0x60, 0x00, 0xf3}
+
+	txID := thor.Bytes32{0xde, 0xad, 0xbe, 0xef}
+
+	tests := []struct {
+		name   string
+		txType tx.Type
+		want   thor.Address
+	}{
+		{
+			name:   "VeChain TypeLegacy uses txID formula",
+			txType: tx.TypeLegacy,
+			want:   thor.CreateContractAddress(txID, 0, 0),
+		},
+		{
+			name:   "EthLegacy uses crypto.CreateAddress",
+			txType: tx.TypeEthLegacy,
+			want:   thor.Address(crypto.CreateAddress(common.Address(origin), 0)),
+		},
+		{
+			name:   "EthTyped1559 uses crypto.CreateAddress",
+			txType: tx.TypeEthTyped1559,
+			want:   thor.Address(crypto.CreateAddress(common.Address(origin), 0)),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			txCtx := &xenv.TransactionContext{
+				ID:     txID,
+				Origin: origin,
+				TxType: tt.txType,
+			}
+			exec, _ := runtime.New(ch, st, &xenv.BlockContext{}, forkFromStart).
+				PrepareClause(tx.NewClause(nil).WithData(initcode), 0, math.MaxUint64, txCtx)
+			out, _, err := exec()
+			assert.NoError(t, err)
+			assert.Nil(t, out.VMErr)
+			assert.NotNil(t, out.ContractAddress, "contract should have been deployed")
+			assert.Equal(t, tt.want, *out.ContractAddress)
+		})
+	}
+}
+
 func getMockTx(repo *chain.Repository, txType tx.Type, t *testing.T) *tx.Transaction {
 	blockRef := tx.NewBlockRef(0)
 	chainTag := repo.ChainTag()
