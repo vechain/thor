@@ -39,7 +39,7 @@ type (
 	GetHashFunc func(uint64) common.Hash
 
 	// NewContractAddressFunc create a new contract according to current evm context and creation counter.
-	NewContractAddressFunc func(evm *EVM, counter uint32) common.Address
+	NewContractAddressFunc func(evm *EVM, caller common.Address, counter uint32) common.Address
 	// InterceptContractCallFunc intercept contract call.
 	InterceptContractCallFunc func(evm *EVM, contract *Contract, readonly bool) ([]byte, error, bool)
 
@@ -398,7 +398,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount)
+	contractAddr = evm.NewContractAddress(evm, caller.Address(), evm.contractCreationCount)
 
 	if evm.vmConfig.Tracer != nil {
 		// Capture the tracer start/end events in debug mode

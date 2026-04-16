@@ -246,5 +246,6 @@ func (r *ResolvedTransaction) ToContext(
 		BlockRef:    r.tx.BlockRef(),
 		Expiration:  r.tx.Expiration(),
 		ClauseCount: uint32(len(r.Clauses)),
+		TxType:      r.tx.Type(),
 	}, nil
 }
