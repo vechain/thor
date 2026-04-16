@@ -99,13 +99,20 @@ func (d *ethLegacyTxData) signature() []byte {
 	sig := make([]byte, 65)
 	d.r.FillBytes(sig[0:32])
 	d.s.FillBytes(sig[32:64])
-	// yParity = (V − 35) & 1  (EIP-155)
+	// yParity = (V − 35) & 1  (EIP-155).
+	// TODO: consider switching to .Bit(0) for semantic clarity.
+	// .Uint64() & 1 is mathematically correct: since V−35 = 2*chainID+yParity and
+	// 2*chainID is always even, the LSB is always yParity regardless of chainID magnitude.
 	sig[64] = byte(new(big.Int).Sub(d.v, big.NewInt(35)).Uint64() & 1)
 	return sig
 }
 
 // setSignature must not be called: Ethereum txs are pre-signed; the signature is
 // embedded in the wire bytes and cannot be changed after construction.
+// Panicking here is intentional — calling setSignature on an Ethereum tx is a programming
+// error (WithSignature is only valid for VeChain-native txs). Panicking ensures the bug
+// is caught immediately rather than silently accepting a mutation that would be ignored.
+// TODO: if callers ever need a softer failure, consider a separate interface method.
 func (d *ethLegacyTxData) setSignature(_ []byte) {
 	panic("ethLegacyTxData: setSignature must not be called; Ethereum txs are pre-signed")
 }
@@ -135,6 +142,9 @@ func (d *ethLegacyTxData) copy() txData {
 // Uses ethLegacySigningBody (a typed struct) so the rlp:"nil" tag on the To field
 // encodes contract-creation txs (nil To) correctly as RLP empty string (0x80).
 func (d *ethLegacyTxData) computeEthSigningHash() thor.Bytes32 {
+	// TODO: review whether passing internal *big.Int pointers (gasPrice, value) directly
+	// into ethLegacySigningBody is safe long-term. RLP encoding is currently read-only so
+	// no mutation occurs, but defensive copies (new(big.Int).Set(...)) would be safer.
 	return ethKeccakRlpHash(&ethLegacySigningBody{
 		Nonce:    d.txNonce,
 		GasPrice: d.gasPrice,
@@ -168,8 +178,15 @@ func (d *ethLegacyTxData) decode(input []byte) error {
 		return errors.New("ethLegacyTxData: V < 35; not an EIP-155 transaction")
 	}
 	chainID := new(big.Int).Rsh(new(big.Int).Sub(body.V, big.NewInt(35)), 1)
+	if chainID.BitLen() > 64 {
+		return errors.New("ethLegacyTxData: chainID exceeds uint64 range")
+	}
 
 	d.txNonce = body.Nonce
+	// body is a local struct; its *big.Int and slice fields are freshly allocated by the
+	// RLP decoder and transferred here by reference. body goes out of scope after this
+	// function returns, so there is no aliasing concern.
+	// TODO: revisit if the RLP decoder ever reuses buffers or if body is ever reused.
 	d.gasPrice = body.GasPrice
 	d.gasLimit = body.GasLimit
 	d.to = body.To
@@ -238,8 +255,14 @@ func (d *eth1559TxData) signature() []byte {
 	return sig
 }
 
+// setSignature must not be called: Ethereum txs are pre-signed; the signature is
+// embedded in the wire bytes and cannot be changed after construction.
+// Panicking here is intentional — calling setSignature on an Ethereum tx is a programming
+// error (WithSignature is only valid for VeChain-native txs). Panicking ensures the bug
+// is caught immediately rather than silently accepting a mutation that would be ignored.
+// TODO: if callers ever need a softer failure, consider a separate interface method.
 func (d *eth1559TxData) setSignature(_ []byte) {
-	panic("eth1559TxData: setSignature must not be called; Ethereum txs are pre-signed") // TODO should we log here instead ?
+	panic("eth1559TxData: setSignature must not be called; Ethereum txs are pre-signed")
 }
 
 func (d *eth1559TxData) copy() txData {
@@ -273,6 +296,9 @@ func (d *eth1559TxData) copy() txData {
 //
 // Uses eth1559SigningBody so the rlp:"nil" tag on To is honoured.
 func (d *eth1559TxData) computeEthSigningHash() thor.Bytes32 {
+	// TODO: review whether passing internal *big.Int pointers (maxPriority, maxFee, value)
+	// directly into eth1559SigningBody is safe long-term. RLP encoding is currently read-only
+	// so no mutation occurs, but defensive copies (new(big.Int).Set(...)) would be safer.
 	return ethKeccakPrefixedRlpHash(TypeEthTyped1559, &eth1559SigningBody{
 		ChainID:              new(big.Int).SetUint64(d.chainID),
 		Nonce:                d.txNonce,
@@ -300,8 +326,15 @@ func (d *eth1559TxData) decode(input []byte) error {
 	if err := rlp.DecodeBytes(input, &body); err != nil {
 		return err
 	}
+	if body.ChainID.BitLen() > 64 {
+		return errors.New("eth1559TxData: chainID exceeds uint64 range")
+	}
 	d.chainID = body.ChainID.Uint64()
 	d.txNonce = body.Nonce
+	// body is a local struct; its *big.Int and slice fields are freshly allocated by the
+	// RLP decoder and transferred here by reference. body goes out of scope after this
+	// function returns, so there is no aliasing concern.
+	// TODO: revisit if the RLP decoder ever reuses buffers or if body is ever reused.
 	d.maxPriority = body.MaxPriorityFeePerGas
 	d.maxFee = body.MaxFeePerGas
 	d.gasLimit = body.GasLimit
@@ -329,8 +362,15 @@ func (d *eth1559TxData) decode(input []byte) error {
 // chainTag is the last byte of the network genesis block hash. Ethereum replay protection
 // uses chainID (already validated by NormalizeEthereumTx); chainTag is stored here as a
 // VeChain compatibility stub so the existing pool/packer/consensus checks are satisfied.
+//
+// IMPORTANT: the caller (typically the API layer handling eth_sendRawTransaction) is
+// responsible for supplying the correct chainTag for this network. Ethereum wallets do not
+// carry a VeChain chainTag; the API layer must inject it from the network config. Passing
+// the wrong chainTag will cause packer adoption to fail with "chain tag mismatch".
+//
 // TODO: when pool integration is wired up, add type-checks in txpool/packer/consensus to
-// bypass chainTag validation for Ethereum tx types.
+// bypass chainTag validation for Ethereum tx types, removing the injection requirement from
+// the API layer.
 func NewEthereumTransaction(norm *NormalizedEthereumTx, chainTag byte) *Transaction {
 	switch norm.TxType {
 	case TypeEthLegacy:
