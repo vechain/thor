@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 
@@ -226,8 +227,17 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			return common.Hash(id)
 		},
-		NewContractAddress: func(_ *vm.EVM, counter uint32) common.Address {
-			return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
+		NewContractAddress: func(_ *vm.EVM, caller common.Address, counter uint32) common.Address {
+			switch txCtx.TxType {
+			case tx.TypeEthLegacy, tx.TypeEthTyped1559:
+				// Ethereum formula: keccak256(rlp([caller, nonce])). counter is unused here —
+				// nonces play the equivalent role for Ethereum txs. With nonce tracking stubbed,
+				// stateDB.GetNonce always returns 0; sequential creates from the same caller
+				// will collide on the second call until real nonce tracking is implemented.
+				return crypto.CreateAddress(caller, stateDB.GetNonce(caller))
+			default:
+				return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
+			}
 		},
 		InterceptContractCall: func(evm *vm.EVM, contract *vm.Contract, readonly bool) ([]byte, error, bool) {
 			if evm.Depth() < 2 {
