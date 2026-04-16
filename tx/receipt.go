@@ -116,7 +116,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errShortTypedReceipt
 	}
 	switch b[0] {
-	case TypeDynamicFee:
+	case TypeDynamicFee, TypeEthLegacy, TypeEthTyped1559:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
@@ -162,7 +162,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		}
 		r.Type = b[0]
 		switch r.Type {
-		case TypeDynamicFee:
+		case TypeDynamicFee, TypeEthLegacy, TypeEthTyped1559:
 			var dec receiptRLP
 			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
 				return err
