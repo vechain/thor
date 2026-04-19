@@ -22,7 +22,7 @@ func TestNewEthereumTransaction_Legacy(t *testing.T) {
 	norm, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
 
-	trx := NewEthereumTransaction(norm, testChainTagVal)
+	trx := NewEthereumTransaction(norm)
 
 	// Type
 	assert.Equal(t, TypeEthLegacy, trx.Type())
@@ -45,8 +45,8 @@ func TestNewEthereumTransaction_Legacy(t *testing.T) {
 	assert.Equal(t, norm.Value, clauses[0].Value())
 	assert.Empty(t, clauses[0].Data()) // default params carry no data; nil and [] are both empty
 
-	// VeChain stubs.
-	assert.Equal(t, testChainTagVal, trx.ChainTag())
+	// VeChain stubs: chain tag returns 0 (Ethereum txs use chainID for replay protection).
+	assert.Equal(t, byte(0), trx.ChainTag())
 	assert.Equal(t, uint32(0), trx.BlockRef().Number()) // blockRef stub = 0
 	assert.Equal(t, uint32(maxUint32), trx.Expiration())
 	assert.False(t, trx.IsExpired(uint32(maxUint32)), "Ethereum txs must not expire at any uint32 block number")
@@ -61,7 +61,7 @@ func TestNewEthereumTransaction_1559(t *testing.T) {
 	norm, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
 
-	trx := NewEthereumTransaction(norm, testChainTagVal)
+	trx := NewEthereumTransaction(norm)
 
 	assert.Equal(t, TypeEthTyped1559, trx.Type())
 	assert.Equal(t, norm.Hash, trx.ID())
@@ -80,8 +80,8 @@ func TestNewEthereumTransaction_1559(t *testing.T) {
 	assert.Equal(t, norm.Value, clauses[0].Value())
 	assert.Empty(t, clauses[0].Data())
 
-	// VeChain stubs — must match EthLegacy values.
-	assert.Equal(t, testChainTagVal, trx.ChainTag())
+	// VeChain stubs: chain tag returns 0 (Ethereum txs use chainID for replay protection).
+	assert.Equal(t, byte(0), trx.ChainTag())
 	assert.Equal(t, uint32(0), trx.BlockRef().Number())
 	assert.Equal(t, uint32(maxUint32), trx.Expiration())
 	assert.False(t, trx.IsExpired(uint32(maxUint32)), "Ethereum txs must not expire at any uint32 block number")
@@ -92,7 +92,7 @@ func TestNewEthereumTransaction_1559(t *testing.T) {
 // TestNewEthereumTransaction_LegacyContractCreation verifies that a nil To (contract
 // creation) is preserved through the conversion and produces an IsCreatingContract clause.
 func TestNewEthereumTransaction_LegacyContractCreation(t *testing.T) {
-	trx, err := defaultEthLegacyBuilder().To(nil).ChainTag(testChainTagVal).Build(ethTestKey)
+	trx, err := defaultEthLegacyBuilder().To(nil).Build(ethTestKey)
 	require.NoError(t, err)
 
 	clauses := trx.Clauses()
@@ -103,7 +103,7 @@ func TestNewEthereumTransaction_LegacyContractCreation(t *testing.T) {
 
 // TestNewEthereumTransaction_1559ContractCreation same for EIP-1559.
 func TestNewEthereumTransaction_1559ContractCreation(t *testing.T) {
-	trx, err := defaultEth1559Builder().To(nil).ChainTag(testChainTagVal).Build(ethTestKey)
+	trx, err := defaultEth1559Builder().To(nil).Build(ethTestKey)
 	require.NoError(t, err)
 
 	clauses := trx.Clauses()
@@ -115,15 +115,16 @@ func TestNewEthereumTransaction_1559ContractCreation(t *testing.T) {
 // UnmarshalBinary produces a Transaction with identical observable properties.
 func TestNewEthereumTransaction_LegacyMarshalRoundtrip(t *testing.T) {
 	testData := []byte{0xde, 0xad, 0xbe, 0xef}
-	original, err := defaultEthLegacyBuilder().Data(testData).ChainTag(testChainTagVal).Build(ethTestKey)
+	original, err := defaultEthLegacyBuilder().Data(testData).Build(ethTestKey)
 	require.NoError(t, err)
 
 	encoded, err := original.MarshalBinary()
 	require.NoError(t, err)
 
-	// Block-body encoding: first byte must be the 0x52 type marker.
+	// EthLegacy block-body encoding is a raw RLP list (no type prefix).
+	// The first byte must be an RLP list header (≥ 0xC0), not a type byte.
 	require.NotEmpty(t, encoded)
-	assert.Equal(t, TypeEthLegacy, encoded[0])
+	assert.GreaterOrEqual(t, encoded[0], byte(0xC0), "EthLegacy must encode as raw RLP list")
 
 	var decoded Transaction
 	require.NoError(t, decoded.UnmarshalBinary(encoded))
@@ -149,7 +150,7 @@ func TestNewEthereumTransaction_LegacyMarshalRoundtrip(t *testing.T) {
 // TestNewEthereumTransaction_1559MarshalRoundtrip same for EIP-1559.
 func TestNewEthereumTransaction_1559MarshalRoundtrip(t *testing.T) {
 	testData := []byte{0xca, 0xfe, 0xba, 0xbe}
-	original, err := defaultEth1559Builder().Data(testData).ChainTag(testChainTagVal).Build(ethTestKey)
+	original, err := defaultEth1559Builder().Data(testData).Build(ethTestKey)
 	require.NoError(t, err)
 
 	encoded, err := original.MarshalBinary()
@@ -184,7 +185,7 @@ func TestNewEthereumTransaction_LegacyEffectiveGasPrice(t *testing.T) {
 	norm, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
 
-	trx := NewEthereumTransaction(norm, testChainTagVal)
+	trx := NewEthereumTransaction(norm)
 
 	// EffectiveGasPrice for EthLegacy should equal gasPrice regardless of baseFee,
 	// because min(gasPrice, gasPrice + baseFee) = gasPrice when baseFee ≥ 0.
@@ -196,18 +197,18 @@ func TestNewEthereumTransaction_LegacyEffectiveGasPrice(t *testing.T) {
 // TestNewEthereumTransaction_UnsupportedTypePanics verifies the panic guard for unknown types.
 func TestNewEthereumTransaction_UnsupportedTypePanics(t *testing.T) {
 	norm := &NormalizedEthereumTx{TxType: 0xFF}
-	assert.Panics(t, func() { NewEthereumTransaction(norm, 0) })
+	assert.Panics(t, func() { NewEthereumTransaction(norm) })
 }
 
 // TestNewEthereumTransaction_Hash verifies that Hash() == ID() == ethTxHash for Ethereum txs,
 // preventing the latent bug where unexported fields cause rlp.Encode to produce an empty
 // encoding and every Ethereum tx to share the same Hash().
 func TestNewEthereumTransaction_Hash(t *testing.T) {
-	legacy, err := defaultEthLegacyBuilder().ChainTag(testChainTagVal).Build(ethTestKey)
+	legacy, err := defaultEthLegacyBuilder().Build(ethTestKey)
 	require.NoError(t, err)
 	assert.Equal(t, legacy.ID(), legacy.Hash(), "EthLegacy: Hash must equal ID (ethTxHash)")
 
-	tx1559, err := defaultEth1559Builder().ChainTag(testChainTagVal).Build(ethTestKey)
+	tx1559, err := defaultEth1559Builder().Build(ethTestKey)
 	require.NoError(t, err)
 	assert.Equal(t, tx1559.ID(), tx1559.Hash(), "Eth1559: Hash must equal ID (ethTxHash)")
 
@@ -218,7 +219,7 @@ func TestNewEthereumTransaction_Hash(t *testing.T) {
 // TestNewEthereumTransaction_LegacyCopy verifies that copy() deep-copies an EthLegacy tx body:
 // mutating the original's underlying data does not affect the copy.
 func TestNewEthereumTransaction_LegacyCopy(t *testing.T) {
-	original, err := defaultEthLegacyBuilder().ChainTag(testChainTagVal).Build(ethTestKey)
+	original, err := defaultEthLegacyBuilder().Build(ethTestKey)
 	require.NoError(t, err)
 
 	copied := &Transaction{body: original.body.copy()}
@@ -239,7 +240,7 @@ func TestNewEthereumTransaction_LegacyCopy(t *testing.T) {
 
 // TestNewEthereumTransaction_1559Copy same for EIP-1559.
 func TestNewEthereumTransaction_1559Copy(t *testing.T) {
-	original, err := defaultEth1559Builder().ChainTag(testChainTagVal).Build(ethTestKey)
+	original, err := defaultEth1559Builder().Build(ethTestKey)
 	require.NoError(t, err)
 
 	copied := &Transaction{body: original.body.copy()}
@@ -258,11 +259,11 @@ func TestNewEthereumTransaction_1559Copy(t *testing.T) {
 // TestNewEthereumTransaction_SetSignaturePanics verifies that calling WithSignature on an
 // Ethereum tx (which routes through setSignature) panics with a clear message.
 func TestNewEthereumTransaction_SetSignaturePanics(t *testing.T) {
-	legacy, err := defaultEthLegacyBuilder().ChainTag(testChainTagVal).Build(ethTestKey)
+	legacy, err := defaultEthLegacyBuilder().Build(ethTestKey)
 	require.NoError(t, err)
 	assert.Panics(t, func() { legacy.WithSignature(make([]byte, 65)) })
 
-	tx1559, err := defaultEth1559Builder().ChainTag(testChainTagVal).Build(ethTestKey)
+	tx1559, err := defaultEth1559Builder().Build(ethTestKey)
 	require.NoError(t, err)
 	assert.Panics(t, func() { tx1559.WithSignature(make([]byte, 65)) })
 }
@@ -275,7 +276,7 @@ func TestNewEthereumTransaction_LegacyFeeAliasing(t *testing.T) {
 	require.NoError(t, err)
 	norm, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
-	trx := NewEthereumTransaction(norm, testChainTagVal)
+	trx := NewEthereumTransaction(norm)
 
 	gasPrice := big.NewInt(20e9)
 	assert.Equal(t, gasPrice, trx.MaxFeePerGas(), "MaxFeePerGas must equal gasPrice for EthLegacy")
@@ -295,7 +296,7 @@ func TestNewEthereumTransaction_1559EffectiveGasPrice(t *testing.T) {
 	require.NoError(t, err)
 	norm, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
-	trx := NewEthereumTransaction(norm, testChainTagVal)
+	trx := NewEthereumTransaction(norm)
 
 	tests := []struct {
 		name     string
@@ -325,13 +326,13 @@ func TestNewEthereumTransaction_EffectivePriorityFeePerGas(t *testing.T) {
 	require.NoError(t, err)
 	legacyNorm, err := NormalizeEthereumTx(legacyRaw, testChainID)
 	require.NoError(t, err)
-	legacyTrx := NewEthereumTransaction(legacyNorm, testChainTagVal)
+	legacyTrx := NewEthereumTransaction(legacyNorm)
 
 	raw1559, err := defaultEth1559Builder().BuildRaw(ethTestKey)
 	require.NoError(t, err)
 	norm1559, err := NormalizeEthereumTx(raw1559, testChainID)
 	require.NoError(t, err)
-	trx1559 := NewEthereumTransaction(norm1559, testChainTagVal)
+	trx1559 := NewEthereumTransaction(norm1559)
 
 	tests := []struct {
 		name     string
@@ -389,6 +390,3 @@ func TestEthLegacyTxData_DecodePreEIP155(t *testing.T) {
 
 // maxUint32 mirrors math.MaxUint32 for use in assertions without an import.
 const maxUint32 = 1<<32 - 1
-
-// testChainTagVal is the stub chainTag used across eth_tx_data tests.
-const testChainTagVal byte = 0x27

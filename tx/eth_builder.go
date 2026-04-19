@@ -32,7 +32,6 @@ import (
 // encoded bytes (e.g. gasPrice == 0, gasLimit == 0).
 type EthBuilder struct {
 	txType               Type
-	chainTag             byte
 	chainID              uint64
 	nonce                uint64
 	gasPrice             *big.Int // EthLegacy only
@@ -51,14 +50,6 @@ func NewEthBuilder(txType Type) *EthBuilder {
 		panic(fmt.Sprintf("EthBuilder: unsupported tx type 0x%02x; use TypeEthLegacy or TypeEthTyped1559", txType))
 	}
 	return &EthBuilder{txType: txType}
-}
-
-// ChainTag sets the VeChain genesis-binding tag attached to the wrapped Transaction.
-// This is the VeChain equivalent of the Ethereum chainID — it binds the transaction
-// to a specific VeChain network for pool and consensus validation.
-func (b *EthBuilder) ChainTag(tag byte) *EthBuilder {
-	b.chainTag = tag
-	return b
 }
 
 // ChainID sets the Ethereum EIP-155 / EIP-1559 replay-protection chain ID.
@@ -164,7 +155,7 @@ func (b *EthBuilder) Build(key *ecdsa.PrivateKey) (*Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewEthereumTransaction(norm, b.chainTag), nil
+	return NewEthereumTransaction(norm), nil
 }
 
 // buildEthLegacyWire produces EIP-155 signed wire bytes for a TypeEthLegacy transaction.

@@ -80,7 +80,6 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 
 	// --- Ethereum transactions ---
 	ethLegacy, err := tx.NewEthBuilder(tx.TypeEthLegacy).
-		ChainTag(mixedBlockChainTag).
 		ChainID(mixedBlockChainID).
 		Nonce(10).
 		GasPrice(big.NewInt(20e9)).
@@ -91,7 +90,6 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 	require.NoError(t, err)
 
 	eth1559, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
-		ChainTag(mixedBlockChainTag).
 		ChainID(mixedBlockChainID).
 		Nonce(20).
 		MaxPriorityFeePerGas(big.NewInt(1e9)).

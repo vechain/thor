@@ -77,7 +77,6 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 	// The sender's address is derived from sender.PrivateKey, which is a dev account
 	// with VET and VTHO pre-funded in genesis — so gas payment will succeed.
 	ethLegacyTx, err := tx.NewEthBuilder(tx.TypeEthLegacy).
-		ChainTag(chain.ChainTag()).
 		ChainID(ethBlockTestChainID).
 		Nonce(1).
 		GasPrice(feeAboveBase).
@@ -89,7 +88,6 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 
 	// --- 3. Ethereum EthTyped1559 tx ---
 	eth1559Tx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
-		ChainTag(chain.ChainTag()).
 		ChainID(ethBlockTestChainID).
 		Nonce(2).
 		MaxPriorityFeePerGas(feeForPriority).
