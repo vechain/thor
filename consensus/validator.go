@@ -199,7 +199,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		}
 
 		switch {
-		case tr.ChainTag() != c.repo.ChainTag():
+		case tr.ChainTag() != c.repo.ChainTag() && tr.Type() != tx.TypeEthLegacy && tr.Type() != tx.TypeEthTyped1559:
+			// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
 		case header.Number() < tr.BlockRef().Number():
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))

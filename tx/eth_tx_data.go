@@ -13,13 +13,10 @@
 //
 //	blockRef   = 0          → blockRef.Number()=0 ≤ any block; all schedule checks pass.
 //	expiration = MaxUint32  → IsExpired (blockNum > 0 + MaxUint32) is never true.
-//	chainTag   = caller-supplied from network genesis (stored at construction time).
+//	chainTag   = 0          → Ethereum replay protection uses chainID; chain tag validation
+//	                          is bypassed in txpool/packer/consensus for Ethereum tx types.
 //	dependsOn  = nil        → no dependency on another transaction.
 //	reserved   = {}         → no feature flags; not delegated; 65-byte signature expected.
-//
-// TODO: bypass chainTag validation in txpool/packer/consensus for Ethereum tx types
-// once pool integration is wired up. Currently, direct runtime invocation (bypassing
-// the pool) works without that change.
 
 package tx
 
@@ -35,8 +32,9 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// ethLegacyTxData implements txData for Ethereum legacy (EIP-155) transactions
-// (block-body type byte: 0x52; wire format: raw RLP list with no type prefix).
+// ethLegacyTxData implements txData for Ethereum legacy (EIP-155) transactions.
+// Wire format and block-body format are identical: a raw RLP list with no type prefix.
+// Disambiguation from VeChain Legacy uses field count (9 vs 10).
 type ethLegacyTxData struct {
 	txNonce  uint64 // "nonce" would conflict with the nonce() interface method
 	gasPrice *big.Int
@@ -51,18 +49,13 @@ type ethLegacyTxData struct {
 	// See Transaction.ID() for the note on the VeChain txID invariant.
 	ethHash thor.Bytes32
 
-	// rawBytes holds the original Ethereum wire bytes (raw RLP list, no 0x52 prefix).
+	// rawBytes holds the original Ethereum wire bytes (raw RLP list).
 	// encode() writes them verbatim for a byte-perfect block body round-trip.
 	rawBytes []byte
-
-	// chainTagVal is the network genesis chainTag stored at construction time.
-	// Ethereum replay protection uses chainID (validated by NormalizeEthereumTx);
-	// chainTag is a VeChain compatibility stub stored here.
-	chainTagVal byte
 }
 
 func (d *ethLegacyTxData) txType() byte   { return TypeEthLegacy }
-func (d *ethLegacyTxData) chainTag() byte { return d.chainTagVal }
+func (d *ethLegacyTxData) chainTag() byte { return 0 } // Ethereum txs use chainID; chain tag validation is bypassed
 
 // blockRef returns 0 (block 0). blockRef.Number()=0 ≤ any current block, so all
 // pool/packer schedule checks pass without any code changes to those layers.
@@ -119,19 +112,18 @@ func (d *ethLegacyTxData) setSignature(_ []byte) {
 
 func (d *ethLegacyTxData) copy() txData {
 	return &ethLegacyTxData{
-		txNonce:     d.txNonce,
-		gasPrice:    new(big.Int).Set(d.gasPrice),
-		gasLimit:    d.gasLimit,
-		to:          cloneAddress(d.to),
-		value:       new(big.Int).Set(d.value),
-		data:        bytes.Clone(d.data),
-		v:           new(big.Int).Set(d.v),
-		r:           new(big.Int).Set(d.r),
-		s:           new(big.Int).Set(d.s),
-		chainID:     d.chainID,
-		ethHash:     d.ethHash,
-		rawBytes:    bytes.Clone(d.rawBytes),
-		chainTagVal: d.chainTagVal,
+		txNonce:  d.txNonce,
+		gasPrice: new(big.Int).Set(d.gasPrice),
+		gasLimit: d.gasLimit,
+		to:       cloneAddress(d.to),
+		value:    new(big.Int).Set(d.value),
+		data:     bytes.Clone(d.data),
+		v:        new(big.Int).Set(d.v),
+		r:        new(big.Int).Set(d.r),
+		s:        new(big.Int).Set(d.s),
+		chainID:  d.chainID,
+		ethHash:  d.ethHash,
+		rawBytes: bytes.Clone(d.rawBytes),
 	}
 }
 
@@ -156,15 +148,14 @@ func (d *ethLegacyTxData) computeEthSigningHash() thor.Bytes32 {
 	})
 }
 
-// encode writes the raw Ethereum wire bytes (RLP list, no 0x52 prefix) to w.
-// Transaction.encodeTyped prepends the 0x52 block-body marker, producing
-// the complete block-body encoding: [0x52 || rawEthBytes].
+// encode writes the raw Ethereum wire bytes (RLP list) to w.
+// This is the complete block-body encoding for EthLegacy — no type prefix is added.
 func (d *ethLegacyTxData) encode(w *bytes.Buffer) error {
 	_, err := w.Write(d.rawBytes)
 	return err
 }
 
-// decode parses raw Ethereum legacy bytes (no 0x52 prefix) as stored in the block body.
+// decode parses a raw Ethereum legacy RLP list as stored in the block body.
 // This is a light parse — no chainID re-validation or signature verification, since the
 // block producer validated those at submission time via NormalizeEthereumTx.
 func (d *ethLegacyTxData) decode(input []byte) error {
@@ -223,12 +214,10 @@ type eth1559TxData struct {
 
 	// rawBytes holds the full EIP-1559 wire bytes: 0x02 || rlpBody.
 	rawBytes []byte
-
-	chainTagVal byte
 }
 
 func (d *eth1559TxData) txType() byte             { return TypeEthTyped1559 }
-func (d *eth1559TxData) chainTag() byte           { return d.chainTagVal }
+func (d *eth1559TxData) chainTag() byte           { return 0 } // Ethereum txs use chainID; chain tag validation is bypassed
 func (d *eth1559TxData) blockRef() uint64         { return 0 }
 func (d *eth1559TxData) expiration() uint32       { return math.MaxUint32 }
 func (d *eth1559TxData) gas() uint64              { return d.gasLimit }
@@ -280,7 +269,6 @@ func (d *eth1559TxData) copy() txData {
 		s:           new(big.Int).Set(d.s),
 		ethHash:     d.ethHash,
 		rawBytes:    bytes.Clone(d.rawBytes),
-		chainTagVal: d.chainTagVal,
 	}
 	if len(d.accessList) > 0 {
 		cpy.accessList = make([]AccessListEntry, len(d.accessList))
@@ -359,54 +347,42 @@ func (d *eth1559TxData) decode(input []byte) error {
 // NewEthereumTransaction converts a NormalizedEthereumTx — produced by NormalizeEthereumTx —
 // into a tx.Transaction suitable for EVM execution and block inclusion.
 //
-// chainTag is the last byte of the network genesis block hash. Ethereum replay protection
-// uses chainID (already validated by NormalizeEthereumTx); chainTag is stored here as a
-// VeChain compatibility stub so the existing pool/packer/consensus checks are satisfied.
-//
-// IMPORTANT: the caller (typically the API layer handling eth_sendRawTransaction) is
-// responsible for supplying the correct chainTag for this network. Ethereum wallets do not
-// carry a VeChain chainTag; the API layer must inject it from the network config. Passing
-// the wrong chainTag will cause packer adoption to fail with "chain tag mismatch".
-//
-// TODO: when pool integration is wired up, add type-checks in txpool/packer/consensus to
-// bypass chainTag validation for Ethereum tx types, removing the injection requirement from
-// the API layer.
-func NewEthereumTransaction(norm *NormalizedEthereumTx, chainTag byte) *Transaction {
+// Ethereum replay protection uses chainID (already validated by NormalizeEthereumTx).
+// VeChain chain tag validation is bypassed in txpool/packer/consensus for Ethereum tx types.
+func NewEthereumTransaction(norm *NormalizedEthereumTx) *Transaction {
 	switch norm.TxType {
 	case TypeEthLegacy:
-		return newEthLegacyTx(norm, chainTag)
+		return newEthLegacyTx(norm)
 	case TypeEthTyped1559:
-		return newEth1559Tx(norm, chainTag)
+		return newEth1559Tx(norm)
 	default:
 		panic(fmt.Sprintf("NewEthereumTransaction: unsupported type 0x%02x", norm.TxType))
 	}
 }
 
-func newEthLegacyTx(norm *NormalizedEthereumTx, chainTag byte) *Transaction {
+func newEthLegacyTx(norm *NormalizedEthereumTx) *Transaction {
 	var d ethLegacyTxData
 	// decode() performs a light parse; NormalizeEthereumTx already validated these bytes,
 	// so failure here indicates a programming error, not bad user input.
 	if err := d.decode(norm.Raw); err != nil {
 		panic(fmt.Sprintf("newEthLegacyTx: unexpected decode failure: %v", err))
 	}
-	d.chainTagVal = chainTag
 
 	t := &Transaction{body: &d}
 	// Pre-cache known values to avoid redundant computation.
 	t.cache.id.Store(d.ethHash)
 	t.cache.origin.Store(norm.Sender)
-	// Block-body size: 0x52 marker (1 byte) + raw Ethereum bytes.
-	t.cache.size.Store(uint64(1 + len(norm.Raw)))
+	// Block-body size: raw Ethereum bytes (RLP list, no type prefix).
+	t.cache.size.Store(uint64(len(norm.Raw)))
 	return t
 }
 
-func newEth1559Tx(norm *NormalizedEthereumTx, chainTag byte) *Transaction {
+func newEth1559Tx(norm *NormalizedEthereumTx) *Transaction {
 	var d eth1559TxData
 	// norm.Raw = 0x02 || rlpBody; decode() expects only the rlpBody.
 	if err := d.decode(norm.Raw[1:]); err != nil {
 		panic(fmt.Sprintf("newEth1559Tx: unexpected decode failure: %v", err))
 	}
-	d.chainTagVal = chainTag
 
 	t := &Transaction{body: &d}
 	t.cache.id.Store(d.ethHash)

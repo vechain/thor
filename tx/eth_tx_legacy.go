@@ -13,12 +13,12 @@ import (
 
 // ethLegacyTransaction is the decoded representation of an Ethereum Legacy (EIP-155) transaction.
 //
-// Wire format:
+// Wire format and block-body format are identical:
 //
 //	rawEthBytes = RLP([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
 //
-// The TypeEthLegacy (0x52) byte is used only as a block-body marker and is never
-// part of rawEthBytes or the ethTxHash computation.
+// This is a 9-field RLP list. Disambiguation from VeChain Legacy (10-field RLP list)
+// is done by field count in UnmarshalBinary / DecodeRLP.
 type ethLegacyTransaction struct {
 	Nonce    uint64
 	GasPrice *big.Int

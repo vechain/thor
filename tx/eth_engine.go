@@ -72,7 +72,7 @@ type NormalizedEthereumTx struct {
 	MaxPriorityFeePerGas *big.Int // EthTyped1559 only; nil for EthLegacy
 
 	// Raw Ethereum wire bytes, preserved for re-broadcast and hash verification.
-	// For EthLegacy: the original 9-field RLP list (no 0x52 internal marker).
+	// For EthLegacy: the original 9-field RLP list (identical to block-body format).
 	// For EthTyped1559: the 0x02-prefixed full encoding.
 	Raw []byte
 }
@@ -153,8 +153,7 @@ func processEthLegacy(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx, e
 		return nil, err
 	}
 
-	// Step 7: compute ethTxHash from original raw bytes.
-	// rawBytes IS the canonical rawEthBytes for EthLegacy (no 0x52 marker).
+	// Step 7: compute ethTxHash = Keccak256(rawEthBytes).
 	hash := thor.Keccak256(rawBytes)
 
 	// Step 8: assemble.
