@@ -136,13 +136,28 @@ func TestEVMFunction(t *testing.T) {
 					t.Fatal(err)
 				}
 
+				// forkFromStart has all fork fields = 0 (including INTERSTELLAR = 0),
+				// so block 0 is already past INTERSTELLAR. The CHAINID opcode must
+				// return the configured Ethereum chain ID, not the old genesis big.Int.
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkFromStart).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
 
-				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(out.Data))
+				expectedChainID := forkFromStart.GetEthChainID(ctx.chain.GenesisID())
+				expectedBI := new(big.Int).SetUint64(expectedChainID)
+				assert.Equal(t, thor.BytesToBytes32(expectedBI.Bytes()), thor.BytesToBytes32(out.Data))
+
+				// Pre-INTERSTELLAR: SoloFork has INTERSTELLAR = 1, so block 0 has not
+				// yet crossed the fork. The CHAINID opcode must still return the old
+				// genesis-derived big.Int value for historical correctness.
+				execPre, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Number: 0}, &thor.SoloFork).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				outPre, _, errPre := execPre()
+				assert.Nil(t, errPre)
+				assert.Nil(t, outPre.VMErr)
+				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(outPre.Data))
 			},
 		},
 		{

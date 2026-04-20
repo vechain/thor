@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"math/rand/v2"
 	"os"
@@ -71,6 +72,7 @@ type TxPool struct {
 	stater       *state.Stater
 	blocklist    blocklist
 	forkConfig   *thor.ForkConfig
+	ethChainID   uint64 // derived once at construction from forkConfig + genesis ID
 	baseFeeCache *baseFeeCache
 
 	executables    atomic.Value
@@ -96,6 +98,7 @@ func New(repo *chain.Repository, stater *state.Stater, options Options, forkConf
 		ctx:          ctx,
 		cancel:       cancel,
 		forkConfig:   forkConfig,
+		ethChainID:   forkConfig.GetEthChainID(repo.GenesisBlock().Header().ID()),
 		baseFeeCache: newBaseFeeCache(forkConfig),
 	}
 
@@ -708,6 +711,18 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 	if nextBlockNum >= p.forkConfig.INTERSTELLAR {
 		if trx.Gas() > thor.MaxTxGasLimit {
 			return badTxError{"tx gas limit exceeds the maximum allowed"}
+		}
+		// Validate that EIP-1559 transactions carry the correct Ethereum chain ID.
+		if trx.Type() == tx.TypeEthTyped1559 {
+			if trx.EthChainID() != p.ethChainID {
+				return badTxError{fmt.Sprintf("Ethereum chain ID %d does not match network chain ID %d",
+					trx.EthChainID(), p.ethChainID)}
+			}
+		}
+	} else {
+		// Before INTERSTELLAR: Ethereum tx types are not yet supported.
+		if trx.Type() == tx.TypeEthTyped1559 {
+			return badTxError{"Ethereum EIP-1559 transactions are not supported before the INTERSTELLAR fork"}
 		}
 	}
 

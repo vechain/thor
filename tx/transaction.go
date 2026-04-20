@@ -694,6 +694,15 @@ func (t *Transaction) validateSignatureLength() error {
 	return nil
 }
 
+// EthChainID returns the Ethereum chain ID embedded in an EIP-1559 transaction.
+// Returns 0 for VeChain-native transaction types, which use chainTag for replay protection.
+func (t *Transaction) EthChainID() uint64 {
+	if d, ok := t.body.(*eth1559TxData); ok {
+		return d.chainID
+	}
+	return 0
+}
+
 // EnforceSignatureLowS checks that the S value in the signature are <= secp256k1 N/2.
 // This is not required for consensus, but a protection against signature malleability.
 func (t *Transaction) EnforceSignatureLowS() error {

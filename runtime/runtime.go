@@ -114,8 +114,20 @@ func New(
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
-		// use genesis id as chain id
-		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+		if thor.IsForked(ctx.Number, forkConfig.INTERSTELLAR) {
+			// From INTERSTELLAR onward: use the configured Ethereum chain ID.
+			// All tx types (VeChain-native and Ethereum) see the same CHAINID opcode
+			// value, which is required for EIP-712 consistency — block.chainid inside
+			// contracts must match the chain ID wallets embed in off-chain signatures.
+			currentChainConfig.ChainID = new(big.Int).SetUint64(
+				forkConfig.GetEthChainID(chain.GenesisID()),
+			)
+		} else {
+			// Pre-INTERSTELLAR: preserve the original genesis-derived value so that
+			// historical block re-execution returns the same result as when the block
+			// was first processed.
+			currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+		}
 	}
 
 	// allocate precompiled contracts

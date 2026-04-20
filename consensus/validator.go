@@ -180,6 +180,10 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
 	}
 
+	// Compute the expected Ethereum chain ID once per block — used inside the loop for
+	// EthTyped1559 validation so we don't recompute it on every transaction.
+	ethChainID := c.forkConfig.GetEthChainID(c.repo.GenesisBlock().Header().ID())
+
 	for _, tr := range txs {
 		origin, err := tr.Origin()
 		if err != nil {
@@ -208,6 +212,13 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
 		case !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) && tr.Type() != tx.TypeLegacy:
 			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+		// Ethereum EIP-1559 transactions require the INTERSTELLAR fork.
+		case !thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && tr.Type() == tx.TypeEthTyped1559:
+			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+		// After INTERSTELLAR: validate the Ethereum chain ID embedded in the transaction.
+		case thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && tr.Type() == tx.TypeEthTyped1559 && tr.EthChainID() != ethChainID:
+			return consensusError(fmt.Sprintf("tx Ethereum chain ID %d does not match network chain ID %d",
+				tr.EthChainID(), ethChainID))
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {

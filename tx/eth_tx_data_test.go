@@ -195,5 +195,19 @@ func TestNewEthereumTransaction_EffectivePriorityFeePerGas(t *testing.T) {
 	}
 }
 
+// TestTransaction_EthChainID verifies that EthChainID() returns the embedded chain ID
+// for TypeEthTyped1559 and zero for all VeChain-native types.
+func TestTransaction_EthChainID(t *testing.T) {
+	eth1559, err := defaultEth1559Builder().ChainID(99999).Build(ethTestKey)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(99999), eth1559.EthChainID(), "EthTyped1559 must return its embedded chain ID")
+
+	legacy := NewBuilder(TypeLegacy).Build()
+	assert.Equal(t, uint64(0), legacy.EthChainID(), "TypeLegacy must return 0")
+
+	dynFee := NewBuilder(TypeDynamicFee).Build()
+	assert.Equal(t, uint64(0), dynFee.EthChainID(), "TypeDynamicFee must return 0")
+}
+
 // maxUint32 mirrors math.MaxUint32 for use in assertions without an import.
 const maxUint32 = 1<<32 - 1
