@@ -1029,7 +1029,7 @@ func TestCall(t *testing.T) {
 
 // TestCreateAddressDerivation verifies that the NewContractAddress hook dispatches to the
 // correct formula based on the transaction type:
-//   - TypeEthLegacy / TypeEthTyped1559 → crypto.CreateAddress(caller, nonce)
+//   - TypeEthTyped1559 → crypto.CreateAddress(caller, nonce)
 //   - VeChain types (TypeLegacy, TypeDynamicFee) → thor.CreateContractAddress(txID, clauseIndex, counter)
 func TestCreateAddressDerivation(t *testing.T) {
 	db := muxdb.NewMem()
@@ -1058,11 +1058,6 @@ func TestCreateAddressDerivation(t *testing.T) {
 			name:   "VeChain TypeLegacy uses txID formula",
 			txType: tx.TypeLegacy,
 			want:   thor.CreateContractAddress(txID, 0, 0),
-		},
-		{
-			name:   "EthLegacy uses crypto.CreateAddress",
-			txType: tx.TypeEthLegacy,
-			want:   thor.Address(crypto.CreateAddress(common.Address(origin), 0)),
 		},
 		{
 			name:   "EthTyped1559 uses crypto.CreateAddress",

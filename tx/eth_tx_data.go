@@ -5,9 +5,9 @@
 
 // Package tx — Ethereum txData implementations.
 //
-// ethLegacyTxData and eth1559TxData implement the txData interface so that Ethereum
-// transactions can flow through the same block-body encoding, pool, and EVM execution
-// path as VeChain-native transactions.
+// eth1559TxData implements the txData interface so that Ethereum EIP-1559 transactions
+// can flow through the same block-body encoding, pool, and EVM execution path as
+// VeChain-native transactions.
 //
 // VeChain-specific fields that Ethereum transactions do not carry are stubbed:
 //
@@ -32,168 +32,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// ethLegacyTxData implements txData for Ethereum legacy (EIP-155) transactions.
-// Wire format and block-body format are identical: a raw RLP list with no type prefix.
-// Disambiguation from VeChain Legacy uses field count (9 vs 10).
-type ethLegacyTxData struct {
-	txNonce  uint64 // "nonce" would conflict with the nonce() interface method
-	gasPrice *big.Int
-	gasLimit uint64
-	to       *thor.Address // nil = contract creation
-	value    *big.Int
-	data     []byte
-	v, r, s  *big.Int
-	chainID  uint64
-
-	// ethHash = Keccak256(rawBytes). Returned by ethTxHash() and used as tx.ID().
-	// See Transaction.ID() for the note on the VeChain txID invariant.
-	ethHash thor.Bytes32
-
-	// rawBytes holds the original Ethereum wire bytes (raw RLP list).
-	// encode() writes them verbatim for a byte-perfect block body round-trip.
-	rawBytes []byte
-}
-
-func (d *ethLegacyTxData) txType() byte   { return TypeEthLegacy }
-func (d *ethLegacyTxData) chainTag() byte { return 0 } // Ethereum txs use chainID; chain tag validation is bypassed
-
-// blockRef returns 0 (block 0). blockRef.Number()=0 ≤ any current block, so all
-// pool/packer schedule checks pass without any code changes to those layers.
-func (d *ethLegacyTxData) blockRef() uint64 { return 0 }
-
-// expiration returns MaxUint32 so IsExpired (blockNum > 0 + MaxUint32) is never true.
-func (d *ethLegacyTxData) expiration() uint32 { return math.MaxUint32 }
-
-// clauses maps the single Ethereum to/value/data to a single VeChain clause.
-func (d *ethLegacyTxData) clauses() []*Clause {
-	return []*Clause{NewClause(d.to).WithValue(d.value).WithData(d.data)}
-}
-
-func (d *ethLegacyTxData) gas() uint64              { return d.gasLimit }
-func (d *ethLegacyTxData) dependsOn() *thor.Bytes32 { return nil }
-func (d *ethLegacyTxData) nonce() uint64            { return d.txNonce }
-func (d *ethLegacyTxData) reserved() *reserved      { return &reserved{} }
-func (d *ethLegacyTxData) ethTxHash() thor.Bytes32  { return d.ethHash }
-
-// maxFeePerGas and maxPriorityFeePerGas both return gasPrice, mapping EthLegacy
-// into the EIP-1559 effective-price formula used by the runtime:
-//
-//	min(maxFeePerGas, maxPriorityFeePerGas + baseFee)
-//	= min(gasPrice, gasPrice + baseFee)
-//	= gasPrice   (since baseFee ≥ 0)
-func (d *ethLegacyTxData) maxFeePerGas() *big.Int         { return new(big.Int).Set(d.gasPrice) }
-func (d *ethLegacyTxData) maxPriorityFeePerGas() *big.Int { return new(big.Int).Set(d.gasPrice) }
-
-// signingFields is unused for Ethereum tx types: Transaction.SigningHash() type-asserts
-// to computeEthSigningHash() instead, which handles the nil-To rlp:"nil" tag correctly.
-func (d *ethLegacyTxData) signingFields() []any { return nil }
-
-func (d *ethLegacyTxData) signature() []byte {
-	sig := make([]byte, 65)
-	d.r.FillBytes(sig[0:32])
-	d.s.FillBytes(sig[32:64])
-	// yParity = (V − 35) & 1  (EIP-155).
-	// TODO: consider switching to .Bit(0) for semantic clarity.
-	// .Uint64() & 1 is mathematically correct: since V−35 = 2*chainID+yParity and
-	// 2*chainID is always even, the LSB is always yParity regardless of chainID magnitude.
-	sig[64] = byte(new(big.Int).Sub(d.v, big.NewInt(35)).Uint64() & 1)
-	return sig
-}
-
-// setSignature must not be called: Ethereum txs are pre-signed; the signature is
-// embedded in the wire bytes and cannot be changed after construction.
-// Panicking here is intentional — calling setSignature on an Ethereum tx is a programming
-// error (WithSignature is only valid for VeChain-native txs). Panicking ensures the bug
-// is caught immediately rather than silently accepting a mutation that would be ignored.
-// TODO: if callers ever need a softer failure, consider a separate interface method.
-func (d *ethLegacyTxData) setSignature(_ []byte) {
-	panic("ethLegacyTxData: setSignature must not be called; Ethereum txs are pre-signed")
-}
-
-func (d *ethLegacyTxData) copy() txData {
-	return &ethLegacyTxData{
-		txNonce:  d.txNonce,
-		gasPrice: new(big.Int).Set(d.gasPrice),
-		gasLimit: d.gasLimit,
-		to:       cloneAddress(d.to),
-		value:    new(big.Int).Set(d.value),
-		data:     bytes.Clone(d.data),
-		v:        new(big.Int).Set(d.v),
-		r:        new(big.Int).Set(d.r),
-		s:        new(big.Int).Set(d.s),
-		chainID:  d.chainID,
-		ethHash:  d.ethHash,
-		rawBytes: bytes.Clone(d.rawBytes),
-	}
-}
-
-// computeEthSigningHash returns the EIP-155 signing hash:
-//
-//	Keccak256(RLP([nonce, gasPrice, gasLimit, to, value, data, chainID, 0, 0]))
-//
-// Uses ethLegacySigningBody (a typed struct) so the rlp:"nil" tag on the To field
-// encodes contract-creation txs (nil To) correctly as RLP empty string (0x80).
-func (d *ethLegacyTxData) computeEthSigningHash() thor.Bytes32 {
-	// TODO: review whether passing internal *big.Int pointers (gasPrice, value) directly
-	// into ethLegacySigningBody is safe long-term. RLP encoding is currently read-only so
-	// no mutation occurs, but defensive copies (new(big.Int).Set(...)) would be safer.
-	return ethKeccakRlpHash(&ethLegacySigningBody{
-		Nonce:    d.txNonce,
-		GasPrice: d.gasPrice,
-		GasLimit: d.gasLimit,
-		To:       d.to,
-		Value:    d.value,
-		Data:     d.data,
-		ChainID:  new(big.Int).SetUint64(d.chainID),
-	})
-}
-
-// encode writes the raw Ethereum wire bytes (RLP list) to w.
-// This is the complete block-body encoding for EthLegacy — no type prefix is added.
-func (d *ethLegacyTxData) encode(w *bytes.Buffer) error {
-	_, err := w.Write(d.rawBytes)
-	return err
-}
-
-// decode parses a raw Ethereum legacy RLP list as stored in the block body.
-// This is a light parse — no chainID re-validation or signature verification, since the
-// block producer validated those at submission time via NormalizeEthereumTx.
-func (d *ethLegacyTxData) decode(input []byte) error {
-	var body ethLegacyTransaction
-	if err := rlp.DecodeBytes(input, &body); err != nil {
-		return err
-	}
-	// V ≥ 35 is the EIP-155 invariant enforced at engine ingestion; verify it is still
-	// intact so chainID extraction (V−35)>>1 cannot underflow.
-	if body.V.Sign() <= 0 || body.V.Cmp(big.NewInt(35)) < 0 {
-		return errors.New("ethLegacyTxData: V < 35; not an EIP-155 transaction")
-	}
-	chainID := new(big.Int).Rsh(new(big.Int).Sub(body.V, big.NewInt(35)), 1)
-	if chainID.BitLen() > 64 {
-		return errors.New("ethLegacyTxData: chainID exceeds uint64 range")
-	}
-
-	d.txNonce = body.Nonce
-	// body is a local struct; its *big.Int and slice fields are freshly allocated by the
-	// RLP decoder and transferred here by reference. body goes out of scope after this
-	// function returns, so there is no aliasing concern.
-	// TODO: revisit if the RLP decoder ever reuses buffers or if body is ever reused.
-	d.gasPrice = body.GasPrice
-	d.gasLimit = body.GasLimit
-	d.to = body.To
-	d.value = body.Value
-	d.data = body.Data
-	d.v, d.r, d.s = body.V, body.R, body.S
-	d.chainID = chainID.Uint64()
-	d.rawBytes = bytes.Clone(input)
-	d.ethHash = thor.Keccak256(input)
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// eth1559TxData
-// ---------------------------------------------------------------------------
-
 // eth1559TxData implements txData for EIP-1559 typed Ethereum transactions
 // (type byte 0x02; wire format: 0x02 || RLP([chainId, nonce, ...])).
 type eth1559TxData struct {
@@ -209,7 +47,7 @@ type eth1559TxData struct {
 	yParity     uint8
 	r, s        *big.Int
 
-	// ethHash = Keccak256(rawBytes). See ethLegacyTxData for details.
+	// ethHash = Keccak256(rawBytes). Returned by ethTxHash() and used as tx.ID().
 	ethHash thor.Bytes32
 
 	// rawBytes holds the full EIP-1559 wire bytes: 0x02 || rlpBody.
@@ -233,7 +71,8 @@ func (d *eth1559TxData) clauses() []*Clause {
 func (d *eth1559TxData) maxFeePerGas() *big.Int         { return new(big.Int).Set(d.maxFee) }
 func (d *eth1559TxData) maxPriorityFeePerGas() *big.Int { return new(big.Int).Set(d.maxPriority) }
 
-// signingFields is unused for Ethereum tx types; see ethLegacyTxData.signingFields.
+// signingFields is unused for Ethereum tx types: Transaction.SigningHash() type-asserts
+// to computeEthSigningHash() instead, which handles the nil-To rlp:"nil" tag correctly.
 func (d *eth1559TxData) signingFields() []any { return nil }
 
 func (d *eth1559TxData) signature() []byte {
@@ -351,30 +190,11 @@ func (d *eth1559TxData) decode(input []byte) error {
 // VeChain chain tag validation is bypassed in txpool/packer/consensus for Ethereum tx types.
 func NewEthereumTransaction(norm *NormalizedEthereumTx) *Transaction {
 	switch norm.TxType {
-	case TypeEthLegacy:
-		return newEthLegacyTx(norm)
 	case TypeEthTyped1559:
 		return newEth1559Tx(norm)
 	default:
 		panic(fmt.Sprintf("NewEthereumTransaction: unsupported type 0x%02x", norm.TxType))
 	}
-}
-
-func newEthLegacyTx(norm *NormalizedEthereumTx) *Transaction {
-	var d ethLegacyTxData
-	// decode() performs a light parse; NormalizeEthereumTx already validated these bytes,
-	// so failure here indicates a programming error, not bad user input.
-	if err := d.decode(norm.Raw); err != nil {
-		panic(fmt.Sprintf("newEthLegacyTx: unexpected decode failure: %v", err))
-	}
-
-	t := &Transaction{body: &d}
-	// Pre-cache known values to avoid redundant computation.
-	t.cache.id.Store(d.ethHash)
-	t.cache.origin.Store(norm.Sender)
-	// Block-body size: raw Ethereum bytes (RLP list, no type prefix).
-	t.cache.size.Store(uint64(len(norm.Raw)))
-	return t
 }
 
 func newEth1559Tx(norm *NormalizedEthereumTx) *Transaction {

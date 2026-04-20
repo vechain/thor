@@ -229,7 +229,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		},
 		NewContractAddress: func(_ *vm.EVM, caller common.Address, counter uint32) common.Address {
 			switch txCtx.TxType {
-			case tx.TypeEthLegacy, tx.TypeEthTyped1559:
+			case tx.TypeEthTyped1559:
 				// Ethereum formula: keccak256(rlp([caller, nonce])). counter is unused here —
 				// nonces play the equivalent role for Ethereum txs. With nonce tracking stubbed,
 				// stateDB.GetNonce always returns 0; sequential creates from the same caller

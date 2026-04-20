@@ -31,17 +31,13 @@ const ethBlockTestChainID = uint64(1337)
 
 // TestMintBlock_MixedTxFamilies mints a single block containing:
 //  1. A VeChain TypeLegacy tx (VET transfer)
-//  2. An Ethereum EthLegacy tx     (VET transfer)
-//  3. An Ethereum EthTyped1559 tx  (VET transfer)
+//  2. An Ethereum EthTyped1559 tx  (VET transfer)
 //
 // Assertions:
 //   - MintBlock succeeds (packer adoption, EVM execution, consensus validation all pass).
-//   - All three receipts exist and are not reverted.
-//   - The recipient's VET balance increased by exactly the sum of the three transferred amounts.
+//   - Both receipts exist and are not reverted.
+//   - The recipient's VET balance increased by exactly the sum of the two transferred amounts.
 //   - Each tx can be retrieved from the chain repository by its ID.
-//
-// TODO: add contract-creation clauses (nil To) once the runtime/API layer for that path
-// is integrated end-to-end.
 func TestMintBlock_MixedTxFamilies(t *testing.T) {
 	chain, err := NewDefault()
 	require.NoError(t, err)
@@ -73,23 +69,10 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 		Build()
 	vcTx = tx.MustSign(vcTx, sender.PrivateKey)
 
-	// --- 2. Ethereum EthLegacy tx ---
-	// The sender's address is derived from sender.PrivateKey, which is a dev account
-	// with VET and VTHO pre-funded in genesis — so gas payment will succeed.
-	ethLegacyTx, err := tx.NewEthBuilder(tx.TypeEthLegacy).
-		ChainID(ethBlockTestChainID).
-		Nonce(1).
-		GasPrice(feeAboveBase).
-		GasLimit(21000).
-		To(&recipient).
-		Value(transferPerTx).
-		Build(sender.PrivateKey)
-	require.NoError(t, err)
-
-	// --- 3. Ethereum EthTyped1559 tx ---
+	// --- 2. Ethereum EthTyped1559 tx ---
 	eth1559Tx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
 		ChainID(ethBlockTestChainID).
-		Nonce(2).
+		Nonce(1).
 		MaxPriorityFeePerGas(feeForPriority).
 		MaxFeePerGas(feeAboveBase).
 		GasLimit(21000).
@@ -98,26 +81,26 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 		Build(sender.PrivateKey)
 	require.NoError(t, err)
 
-	// Mint a block containing all three transactions.
-	require.NoError(t, chain.MintBlock(vcTx, ethLegacyTx, eth1559Tx))
+	// Mint a block containing both transactions.
+	require.NoError(t, chain.MintBlock(vcTx, eth1559Tx))
 
 	// --- Verify: receipts exist and are not reverted ---
-	for _, trx := range []*tx.Transaction{vcTx, ethLegacyTx, eth1559Tx} {
+	for _, trx := range []*tx.Transaction{vcTx, eth1559Tx} {
 		receipt, err := chain.GetTxReceipt(trx.ID())
 		require.NoError(t, err, "receipt must exist for tx ID %s", trx.ID())
 		assert.False(t, receipt.Reverted, "tx %s must not be reverted", trx.ID())
 	}
 
-	// --- Verify: VET balance increased by exactly 3 VET ---
+	// --- Verify: VET balance increased by exactly 2 VET ---
 	balanceAfter, err := chain.State().GetBalance(recipient)
 	require.NoError(t, err)
-	expectedIncrease := new(big.Int).Mul(transferPerTx, big.NewInt(3))
+	expectedIncrease := new(big.Int).Mul(transferPerTx, big.NewInt(2))
 	actualIncrease := new(big.Int).Sub(balanceAfter, balanceBefore)
 	assert.Equal(t, expectedIncrease, actualIncrease,
-		"recipient VET balance must increase by exactly 3 × transferPerTx")
+		"recipient VET balance must increase by exactly 2 × transferPerTx")
 
 	// --- Verify: each tx is retrievable by ID from the chain repository ---
-	for _, trx := range []*tx.Transaction{vcTx, ethLegacyTx, eth1559Tx} {
+	for _, trx := range []*tx.Transaction{vcTx, eth1559Tx} {
 		retrieved, _, err := chain.Repo().NewBestChain().GetTransaction(trx.ID())
 		require.NoError(t, err, "tx %s must be retrievable by ID", trx.ID())
 		assert.Equal(t, trx.Type(), retrieved.Type(), "tx type must be preserved in repo")
