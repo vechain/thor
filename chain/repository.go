@@ -159,7 +159,11 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 	if len(txs) > 0 {
 		// index and save txs
 		for i, tx := range txs {
-			txid := tx.ID()
+			// Use CanonicalTxID so that ETH EIP-1559 (0x02) transactions are indexed
+			// by their native keccak256 hash, letting wallets like MetaMask track them
+			// by the hash they computed at signing time. For VeChain-native types,
+			// CanonicalTxID() == ID(), so legacy indexing is unchanged.
+			txid := tx.CanonicalTxID()
 			txIDs = append(txIDs, txid)
 
 			// write the filter key

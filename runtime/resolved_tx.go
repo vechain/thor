@@ -28,6 +28,15 @@ type ResolvedTransaction struct {
 
 // ResolveTransaction resolves the transaction and performs basic validation.
 func ResolveTransaction(trx *tx.Transaction) (*ResolvedTransaction, error) {
+	if trx.Type() == tx.TypeEthDynamicFee {
+		// We keep the RLP layout bit-exact with Ethereum so tx hashes match MetaMask's,
+		// but VeChain's execution engine has no access-list semantics yet. Reject at
+		// resolve time rather than decode so the wallet sees a clean "unsupported"
+		// error rather than a parse failure.
+		if len(trx.AccessList()) != 0 {
+			return nil, errors.New("eth tx access list not supported")
+		}
+	}
 	origin, err := trx.Origin()
 	if err != nil {
 		return nil, err

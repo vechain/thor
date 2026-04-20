@@ -45,10 +45,13 @@ var (
 
 type Type = byte
 
-// Starting from 0x51 to avoid ambiguity with Ethereum tx type codes.
+// TypeLegacy and TypeDynamicFee are VeChain-native; TypeEthDynamicFee is the Ethereum
+// EIP-1559 (0x02) envelope, kept bit-exact with Ethereum so wallets can track it by
+// its native keccak256 hash.
 const (
-	TypeLegacy     = Type(0x00)
-	TypeDynamicFee = Type(0x51)
+	TypeLegacy        = Type(0x00)
+	TypeEthDynamicFee = Type(0x02)
+	TypeDynamicFee    = Type(0x51)
 )
 
 const (
@@ -172,6 +175,10 @@ func (t *Transaction) decodeTyped(b []byte) (txData, error) {
 		var body dynamicFeeTransaction
 		err := body.decode(b[1:])
 		return &body, err
+	case TypeEthDynamicFee:
+		var body ethDynamicFeeTransaction
+		err := body.decode(b[1:])
+		return &body, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -266,6 +273,12 @@ func (t *Transaction) Expiration() uint32 {
 
 // IsExpired returns whether the tx is expired according to the given blockNum.
 func (t *Transaction) IsExpired(blockNum uint32) bool {
+	// Ethereum EIP-1559 (0x02) has no expiration concept — the user's wallet is responsible
+	// for bumping nonces / canceling. Without this short-circuit, blockRef=0 and expiration=0
+	// would make the tx look expired for every blockNum > 0.
+	if t.Type() == TypeEthDynamicFee {
+		return false
+	}
 	return uint64(blockNum) > uint64(t.BlockRef().Number())+uint64(t.body.expiration()) // cast to uint64 to prevent potential overflow
 }
 
@@ -283,6 +296,52 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 		return
 	}
 	return thor.Blake2b(t.SigningHash().Bytes(), origin[:])
+}
+
+// CanonicalTxID returns the externally-visible transaction identifier.
+//
+//   - 0x00 legacy / 0x51 dynamic-fee: Blake2b(SigningHash, Origin) — same as ID()
+//   - 0x02 ETH EIP-1559: Keccak256(0x02 || RLP(signed tx)) — the native Ethereum txhash
+//
+// This is the ID used by the chain index, txpool dedup map, packer/consensus
+// processed-tx tracking, and public API responses. Internal flows that depend
+// on the VeChain-native identity (work evaluation, delegator signing hash) keep
+// using ID().
+func (t *Transaction) CanonicalTxID() thor.Bytes32 {
+	if t.Type() == TypeEthDynamicFee {
+		// Origin recovery first — an unsigned tx has no canonical id.
+		if _, err := t.Origin(); err != nil {
+			return thor.Bytes32{}
+		}
+		data, err := t.MarshalBinary()
+		if err != nil {
+			return thor.Bytes32{}
+		}
+		return thor.Keccak256(data)
+	}
+	return t.ID()
+}
+
+// ChainID returns the ETH EIP-1559 chainID for type 0x02 transactions, or nil
+// for VeChain-native types (which use ChainTag instead).
+func (t *Transaction) ChainID() *big.Int {
+	if eth, ok := t.body.(*ethDynamicFeeTransaction); ok {
+		if eth.ChainID == nil {
+			return nil
+		}
+		return new(big.Int).Set(eth.ChainID)
+	}
+	return nil
+}
+
+// AccessList returns the EIP-2930 access list for type 0x02 transactions, or
+// nil for other types. Currently non-empty access lists are rejected at the
+// runtime resolution stage (see runtime.ResolveTransaction).
+func (t *Transaction) AccessList() AccessList {
+	if eth, ok := t.body.(*ethDynamicFeeTransaction); ok {
+		return eth.AccessList
+	}
+	return nil
 }
 
 // Hash returns hash of tx.
@@ -309,6 +368,12 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 
 	if t.Type() == TypeLegacy {
 		return rlpHash(t.body.signingFields())
+	}
+	// ETH EIP-1559 defines the signing hash as Keccak256(0x02 || RLP(fields)),
+	// not Blake2b. Keeping it in lockstep with the Ethereum spec is what lets
+	// MetaMask/ethers sign a tx off-line and have us recover the same origin.
+	if t.Type() == TypeEthDynamicFee {
+		return keccakPrefixedRlpHash(t.Type(), t.body.signingFields())
 	}
 	// Include type prefix for typed tx.
 	return prefixedRlpHash(t.Type(), t.body.signingFields())
@@ -423,6 +488,11 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 // TestFeatures test if the tx is compatible with given supported features.
 // An error returned if it is incompatible.
 func (t *Transaction) TestFeatures(supported Features) error {
+	// 0x02 has no reserved slot; delegation (VIP-191) is deliberately unsupported so
+	// wallets signing the plain Ethereum envelope don't have a second signer bolted on.
+	if t.Type() == TypeEthDynamicFee {
+		return nil
+	}
 	r := t.body.reserved()
 	if r.Features&supported != r.Features {
 		return errors.New("unsupported features")
@@ -642,6 +712,15 @@ func (t *Transaction) String() string {
 }
 
 func (t *Transaction) validateSignatureLength() error {
+	// 0x02 doesn't carry a reserved/features field, so Features() would return 0 anyway,
+	// but expressing the constraint inline makes the intent explicit: ETH envelope is
+	// always a single 65-byte signature, never delegated.
+	if t.Type() == TypeEthDynamicFee {
+		if len(t.body.signature()) != 65 {
+			return secp256k1.ErrInvalidSignatureLen
+		}
+		return nil
+	}
 	expectedSigLen := 65
 	if t.Features().IsDelegated() {
 		expectedSigLen *= 2

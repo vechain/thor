@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 
@@ -157,20 +158,36 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		return badTxError{err.Error()}
 	}
 
-	switch {
-	case t.ChainTag() != f.packer.repo.ChainTag():
-		return badTxError{"chain tag mismatch"}
-	case f.Number() < t.BlockRef().Number():
-		return errTxNotAdoptableNow
-	case t.IsExpired(f.Number()):
-		return badTxError{"expired"}
-	case f.gasUsed+t.Gas() > f.runtime.Context().GasLimit:
-		// has enough space to adopt minimum tx
-		if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
-			// try to find a lower gas tx
-			return errTxNotAdoptableNow
+	if t.Type() == tx.TypeEthDynamicFee {
+		// ETH EIP-1559 (0x02) carries its own chainID (not ChainTag) and has no
+		// blockRef/expiration concept, so those checks don't apply. We still need
+		// to enforce block gas accounting identically to other tx types.
+		expected := new(big.Int).SetBytes(f.packer.repo.GenesisBlock().Header().ID().Bytes())
+		if got := t.ChainID(); got == nil || got.Cmp(expected) != 0 {
+			return badTxError{"eth tx chain id mismatch"}
 		}
-		return errGasLimitReached
+		if f.gasUsed+t.Gas() > f.runtime.Context().GasLimit {
+			if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
+				return errTxNotAdoptableNow
+			}
+			return errGasLimitReached
+		}
+	} else {
+		switch {
+		case t.ChainTag() != f.packer.repo.ChainTag():
+			return badTxError{"chain tag mismatch"}
+		case f.Number() < t.BlockRef().Number():
+			return errTxNotAdoptableNow
+		case t.IsExpired(f.Number()):
+			return badTxError{"expired"}
+		case f.gasUsed+t.Gas() > f.runtime.Context().GasLimit:
+			// has enough space to adopt minimum tx
+			if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
+				// try to find a lower gas tx
+				return errTxNotAdoptableNow
+			}
+			return errGasLimitReached
+		}
 	}
 
 	if thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) && !f.txFitsBlockSize(t) {
@@ -187,8 +204,14 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		}
 	}
 
-	// check if tx already there
-	if found, err := f.hasTx(t.ID(), t.BlockRef().Number()); err != nil {
+	// 0x02 is additionally gated by INTERSTELLAR (later than GALACTICA).
+	if t.Type() == tx.TypeEthDynamicFee && !thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) {
+		return badTxError{"invalid tx type"}
+	}
+
+	// check if tx already there. CanonicalTxID matches the key used by chain index
+	// and consensus; for non-0x02 types it equals ID().
+	if found, err := f.hasTx(t.CanonicalTxID(), t.BlockRef().Number()); err != nil {
 		return err
 	} else if found {
 		return errKnownTx
@@ -215,7 +238,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		f.runtime.State().RevertTo(checkpoint)
 		return badTxError{err.Error()}
 	}
-	f.processedTxs[t.ID()] = receipt.Reverted
+	f.processedTxs[t.CanonicalTxID()] = receipt.Reverted
 	f.gasUsed += receipt.GasUsed
 	f.blockSize += uint64(t.Size())
 	f.receipts = append(f.receipts, receipt)

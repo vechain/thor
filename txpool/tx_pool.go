@@ -272,8 +272,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	atomic.AddUint32(&p.addedAfterWash, 1)
 
 	txTypeString := "Legacy"
-	if newTx.Type() == tx.TypeDynamicFee {
+	switch newTx.Type() {
+	case tx.TypeDynamicFee:
 		txTypeString = "DynamicFee"
+	case tx.TypeEthDynamicFee:
+		txTypeString = "EthDynamicFee"
 	}
 	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 
@@ -695,15 +698,30 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return badTxError{err.Error()}
 	}
 
-	if trx.ChainTag() != p.repo.ChainTag() {
-		return badTxError{"chain tag mismatch"}
+	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
+
+	if trx.Type() == tx.TypeEthDynamicFee {
+		// ETH EIP-1559 (0x02) is gated by INTERSTELLAR. Reject early with a clear
+		// error so wallets don't get a vague "unsupported" after chain-id failure.
+		if nextBlockNum < p.forkConfig.INTERSTELLAR {
+			return badTxError{"eth tx type not supported before INTERSTELLAR"}
+		}
+		// ChainID must match genesis-derived big.Int (same value runtime.CHAINID exposes).
+		expected := new(big.Int).SetBytes(p.repo.GenesisBlock().Header().ID().Bytes())
+		got := trx.ChainID()
+		if got == nil || got.Cmp(expected) != 0 {
+			return badTxError{"eth tx chain id mismatch"}
+		}
+	} else {
+		if trx.ChainTag() != p.repo.ChainTag() {
+			return badTxError{"chain tag mismatch"}
+		}
 	}
 
 	if trx.Size() > MaxTxSize {
 		return txRejectedError{"size too large"}
 	}
 
-	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
 	if nextBlockNum >= p.forkConfig.INTERSTELLAR {
 		if trx.Gas() > thor.MaxTxGasLimit {
 			return badTxError{"tx gas limit exceeds the maximum allowed"}

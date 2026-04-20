@@ -34,3 +34,15 @@ func prefixedRlpHash(prefix byte, x any) thor.Bytes32 {
 		rlp.Encode(w, x)
 	})
 }
+
+// keccakPrefixedRlpHash writes the prefix byte followed by the RLP encoding of x
+// into a Keccak256 hasher. Used for ETH EIP-1559 (0x02) typed transactions where
+// the canonical hash must match Ethereum's keccak256(type || RLP(payload)).
+func keccakPrefixedRlpHash(prefix byte, x any) thor.Bytes32 {
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	buf.WriteByte(prefix)
+	_ = rlp.Encode(buf, x)
+	return thor.Keccak256(buf.Bytes())
+}

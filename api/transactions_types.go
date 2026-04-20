@@ -88,7 +88,10 @@ func ConvertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 			header.ID(),
 			header.Number(),
 			header.Timestamp(),
-			tx.ID(),
+			// CanonicalTxID returns the keccak256 hash for 0x02 so a wallet that
+			// queried for the receipt by its ETH txhash sees that same hash echoed
+			// back. For all other types it equals ID().
+			tx.CanonicalTxID(),
 			origin,
 		},
 	}

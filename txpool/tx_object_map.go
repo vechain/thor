@@ -91,7 +91,7 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer fu
 	}
 
 	m.mapByHash[hash] = txObj
-	m.mapByID[txObj.ID()] = txObj
+	m.mapByID[txObj.CanonicalTxID()] = txObj
 	return nil
 }
 
@@ -132,7 +132,7 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 		}
 
 		delete(m.mapByHash, txHash)
-		delete(m.mapByID, txObj.ID())
+		delete(m.mapByID, txObj.CanonicalTxID())
 		return true
 	}
 	return false
@@ -193,7 +193,7 @@ func (m *txObjectMap) Fill(txObjs []*TxObject) {
 			m.quota[*delegator]++
 		}
 		m.mapByHash[txObj.Hash()] = txObj
-		m.mapByID[txObj.ID()] = txObj
+		m.mapByID[txObj.CanonicalTxID()] = txObj
 		// skip cost check and accumulation
 	}
 }

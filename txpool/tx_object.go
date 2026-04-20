@@ -84,6 +84,9 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	case !thor.IsForked(nextBlockNum, forkConfig.GALACTICA) && o.Type() != tx.TypeLegacy:
 		// reject non legacy tx before GALACTICA
 		return false, tx.ErrTxTypeNotSupported
+	case o.Type() == tx.TypeEthDynamicFee && !thor.IsForked(nextBlockNum, forkConfig.INTERSTELLAR):
+		// 0x02 is gated strictly by INTERSTELLAR regardless of GALACTICA.
+		return false, tx.ErrTxTypeNotSupported
 	}
 
 	// test features on next block
@@ -95,7 +98,7 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, err
 	}
 
-	if has, err := chain.HasTransaction(o.ID(), o.BlockRef().Number()); err != nil {
+	if has, err := chain.HasTransaction(o.CanonicalTxID(), o.BlockRef().Number()); err != nil {
 		return false, err
 	} else if has {
 		return false, errors.New("known tx")

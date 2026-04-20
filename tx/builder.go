@@ -26,6 +26,13 @@ type Builder struct {
 	nonce                uint64
 	dependsOn            *thor.Bytes32
 	reserved             reserved
+
+	// 0x02 (ETH EIP-1559) specific. Ignored for other tx types.
+	chainID    *big.Int
+	ethTo      *thor.Address
+	ethValue   *big.Int
+	ethData    []byte
+	accessList AccessList
 }
 
 func NewBuilder(txType Type) *Builder {
@@ -110,6 +117,51 @@ func (b *Builder) Features(feat Features) *Builder {
 	return b
 }
 
+// ChainID sets the Ethereum chainID used by type 0x02 transactions. Ignored
+// for non-0x02 types.
+func (b *Builder) ChainID(chainID *big.Int) *Builder {
+	if chainID != nil {
+		b.chainID = new(big.Int).Set(chainID)
+	}
+	return b
+}
+
+// EthTo sets the recipient of a type 0x02 transaction. nil means contract
+// creation. Ignored for non-0x02 types.
+func (b *Builder) EthTo(to *thor.Address) *Builder {
+	if to != nil {
+		cpy := *to
+		b.ethTo = &cpy
+	} else {
+		b.ethTo = nil
+	}
+	return b
+}
+
+// EthValue sets the value of a type 0x02 transaction. Ignored for non-0x02
+// types.
+func (b *Builder) EthValue(value *big.Int) *Builder {
+	if value != nil {
+		b.ethValue = new(big.Int).Set(value)
+	}
+	return b
+}
+
+// EthData sets the call data of a type 0x02 transaction. Ignored for
+// non-0x02 types.
+func (b *Builder) EthData(data []byte) *Builder {
+	b.ethData = append([]byte(nil), data...)
+	return b
+}
+
+// AccessList sets the EIP-2930 access list of a type 0x02 transaction. The
+// list is carried bit-exact for hash compatibility, but non-empty lists are
+// rejected at runtime resolution.
+func (b *Builder) AccessList(list AccessList) *Builder {
+	b.accessList = append(AccessList(nil), list...)
+	return b
+}
+
 // Build builds a tx object.
 func (b *Builder) Build() *Transaction {
 	if b.txType == TypeLegacy {
@@ -124,6 +176,41 @@ func (b *Builder) Build() *Transaction {
 				Nonce:        b.nonce,
 				DependsOn:    b.dependsOn,
 				Reserved:     b.reserved,
+			},
+		}
+	}
+
+	if b.txType == TypeEthDynamicFee {
+		value := b.ethValue
+		if value == nil {
+			value = new(big.Int)
+		}
+		maxFee := b.maxFeePerGas
+		if maxFee == nil {
+			maxFee = new(big.Int)
+		}
+		maxPrio := b.maxPriorityFeePerGas
+		if maxPrio == nil {
+			maxPrio = new(big.Int)
+		}
+		chainID := b.chainID
+		if chainID == nil {
+			chainID = new(big.Int)
+		}
+		return &Transaction{
+			body: &ethDynamicFeeTransaction{
+				ChainID:              chainID,
+				Nonce:                b.nonce,
+				MaxPriorityFeePerGas: maxPrio,
+				MaxFeePerGas:         maxFee,
+				Gas:                  b.gas,
+				To:                   b.ethTo,
+				Value:                value,
+				Data:                 b.ethData,
+				AccessList:           b.accessList,
+				V:                    new(big.Int),
+				R:                    new(big.Int),
+				S:                    new(big.Int),
 			},
 		}
 	}

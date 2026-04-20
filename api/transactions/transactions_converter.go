@@ -26,6 +26,7 @@ type Transaction struct {
 	Gas                  uint64                `json:"gas"`
 	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
 	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
+	ChainID              *math.HexOrDecimal256 `json:"chainId,omitempty"` // only set for ETH EIP-1559 (0x02)
 	Origin               thor.Address          `json:"origin"`
 	Delegator            *thor.Address         `json:"delegator"`
 	Nonce                math.HexOrDecimal64   `json:"nonce"`
@@ -49,7 +50,9 @@ func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	t := &Transaction{
 		ChainTag:   trx.ChainTag(),
 		Type:       trx.Type(),
-		ID:         trx.ID(),
+		// CanonicalTxID returns the keccak256 hash for 0x02 (what wallets expect) and
+		// the existing Blake2b(signingHash, origin) for all other types.
+		ID:         trx.CanonicalTxID(),
 		Origin:     origin,
 		BlockRef:   hexutil.Encode(br[:]),
 		Expiration: trx.Expiration(),
@@ -65,6 +68,10 @@ func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 	case tx.TypeLegacy:
 		coef := trx.GasPriceCoef()
 		t.GasPriceCoef = &coef
+	case tx.TypeEthDynamicFee:
+		t.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
+		t.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
+		t.ChainID = (*math.HexOrDecimal256)(trx.ChainID())
 	default:
 		t.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
 		t.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())

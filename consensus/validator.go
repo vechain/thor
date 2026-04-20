@@ -8,6 +8,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -198,15 +199,27 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx delegator blocked got packed: %v", delegator))
 		}
 
-		switch {
-		case tr.ChainTag() != c.repo.ChainTag():
-			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
-		case header.Number() < tr.BlockRef().Number():
-			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
-		case tr.IsExpired(header.Number()):
-			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
-		case !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) && tr.Type() != tx.TypeLegacy:
-			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+		if tr.Type() == tx.TypeEthDynamicFee {
+			// ETH EIP-1559 (0x02) has no ChainTag / BlockRef / Expiration. It is gated
+			// by INTERSTELLAR and keyed by ChainID compared to the genesis-derived big.Int.
+			if !thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) {
+				return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+			}
+			expected := new(big.Int).SetBytes(c.repo.GenesisBlock().Header().ID().Bytes())
+			if got := tr.ChainID(); got == nil || got.Cmp(expected) != 0 {
+				return consensusError("tx eth chain id mismatch")
+			}
+		} else {
+			switch {
+			case tr.ChainTag() != c.repo.ChainTag():
+				return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
+			case header.Number() < tr.BlockRef().Number():
+				return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
+			case tr.IsExpired(header.Number()):
+				return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
+			case !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) && tr.Type() != tx.TypeLegacy:
+				return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+			}
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
@@ -263,8 +276,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 	}
 
 	for _, tx := range txs {
-		// check if tx existed
-		if found, err := hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
+		// check if tx existed. Use canonical tx id so 0x02 is tracked by its keccak256
+		// hash consistently with chain index and packer; for other types the value equals ID().
+		if found, err := hasTx(tx.CanonicalTxID(), tx.BlockRef().Number()); err != nil {
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
@@ -296,7 +310,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 
 		receipts = append(receipts, receipt)
-		processedTxs[tx.ID()] = receipt.Reverted
+		processedTxs[tx.CanonicalTxID()] = receipt.Reverted
 	}
 
 	if header.GasUsed() != totalGasUsed {
