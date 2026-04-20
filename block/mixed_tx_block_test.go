@@ -6,7 +6,7 @@
 package block
 
 // mixed_tx_block_test.go — verifies that a block body containing transactions from all
-// four type families (TypeLegacy, TypeDynamicFee, TypeEthLegacy, TypeEthTyped1559) encodes
+// three type families (TypeLegacy, TypeDynamicFee, TypeEthTyped1559) encodes
 // and decodes correctly via RLP, with every transaction preserving its type, identity
 // (including ethTxHash for Ethereum types), gas, and signer address.
 
@@ -43,7 +43,7 @@ var mixedBlockTestKey = func() *ecdsa.PrivateKey {
 }()
 
 // TestMixedTxFamilyBlock_Roundtrip builds a block that contains one transaction from each
-// of the four supported type families, RLP-encodes it, decodes it, and asserts that every
+// of the three supported type families, RLP-encodes it, decodes it, and asserts that every
 // transaction survives the round-trip with its observable properties intact.
 //
 // Critical invariants verified for Ethereum tx types:
@@ -78,17 +78,7 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 		mixedBlockTestKey,
 	)
 
-	// --- Ethereum transactions ---
-	ethLegacy, err := tx.NewEthBuilder(tx.TypeEthLegacy).
-		ChainID(mixedBlockChainID).
-		Nonce(10).
-		GasPrice(big.NewInt(20e9)).
-		GasLimit(21000).
-		To(&addrA).
-		Value(value).
-		Build(mixedBlockTestKey)
-	require.NoError(t, err)
-
+	// --- Ethereum EIP-1559 transaction ---
 	eth1559, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
 		ChainID(mixedBlockChainID).
 		Nonce(20).
@@ -105,7 +95,6 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 		GasUsed(0).
 		Transaction(vcLegacy).
 		Transaction(vcDynFee).
-		Transaction(ethLegacy).
 		Transaction(eth1559).
 		GasLimit(2_000_000).
 		TotalScore(1).
@@ -124,7 +113,7 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 	require.NoError(t, rlp.DecodeBytes(encoded, &decoded))
 
 	got := decoded.Transactions()
-	require.Len(t, got, 4, "decoded block must contain exactly 4 transactions")
+	require.Len(t, got, 3, "decoded block must contain exactly 3 transactions")
 
 	// 0: TypeLegacy
 	assert.Equal(t, tx.TypeLegacy, got[0].Type())
@@ -138,19 +127,13 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 	assert.Equal(t, vcDynFee.Gas(), got[1].Gas())
 	mixedBlockAssertOrigin(t, vcDynFee, got[1])
 
-	// 2: TypeEthLegacy — ethTxHash (ID) must survive the block body round-trip intact.
-	assert.Equal(t, tx.TypeEthLegacy, got[2].Type())
-	assert.Equal(t, ethLegacy.ID(), got[2].ID(), "ethTxHash must survive block body round-trip")
-	assert.Equal(t, ethLegacy.Gas(), got[2].Gas())
-	mixedBlockAssertOrigin(t, ethLegacy, got[2])
-
-	// 3: TypeEthTyped1559
-	assert.Equal(t, tx.TypeEthTyped1559, got[3].Type())
-	assert.Equal(t, eth1559.ID(), got[3].ID(), "ethTxHash must survive block body round-trip")
-	assert.Equal(t, eth1559.Gas(), got[3].Gas())
-	mixedBlockAssertOrigin(t, eth1559, got[3])
-	assert.Equal(t, eth1559.MaxFeePerGas(), got[3].MaxFeePerGas())
-	assert.Equal(t, eth1559.MaxPriorityFeePerGas(), got[3].MaxPriorityFeePerGas())
+	// 2: TypeEthTyped1559
+	assert.Equal(t, tx.TypeEthTyped1559, got[2].Type())
+	assert.Equal(t, eth1559.ID(), got[2].ID(), "ethTxHash must survive block body round-trip")
+	assert.Equal(t, eth1559.Gas(), got[2].Gas())
+	mixedBlockAssertOrigin(t, eth1559, got[2])
+	assert.Equal(t, eth1559.MaxFeePerGas(), got[2].MaxFeePerGas())
+	assert.Equal(t, eth1559.MaxPriorityFeePerGas(), got[2].MaxPriorityFeePerGas())
 }
 
 // --- helpers ----------------------------------------------------------------

@@ -52,8 +52,8 @@ func TestNormalizeEthereumTx_TypeDetection(t *testing.T) {
 			wantCode: EthErrUnsupportedTxType,
 		},
 		{
-			name:     "TypeEthLegacy 0x52 as wire byte rejected",
-			raw:      []byte{TypeEthLegacy},
+			name:     "type byte 0x52 rejected",
+			raw:      []byte{0x52},
 			wantCode: EthErrUnsupportedTxType,
 		},
 		{

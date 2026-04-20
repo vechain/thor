@@ -6,7 +6,7 @@
 // Package tx — EthereumTx ingestion engine.
 //
 // NormalizeEthereumTx turns raw bytes into a validated NormalizedEthereumTx for
-// EthLegacy and EthTyped1559 transactions. The pipeline is:
+// EthTyped1559 transactions. The pipeline is:
 //
 //	Step 0: size check                    (< 128 KiB)
 //	Step 1: detect tx kind                (Detector)
@@ -53,7 +53,7 @@ const (
 type NormalizedEthereumTx struct {
 	// Identity
 	Hash   thor.Bytes32 // ethTxHash = Keccak256(rawEthBytes)
-	TxType Type         // TypeEthLegacy | TypeEthTyped1559
+	TxType Type         // TypeEthTyped1559
 
 	// Sender recovered via secp256k1 ECDSA — not present on the wire.
 	Sender thor.Address
@@ -66,13 +66,11 @@ type NormalizedEthereumTx struct {
 	Data     []byte
 	ChainID  uint64
 
-	// Fee fields — mutually exclusive per tx type.
-	GasPrice             *big.Int // EthLegacy only; nil for EthTyped1559
-	MaxFeePerGas         *big.Int // EthTyped1559 only; nil for EthLegacy
-	MaxPriorityFeePerGas *big.Int // EthTyped1559 only; nil for EthLegacy
+	// Fee fields.
+	MaxFeePerGas         *big.Int
+	MaxPriorityFeePerGas *big.Int
 
 	// Raw Ethereum wire bytes, preserved for re-broadcast and hash verification.
-	// For EthLegacy: the original 9-field RLP list (identical to block-body format).
 	// For EthTyped1559: the 0x02-prefixed full encoding.
 	Raw []byte
 }
@@ -98,8 +96,7 @@ func NormalizeEthereumTx(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx
 
 	switch {
 	case first >= 0xC0:
-		// EthLegacy: raw RLP list.
-		return processEthLegacy(rawBytes, chainID)
+		return nil, ethErr(EthErrUnsupportedTxType, "Ethereum legacy (type-0 RLP) transactions are not supported; use EIP-1559 (type 0x02)")
 	case first == TypeEthTyped1559:
 		return processEth1559(rawBytes, chainID)
 	case first == 0x01:
@@ -111,65 +108,6 @@ func NormalizeEthereumTx(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx
 	default:
 		return nil, ethErrf(EthErrUnsupportedTxType, "unknown transaction type byte: 0x%02x", first)
 	}
-}
-
-// TODO add more tests around the private methods
-
-// processEthLegacy runs the full pipeline for an EthLegacy transaction.
-func processEthLegacy(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx, error) {
-	// Step 2: RLP decode.
-	// rlp.DecodeBytes enforces:
-	//   - Canonical integer encoding (no leading zeros) for *big.Int and uint fields.
-	//   - Exactly 9 fields (struct field count mismatch → error).
-	//   - No trailing bytes after the outer RLP list.
-	var body ethLegacyTransaction
-	if err := rlp.DecodeBytes(rawBytes, &body); err != nil {
-		return nil, wrapRLPErr(err)
-	}
-
-	// Step 3: validate CHAIN_ID before any ECDSA work.
-	// EIP-155 requires V ≥ 35. V < 35 means a pre-EIP-155 signature (v=27 or v=28).
-	if body.V.Sign() <= 0 || body.V.Cmp(big.NewInt(35)) < 0 {
-		return nil, ethErr(EthErrEIP155Required, "pre-EIP-155 signatures (v=27, v=28) are not accepted")
-	}
-	wireChainID := body.chainID()
-	if wireChainID.Cmp(new(big.Int).SetUint64(chainID)) != 0 {
-		return nil, ethErrf(EthErrChainIDMismatch, "chain ID %s does not match expected %d", wireChainID, chainID)
-	}
-
-	// Step 4: validate field ranges.
-	if err := validateEthLegacyFields(&body); err != nil {
-		return nil, err
-	}
-
-	// Step 5: validate signature scalar bounds.
-	if err := validateSigScalars(body.R, body.S); err != nil {
-		return nil, err
-	}
-
-	// Step 6: recover sender.
-	sender, err := recoverEthSender(body.ethSigningHash(), body.signature())
-	if err != nil {
-		return nil, err
-	}
-
-	// Step 7: compute ethTxHash = Keccak256(rawEthBytes).
-	hash := thor.Keccak256(rawBytes)
-
-	// Step 8: assemble.
-	return &NormalizedEthereumTx{
-		Hash:     hash,
-		TxType:   TypeEthLegacy,
-		Sender:   sender,
-		Nonce:    body.Nonce,
-		GasLimit: body.GasLimit,
-		To:       cloneAddress(body.To),
-		Value:    new(big.Int).Set(body.Value),
-		Data:     bytes.Clone(body.Data),
-		ChainID:  chainID,
-		GasPrice: new(big.Int).Set(body.GasPrice),
-		Raw:      rawBytes,
-	}, nil
 }
 
 // processEth1559 runs the full pipeline for an EthTyped1559 transaction.
@@ -225,24 +163,6 @@ func processEth1559(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx, err
 		MaxPriorityFeePerGas: new(big.Int).Set(body.MaxPriorityFeePerGas),
 		Raw:                  rawBytes,
 	}, nil
-}
-
-// validateEthLegacyFields performs stateless range checks on EthLegacy fields.
-// Canonical RLP encoding (no leading zeros) is already enforced by the RLP decoder
-// for *big.Int and uint fields.
-func validateEthLegacyFields(t *ethLegacyTransaction) error {
-	if t.GasPrice.Sign() <= 0 {
-		return ethErr(EthErrInvalidField, "gasPrice must be > 0")
-	}
-	if t.GasLimit == 0 {
-		return ethErr(EthErrInvalidField, "gasLimit must be > 0")
-	}
-	// RLP decodes *big.Int via SetBytes, which is always non-negative; only an upper-bound check is needed.
-	if t.Value.BitLen() > max256BitLen {
-		return ethErr(EthErrInvalidField, "value out of range [0, 2^256 - 1]")
-	}
-	// to: nil (contract creation) or exactly 20 bytes — enforced by *thor.Address `rlp:"nil"`.
-	return nil
 }
 
 // validateEth1559Fields performs stateless range checks on EthTyped1559 fields.

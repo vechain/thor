@@ -15,51 +15,38 @@ import (
 
 // TestEthBuilder_NilKeyRejected verifies that BuildRaw returns an error for a nil key.
 func TestEthBuilder_NilKeyRejected(t *testing.T) {
-	_, err := defaultEthLegacyBuilder().BuildRaw(nil)
-	require.Error(t, err)
-
-	_, err = defaultEth1559Builder().BuildRaw(nil)
+	_, err := defaultEth1559Builder().BuildRaw(nil)
 	require.Error(t, err)
 }
 
 // TestEthBuilder_UnsupportedTypePanics verifies that NewEthBuilder panics for
-// types other than TypeEthLegacy and TypeEthTyped1559.
+// types other than TypeEthTyped1559.
 func TestEthBuilder_UnsupportedTypePanics(t *testing.T) {
 	assert.Panics(t, func() { NewEthBuilder(TypeLegacy) })
 	assert.Panics(t, func() { NewEthBuilder(TypeDynamicFee) })
 	assert.Panics(t, func() { NewEthBuilder(0xFF) })
 }
 
-// TestEthBuilder_ChainIDZero verifies that chainID=0 is accepted by the engine
-// (V=35/36, extracted chainID=0 matches). This documents the current behaviour;
-// callers are responsible for supplying a valid chain ID.
-func TestEthBuilder_ChainIDZero(t *testing.T) {
-	rawBytes, err := defaultEthLegacyBuilder().ChainID(0).BuildRaw(ethTestKey)
-	require.NoError(t, err)
-
-	_, err = NormalizeEthereumTx(rawBytes, 0)
-	require.NoError(t, err, "chainID=0 is currently accepted; update this test if the engine adds a lower-bound check")
-}
-
 // TestEthBuilder_MutatingInputAfterSet verifies that mutating a *big.Int after
 // passing it to a setter does not affect the built transaction.
 func TestEthBuilder_MutatingInputAfterSet(t *testing.T) {
-	price := big.NewInt(20e9)
-	b := NewEthBuilder(TypeEthLegacy).
+	fee := big.NewInt(20e9)
+	b := NewEthBuilder(TypeEthTyped1559).
 		ChainID(testChainID).
 		Nonce(5).
-		GasPrice(price).
+		MaxFeePerGas(fee).
+		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		GasLimit(21000)
 
 	// Mutate the caller's pointer after handing it to the builder.
-	price.SetInt64(0)
+	fee.SetInt64(0)
 
 	rawBytes, err := b.BuildRaw(ethTestKey)
 	require.NoError(t, err, "mutating the input *big.Int must not affect the built tx")
 
 	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
 	require.NoError(t, err)
-	assert.Equal(t, big.NewInt(20e9), ntx.GasPrice, "gasPrice must reflect the value at Set time, not after mutation")
+	assert.Equal(t, big.NewInt(20e9), ntx.MaxFeePerGas, "maxFeePerGas must reflect the value at Set time, not after mutation")
 }
 
 // TestEthBuilder_BuildErrorPropagates verifies that Build() returns an error when
@@ -69,16 +56,6 @@ func TestEthBuilder_BuildErrorPropagates(t *testing.T) {
 		name    string
 		builder *EthBuilder
 	}{
-		// EthLegacy: gasPrice defaults to zero → "gasPrice must be > 0".
-		{
-			"legacy_gasPrice_zero",
-			NewEthBuilder(TypeEthLegacy).ChainID(testChainID).GasLimit(21000),
-		},
-		// EthLegacy: gasLimit zero → "gasLimit must be > 0".
-		{
-			"legacy_gasLimit_zero",
-			NewEthBuilder(TypeEthLegacy).ChainID(testChainID).GasPrice(big.NewInt(1e9)),
-		},
 		// EthTyped1559: maxFeePerGas defaults to zero → "maxFeePerGas must be > 0".
 		{
 			"1559_maxFee_zero",

@@ -32,20 +32,6 @@ var ethTestKey = func() *ecdsa.PrivateKey {
 
 var testSenderAddress = thor.Address(crypto.PubkeyToAddress(ethTestKey.PublicKey))
 
-// defaultEthLegacyBuilder returns a pre-configured EthBuilder for an EIP-155 legacy
-// transaction using ethTestKey and testChainID.  Callers can chain additional setters to
-// override individual fields before calling BuildRaw(ethTestKey) or Build(ethTestKey).
-func defaultEthLegacyBuilder() *EthBuilder {
-	to := thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
-	return NewEthBuilder(TypeEthLegacy).
-		ChainID(testChainID).
-		Nonce(5).
-		GasPrice(big.NewInt(20e9)).
-		GasLimit(21000).
-		To(&to).
-		Value(big.NewInt(1e9))
-}
-
 // defaultEth1559Builder returns a pre-configured EthBuilder for an EIP-1559 typed
 // transaction using ethTestKey and testChainID.  Callers can chain additional setters to
 // override individual fields before calling BuildRaw(ethTestKey) or Build(ethTestKey).

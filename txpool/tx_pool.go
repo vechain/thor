@@ -695,7 +695,7 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return badTxError{err.Error()}
 	}
 
-	if trx.ChainTag() != p.repo.ChainTag() && trx.Type() != tx.TypeEthLegacy && trx.Type() != tx.TypeEthTyped1559 {
+	if trx.ChainTag() != p.repo.ChainTag() && trx.Type() != tx.TypeEthTyped1559 {
 		// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 		return badTxError{"chain tag mismatch"}
 	}
