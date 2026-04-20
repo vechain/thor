@@ -39,7 +39,8 @@ const ethBlockTestChainID = uint64(1337)
 //   - The recipient's VET balance increased by exactly the sum of the two transferred amounts.
 //   - Each tx can be retrieved from the chain repository by its ID.
 func TestMintBlock_MixedTxFamilies(t *testing.T) {
-	chain, err := NewDefault()
+	fc := thor.ForkConfig{EthChainID: ethBlockTestChainID} // all forks active from block 0
+	chain, err := NewWithFork(&fc, 180)
 	require.NoError(t, err)
 
 	sender := genesis.DevAccounts()[0]

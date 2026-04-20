@@ -182,7 +182,17 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		if t.Type() != tx.TypeLegacy {
 			return badTxError{"invalid tx type"}
 		}
+	} else if !thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) {
+		// Between GALACTICA and INTERSTELLAR: TypeLegacy and TypeDynamicFee only.
+		// Ethereum EIP-1559 transactions require the INTERSTELLAR fork.
+		if t.Type() == tx.TypeEthTyped1559 {
+			return badTxError{"Ethereum EIP-1559 transactions are not supported before the INTERSTELLAR fork"}
+		}
+		if err := f.validateTxFee(t); err != nil {
+			return err
+		}
 	} else {
+		// After INTERSTELLAR: all tx types permitted — TypeLegacy, TypeDynamicFee, TypeEthTyped1559.
 		if err := f.validateTxFee(t); err != nil {
 			return err
 		}

@@ -39,6 +39,39 @@ func TestNoFork(t *testing.T) {
 	}
 }
 
+// TestGetEthChainID verifies the GetEthChainID helper.
+func TestGetEthChainID(t *testing.T) {
+	// Explicit EthChainID is returned unchanged, regardless of genesisID.
+	fc := &ForkConfig{EthChainID: 100009}
+	if got := fc.GetEthChainID(Bytes32{}); got != 100009 {
+		t.Errorf("explicit EthChainID: got %d, want 100009", got)
+	}
+
+	// SoloFork uses the hardcoded dev chain ID.
+	if got := SoloFork.GetEthChainID(Bytes32{}); got != 1337 {
+		t.Errorf("SoloFork EthChainID: got %d, want 1337", got)
+	}
+
+	// EthChainID = 0 means "derive from genesisID[4:8]".
+	// bytes {0x12, 0x34, 0x56, 0x78} → big-endian uint32 = 0x12345678 = 305419896.
+	var genesis Bytes32
+	genesis[4] = 0x12
+	genesis[5] = 0x34
+	genesis[6] = 0x56
+	genesis[7] = 0x78
+
+	zeroFC := ForkConfig{}
+	if got := zeroFC.GetEthChainID(genesis); got != 0x12345678 {
+		t.Errorf("derived EthChainID: got %d, want %d", got, uint64(0x12345678))
+	}
+
+	// nil receiver also derives and does not panic.
+	var nilFC *ForkConfig
+	if got := nilFC.GetEthChainID(genesis); got != 0x12345678 {
+		t.Errorf("nil ForkConfig derived EthChainID: got %d, want %d", got, uint64(0x12345678))
+	}
+}
+
 // TestGetForkConfig checks retrieval of fork configurations for known genesis IDs.
 func TestGetForkConfig(t *testing.T) {
 	// You'll need to adjust these based on the actual genesis IDs and expected configurations
