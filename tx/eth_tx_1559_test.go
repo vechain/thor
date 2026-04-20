@@ -30,7 +30,6 @@ func TestEth1559_ValidDecodeHashAndSender(t *testing.T) {
 	assert.Equal(t, uint64(21000), ntx.GasLimit)
 	assert.Equal(t, big.NewInt(10e9), ntx.MaxFeePerGas)
 	assert.Equal(t, big.NewInt(1e9), ntx.MaxPriorityFeePerGas)
-	assert.Nil(t, ntx.GasPrice)
 	assert.Equal(t, testChainID, ntx.ChainID)
 
 	expectedHash := thor.Keccak256(rawBytes)

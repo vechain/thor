@@ -54,11 +54,6 @@ const (
 
 	// EthereumTx type constants.
 
-	// TypeEthLegacy identifies Ethereum legacy (EIP-155) transactions.
-	// Wire format and block-body format are identical: a raw RLP list with no type prefix.
-	// Disambiguation from VeChain Legacy (also a raw RLP list) is done by field count:
-	// VeChain Legacy has 10 fields; Ethereum Legacy has 9.
-	TypeEthLegacy    = Type(0x52)
 	TypeEthTyped1559 = Type(0x02)
 )
 
@@ -124,19 +119,12 @@ type txData interface {
 }
 
 // MarshalBinary returns the canonical encoding of the transaction.
-// For VeChain legacy and Ethereum legacy, it returns the raw RLP list (no type prefix).
+// For VeChain legacy, it returns the raw RLP list (no type prefix).
 // For all other typed transactions, it returns the type byte followed by the RLP body.
 func (t *Transaction) MarshalBinary() ([]byte, error) {
 	switch t.Type() {
 	case TypeLegacy:
 		return rlp.EncodeToBytes(t.body)
-	case TypeEthLegacy:
-		// EthLegacy block-body format: raw RLP list, identical to the Ethereum wire format.
-		var buf bytes.Buffer
-		if err := t.body.encode(&buf); err != nil {
-			return nil, err
-		}
-		return buf.Bytes(), nil
 	default:
 		var buf bytes.Buffer
 		err := t.encodeTyped(&buf)
@@ -155,17 +143,6 @@ func (t *Transaction) EncodeRLP(w io.Writer) error {
 	switch t.Type() {
 	case TypeLegacy:
 		return rlp.Encode(w, &t.body)
-	case TypeEthLegacy:
-		// EthLegacy block-body format: raw RLP list written directly, same as VeChain Legacy.
-		// No EIP-2718 envelope wrapping — the raw list is the complete block-body element.
-		buf := encodeBufferPool.Get().(*bytes.Buffer)
-		defer encodeBufferPool.Put(buf)
-		buf.Reset()
-		if err := t.body.encode(buf); err != nil {
-			return err
-		}
-		_, err := w.Write(buf.Bytes())
-		return err
 	default:
 		buf := encodeBufferPool.Get().(*bytes.Buffer)
 		defer encodeBufferPool.Put(buf)
@@ -181,28 +158,12 @@ func (t *Transaction) EncodeRLP(w io.Writer) error {
 // It supports legacy RLP transactions and typed transactions.
 func (t *Transaction) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
-		// First byte ≥ 0x80: it's an RLP list — either VeChain Legacy (10 fields)
-		// or Ethereum Legacy (9 fields). Count fields to dispatch to the right decoder.
-		n, err := countRLPListFields(b)
-		if err != nil {
-			return fmt.Errorf("decoding legacy tx: %w", err)
+		// First byte ≥ 0x80: it's a raw RLP list — VeChain TypeLegacy.
+		var data legacyTransaction
+		if err := rlp.DecodeBytes(b, &data); err != nil {
+			return err
 		}
-		switch n {
-		case 10:
-			var data legacyTransaction
-			if err := rlp.DecodeBytes(b, &data); err != nil {
-				return err
-			}
-			t.setDecoded(&data, uint64(len(b)))
-		case 9:
-			var data ethLegacyTxData
-			if err := data.decode(b); err != nil {
-				return err
-			}
-			t.setDecoded(&data, uint64(len(b)))
-		default:
-			return fmt.Errorf("unrecognised legacy tx: %d RLP fields (want 9 or 10)", n)
-		}
+		t.setDecoded(&data, uint64(len(b)))
 		return nil
 	}
 	// It's a typed transaction envelope.
@@ -215,8 +176,6 @@ func (t *Transaction) UnmarshalBinary(b []byte) error {
 }
 
 // decodeTyped decodes a typed transaction from the canonical format.
-// EthLegacy is NOT handled here — it has no type prefix and is dispatched by field count
-// in UnmarshalBinary / DecodeRLP.
 func (t *Transaction) decodeTyped(b []byte) (txData, error) {
 	if len(b) <= 1 {
 		return nil, errShortTypedTx
@@ -252,13 +211,13 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 	case err != nil:
 		return err
 	case kind == rlp.List:
-		// Raw RLP list — could be VeChain Legacy (10 fields) or Ethereum Legacy (9 fields).
-		// Read raw bytes and delegate to UnmarshalBinary for field-count dispatch.
-		b, err := s.Raw()
-		if err != nil {
+		// Raw RLP list — VeChain TypeLegacy.
+		var data legacyTransaction
+		if err := s.Decode(&data); err != nil {
 			return err
 		}
-		return t.UnmarshalBinary(b)
+		t.setDecoded(&data, 0)
+		return nil
 	case kind == rlp.Byte:
 		return errShortTypedTx
 	default:
@@ -283,16 +242,10 @@ func (t *Transaction) Size() thor.StorageSize {
 	}
 
 	var size thor.StorageSize
-	switch body := t.body.(type) {
-	case *ethLegacyTxData:
-		// EthLegacy encodes as a raw RLP list with no type prefix; size = len(rawBytes).
-		size = thor.StorageSize(len(body.rawBytes))
-	default:
-		rlp.Encode(&size, t.body)
-		// For typed transactions, the encoding also includes the leading type byte.
-		if t.body.txType() != TypeLegacy {
-			size += 1
-		}
+	rlp.Encode(&size, t.body)
+	// For typed transactions, the encoding also includes the leading type byte.
+	if t.body.txType() != TypeLegacy {
+		size += 1
 	}
 
 	t.cache.size.Store(uint64(size))
@@ -386,14 +339,9 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	defer func() { t.cache.signingHash.Store(hash) }()
 
 	// Ethereum tx types use Keccak256-based signing hashes. We type-assert to the
-	// concrete types so computeEthSigningHash() can use rlp:"nil"-tagged structs,
+	// concrete type so computeEthSigningHash() can use rlp:"nil"-tagged structs,
 	// which is required to correctly encode a nil To field (contract creation).
-	switch body := t.body.(type) {
-	case *ethLegacyTxData:
-		// EIP-155: Keccak256(RLP([nonce, gasPrice, gasLimit, to, value, data, chainID, 0, 0]))
-		// No type prefix — the EIP-155 preimage is a plain RLP list.
-		return body.computeEthSigningHash()
-	case *eth1559TxData:
+	if body, ok := t.body.(*eth1559TxData); ok {
 		// EIP-1559: Keccak256(0x02 || RLP([chainId, nonce, maxPriorityFeePerGas, ...]))
 		return body.computeEthSigningHash()
 	}
@@ -802,17 +750,6 @@ func IntrinsicGas(clauses ...*Clause) (uint64, error) {
 		}
 	}
 	return total, nil
-}
-
-// countRLPListFields counts the top-level items in an RLP-encoded list.
-// Used to distinguish VeChain Legacy (10 fields) from Ethereum Legacy (9 fields)
-// without decoding any field values.
-func countRLPListFields(b []byte) (int, error) {
-	content, _, err := rlp.SplitList(b)
-	if err != nil {
-		return 0, err
-	}
-	return rlp.CountValues(content)
 }
 
 // see core.IntrinsicGas

@@ -88,7 +88,7 @@ func TestEmptyRootHash(t *testing.T) {
 }
 
 func TestMarshalAndUnmarshalBinary(t *testing.T) {
-	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthLegacy, TypeEthTyped1559} {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthTyped1559} {
 		originalReceipt := getMockReceipt(txType)
 
 		data, err := originalReceipt.MarshalBinary()
@@ -103,7 +103,7 @@ func TestMarshalAndUnmarshalBinary(t *testing.T) {
 }
 
 func TestEncodeAndDecodeReceipt(t *testing.T) {
-	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthLegacy, TypeEthTyped1559} {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthTyped1559} {
 		originalReceipt := getMockReceipt(txType)
 		receiptBuf := new(bytes.Buffer)
 		// Encoding
@@ -202,7 +202,7 @@ func TestDerivableReceipts_EncodeIndex_PanicsOnMarshalError(t *testing.T) {
 	_ = dr.EncodeIndex(0)
 }
 
-// TestReceiptRootHashRoundtrip verifies that a Receipts slice containing all four
+// TestReceiptRootHashRoundtrip verifies that a Receipts slice containing all three
 // tx type families produces the same RootHash before and after a MarshalBinary →
 // UnmarshalBinary round-trip.  This guards the consensus invariant that block
 // receipt-root hashes are reproducible after reading receipts back from storage.
@@ -210,7 +210,6 @@ func TestReceiptRootHashRoundtrip(t *testing.T) {
 	originals := Receipts{
 		ptr(getMockReceipt(TypeLegacy)),
 		ptr(getMockReceipt(TypeDynamicFee)),
-		ptr(getMockReceipt(TypeEthLegacy)),
 		ptr(getMockReceipt(TypeEthTyped1559)),
 	}
 	originalRoot := originals.RootHash()
