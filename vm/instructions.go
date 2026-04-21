@@ -785,9 +785,17 @@ func opSuicide(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack)
 }
 
 // opChainID implements CHAINID opcode
-func opChainID(_ *uint64, evm *EVM, _ *Contract, _ *Memory, stack *Stack) ([]byte, error) {
+func opChainID(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack) ([]byte, error) {
 	chainID, _ := uint256.FromBig(evm.chainConfig.ChainID)
 	stack.push(chainID)
+
+	callType := "regular"
+	if contract.DelegateCall {
+		callType = "delegate"
+	}
+	metricChainIDOpcodeCount().AddWithLabel(1, map[string]string{"call_type": callType})
+	metricChainIDOpcodeCallDepth().Observe(int64(evm.depth))
+
 	return nil, nil
 }
 

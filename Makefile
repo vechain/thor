@@ -15,8 +15,13 @@ MAJOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f1)
 MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
 export GO111MODULE=on
 
+# Default host path for Thor chain data (override on the command line).
+# Example: make resync-chain-setup CHAIN_DATA_DIR=/mnt/nvme/thor
+CHAIN_DATA_DIR ?= $(CURDIR)/resync-data/thor
+
 .DEFAULT_GOAL := thor
-.PHONY: thor disco all clean test install-hooks
+.PHONY: thor disco all clean test install-hooks \
+        resync-chain-setup resync-chain resync-chain-stop resync-chain-logs resync-chain-clean
 
 help:
 	@egrep -h '\s#@\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?#@ "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
@@ -107,6 +112,43 @@ install-hooks: #@ Install Git pre-commit hook
 	@ln -sf $(CURDIR)/.git-hooks/pre-commit .git/hooks/pre-commit
 	@chmod +x .git-hooks/pre-commit .git/hooks/pre-commit
 	@echo "✅ Installed .git-hooks/pre-commit → .git/hooks/pre-commit"
+
+resync-chain-setup: #@ Prepare the host directory and Docker image for a full mainnet resync (run once)
+	@echo "Setting up mainnet resync environment..."
+	@if [ ! -f .env ]; then \
+		sed 's|HOST_THOR_DATA_DIR=.*|HOST_THOR_DATA_DIR=$(CHAIN_DATA_DIR)|' .env.example > .env; \
+		echo "  created .env (HOST_THOR_DATA_DIR=$(CHAIN_DATA_DIR))"; \
+	else \
+		echo "  .env already exists — skipping creation"; \
+	fi
+	@mkdir -p $(CHAIN_DATA_DIR)
+	@echo "  chain data dir: $(CHAIN_DATA_DIR)"
+	@if chown -R 1000:1000 $(CHAIN_DATA_DIR) 2>/dev/null; then \
+		echo "  ownership set to UID/GID 1000"; \
+	else \
+		echo "  warning: could not set ownership — run manually:"; \
+		echo "    sudo chown -R 1000:1000 $(CHAIN_DATA_DIR)"; \
+	fi
+	@echo "Building Docker image..."
+	@docker compose build
+	@echo "Done. Run 'make resync-chain' to start."
+
+resync-chain: #@ Start the mainnet resync with Prometheus and Grafana
+	@[ -f .env ] || { echo "error: .env not found — run 'make resync-chain-setup' first"; exit 1; }
+	@docker compose up -d
+	@echo "Services started:"
+	@echo "  Grafana    -> http://localhost:3000  (admin / see .env)"
+	@echo "  Prometheus -> http://localhost:9090"
+	@echo "  Thor logs  -> make resync-chain-logs"
+
+resync-chain-stop: #@ Stop all resync services (chain data and metrics are preserved)
+	@docker compose down
+
+resync-chain-logs: #@ Stream live Thor sync logs
+	@docker compose logs -f thor
+
+resync-chain-clean: #@ Stop services and remove Prometheus and Grafana volumes (chain data is kept)
+	@docker compose down -v
 
 .DEFAULT:
 	@$(MAKE) help

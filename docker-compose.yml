@@ -1,0 +1,64 @@
+services:
+  thor:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8669:8669"
+      - "11235:11235"
+      - "11235:11235/udp"
+      - "55555:55555/udp"
+    environment:
+      THOR_NETWORK: main
+      THOR_DATA_DIR: /data/thor
+      THOR_ENABLE_METRICS: "true"
+      THOR_METRICS_ADDR: "0.0.0.0:2112"
+      THOR_API_ADDR: "0.0.0.0:8669"
+      THOR_SKIP_LOGS: "true"
+      THOR_CACHE: "${THOR_CACHE:-4096}"
+    volumes:
+      - "${HOST_THOR_DATA_DIR}:/data/thor"
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - monitoring
+    depends_on:
+      - thor
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
