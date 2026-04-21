@@ -145,7 +145,7 @@ func TestEVMFunction(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
 
-				expectedChainID := forkFromStart.GetEthChainID(ctx.chain.GenesisID())
+				expectedChainID := thor.GetEthChainID(ctx.chain.GenesisID())
 				expectedBI := new(big.Int).SetUint64(expectedChainID)
 				assert.Equal(t, thor.BytesToBytes32(expectedBI.Bytes()), thor.BytesToBytes32(out.Data))
 

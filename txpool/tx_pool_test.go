@@ -1984,13 +1984,14 @@ func TestValidateTxBasics(t *testing.T) {
 }
 
 func TestValidateTxBasics_EthTyped1559ChainID(t *testing.T) {
-	const networkChainID = uint64(1337)
-
 	// INTERSTELLAR = 0 means it activates from block 0; genesis (block 0) is
 	// already past the fork, so nextBlockNum=1 satisfies the >=0 condition.
-	fc := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 0, EthChainID: networkChainID}
+	fc := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 0}
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &fc)
 	defer pool.Close()
+
+	// Derive the network chain ID from the genesis — no hardcoded value needed.
+	networkChainID := pool.ethChainID
 
 	buildEth1559 := func(chainID uint64) *tx.Transaction {
 		trx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
@@ -2014,13 +2015,13 @@ func TestValidateTxBasics_EthTyped1559ChainID(t *testing.T) {
 			networkChainID+1, networkChainID)}, err)
 	})
 
-	// Before INTERSTELLAR: TypeEthTyped1559 must be rejected outright.
+	// Before INTERSTELLAR: TypeEthTyped1559 must be rejected outright regardless of chain ID.
 	t.Run("rejected before INTERSTELLAR", func(t *testing.T) {
-		preFork := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 1<<32 - 1, EthChainID: networkChainID}
+		preFork := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 1<<32 - 1}
 		prePool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &preFork)
 		defer prePool.Close()
 
-		err := prePool.validateTxBasics(buildEth1559(networkChainID))
+		err := prePool.validateTxBasics(buildEth1559(prePool.ethChainID))
 		assert.Equal(t, badTxError{"Ethereum EIP-1559 transactions are not supported before the INTERSTELLAR fork"}, err)
 	})
 }
