@@ -98,7 +98,7 @@ func New(repo *chain.Repository, stater *state.Stater, options Options, forkConf
 		ctx:          ctx,
 		cancel:       cancel,
 		forkConfig:   forkConfig,
-		ethChainID:   forkConfig.GetEthChainID(repo.GenesisBlock().Header().ID()),
+		ethChainID:   thor.GetEthChainID(repo.GenesisBlock().Header().ID()),
 		baseFeeCache: newBaseFeeCache(forkConfig),
 	}
 

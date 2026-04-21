@@ -23,12 +23,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// ethBlockTestChainID is the Ethereum replay-protection chain ID used to sign Ethereum
-// transactions in this file.  It is independent of the VeChain chainTag — NormalizeEthereumTx
-// validates the signature against this value, while the VeChain chainTag is set separately
-// via NewEthereumTransaction.
-const ethBlockTestChainID = uint64(1337)
-
 // TestMintBlock_MixedTxFamilies mints a single block containing:
 //  1. A VeChain TypeLegacy tx (VET transfer)
 //  2. An Ethereum EthTyped1559 tx  (VET transfer)
@@ -39,9 +33,12 @@ const ethBlockTestChainID = uint64(1337)
 //   - The recipient's VET balance increased by exactly the sum of the two transferred amounts.
 //   - Each tx can be retrieved from the chain repository by its ID.
 func TestMintBlock_MixedTxFamilies(t *testing.T) {
-	fc := thor.ForkConfig{EthChainID: ethBlockTestChainID} // all forks active from block 0
+	fc := thor.ForkConfig{} // all forks active from block 0
 	chain, err := NewWithFork(&fc, 180)
 	require.NoError(t, err)
+
+	// Derive the Ethereum chain ID from the genesis block — no hardcoded value needed.
+	ethChainID := thor.GetEthChainID(chain.GenesisBlock().Header().ID())
 
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1].Address
@@ -72,7 +69,7 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 
 	// --- 2. Ethereum EthTyped1559 tx ---
 	eth1559Tx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
-		ChainID(ethBlockTestChainID).
+		ChainID(ethChainID).
 		Nonce(1).
 		MaxPriorityFeePerGas(feeForPriority).
 		MaxFeePerGas(feeAboveBase).

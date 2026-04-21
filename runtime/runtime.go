@@ -120,7 +120,7 @@ func New(
 			// value, which is required for EIP-712 consistency — block.chainid inside
 			// contracts must match the chain ID wallets embed in off-chain signatures.
 			currentChainConfig.ChainID = new(big.Int).SetUint64(
-				forkConfig.GetEthChainID(chain.GenesisID()),
+				thor.GetEthChainID(chain.GenesisID()),
 			)
 		} else {
 			// Pre-INTERSTELLAR: preserve the original genesis-derived value so that

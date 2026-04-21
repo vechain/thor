@@ -24,13 +24,6 @@ type ForkConfig struct {
 	GALACTICA    uint32
 	HAYABUSA     uint32 // Start of the Hayabusa Transition Period - PoA is still active until the transition period is over and 2/3 of the MBP have entered the PoS queue
 	INTERSTELLAR uint32
-
-	// EthChainID is the Ethereum-compatible chain ID used for the CHAINID opcode and
-	// EIP-1559 transaction validation from the INTERSTELLAR fork onward.
-	// Well-known networks (mainnet, testnet) set this explicitly.
-	// If zero, GetEthChainID derives a value from the genesis ID (suitable for custom
-	// or solo networks that are not registered on ChainList).
-	EthChainID uint64 `json:",omitempty"`
 }
 
 func (fc *ForkConfig) String() string {
@@ -50,9 +43,6 @@ func (fc *ForkConfig) String() string {
 	push("GALACTICA", fc.GALACTICA)
 	push("HAYABUSA", fc.HAYABUSA)
 	push("INTERSTELLAR", fc.INTERSTELLAR)
-	if fc.EthChainID != 0 {
-		strs = append(strs, fmt.Sprintf("EthChainID: %v", fc.EthChainID))
-	}
 
 	return strings.Join(strs, ", ")
 }
@@ -82,12 +72,6 @@ var SoloFork = ForkConfig{
 	HAYABUSA:  0,
 
 	INTERSTELLAR: 1, // set to 1 to make genesis stable during development
-
-	// TODO: review solo EthChainID — 1337 is a widely-used dev/testing convention.
-	// It must not be used on any public or shared network. Custom networks should set
-	// their own EthChainID in the genesis forkConfig JSON, or leave it 0 for
-	// automatic derivation from the genesis ID.
-	EthChainID: 1337,
 }
 
 // for well-known networks
@@ -103,7 +87,6 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		GALACTICA:    22_084_200,
 		HAYABUSA:     23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
 		INTERSTELLAR: math.MaxUint32,
-		EthChainID:   100009,
 	},
 	// testnet
 	MustParseBytes32("0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127"): {
@@ -116,7 +99,6 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		GALACTICA:    21_770_500,
 		HAYABUSA:     23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
 		INTERSTELLAR: math.MaxUint32,
-		EthChainID:   100010,
 	},
 }
 
@@ -126,19 +108,16 @@ func GetForkConfig(genesisID Bytes32) *ForkConfig {
 	return forkConfigs[genesisID]
 }
 
-// GetEthChainID returns the Ethereum-compatible chain ID for use with the CHAINID
-// opcode and EIP-1559 transaction validation from the INTERSTELLAR fork onward.
+// GetEthChainID returns the Ethereum-compatible chain ID for the given genesis ID.
+// It is used for the CHAINID opcode and EIP-1559 transaction validation from the
+// INTERSTELLAR fork onward.
 //
-// If EthChainID is explicitly set (non-zero), that value is returned.
-// Otherwise it is derived from genesisID[4:8]: the first four bytes of actual
-// hash entropy (genesisID[0:3] is always 0x00000000 — the genesis block number).
-// This automatic derivation produces a unique uint32-range chain ID for any
-// custom or solo network not registered on ChainList.
-func (fc *ForkConfig) GetEthChainID(genesisID Bytes32) uint64 {
-	if fc != nil && fc.EthChainID != 0 {
-		return fc.EthChainID
-	}
-	return uint64(binary.BigEndian.Uint32(genesisID[4:8]))
+// The chain ID is derived from genesisID[30:32] (the last two bytes of the genesis
+// block ID) interpreted as a big-endian uint16. By construction, genesisID[31] is the
+// VeChain ChainTag, so the chain ID's low byte always equals the ChainTag. This gives
+// every network a unique, compact chain ID that can be looked up on ChainList.
+func GetEthChainID(genesisID Bytes32) uint64 {
+	return uint64(binary.BigEndian.Uint16(genesisID[30:32]))
 }
 
 // IsForked returns true if the given block number is already forked comparing to the given fork number.

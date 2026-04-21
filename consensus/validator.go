@@ -182,7 +182,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 
 	// Compute the expected Ethereum chain ID once per block — used inside the loop for
 	// EthTyped1559 validation so we don't recompute it on every transaction.
-	ethChainID := c.forkConfig.GetEthChainID(c.repo.GenesisBlock().Header().ID())
+	ethChainID := thor.GetEthChainID(c.repo.GenesisBlock().Header().ID())
 
 	for _, tr := range txs {
 		origin, err := tr.Origin()

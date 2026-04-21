@@ -39,36 +39,27 @@ func TestNoFork(t *testing.T) {
 	}
 }
 
-// TestGetEthChainID verifies the GetEthChainID helper.
+// TestGetEthChainID verifies the GetEthChainID formula.
 func TestGetEthChainID(t *testing.T) {
-	// Explicit EthChainID is returned unchanged, regardless of genesisID.
-	fc := &ForkConfig{EthChainID: 100009}
-	if got := fc.GetEthChainID(Bytes32{}); got != 100009 {
-		t.Errorf("explicit EthChainID: got %d, want 100009", got)
+	// The chain ID is always uint16BE(genesisID[30:32]).
+	// Low byte equals the ChainTag by construction.
+	tests := []struct {
+		name string
+		b30  byte
+		b31  byte
+		want uint64
+	}{
+		{"arbitrary", 0xab, 0xcd, 0xabcd},
+		{"mainnet bytes", 0x1b, 0x4a, 6986},  // mainnet genesisID[30:31] = 0x1b4a
+		{"testnet bytes", 0xb1, 0x27, 45351}, // testnet genesisID[30:31] = 0xb127
 	}
-
-	// SoloFork uses the hardcoded dev chain ID.
-	if got := SoloFork.GetEthChainID(Bytes32{}); got != 1337 {
-		t.Errorf("SoloFork EthChainID: got %d, want 1337", got)
-	}
-
-	// EthChainID = 0 means "derive from genesisID[4:8]".
-	// bytes {0x12, 0x34, 0x56, 0x78} → big-endian uint32 = 0x12345678 = 305419896.
-	var genesis Bytes32
-	genesis[4] = 0x12
-	genesis[5] = 0x34
-	genesis[6] = 0x56
-	genesis[7] = 0x78
-
-	zeroFC := ForkConfig{}
-	if got := zeroFC.GetEthChainID(genesis); got != 0x12345678 {
-		t.Errorf("derived EthChainID: got %d, want %d", got, uint64(0x12345678))
-	}
-
-	// nil receiver also derives and does not panic.
-	var nilFC *ForkConfig
-	if got := nilFC.GetEthChainID(genesis); got != 0x12345678 {
-		t.Errorf("nil ForkConfig derived EthChainID: got %d, want %d", got, uint64(0x12345678))
+	for _, tt := range tests {
+		var genesis Bytes32
+		genesis[30] = tt.b30
+		genesis[31] = tt.b31
+		if got := GetEthChainID(genesis); got != tt.want {
+			t.Errorf("%s: GetEthChainID got %d, want %d", tt.name, got, tt.want)
+		}
 	}
 }
 
