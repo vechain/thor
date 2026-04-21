@@ -41,6 +41,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
+	"github.com/vechain/thor/v2/vm"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
@@ -239,6 +240,17 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	instanceDir, err := makeInstanceDir(ctx.String(dataDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name))
 	if err != nil {
 		return err
+	}
+
+	if enableMetrics {
+		outPath := filepath.Join(instanceDir, "chainid-contracts.json")
+		if err := vm.InitChainIDTracker(outPath); err != nil {
+			log.Warn("chainid tracker init failed", "err", err)
+		} else {
+			vm.GetChainIDTracker().Start(exitSignal)
+			defer vm.GetChainIDTracker().Flush()
+			log.Info("chainid tracker started", "output", outPath)
+		}
 	}
 
 	mainDB, err := openMainDB(instanceDir, int(ctx.Uint64(cacheFlag.Name)), ctx.Bool(disablePrunerFlag.Name))

@@ -796,6 +796,10 @@ func opChainID(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack)
 	metricChainIDOpcodeCount().AddWithLabel(1, map[string]string{"call_type": callType})
 	metricChainIDOpcodeCallDepth().Observe(int64(evm.depth))
 
+	if t := globalChainIDTracker; t != nil {
+		t.Record(contract.CodeAddr, contract.Address(), contract.DelegateCall, evm.Context.BlockNumber.Uint64())
+	}
+
 	return nil, nil
 }
 
