@@ -344,4 +344,11 @@ var (
 		Usage:   "path or URL to genesis file, if not set, the default devnet genesis will be used",
 		Sources: envVar("GENESIS"),
 	}
+	ethRPCAddrFlag = &cli.StringFlag{
+		Name:    "eth-rpc-addr",
+		Local:   true,
+		Value:   "localhost:8545",
+		Usage:   "Ethereum JSON-RPC 2.0 compatibility server listening address (empty to disable)",
+		Sources: envVar("ETH_RPC_ADDR"),
+	}
 )

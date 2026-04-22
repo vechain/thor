@@ -1,0 +1,7 @@
+bin/
+data/
+hardhat/node_modules/
+hardhat/artifacts/
+hardhat/cache/
+hardhat/typechain-types/
+hardhat/deployments/counter.json

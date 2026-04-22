@@ -55,7 +55,7 @@ type eth1559TxData struct {
 }
 
 func (d *eth1559TxData) txType() byte             { return TypeEthTyped1559 }
-func (d *eth1559TxData) chainTag() byte           { return 0 } // Ethereum txs use chainID; chain tag validation is bypassed
+func (d *eth1559TxData) chainTag() byte           { return byte(d.chainID & 0xFF) } // Ethereum txs use chainID; chain tag validation is bypassed
 func (d *eth1559TxData) blockRef() uint64         { return 0 }
 func (d *eth1559TxData) expiration() uint32       { return math.MaxUint32 }
 func (d *eth1559TxData) gas() uint64              { return d.gasLimit }

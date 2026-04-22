@@ -130,6 +130,7 @@ func main() {
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
 			minEffectivePriorityFeeFlag,
+			ethRPCAddrFlag,
 		},
 		Action: defaultAction,
 		Commands: []*cli.Command{
@@ -174,6 +175,7 @@ func main() {
 					enableAdminFlag,
 					allowedTracersFlag,
 					minEffectivePriorityFeeFlag,
+					ethRPCAddrFlag,
 				},
 				Action: soloAction,
 			},
@@ -328,6 +330,25 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
+
+	if ethRPCAddr := ctx.String(ethRPCAddrFlag.Name); ethRPCAddr != "" {
+		ethURL, ethCloser, ethErr := httpserver.StartEthRPCServer(
+			ethRPCAddr,
+			repo,
+			state.NewStater(mainDB),
+			txPool,
+			logDB,
+			bftEngine,
+			forkConfig,
+			ctx.Uint64(apiCallGasLimitFlag.Name),
+			version,
+		)
+		if ethErr != nil {
+			return ethErr
+		}
+		defer func() { log.Info("stopping ETH RPC server..."); ethCloser() }()
+		log.Info("ETH RPC server started", "url", ethURL)
+	}
 
 	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL, false)
 
@@ -524,6 +545,25 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
+
+	if ethRPCAddr := ctx.String(ethRPCAddrFlag.Name); ethRPCAddr != "" {
+		ethURL, ethCloser, ethErr := httpserver.StartEthRPCServer(
+			ethRPCAddr,
+			repo,
+			stater,
+			pool,
+			logDB,
+			bftEngine,
+			forkConfig,
+			ctx.Uint64(apiCallGasLimitFlag.Name),
+			version,
+		)
+		if ethErr != nil {
+			return ethErr
+		}
+		defer func() { log.Info("stopping ETH RPC server..."); ethCloser() }()
+		log.Info("ETH RPC server started", "url", ethURL)
+	}
 
 	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
 

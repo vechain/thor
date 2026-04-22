@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Counter DApp — VeChain ETH RPC PoC</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #f0f6fc;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #8b949e;
+      margin-bottom: 28px;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 6px;
+    }
+
+    .value-box {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+
+    .counter-value {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #58a6ff;
+      line-height: 1;
+    }
+
+    .address-text {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #8b949e;
+      word-break: break-all;
+    }
+
+    .address-text a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: #238636;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #2ea043; }
+
+    .btn-secondary {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+    }
+
+    .btn-secondary:hover:not(:disabled) { background: #30363d; }
+
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .status.info    { display: block; background: #1c2a3a; border: 1px solid #1f6feb; color: #79c0ff; }
+    .status.success { display: block; background: #12261e; border: 1px solid #238636; color: #3fb950; }
+    .status.error   { display: block; background: #2d1010; border: 1px solid #da3633; color: #f85149; }
+
+    .tx-link {
+      display: block;
+      margin-top: 8px;
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: #58a6ff;
+      word-break: break-all;
+    }
+
+    .events-list {
+      margin-top: 8px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .event-row {
+      font-size: 0.78rem;
+      font-family: monospace;
+      color: #8b949e;
+      padding: 3px 0;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .event-row:last-child { border-bottom: none; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #21262d;
+      margin: 24px 0;
+    }
+
+    .wallet-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot.connected    { background: #3fb950; }
+    .dot.disconnected { background: #f85149; }
+    .dot.pending      { background: #d29922; }
+
+    .wallet-label {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Counter DApp</h1>
+  <p class="subtitle">VeChain Solo · ETH RPC PoC</p>
+
+  <!-- Wallet status -->
+  <div class="wallet-row">
+    <div class="dot disconnected" id="walletDot"></div>
+    <span class="wallet-label" id="walletLabel">Not connected</span>
+  </div>
+
+  <!-- Counter display -->
+  <div class="section-label">Current count</div>
+  <div class="value-box">
+    <div class="counter-value" id="counterValue">—</div>
+  </div>
+
+  <!-- Contract address -->
+  <div class="section-label">Contract</div>
+  <div class="value-box">
+    <div class="address-text" id="contractAddress">Loading…</div>
+  </div>
+
+  <!-- Actions -->
+  <button class="btn-primary" id="incrementBtn" disabled>Increment Counter</button>
+  <button class="btn-secondary" id="connectBtn">Connect Wallet</button>
+
+  <!-- Status / feedback -->
+  <div class="status" id="status"></div>
+
+  <!-- Recent events -->
+  <hr class="divider" />
+  <div class="section-label">Recent CounterIncreased events</div>
+  <div class="value-box">
+    <div class="events-list" id="eventsList">
+      <div class="event-row" style="color:#484f58">No events yet.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Config ────────────────────────────────────────────────────────────────
+
+const CHAIN_ID      = 58712n;          // VeChain devnet ETH chain ID (0xe558)
+const CHAIN_ID_HEX  = "0xe558";
+const RPC_URL       = "http://localhost:8545";
+const DEPLOYMENT_URL = "../hardhat/deployments/counter.json";
+
+const COUNTER_ABI = [
+  "function count() view returns (uint256)",
+  "function increment() external",
+  "event CounterIncreased(address indexed by, uint256 newCount)",
+];
+
+const VECHAIN_SOLO_NETWORK = {
+  chainId: CHAIN_ID_HEX,
+  chainName: "VeChain Solo",
+  nativeCurrency: { name: "VeChain Energy", symbol: "VTHO", decimals: 18 },
+  rpcUrls: [RPC_URL],
+  blockExplorerUrls: null,
+};
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+let provider = null;
+let signer   = null;
+let contract = null;
+let account  = null;
+let contractAddress = null;
+
+// ─── DOM helpers ────────────────────────────────────────────────────────────
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(msg, type = "info") {
+  const el = $("status");
+  el.className = "status " + type;
+  el.innerHTML = msg;
+}
+
+function clearStatus() {
+  $("status").className = "status";
+}
+
+function setWallet(state, label) {
+  $("walletDot").className = "dot " + state;
+  $("walletLabel").textContent = label;
+}
+
+// ─── Load deployment ────────────────────────────────────────────────────────
+
+async function loadDeployment() {
+  try {
+    const res = await fetch(DEPLOYMENT_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    contractAddress = d.address;
+    $("contractAddress").innerHTML =
+      `<span class="address-text">${contractAddress}</span>`;
+    return contractAddress;
+  } catch (e) {
+    $("contractAddress").textContent = "Not deployed — run: make deploy";
+    setStatus(
+      "Counter contract not found. Start Thor (<code>make start</code>) " +
+      "and deploy the contract (<code>make deploy</code>), then refresh.",
+      "error"
+    );
+    return null;
+  }
+}
+
+// ─── Network switch / add ───────────────────────────────────────────────────
+
+async function ensureNetwork() {
+  try {
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: CHAIN_ID_HEX }],
+    });
+  } catch (switchErr) {
+    // 4902 = chain not added yet
+    if (switchErr.code === 4902 || switchErr.code === -32603) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [VECHAIN_SOLO_NETWORK],
+      });
+    } else {
+      throw switchErr;
+    }
+  }
+}
+
+// ─── Connect wallet ─────────────────────────────────────────────────────────
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    setStatus(
+      "No wallet detected. Install <strong>MetaMask</strong> or <strong>VeWorld</strong> and refresh.",
+      "error"
+    );
+    return;
+  }
+  if (!contractAddress) {
+    setStatus("Deploy the contract first: <code>make deploy</code>", "error");
+    return;
+  }
+
+  try {
+    setStatus("Requesting wallet access…", "info");
+    setWallet("pending", "Connecting…");
+
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    account = accounts[0];
+
+    setStatus("Switching to VeChain Solo network…", "info");
+    await ensureNetwork();
+
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
+    contract = new ethers.Contract(contractAddress, COUNTER_ABI, signer);
+
+    const short = account.slice(0, 6) + "…" + account.slice(-4);
+    setWallet("connected", `Connected: ${short}`);
+    clearStatus();
+
+    $("incrementBtn").disabled = false;
+    $("connectBtn").textContent = "Switch Account";
+
+    await refreshCount();
+    startPolling();
+    loadRecentEvents();
+
+  } catch (e) {
+    setWallet("disconnected", "Not connected");
+    setStatus("Connection failed: " + (e.message || e), "error");
+  }
+}
+
+// ─── Read counter ───────────────────────────────────────────────────────────
+
+async function refreshCount() {
+  if (!contract) return;
+  try {
+    const c = await contract.count();
+    $("counterValue").textContent = c.toString();
+  } catch (_) {}
+}
+
+function startPolling() {
+  setInterval(refreshCount, 4000);
+}
+
+// ─── Load recent events ──────────────────────────────────────────────────────
+
+async function loadRecentEvents() {
+  if (!contract || !provider) return;
+  try {
+    const latest   = await provider.getBlockNumber();
+    const fromBlock = Math.max(0, latest - 500);
+    const filter   = contract.filters.CounterIncreased();
+    const logs     = await contract.queryFilter(filter, fromBlock, latest);
+
+    const list = $("eventsList");
+    if (logs.length === 0) {
+      list.innerHTML = '<div class="event-row" style="color:#484f58">No events in last 500 blocks.</div>';
+      return;
+    }
+
+    list.innerHTML = logs
+      .slice(-20)
+      .reverse()
+      .map((log) => {
+        const by = log.args.by.slice(0, 10) + "…";
+        return `<div class="event-row">block ${log.blockNumber} · by ${by} → count=${log.args.newCount}</div>`;
+      })
+      .join("");
+  } catch (_) {}
+}
+
+// ─── Increment ───────────────────────────────────────────────────────────────
+
+async function increment() {
+  if (!contract || !signer) return;
+
+  $("incrementBtn").disabled = true;
+  setStatus("Sending transaction…", "info");
+
+  try {
+    const tx = await contract.increment();
+    setStatus(
+      `Transaction sent. Waiting for confirmation…` +
+      `<a class="tx-link" href="#" onclick="return false">${tx.hash}</a>`,
+      "info"
+    );
+
+    const receipt = await tx.wait();
+    const newCount = await contract.count();
+
+    setStatus(
+      `Incremented! New count: <strong>${newCount}</strong><br/>` +
+      `Block: ${receipt.blockNumber}` +
+      `<a class="tx-link" href="#" onclick="return false">${tx.hash}</a>`,
+      "success"
+    );
+
+    $("counterValue").textContent = newCount.toString();
+    await loadRecentEvents();
+
+  } catch (e) {
+    const msg = e?.info?.error?.message || e?.message || String(e);
+    setStatus("Transaction failed: " + msg, "error");
+  } finally {
+    $("incrementBtn").disabled = false;
+  }
+}
+
+// ─── Account / chain change listeners ────────────────────────────────────────
+
+function attachWalletListeners() {
+  if (!window.ethereum) return;
+  window.ethereum.on("accountsChanged", (accounts) => {
+    if (accounts.length === 0) {
+      setWallet("disconnected", "Not connected");
+      $("incrementBtn").disabled = true;
+      signer = null; contract = null; account = null;
+    } else {
+      account = accounts[0];
+      connectWallet(); // re-initialise with new account
+    }
+  });
+  window.ethereum.on("chainChanged", () => window.location.reload());
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", async () => {
+  $("connectBtn").addEventListener("click", connectWallet);
+  $("incrementBtn").addEventListener("click", increment);
+  attachWalletListeners();
+  await loadDeployment();
+});
+</script>
+</body>
+</html>
