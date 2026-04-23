@@ -706,8 +706,9 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		if nextBlockNum < p.forkConfig.INTERSTELLAR {
 			return badTxError{"eth tx type not supported before INTERSTELLAR"}
 		}
-		// ChainID must match genesis-derived big.Int (same value runtime.CHAINID exposes).
-		expected := new(big.Int).SetBytes(p.repo.GenesisBlock().Header().ID().Bytes())
+		// ChainID must match the 2-byte CHAIN_ID (same value the post-INTERSTELLAR CHAINID opcode exposes).
+		// This branch is already gated by INTERSTELLAR above, so no fork check is needed here.
+		expected := new(big.Int).SetUint64(thor.ChainID(p.repo.GenesisBlock().Header().ID()))
 		got := trx.ChainID()
 		if got == nil || got.Cmp(expected) != 0 {
 			return badTxError{"eth tx chain id mismatch"}
