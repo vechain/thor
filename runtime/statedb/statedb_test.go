@@ -24,6 +24,7 @@ import (
 
 	"github.com/vechain/thor/v2/muxdb"
 	State "github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
 
@@ -295,4 +296,25 @@ func TestCreateContract(t *testing.T) {
 	stateDB.RevertToSnapshot(rev)
 	assert.False(t, stateDB.IsNewContract(addr2))
 	assert.True(t, stateDB.IsNewContract(addr))
+}
+
+// TestV1NonceReadsRealState confirms the V1 GetNonce change from hardcoded-0
+// to real-state-read keeps the pre-INTERSTELLAR / 0x00 / 0x51 contract intact
+// (no writer → reader sees 0) while letting post-bump state surface if another
+// path (e.g. V2) has written a value. V1 SetNonce stays no-op.
+func TestV1NonceReadsRealState(t *testing.T) {
+	addr := common.Address{0xaa}
+	st := State.New(muxdb.NewMem(), trie.Root{})
+	db := New(st)
+
+	// Fresh state: GetNonce reads 0 (and stays 0 after V1 SetNonce no-op).
+	assert.Equal(t, uint64(0), db.GetNonce(addr))
+	db.SetNonce(addr, 42)
+	assert.Equal(t, uint64(0), db.GetNonce(addr), "V1 SetNonce must be a no-op")
+
+	// Simulate a V2-style write directly through state.SetNonce. V1 GetNonce
+	// must observe it — required for vm/evm.go:469 collision check to see
+	// post-INTERSTELLAR nonces on 0x00/0x51 execution paths.
+	assert.NoError(t, st.SetNonce(thor.Address(addr), 7))
+	assert.Equal(t, uint64(7), db.GetNonce(addr))
 }

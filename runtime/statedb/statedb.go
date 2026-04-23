@@ -136,10 +136,29 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
-// GetNonce stub.
-func (s *StateDB) GetNonce(_ common.Address) uint64 { return 0 }
+// GetNonce reads the sequential transaction nonce from state.
+//
+// Pre-INTERSTELLAR: state.Nonce is never written, so this returns 0 for all
+// accounts — identical to the previous hard-coded-0 behavior (no consensus
+// change). Post-INTERSTELLAR: a 0x02 tx may have written a non-zero value via
+// StateDBV2, which this V1 path reads back correctly. Reading the real value
+// is necessary so `StateDB.Empty()` (which reaches Account.IsEmpty via
+// state.Exists) is self-consistent with the spec-3 EIP-161 Nonce field;
+// otherwise vm/evm.go:469 contract-address-collision would miss the nonce
+// dimension.
+func (s *StateDB) GetNonce(addr common.Address) uint64 {
+	n, err := s.state.GetNonce(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
 
-// SetNonce stub.
+// SetNonce is a no-op on V1. It is exercised by VM paths (inner CREATE bump
+// at vm/evm.go:461, EIP-158 `SetNonce(contract, 1)` at line 484) during
+// 0x00 / 0x51 txs and any pre-INTERSTELLAR execution, where we intentionally
+// do not alter account.Nonce. StateDBV2 (spec 3 §3.2) overrides this to
+// persist writes for post-INTERSTELLAR 0x02 execution.
 func (s *StateDB) SetNonce(_ common.Address, _ uint64) {}
 
 // GetCodeHash stub.
