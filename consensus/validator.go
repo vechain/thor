@@ -205,7 +205,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			if !thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) {
 				return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
 			}
-			expected := new(big.Int).SetBytes(c.repo.GenesisBlock().Header().ID().Bytes())
+			// 0x02 is already gated by !IsForked(INTERSTELLAR) above, so this branch is always post-fork.
+			expected := new(big.Int).SetUint64(thor.ChainID(c.repo.GenesisBlock().Header().ID()))
 			if got := tr.ChainID(); got == nil || got.Cmp(expected) != 0 {
 				return consensusError("tx eth chain id mismatch")
 			}
