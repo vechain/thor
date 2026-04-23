@@ -26,7 +26,7 @@ import (
 type Server struct {
 	repo       *chain.Repository
 	stater     *state.Stater
-	pool       *txpool.TxPool
+	pool       txpool.Pool
 	logDB      *logdb.LogDB
 	forkConfig *thor.ForkConfig
 	bft        bft.Committer
@@ -49,7 +49,7 @@ type handlerFunc func(ctx context.Context, s *Server, params json.RawMessage) (a
 func NewServer(
 	repo *chain.Repository,
 	stater *state.Stater,
-	pool *txpool.TxPool,
+	pool txpool.Pool,
 	logDB *logdb.LogDB,
 	forkConfig *thor.ForkConfig,
 	bft bft.Committer,

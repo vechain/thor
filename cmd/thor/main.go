@@ -91,6 +91,7 @@ func main() {
 		Flags: []cli.Flag{
 			networkFlag,
 			apiTxpoolFlag,
+			apiEthRPCEnabledFlag,
 			configDirFlag,
 			masterKeyStdinFlag,
 			dataDirFlag,
@@ -142,6 +143,7 @@ func main() {
 					cacheFlag,
 					logDbAdditionalIndexesFlag,
 					apiTxpoolFlag,
+					apiEthRPCEnabledFlag,
 					apiAddrFlag,
 					apiCorsFlag,
 					apiTimeoutFlag,

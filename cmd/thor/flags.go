@@ -123,6 +123,12 @@ var (
 		Usage:   "enable txpool REST API endpoints",
 		Sources: envVar("API_ENABLE_TXPOOL"),
 	}
+	apiEthRPCEnabledFlag = &cli.BoolFlag{
+		Name:    "api-eth-rpc-enabled",
+		Local:   true,
+		Usage:   "enable experimental eth_* JSON-RPC namespace at POST /rpc",
+		Sources: envVar("API_ETH_RPC_ENABLED"),
+	}
 	// db indexes flags
 	logDbAdditionalIndexesFlag = &cli.BoolFlag{
 		Name:    "logdb-additional-indexes",

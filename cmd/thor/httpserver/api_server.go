@@ -27,6 +27,7 @@ import (
 	"github.com/vechain/thor/v2/api/fees"
 	"github.com/vechain/thor/v2/api/middleware"
 	"github.com/vechain/thor/v2/api/node"
+	"github.com/vechain/thor/v2/api/rpc"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
@@ -67,6 +68,7 @@ type APIConfig struct {
 	Timeout                    int
 	SlowQueriesThreshold       int
 	Log5XXErrors               bool
+	EthRPCEnabled              bool
 }
 
 func StartAPIServer(
@@ -130,6 +132,16 @@ func StartAPIServer(
 	}).Mount(router, "/fees")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
+
+	if config.EthRPCEnabled {
+		rpcServer := rpc.NewServer(repo, stater, txPool, logDB, forkConfig, bft, rpc.Config{
+			LogsLimit:                  config.LogsLimit,
+			APIBacktraceLimit:          config.APIBacktraceLimit,
+			CallGasLimit:               config.CallGasLimit,
+			PriorityIncreasePercentage: config.PriorityIncreasePercentage,
+		})
+		router.Path("/rpc").Methods(http.MethodPost).Handler(rpcServer)
+	}
 
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
