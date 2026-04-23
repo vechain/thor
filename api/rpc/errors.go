@@ -33,8 +33,8 @@ const (
 	ReasonBlockNotCanonical            = "block_not_canonical"
 	ReasonTxKnown                      = "tx_known"
 	ReasonTxUnderpriced                = "tx_underpriced"
-	ReasonNonceTooLow                  = "nonce_too_low" // reserved; not currently emitted
-	ReasonNonceGap                     = "nonce_gap"     // reserved; not currently emitted
+	ReasonNonceTooLow                  = "nonce_too_low" // emitted at admit for 0x02 post-INT when tx.Nonce < state.Nonce
+	ReasonNonceGap                     = "nonce_gap"     // reserved; spec 3 accepts future-nonce into pool and does not emit
 	ReasonInsufficientFunds            = "insufficient_funds"
 	ReasonChainIDMismatch              = "chain_id_mismatch"
 	ReasonTxTypeNotSupported           = "tx_type_not_supported"

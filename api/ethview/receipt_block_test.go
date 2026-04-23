@@ -9,6 +9,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -146,8 +148,10 @@ func TestProjectReceipt_Create_ContractAddressSet(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, obj.ContractAddress, "CREATE tx must surface contractAddress")
-	expected := thor.CreateContractAddress(trx.ID(), 0, 0)
-	assert.Equal(t, expected, *obj.ContractAddress)
+	// Spec 3 §2.3: 0x02 CREATE address is `keccak(rlp(origin, nonce))[12:]`
+	// (eth-style), not VeChain-native.
+	expectedEth := crypto.CreateAddress(common.Address(genesis.DevAccounts()[0].Address), trx.Nonce())
+	assert.Equal(t, thor.Address(expectedEth), *obj.ContractAddress)
 }
 
 // --- block projection --------------------------------------------------------

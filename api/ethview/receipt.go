@@ -8,7 +8,9 @@ package ethview
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -137,12 +139,19 @@ func ProjectReceipt(
 		effective = new(big.Int)
 	}
 
-	// contractAddress: VeChain-native derivation for every tx type per
-	// Deviation D1 (spec §3). Only emit when the single clause is a
-	// contract creation (to==nil on the native tx).
+	// contractAddress: per spec 3 §2.3, 0x02 CREATE uses eth-style
+	// `keccak(rlp(origin, nonce))[12:]`; 0x00 / 0x51 keep VeChain-native
+	// derivation (Deviation D1 resolved only for 0x02). Only emit when the
+	// single clause is a contract creation (to==nil on the native tx).
 	var contractAddr *thor.Address
 	if firstClauseTo(trx) == nil {
-		addr := thor.CreateContractAddress(trx.ID(), 0, 0)
+		var addr thor.Address
+		if trx.Type() == tx.TypeEthDynamicFee {
+			eth := crypto.CreateAddress(common.Address(meta.Origin), trx.Nonce())
+			addr = thor.Address(eth)
+		} else {
+			addr = thor.CreateContractAddress(trx.ID(), 0, 0)
+		}
 		contractAddr = &addr
 	}
 

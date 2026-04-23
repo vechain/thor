@@ -123,6 +123,11 @@ func mapTxPoolError(err error) *RPCError {
 	case contains(msg, "underpriced"):
 		return ReasonError(ReasonTxUnderpriced, msg)
 
+	case contains(msg, "nonce too low"):
+		// Activated by spec 3 §4.1 / §8 once the admit path checks
+		// tx.Nonce < state.Nonce for 0x02 post-INTERSTELLAR.
+		return ReasonError(ReasonNonceTooLow, msg)
+
 	case contains(msg, "S value is out of range"),
 		contains(msg, "invalid signature"):
 		return ReasonError(ReasonTxValidationFailed, msg)

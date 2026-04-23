@@ -129,19 +129,25 @@ func handleGetStorageAt(_ context.Context, s *Server, params json.RawMessage) (a
 	return v, nil
 }
 
-// handleGetTransactionCount always returns "0x0" per spec Deviation D2.
-// Thor has no sequential account nonce today; wallets that rely on this
-// value to display user-visible nonce will simply see zero. The signature
-// keeps the full (address, blockTag) parse so that when a real count is
-// wired (Deferred §13.6) this handler is the only surface that changes.
+// handleGetTransactionCount returns the sequential nonce for addr at the
+// given block (spec 3 §5). Pre-INTERSTELLAR blocks never wrote Nonce, so the
+// read returns 0 — seamless continuity with the Spec 2 stub. "pending" is
+// currently aliased to "latest" (state nonce only; pool's future-nonce queue
+// length is Deferred §11.1).
 func handleGetTransactionCount(_ context.Context, s *Server, params json.RawMessage) (any, *RPCError) {
-	_, _, rerr := parseAddrAndTag(params)
+	addr, tag, rerr := parseAddrAndTag(params)
 	if rerr != nil {
 		return nil, rerr
 	}
-	// Ignore s / tag; return constant zero.
-	_ = s
-	return hexutil.Uint64(0), nil
+	st, rerr := stateAtTag(s, tag)
+	if rerr != nil {
+		return nil, rerr
+	}
+	n, err := st.GetNonce(addr)
+	if err != nil {
+		return nil, InternalError(err)
+	}
+	return hexutil.Uint64(n), nil
 }
 
 // Silence the chain unused-import warning on a go-less build: referenced via
