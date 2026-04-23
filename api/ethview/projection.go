@@ -90,10 +90,11 @@ func ProjectTx(trx *tx.Transaction, meta TxMeta) (*TransactionObject, error) {
 	switch trx.Type() {
 	case tx.TypeEthDynamicFee:
 		return projectEthDynamicFee(trx, meta), nil
-	case tx.TypeLegacy:
-		panic("not yet implemented")
-	case tx.TypeDynamicFee:
-		panic("not yet implemented")
+	case tx.TypeLegacy, tx.TypeDynamicFee:
+		if !isRepresentable(trx) {
+			return nil, ErrNotRepresentable
+		}
+		return projectVeChainTx(trx, meta), nil
 	default:
 		return nil, ErrNotRepresentable
 	}
@@ -196,5 +197,109 @@ func projectAccessList(al tx.AccessList) *[]accessEntry {
 		out = append(out, accessEntry{Address: t.Address, StorageKeys: keys})
 	}
 	return &out
+}
+
+// projectVeChainTx renders a single-clause 0x00 or 0x51 tx. Callers must have
+// already rejected multi-clause txs; this function assumes len(clauses)==1.
+// VeChainTx-specific fields (chainTag, blockRef, expiration, clauses,
+// dependsOn, reserved, delegator, gasPriceCoef) are populated; eth standard
+// fields are copied from the first (and only) clause.
+func projectVeChainTx(trx *tx.Transaction, meta TxMeta) *TransactionObject {
+	cs := trx.Clauses()
+	first := cs[0]
+	v, r, s := splitSignatureVeChain(trx)
+
+	chainTag := hexutil.Uint64(trx.ChainTag())
+	blockRefBytes := trx.BlockRef()
+	blockRef := hexutil.Bytes(blockRefBytes[:])
+	expiration := hexutil.Uint64(trx.Expiration())
+	gpc := hexutil.Uint64(trx.GasPriceCoef())
+
+	// Clause mirror array — single-clause by precondition.
+	clauses := []nativeClause{{
+		To:    first.To(),
+		Value: (*hexutil.Big)(first.Value()),
+		Data:  first.Data(),
+	}}
+
+	obj := &TransactionObject{
+		Hash:       trx.CanonicalTxID(),
+		Type:       hexutil.Uint64(trx.Type()),
+		Nonce:      hexutil.Uint64(trx.Nonce()),
+		From:       meta.Origin,
+		To:         first.To(),
+		Value:      (*hexutil.Big)(first.Value()),
+		Gas:        hexutil.Uint64(trx.Gas()),
+		Input:      first.Data(),
+		V:          (*hexutil.Big)(v),
+		R:          (*hexutil.Big)(r),
+		S:          (*hexutil.Big)(s),
+		ChainTag:   &chainTag,
+		BlockRef:   &blockRef,
+		Expiration: &expiration,
+		Clauses:    clauses,
+		DependsOn:  trx.DependsOn(),
+		Delegator:  meta.Delegator,
+	}
+
+	// Reserved trailer is only meaningful when Features != 0 (today that means
+	// VIP-191 delegation). Emit whenever non-zero.
+	if feat := trx.Features(); feat != 0 {
+		obj.Reserved = &nativeReservedStruct{Features: hexutil.Uint64(feat)}
+	}
+
+	// gasPriceCoef is 0x00-only; skip serializing for 0x51.
+	if trx.Type() == tx.TypeLegacy {
+		obj.GasPriceCoef = &gpc
+	}
+
+	// 0x51 carries its own fee caps — surface them like 0x02.
+	if trx.Type() == tx.TypeDynamicFee {
+		obj.MaxFeePerGas = (*hexutil.Big)(trx.MaxFeePerGas())
+		obj.MaxPriorityFeePerGas = (*hexutil.Big)(trx.MaxPriorityFeePerGas())
+	}
+
+	// gasPrice derivation per spec §6.4. Caller is responsible for supplying
+	// meta.EffectiveGasPrice:
+	//   0x00 mined or pending: bgp × (255 + gasPriceCoef) / 255.
+	//   0x51 mined: receipt effectiveGasPrice; pending: maxFeePerGas.
+	switch {
+	case meta.EffectiveGasPrice != nil:
+		obj.GasPrice = (*hexutil.Big)(new(big.Int).Set(meta.EffectiveGasPrice))
+	case trx.Type() == tx.TypeDynamicFee:
+		obj.GasPrice = (*hexutil.Big)(new(big.Int).Set(trx.MaxFeePerGas()))
+	default:
+		obj.GasPrice = (*hexutil.Big)(new(big.Int))
+	}
+
+	// Block location (same rule as 0x02).
+	if meta.BlockID != nil {
+		idx := hexutil.Uint64(meta.Index)
+		obj.BlockHash = meta.BlockID
+		if meta.BlockNumber != nil {
+			bn := hexutil.Uint64(*meta.BlockNumber)
+			obj.BlockNumber = &bn
+		}
+		obj.TransactionIndex = &idx
+	}
+
+	return obj
+}
+
+// splitSignatureVeChain returns (V, R, S) from a VeChainTx signature. For
+// non-delegated 0x00 / 0x51 the signature is a single 65-byte ECDSA blob;
+// for delegated txs the first 65 bytes are the originator's sig and the
+// remaining 65 are the delegator's. We only expose the originator triplet in
+// the eth-shape (wallets and tools that care about the delegator read it via
+// the dedicated `delegator` field).
+func splitSignatureVeChain(trx *tx.Transaction) (*big.Int, *big.Int, *big.Int) {
+	sig := trx.Signature()
+	if len(sig) < 65 {
+		return new(big.Int), new(big.Int), new(big.Int)
+	}
+	r := new(big.Int).SetBytes(sig[0:32])
+	s := new(big.Int).SetBytes(sig[32:64])
+	v := new(big.Int).SetUint64(uint64(sig[64]))
+	return v, r, s
 }
 
