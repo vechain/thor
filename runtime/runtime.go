@@ -113,8 +113,13 @@ func New(
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
-		// use genesis id as chain id
-		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+		if thor.IsForked(ctx.Number, forkConfig.INTERSTELLAR) {
+			// Post-INTERSTELLAR: 2-byte EIP-155 CHAIN_ID from the last two bytes of genesis id.
+			currentChainConfig.ChainID = new(big.Int).SetUint64(thor.ChainID(chain.GenesisID()))
+		} else {
+			// Pre-INTERSTELLAR: legacy 32-byte genesis id interpreted as uint256.
+			currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+		}
 	}
 
 	// allocate precompiled contracts

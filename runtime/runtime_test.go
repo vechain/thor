@@ -136,13 +136,73 @@ func TestEVMFunction(t *testing.T) {
 					t.Fatal(err)
 				}
 
+				// forkFromStart has INTERSTELLAR=0, so ctx.Number=0 is post-fork and CHAINID returns the 2-byte value.
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkFromStart).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
 
-				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(out.Data))
+				want := new(big.Int).SetUint64(thor.ChainID(ctx.chain.GenesisID()))
+				got := new(big.Int).SetBytes(out.Data)
+				assert.Equal(t, want, got, "post-INTERSTELLAR CHAINID returns 2-byte CHAIN_ID")
+			},
+		},
+		{
+			name:       "ChainID pre-INTERSTELLAR",
+			code:       "6080604052348015600f57600080fd5b506004361060285760003560e01c8063adc879e914602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600046905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea264697066735822122060b67d944ffa8f0c5ee69f2f47decc3dc175ea2e4341a4de3705d72b868ce2b864736f6c63430008010033",
+			abi:        `[{"inputs":[],"name":"chainID","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "chainID",
+			testFunc: func(ctx *context, t *testing.T) {
+				// Pre-INTERSTELLAR: CHAINID returns the legacy 32-byte genesis id as uint256.
+				methodData, err := ctx.method.EncodeInput()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				preFork := &thor.ForkConfig{INTERSTELLAR: 100}
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Number: 50}, preFork).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(out.Data),
+					"pre-INTERSTELLAR CHAINID returns full 32-byte genesis id")
+			},
+		},
+		{
+			name:       "ChainID activation boundary",
+			code:       "6080604052348015600f57600080fd5b506004361060285760003560e01c8063adc879e914602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600046905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea264697066735822122060b67d944ffa8f0c5ee69f2f47decc3dc175ea2e4341a4de3705d72b868ce2b864736f6c63430008010033",
+			abi:        `[{"inputs":[],"name":"chainID","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "chainID",
+			testFunc: func(ctx *context, t *testing.T) {
+				// At ctx.Number == INTERSTELLAR, IsForked returns true -> already post-fork.
+				methodData, err := ctx.method.EncodeInput()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				activation := &thor.ForkConfig{INTERSTELLAR: 10}
+
+				// One block before activation — still pre-fork: 32-byte genesis id.
+				execBefore, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Number: 9}, activation).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				outBefore, _, err := execBefore()
+				assert.Nil(t, err)
+				assert.Nil(t, outBefore.VMErr)
+				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(outBefore.Data),
+					"block INTERSTELLAR-1: pre-fork 32-byte value")
+
+				// Activation block itself — post-fork: 2-byte value.
+				execAt, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Number: 10}, activation).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				outAt, _, err := execAt()
+				assert.Nil(t, err)
+				assert.Nil(t, outAt.VMErr)
+				want := new(big.Int).SetUint64(thor.ChainID(ctx.chain.GenesisID()))
+				assert.Equal(t, want, new(big.Int).SetBytes(outAt.Data),
+					"block INTERSTELLAR: post-fork 2-byte CHAIN_ID")
 			},
 		},
 		{
