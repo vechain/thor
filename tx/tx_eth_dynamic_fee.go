@@ -32,6 +32,17 @@ type AccessList []AccessTuple
 //
 // Layout matches go-ethereum's DynamicFeeTx so that canonical encoding and
 // keccak256 txhash agree with Ethereum wallets.
+//
+// Nonce semantics: the Nonce field is treated as a user-chosen random value,
+// not a sequential account counter. Admission is NOT gated by
+// tx.Nonce == state_account_nonce; de-duplication relies on CanonicalTxID
+// (keccak256 of the signed RLP bytes) being unique per distinct signed tx.
+// This matches VeChain's legacy (0x00) and dynamic-fee (0x51) nonce model.
+//
+// Implementing a true sequential account nonce plus Ethereum-style CREATE
+// address derivation (keccak(rlp(caller, caller.Nonce))[12:]) is deferred;
+// CREATE addresses for all tx types go through thor.CreateContractAddress
+// in the current design.
 type ethDynamicFeeTransaction struct {
 	ChainID              *big.Int
 	Nonce                uint64
