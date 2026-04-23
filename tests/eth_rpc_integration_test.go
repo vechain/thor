@@ -120,6 +120,9 @@ func TestEthRPC_E2E_SendReceivePack(t *testing.T) {
 
 	chainID := new(big.Int).SetUint64(thor.ChainID(tc.Repo().GenesisBlock().Header().ID()))
 	to := thor.BytesToAddress([]byte("e2e"))
+	// Spec 3 §4.2: first tx from an EOA must use nonce=0 (sequential nonce
+	// semantics). Previously this used 7; the old admission path did not
+	// enforce nonce equality, so any value worked.
 	builder := tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(chainID).
 		EthTo(&to).
@@ -127,7 +130,7 @@ func TestEthRPC_E2E_SendReceivePack(t *testing.T) {
 		MaxFeePerGas(big.NewInt(10_000_000_000_000)).
 		MaxPriorityFeePerGas(big.NewInt(1_000_000_000)).
 		Gas(21000).
-		Nonce(7)
+		Nonce(0)
 	trx := tx.MustSign(builder.Build(), genesis.DevAccounts()[0].PrivateKey)
 	raw, err := trx.MarshalBinary()
 	require.NoError(t, err)

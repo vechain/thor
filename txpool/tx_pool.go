@@ -713,6 +713,22 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		if got == nil || got.Cmp(expected) != 0 {
 			return badTxError{"eth tx chain id mismatch"}
 		}
+		// Spec 3 §4.1 / §8 — reject txs whose nonce has already been consumed.
+		// Future-nonce (tx.Nonce > state.Nonce) is accepted and held until the
+		// gap closes; equality becomes executable. The error message mirrors
+		// the chainId-mismatch style (no expected value leaked to the client).
+		origin, err := trx.Origin()
+		if err != nil {
+			return badTxError{"tx validation failed"}
+		}
+		bestState := p.stater.NewState(p.repo.BestBlockSummary().Root())
+		currentNonce, err := bestState.GetNonce(origin)
+		if err != nil {
+			return txRejectedError{"state read failed"}
+		}
+		if trx.Nonce() < currentNonce {
+			return badTxError{"nonce too low"}
+		}
 	} else {
 		if trx.ChainTag() != p.repo.ChainTag() {
 			return badTxError{"chain tag mismatch"}

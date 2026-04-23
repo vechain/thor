@@ -89,6 +89,22 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, tx.ErrTxTypeNotSupported
 	}
 
+	// Spec 3 §4.2 — post-INTERSTELLAR 0x02 txs require `tx.Nonce ==
+	// state.Nonce` to be executable. Future-nonce (state.Nonce < tx.Nonce)
+	// returns (false, nil) so the pool retries when state advances; low
+	// nonce is already filtered at admit, so (false, nil) here is purely
+	// defensive. We skip this check for non-0x02 and pre-INT to preserve
+	// historic behavior bit-for-bit.
+	if o.Type() == tx.TypeEthDynamicFee && thor.IsForked(nextBlockNum, forkConfig.INTERSTELLAR) {
+		currentNonce, err := state.GetNonce(o.Origin())
+		if err != nil {
+			return false, err
+		}
+		if o.Nonce() != currentNonce {
+			return false, nil
+		}
+	}
+
 	// test features on next block
 	var features tx.Features
 	if thor.IsForked(nextBlockNum, forkConfig.VIP191) {
