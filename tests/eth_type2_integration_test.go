@@ -68,7 +68,7 @@ func TestEthType2_PoolAcceptsAfterInterstellar(t *testing.T) {
 		MaxLifetime:     time.Hour,
 	}, forks)
 
-	chainID := new(big.Int).SetBytes(tchain.GenesisBlock().Header().ID().Bytes())
+	chainID := new(big.Int).SetUint64(thor.ChainID(tchain.GenesisBlock().Header().ID()))
 	trx := makeEthTx(t, chainID, 0, 10_000_000_000_000, 1_000_000_000)
 
 	require.NoError(t, pool.AddLocal(trx), "pool should accept 0x02 after INTERSTELLAR")
@@ -101,7 +101,7 @@ func TestEthType2_PoolRejectsBeforeInterstellar(t *testing.T) {
 		MaxLifetime:     time.Hour,
 	}, forks)
 
-	chainID := new(big.Int).SetBytes(tchain.GenesisBlock().Header().ID().Bytes())
+	chainID := new(big.Int).SetUint64(thor.ChainID(tchain.GenesisBlock().Header().ID()))
 	trx := makeEthTx(t, chainID, 0, 10_000_000_000_000, 1_000_000_000)
 
 	err = pool.AddLocal(trx)
@@ -144,7 +144,7 @@ func TestEthType2_PoolRejectsNonEmptyAccessList(t *testing.T) {
 		MaxLifetime:     time.Hour,
 	}, forks)
 
-	chainID := new(big.Int).SetBytes(tchain.GenesisBlock().Header().ID().Bytes())
+	chainID := new(big.Int).SetUint64(thor.ChainID(tchain.GenesisBlock().Header().ID()))
 	to := thor.BytesToAddress([]byte("to"))
 	trx := tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(chainID).

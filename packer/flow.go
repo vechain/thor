@@ -162,7 +162,8 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		// ETH EIP-1559 (0x02) carries its own chainID (not ChainTag) and has no
 		// blockRef/expiration concept, so those checks don't apply. We still need
 		// to enforce block gas accounting identically to other tx types.
-		expected := new(big.Int).SetBytes(f.packer.repo.GenesisBlock().Header().ID().Bytes())
+		// Post-INTERSTELLAR 2-byte CHAIN_ID; aligned with txpool/consensus/runtime.
+		expected := new(big.Int).SetUint64(thor.ChainID(f.packer.repo.GenesisBlock().Header().ID()))
 		if got := t.ChainID(); got == nil || got.Cmp(expected) != 0 {
 			return badTxError{"eth tx chain id mismatch"}
 		}
