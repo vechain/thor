@@ -162,6 +162,28 @@ func (s *State) GetBalance(addr thor.Address) (*big.Int, error) {
 	return acc.Balance, nil
 }
 
+// GetNonce returns the sequential transaction nonce for the given address.
+// Pre-INTERSTELLAR state is never written, so this returns 0 for all accounts
+// until 0x02 tx runtime starts writing (see spec 3 §3.1 / §4.5).
+func (s *State) GetNonce(addr thor.Address) (uint64, error) {
+	acc, err := s.getAccount(addr)
+	if err != nil {
+		return 0, &Error{err}
+	}
+	return acc.Nonce, nil
+}
+
+// SetNonce sets the sequential transaction nonce for the given address.
+func (s *State) SetNonce(addr thor.Address, nonce uint64) error {
+	cpy, err := s.getAccountCopy(addr)
+	if err != nil {
+		return &Error{err}
+	}
+	cpy.Nonce = nonce
+	s.updateAccount(addr, &cpy)
+	return nil
+}
+
 // SetBalance set balance for the given address.
 func (s *State) SetBalance(addr thor.Address, balance *big.Int) error {
 	cpy, err := s.getAccountCopy(addr)

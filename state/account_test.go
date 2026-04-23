@@ -38,6 +38,67 @@ func TestAccount(t *testing.T) {
 	acc = emptyAccount()
 	acc.StorageRoot = []byte{1}
 	assert.True(t, acc.IsEmpty())
+
+	acc = emptyAccount()
+	acc.Nonce = 1
+	assert.False(t, acc.IsEmpty())
+}
+
+// TestAccountRLPBackwardCompat guards the `rlp:"optional"` contract: existing
+// on-chain account blobs (6-field RLP) must still decode, and a new-format
+// account with Nonce==0 must encode back to the same 6-field blob so state
+// root is unchanged for non-ETH-tx writers.
+func TestAccountRLPBackwardCompat(t *testing.T) {
+	// Legacy 6-field encoding (as stored pre-INTERSTELLAR).
+	type legacyAccount struct {
+		Balance     *big.Int
+		Energy      *big.Int
+		BlockTime   uint64
+		Master      []byte
+		CodeHash    []byte
+		StorageRoot []byte
+	}
+	legacy := legacyAccount{
+		Balance:     big.NewInt(7),
+		Energy:      big.NewInt(11),
+		BlockTime:   13,
+		Master:      []byte("master"),
+		CodeHash:    []byte("codehash"),
+		StorageRoot: []byte("sroot"),
+	}
+	legacyBytes, err := rlp.EncodeToBytes(&legacy)
+	assert.NoError(t, err)
+
+	var decoded Account
+	assert.NoError(t, rlp.DecodeBytes(legacyBytes, &decoded))
+	assert.Equal(t, uint64(0), decoded.Nonce, "old encoding must decode to Nonce=0")
+	assert.Equal(t, legacy.Balance, decoded.Balance)
+
+	// Encoding a new-format account with Nonce==0 must produce byte-identical
+	// output to the legacy 6-field encoding (optional tag strips trailing zero).
+	newZero := Account{
+		Balance:     big.NewInt(7),
+		Energy:      big.NewInt(11),
+		BlockTime:   13,
+		Master:      []byte("master"),
+		CodeHash:    []byte("codehash"),
+		StorageRoot: []byte("sroot"),
+		Nonce:       0,
+	}
+	newZeroBytes, err := rlp.EncodeToBytes(&newZero)
+	assert.NoError(t, err)
+	assert.Equal(t, legacyBytes, newZeroBytes, "Nonce==0 must encode as 6-field (same as legacy)")
+
+	// Non-zero Nonce must encode as 7 fields and round-trip cleanly.
+	newNonce := newZero
+	newNonce.Nonce = 42
+	newNonceBytes, err := rlp.EncodeToBytes(&newNonce)
+	assert.NoError(t, err)
+	assert.NotEqual(t, legacyBytes, newNonceBytes, "Nonce>0 must produce different encoding")
+
+	var rt Account
+	assert.NoError(t, rlp.DecodeBytes(newNonceBytes, &rt))
+	assert.Equal(t, uint64(42), rt.Nonce)
 }
 
 func TestCalculateEnergy(t *testing.T) {
@@ -78,12 +139,12 @@ func TestTrie(t *testing.T) {
 		"should load an empty account")
 
 	acc1 := Account{
-		big.NewInt(1),
-		big.NewInt(0),
-		0,
-		[]byte("master"),
-		[]byte("code hash"),
-		[]byte("storage root"),
+		Balance:     big.NewInt(1),
+		Energy:      big.NewInt(0),
+		BlockTime:   0,
+		Master:      []byte("master"),
+		CodeHash:    []byte("code hash"),
+		StorageRoot: []byte("storage root"),
 	}
 	meta1 := AccountMetadata{
 		StorageID:       []byte("sid"),

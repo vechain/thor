@@ -57,6 +57,52 @@ func TestStateReadWrite(t *testing.T) {
 	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetCodeHash(addr)))
 }
 
+func TestNonce(t *testing.T) {
+	st := New(muxdb.NewMem(), trie.Root{})
+	addr := thor.BytesToAddress([]byte("nonce-account"))
+
+	// zero-value on fresh account
+	n, err := st.GetNonce(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), n)
+	exists, err := st.Exists(addr)
+	assert.NoError(t, err)
+	assert.False(t, exists, "writing Nonce=0 must leave the account empty")
+
+	// SetNonce + GetNonce round-trip; account becomes non-empty.
+	assert.NoError(t, st.SetNonce(addr, 5))
+	n, err = st.GetNonce(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(5), n)
+	exists, err = st.Exists(addr)
+	assert.NoError(t, err)
+	assert.True(t, exists, "Nonce>0 makes the account non-empty (EIP-161)")
+
+	// Setting back to 0 keeps it observable as 0 (account still carries the
+	// stacked write). Note we don't assert Exists==false here because balance
+	// / energy / code may still differ from genesis depending on caller flow;
+	// the contract is just that GetNonce returns what we last wrote.
+	assert.NoError(t, st.SetNonce(addr, 0))
+	n, err = st.GetNonce(addr)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), n)
+}
+
+func TestNonceRevert(t *testing.T) {
+	st := New(muxdb.NewMem(), trie.Root{})
+	addr := thor.BytesToAddress([]byte("nonce-rev"))
+
+	assert.NoError(t, st.SetNonce(addr, 3))
+	chk := st.NewCheckpoint()
+	assert.NoError(t, st.SetNonce(addr, 9))
+	n, _ := st.GetNonce(addr)
+	assert.Equal(t, uint64(9), n)
+
+	st.RevertTo(chk)
+	n, _ = st.GetNonce(addr)
+	assert.Equal(t, uint64(3), n, "checkpoint revert must roll back Nonce writes")
+}
+
 func TestStateRevert(t *testing.T) {
 	db := muxdb.NewMem()
 	state := New(muxdb.NewMem(), trie.Root{})
