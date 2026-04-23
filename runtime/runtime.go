@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 
@@ -25,6 +26,16 @@ import (
 	"github.com/vechain/thor/v2/vm"
 	"github.com/vechain/thor/v2/xenv"
 )
+
+// runtimeStateDB is the superset of vm.StateDB used by the runtime: it adds
+// the Thor-specific transfer / log collection helpers. Both *statedb.StateDB
+// (V1) and *statedb.StateDBV2 satisfy it, so `newEVM` can accept either and
+// the VM's interface-dispatched SetNonce routes to whichever was selected.
+type runtimeStateDB interface {
+	vm.StateDB
+	AddTransfer(*tx.Transfer)
+	GetLogs() (tx.Events, tx.Transfers)
+}
 
 var (
 	energyTransferEvent     *abi.Event
@@ -181,7 +192,23 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 	return rt
 }
 
-func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
+// newStateDB returns the StateDB flavor appropriate for this tx + fork.
+// Post-INTERSTELLAR 0x02 (TypeEthDynamicFee) gets V2 whose SetNonce writes
+// through to account state so sender-nonce bumps and EIP-158 contract-nonce
+// initialization persist. Everything else (0x00 / 0x51, any pre-INT) gets
+// V1 whose SetNonce is a no-op so `SetNonce` calls from shared code paths
+// are semantically harmless. This centralizes the tx-type + fork gate in a
+// single helper (spec 3 §2.1 / §3.3).
+func (rt *Runtime) newStateDB(trx *tx.Transaction) runtimeStateDB {
+	if trx != nil &&
+		trx.Type() == tx.TypeEthDynamicFee &&
+		thor.IsForked(rt.ctx.Number, rt.forkConfig.INTERSTELLAR) {
+		return statedb.NewV2(rt.state)
+	}
+	return statedb.New(rt.state)
+}
+
+func (rt *Runtime) newEVM(stateDB runtimeStateDB, clauseIndex uint32, txCtx *xenv.TransactionContext, trx *tx.Transaction) *vm.EVM {
 	var (
 		lastNonNativeCallGas uint64
 		baseFee              *big.Int
@@ -231,7 +258,32 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			return common.Hash(id)
 		},
-		NewContractAddress: func(_ *vm.EVM, counter uint32) common.Address {
+		NewContractAddress: func(evm *vm.EVM, counter uint32, caller common.Address) common.Address {
+			// Spec 3 §2.3: for 0x02 txs past INTERSTELLAR, produce eth-style
+			// `keccak(rlp(sender, nonce))[12:]` CREATE addresses; all other tx
+			// types keep VeChain-native derivation. Dispatch happens here
+			// (runtime side) rather than inside vm/evm.go so the VM stays
+			// chain-agnostic.
+			if trx != nil &&
+				trx.Type() == tx.TypeEthDynamicFee &&
+				thor.IsForked(rt.ctx.Number, rt.forkConfig.INTERSTELLAR) {
+				nonce := evm.StateDB.GetNonce(caller)
+				if evm.Depth() == 0 && caller == common.Address(txCtx.Origin) {
+					// Top-level CREATE from origin: runtime pre-bumped origin
+					// to N+1 outside the checkpoint (spec 3 §2.1). The VM's
+					// own sender-nonce bump at vm/evm.go:461 is gated by
+					// depth>0, so the caller.Nonce we read here is N+1; the
+					// eth address formula wants the pre-bump value (N) =
+					// nonce - 1.
+					return common.Address(crypto.CreateAddress(caller, nonce-1))
+				}
+				// Inner CREATE (or any non-origin top-level, which shouldn't
+				// happen in practice): caller is a contract whose nonce will
+				// be bumped by the VM after this callback runs. The eth
+				// formula wants the pre-bump value = current read.
+				return common.Address(crypto.CreateAddress(caller, nonce))
+			}
+			// 0x00 / 0x51 / pre-INT — VeChain-native derivation unchanged.
 			return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
 		},
 		InterceptContractCall: func(evm *vm.EVM, contract *vm.Contract, readonly bool) ([]byte, error, bool) {
@@ -373,15 +425,33 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 
 // PrepareClause prepare to execute clause.
 // It allows to interrupt execution.
+//
+// Callers with no transaction context (genesis builder, runtime unit tests)
+// reach here directly; PrepareTransaction threads the full tx through
+// prepareClauseWithTx instead so V1/V2 StateDB selection and eth-style CREATE
+// derivation can kick in when the tx is 0x02 post-INTERSTELLAR.
 func (rt *Runtime) PrepareClause(
 	clause *tx.Clause,
 	clauseIndex uint32,
 	gas uint64,
 	txCtx *xenv.TransactionContext,
 ) (exec func() (output *Output, interrupted bool, err error), interrupt func()) {
+	return rt.prepareClauseWithTx(clause, clauseIndex, gas, txCtx, nil)
+}
+
+// prepareClauseWithTx is the internal clause setup that takes the carrying tx
+// (may be nil when invoked from PrepareClause). The tx drives StateDB flavor
+// and CREATE address derivation inside newEVM / newStateDB.
+func (rt *Runtime) prepareClauseWithTx(
+	clause *tx.Clause,
+	clauseIndex uint32,
+	gas uint64,
+	txCtx *xenv.TransactionContext,
+	trx *tx.Transaction,
+) (exec func() (output *Output, interrupted bool, err error), interrupt func()) {
 	var (
-		stateDB       = statedb.New(rt.state)
-		evm           = rt.newEVM(stateDB, clauseIndex, txCtx)
+		stateDB       = rt.newStateDB(trx)
+		evm           = rt.newEVM(stateDB, clauseIndex, txCtx, trx)
 		data          []byte
 		leftOverGas   uint64
 		vmErr         error
@@ -477,6 +547,16 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 		return nil, err
 	}
 
+	// Spec 3 §2.1 — pre-bump origin.Nonce AFTER BuyGas (so nonce only moves
+	// for txs we actually include) and BEFORE NewCheckpoint (so VMErr-driven
+	// RevertTo does not undo the bump, matching eth semantics where a revert
+	// still consumes the sender's sequence slot). The rt.newStateDB gate
+	// makes this a no-op for V1 paths (non-ETH txs, pre-INT), so it is safe
+	// to run unconditionally.
+	txStateDB := rt.newStateDB(trx)
+	origin := common.Address(resolvedTx.Origin)
+	txStateDB.SetNonce(origin, txStateDB.GetNonce(origin)+1)
+
 	// ResolveTransaction has checked that tx.Gas() >= IntrinsicGas
 	leftOverGas := trx.Gas() - resolvedTx.IntrinsicGas
 	// checkpoint to be reverted when clause failure.
@@ -494,7 +574,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 		HasNextClause: hasNext,
 		PrepareNext: func() (exec func() (bool, error), interrupt func()) {
 			nextClauseIndex := uint32(len(txOutputs))
-			execFunc, interrupt := rt.PrepareClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
+			execFunc, interrupt := rt.prepareClauseWithTx(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx, trx)
 
 			exec = func() (interrupted bool, err error) {
 				if rt.vmConfig.Tracer != nil {

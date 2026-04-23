@@ -38,8 +38,12 @@ type (
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
 
-	// NewContractAddressFunc create a new contract according to current evm context and creation counter.
-	NewContractAddressFunc func(evm *EVM, counter uint32) common.Address
+	// NewContractAddressFunc returns the address for a new CREATE frame.
+	// `caller` is the immediate caller of the CREATE op (origin for top-level,
+	// the invoking contract for inner CREATE). The implementation may read
+	// evm.StateDB.GetNonce(caller) and evm.Depth() to branch between
+	// VeChain-native and eth-style derivation (see runtime/runtime.go spec 3 §2.3).
+	NewContractAddressFunc func(evm *EVM, counter uint32, caller common.Address) common.Address
 	// InterceptContractCallFunc intercept contract call.
 	InterceptContractCallFunc func(evm *EVM, contract *Contract, readonly bool) ([]byte, error, bool)
 
@@ -398,7 +402,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount)
+	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount, caller.Address())
 
 	if evm.vmConfig.Tracer != nil {
 		// Capture the tracer start/end events in debug mode
@@ -458,7 +462,15 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
-	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	// Top-level CREATE's caller is the tx origin, whose nonce the runtime has
+	// already pre-bumped outside the checkpoint (spec 3 §2.1). Bumping here
+	// too would double-bump. Inner CREATE (depth > 0) still needs the bump
+	// because the caller is a contract whose nonce only this path updates.
+	// V1 StateDB's SetNonce is a no-op anyway (0x00/0x51/pre-INT), so this
+	// gate is semantically harmless outside V2 contexts.
+	if evm.depth > 0 {
+		evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	}
 
 	// Increase counter, same behavior as Create()
 	// We already have address, just need to increase the counter.
