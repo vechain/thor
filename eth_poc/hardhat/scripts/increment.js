@@ -23,9 +23,11 @@ async function main() {
 
   const before = await counter.count();
   console.log("Count before:", before.toString());
+  console.log("Message before:", await counter.lastMessage());
 
-  console.log("Sending increment()...");
-  const tx = await counter.increment();
+  const msg = `hello from increment.js at ${new Date().toISOString()}`;
+  console.log(`Sending increment("${msg}")...`);
+  const tx = await counter.increment(msg);
   console.log("Tx hash:", tx.hash);
 
   const receipt = await tx.wait();
@@ -33,13 +35,14 @@ async function main() {
 
   const after = await counter.count();
   console.log("Count after:", after.toString());
+  console.log("Message after:", await counter.lastMessage());
 
   for (const log of receipt.logs) {
     try {
       const parsed = counter.interface.parseLog(log);
       if (parsed?.name === "CounterIncreased") {
         console.log(
-          `Event: CounterIncreased(by=${parsed.args.by}, newCount=${parsed.args.newCount})`
+          `Event: CounterIncreased(by=${parsed.args.by}, newCount=${parsed.args.newCount}, message="${parsed.args.message}")`
         );
       }
     } catch (_) {}

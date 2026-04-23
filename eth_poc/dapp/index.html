@@ -176,6 +176,24 @@
       font-size: 0.85rem;
       color: #8b949e;
     }
+
+    .msg-input {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .msg-input::placeholder { color: #484f58; }
+    .msg-input:focus { border-color: #58a6ff; }
+    .msg-input:disabled { opacity: 0.45; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -195,6 +213,12 @@
     <div class="counter-value" id="counterValue">—</div>
   </div>
 
+  <!-- Last message -->
+  <div class="section-label">Last message</div>
+  <div class="value-box">
+    <div class="address-text" id="lastMessage" style="color:#e6edf3;font-family:system-ui">—</div>
+  </div>
+
   <!-- Contract address -->
   <div class="section-label">Contract</div>
   <div class="value-box">
@@ -202,6 +226,14 @@
   </div>
 
   <!-- Actions -->
+  <input
+    class="msg-input"
+    id="msgInput"
+    type="text"
+    placeholder="Message to attach…"
+    maxlength="280"
+    disabled
+  />
   <button class="btn-primary" id="incrementBtn" disabled>Increment Counter</button>
   <button class="btn-secondary" id="connectBtn">Connect Wallet</button>
 
@@ -228,8 +260,9 @@ const DEPLOYMENT_URL = "../hardhat/deployments/counter.json";
 
 const COUNTER_ABI = [
   "function count() view returns (uint256)",
-  "function increment() external",
-  "event CounterIncreased(address indexed by, uint256 newCount)",
+  "function lastMessage() view returns (string)",
+  "function increment(string message) external",
+  "event CounterIncreased(address indexed by, uint256 newCount, string message)",
 ];
 
 const VECHAIN_SOLO_NETWORK = {
@@ -344,6 +377,7 @@ async function connectWallet() {
     clearStatus();
 
     $("incrementBtn").disabled = false;
+    $("msgInput").disabled = false;
     $("connectBtn").textContent = "Switch Account";
 
     await refreshCount();
@@ -361,13 +395,14 @@ async function connectWallet() {
 async function refreshCount() {
   if (!contract) return;
   try {
-    const c = await contract.count();
+    const [c, msg] = await Promise.all([contract.count(), contract.lastMessage()]);
     $("counterValue").textContent = c.toString();
+    $("lastMessage").textContent  = msg || "—";
   } catch (_) {}
 }
 
 function startPolling() {
-  setInterval(refreshCount, 4000);
+  setInterval(refreshCount, 1000);
 }
 
 // ─── Load recent events ──────────────────────────────────────────────────────
@@ -390,8 +425,9 @@ async function loadRecentEvents() {
       .slice(-20)
       .reverse()
       .map((log) => {
-        const by = log.args.by.slice(0, 10) + "…";
-        return `<div class="event-row">block ${log.blockNumber} · by ${by} → count=${log.args.newCount}</div>`;
+        const by  = log.args.by.slice(0, 10) + "…";
+        const msg = log.args.message ? ` · "${log.args.message}"` : "";
+        return `<div class="event-row">block ${log.blockNumber} · by ${by} → count=${log.args.newCount}${msg}</div>`;
       })
       .join("");
   } catch (_) {}
@@ -402,11 +438,14 @@ async function loadRecentEvents() {
 async function increment() {
   if (!contract || !signer) return;
 
+  const userMsg = $("msgInput").value.trim() || `dapp @ ${new Date().toISOString()}`;
+
   $("incrementBtn").disabled = true;
+  $("msgInput").disabled = true;
   setStatus("Sending transaction…", "info");
 
   try {
-    const tx = await contract.increment();
+    const tx = await contract.increment(userMsg);
     setStatus(
       `Transaction sent. Waiting for confirmation…` +
       `<a class="tx-link" href="#" onclick="return false">${tx.hash}</a>`,
@@ -431,6 +470,7 @@ async function increment() {
     setStatus("Transaction failed: " + msg, "error");
   } finally {
     $("incrementBtn").disabled = false;
+    $("msgInput").disabled = false;
   }
 }
 
@@ -456,6 +496,9 @@ function attachWalletListeners() {
 document.addEventListener("DOMContentLoaded", async () => {
   $("connectBtn").addEventListener("click", connectWallet);
   $("incrementBtn").addEventListener("click", increment);
+  $("msgInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !$("incrementBtn").disabled) increment();
+  });
   attachWalletListeners();
   await loadDeployment();
 });

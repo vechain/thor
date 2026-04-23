@@ -8,9 +8,11 @@ package httpserver
 import (
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api/ethcompat"
@@ -25,6 +27,7 @@ import (
 // StartEthRPCServer starts the Ethereum JSON-RPC 2.0 compatibility server.
 func StartEthRPCServer(
 	addr string,
+	allowedOrigins string,
 	repo *chain.Repository,
 	stater *state.Stater,
 	txPool txpool.Pool,
@@ -39,9 +42,14 @@ func StartEthRPCServer(
 		return "", nil, errors.Wrapf(err, "listen ETH RPC addr [%v]", addr)
 	}
 
+	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
+	for i, o := range origins {
+		origins[i] = strings.TrimSpace(o)
+	}
+
 	rpc := ethcompat.New(repo, stater, txPool, logDB, bft, forkConfig, callGasLimit, version)
 	srv := &http.Server{
-		Handler:           rpc,
+		Handler:           handlers.CORS(handlers.AllowedOrigins(origins))(rpc),
 		ReadHeaderTimeout: time.Second,
 		ReadTimeout:       5 * time.Second,
 	}

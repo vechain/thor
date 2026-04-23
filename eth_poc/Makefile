@@ -5,7 +5,7 @@ ETH_PORT   := 8545
 API_PORT   := 8669
 DAPP_PORT  := 3000
 
-.PHONY: all build start install deploy increment dapp reset clean
+.PHONY: all build start install deploy increment spam dapp reset clean
 
 all: build
 
@@ -23,6 +23,7 @@ start: build
 	$(THOR) solo \
 		--eth-rpc-addr localhost:$(ETH_PORT) \
 		--api-addr     localhost:$(API_PORT) \
+		--api-cors     "*" \
 		--data-dir     $(ROOT)/data \
 		--verbosity    3
 
@@ -32,6 +33,7 @@ start-mem: build
 	$(THOR) solo \
 		--eth-rpc-addr localhost:$(ETH_PORT) \
 		--api-addr     localhost:$(API_PORT) \
+		--api-cors     "*" \
 		--verbosity    3
 
 ## install — npm install inside hardhat/
@@ -45,6 +47,10 @@ deploy: install
 ## increment — call Counter.increment() once
 increment:
 	@cd $(ROOT)/hardhat && npx hardhat run scripts/increment.js --network vechain_solo
+
+## spam — send increment txs every 2s via ETH RPC and VeChain native API concurrently
+spam: install
+	@cd $(ROOT)/hardhat && node scripts/spam.js
 
 ## dapp — serve the DApp on http://localhost:$(DAPP_PORT)/dapp/
 dapp:

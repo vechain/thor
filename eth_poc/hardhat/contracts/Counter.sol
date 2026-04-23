@@ -3,11 +3,13 @@ pragma solidity ^0.8.24;
 
 contract Counter {
     uint256 public count;
+    string public lastMessage;
 
-    event CounterIncreased(address indexed by, uint256 newCount);
+    event CounterIncreased(address indexed by, uint256 newCount, string message);
 
-    function increment() external {
+    function increment(string calldata message) external {
         count += 1;
-        emit CounterIncreased(msg.sender, count);
+        lastMessage = message;
+        emit CounterIncreased(msg.sender, count, message);
     }
 }

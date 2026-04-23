@@ -334,6 +334,7 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	if ethRPCAddr := ctx.String(ethRPCAddrFlag.Name); ethRPCAddr != "" {
 		ethURL, ethCloser, ethErr := httpserver.StartEthRPCServer(
 			ethRPCAddr,
+			ctx.String(apiCorsFlag.Name),
 			repo,
 			state.NewStater(mainDB),
 			txPool,
@@ -549,6 +550,7 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	if ethRPCAddr := ctx.String(ethRPCAddrFlag.Name); ethRPCAddr != "" {
 		ethURL, ethCloser, ethErr := httpserver.StartEthRPCServer(
 			ethRPCAddr,
+			ctx.String(apiCorsFlag.Name),
 			repo,
 			stater,
 			pool,
