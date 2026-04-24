@@ -119,7 +119,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // one structured log line per invocation (when request logging is enabled).
 func (s *Server) dispatchAndLog(ctx context.Context, body []byte, start time.Time) (env rpcResponse) {
 	method := "(unknown)"
-	defer func() { s.logExchange(method, env, body, time.Since(start)) }()
+	// previewSrc is what logExchange reads for params_preview. Default to the
+	// raw body (useful on parse/batch errors). Once the envelope parses, we
+	// swap to req.Params so the log shows only the actual parameters — no
+	// duplicated "jsonrpc":"2.0","method":"..." envelope noise.
+	var previewSrc []byte = body
+	defer func() { s.logExchange(method, env, previewSrc, time.Since(start)) }()
 
 	// Reject array-form (batch) requests up-front with a clear message.
 	// Scan for the first non-whitespace byte.
@@ -146,6 +151,10 @@ func (s *Server) dispatchAndLog(ctx context.Context, body []byte, start time.Tim
 
 	// Method is known at this point; update so the defer captures it.
 	method = req.Method
+	// Params are known too; prefer them over the raw body for the log preview.
+	if len(req.Params) > 0 {
+		previewSrc = req.Params
+	}
 
 	handler, ok := s.dispatch[req.Method]
 	if !ok {

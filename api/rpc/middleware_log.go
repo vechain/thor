@@ -80,8 +80,10 @@ func reasonFromError(err *RPCError) string {
 }
 
 // paramsPreview returns up to paramsPreviewLimit bytes of raw, appending
-// "...(truncated)" when the input is longer. When the request body cannot be
-// parsed, callers pass the raw body here so the preview still captures context.
+// "...(truncated)" when the input is longer. The caller passes req.Params
+// when the envelope parses (so we skip the "jsonrpc"/"method"/"id" keys);
+// on parse or batch errors it passes the raw body as a fallback so the
+// preview still captures context.
 func paramsPreview(raw []byte) string {
 	if len(raw) <= paramsPreviewLimit {
 		return string(raw)
