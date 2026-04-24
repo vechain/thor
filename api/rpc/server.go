@@ -11,6 +11,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"time"
 
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
@@ -96,7 +97,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	start := time.Now()
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, s.cfg.bodyLimit()))
+	defer r.Body.Close()
 	if err != nil {
 		// MaxBytesReader produces http.MaxBytesError after the limit; treat
 		// either error as a parse-time failure rather than a transport one so
@@ -104,43 +107,55 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", Error: ReasonError(ReasonOversizedData, "request body too large: "+err.Error())})
 		return
 	}
-	defer r.Body.Close()
+
+	env := s.dispatchAndLog(r.Context(), body, start)
+	writeEnvelope(w, env)
+}
+
+// dispatchAndLog handles the dispatch logic for a single JSON-RPC request,
+// returning the response envelope. The ctx and start parameters are reserved
+// for Task 1.3's logging middleware (a future defer will emit one log line per
+// call using these values). The named return value env allows that future defer
+// to read the final envelope without additional wiring.
+func (s *Server) dispatchAndLog(ctx context.Context, body []byte, start time.Time) (env rpcResponse) {
+	_ = start // reserved for Task 1.3 logging
 
 	// Reject array-form (batch) requests up-front with a clear message.
 	// Scan for the first non-whitespace byte.
 	if firstNonSpace(body) == '[' {
-		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", Error: InvalidRequest("batch requests not supported")})
+		env = rpcResponse{JSONRPC: "2.0", Error: InvalidRequest("batch requests not supported")}
 		return
 	}
 
 	var req rpcRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", Error: ParseError(err.Error())})
+		env = rpcResponse{JSONRPC: "2.0", Error: ParseError(err.Error())}
 		return
 	}
 
 	// Validate envelope.
 	if req.JSONRPC != "2.0" {
-		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: InvalidRequest("jsonrpc version must be \"2.0\"")})
+		env = rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: InvalidRequest("jsonrpc version must be \"2.0\"")}
 		return
 	}
 	if req.Method == "" {
-		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: InvalidRequest("method required")})
+		env = rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: InvalidRequest("method required")}
 		return
 	}
 
 	handler, ok := s.dispatch[req.Method]
 	if !ok {
-		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: MethodNotFound(req.Method)})
+		env = rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: MethodNotFound(req.Method)}
 		return
 	}
 
-	result, rpcErr := handler(r.Context(), s, req.Params)
+	result, rpcErr := handler(ctx, s, req.Params)
 	if rpcErr != nil {
-		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: rpcErr})
+		env = rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}
 		return
 	}
-	writeEnvelope(w, rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result, resultSet: true})
+	env = rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: result, resultSet: true}
+	return
 }
 
 // writeEnvelope serializes the response envelope and writes it to w. On
