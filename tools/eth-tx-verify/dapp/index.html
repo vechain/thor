@@ -70,10 +70,10 @@
     </section>
 </main>
 
-<!-- Sidebar placeholder — Task 3.4 -->
+<!-- Sidebar ⑤ RPC log -->
 <aside>
     <h3>⑤ RPC log</h3>
-    <div id="log-panel">Coming in Task 3.4.</div>
+    <div id="log-panel" style="overflow-y:auto; max-height: calc(100vh - 60px);"></div>
 </aside>
 
 <script type="module">
@@ -84,6 +84,54 @@
 
     const RPC_URL = 'http://localhost:8669/rpc';
     const ENERGY_ADDR = '0x0000000000000000000000000000456E65726779';
+
+    // ── LoggingProvider ───────────────────────────────────────────────────────
+
+    class LoggingProvider extends BrowserProvider {
+        async send(method, params) {
+            const start = performance.now();
+            try {
+                const result = await super.send(method, params);
+                logToPanel({ method, params, result, ms: performance.now() - start, ok: true });
+                return result;
+            } catch (err) {
+                logToPanel({ method, params, error: err, ms: performance.now() - start, ok: false });
+                throw err;
+            }
+        }
+    }
+
+    const MAX_LOG_ENTRIES = 50;
+
+    function logToPanel(entry) {
+        const panel = document.getElementById('log-panel');
+        if (!panel) return;
+
+        const div = document.createElement('div');
+        div.style.borderBottom = '1px solid #333';
+        div.style.padding = '4px 0';
+        div.style.color = entry.ok ? '#8be9fd' : '#ff5555';
+
+        const paramsStr = JSON.stringify(entry.params);
+        const paramsPreview = paramsStr.length > 80 ? paramsStr.slice(0, 77) + '...' : paramsStr;
+
+        let result;
+        if (entry.ok) {
+            const resultStr = JSON.stringify(entry.result);
+            result = resultStr && resultStr.length > 40 ? resultStr.slice(0, 37) + '...' : resultStr;
+        } else {
+            result = 'ERR: ' + (entry.error.message || String(entry.error));
+            if (result.length > 60) result = result.slice(0, 57) + '...';
+        }
+
+        div.innerHTML = `<strong>${entry.method}</strong> <span style="opacity:0.7">${entry.ms.toFixed(1)}ms</span><br><small>${paramsPreview}</small><br>${result}`;
+        panel.prepend(div);
+
+        // Cap entries
+        while (panel.children.length > MAX_LOG_ENTRIES) {
+            panel.removeChild(panel.lastChild);
+        }
+    }
 
     // Compiled with solc 0.8.28 --optimize
     const COUNTER = {
@@ -164,7 +212,7 @@
 
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
             account = accounts[0];
-            provider = new BrowserProvider(window.ethereum);
+            provider = new LoggingProvider(window.ethereum);
             signer = await provider.getSigner();
 
             setStatus('account', `Account: ${account}`);
