@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETH-Tx Verification Toolkit — VeChain Solo DApp</title>
+    <style>
+        * { box-sizing: border-box; font-family: -apple-system, Segoe UI, sans-serif; }
+        body { margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 360px; min-height: 100vh; }
+        main { padding: 24px; max-width: 720px; }
+        aside { background: #111; color: #eee; padding: 16px; font-family: Menlo, monospace; font-size: 12px; overflow-y: auto; }
+        .banner { background: #fdecea; border: 1px solid #e74c3c; color: #c0392b; padding: 12px; margin-bottom: 16px; border-radius: 4px; }
+        section { background: #fafafa; border: 1px solid #ddd; padding: 16px; margin-bottom: 12px; border-radius: 4px; }
+        section h2 { margin-top: 0; font-size: 16px; }
+        button { padding: 8px 14px; cursor: pointer; }
+        .status { font-family: Menlo, monospace; font-size: 13px; color: #555; margin-top: 8px; }
+        .error { color: #c0392b; }
+        .ok { color: #27ae60; }
+    </style>
+</head>
+<body>
+<main>
+    <div class="banner">
+        ⚠️ <strong>MetaMask gas estimates display as VET, but Thor actually charges in VTHO.</strong>
+        Solo dev accounts have unlimited VTHO, so this is cosmetic here — but a mainnet deployment would require separate VTHO-awareness.
+    </div>
+
+    <!-- Panel ① Network setup -->
+    <section>
+        <h2>① Network setup</h2>
+        <button id="add-chain">Add VeChain Solo to MetaMask</button>
+        <div class="status" id="add-chain-status">Click to resolve chainId from RPC and prompt MetaMask.</div>
+    </section>
+
+    <!-- Panel ② Wallet connect -->
+    <section>
+        <h2>② Wallet connect</h2>
+        <button id="connect">Connect Wallet</button>
+        <div class="status" id="account">Not connected</div>
+        <div class="status" id="vet">VET: —</div>
+        <div class="status" id="vtho">VTHO: —</div>
+        <div class="status" id="chain-check"></div>
+    </section>
+
+    <!-- Panel ③ placeholder — Task 3.3 -->
+    <section>
+        <h2>③ Send VET (0x02 transfer)</h2>
+        <div class="status">Coming in Task 3.3.</div>
+    </section>
+
+    <!-- Panel ④ placeholder — Task 3.3 -->
+    <section>
+        <h2>④ Deploy &amp; Call (CREATE address verification)</h2>
+        <div class="status">Coming in Task 3.3.</div>
+    </section>
+</main>
+
+<!-- Sidebar placeholder — Task 3.4 -->
+<aside>
+    <h3>⑤ RPC log</h3>
+    <div id="log-panel">Coming in Task 3.4.</div>
+</aside>
+
+<script type="module">
+    import { BrowserProvider, formatEther, Interface } from 'https://esm.sh/ethers@6.13.4';
+
+    const RPC_URL = 'http://localhost:8669/rpc';
+    const ENERGY_ADDR = '0x0000000000000000000000000000456E65726779';
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function setStatus(id, text, cls) {
+        const el = document.getElementById(id);
+        el.textContent = text;
+        el.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    async function rpcCall(method, params = []) {
+        const res = await fetch(RPC_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 }),
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message ?? JSON.stringify(json.error));
+        return json.result;
+    }
+
+    // ── Panel ① — Add Chain ───────────────────────────────────────────────
+
+    document.getElementById('add-chain').addEventListener('click', async () => {
+        const btn = document.getElementById('add-chain');
+        btn.disabled = true;
+        setStatus('add-chain-status', 'Resolving chainId from RPC…');
+
+        try {
+            if (!window.ethereum) throw new Error('MetaMask not detected. Please install MetaMask.');
+
+            const chainId = await rpcCall('eth_chainId');
+            setStatus('add-chain-status', `Resolved chainId: ${chainId} — prompting MetaMask…`);
+
+            await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                    chainId,
+                    chainName: 'VeChain Solo',
+                    nativeCurrency: { name: 'VeChainThor', symbol: 'VET', decimals: 18 },
+                    rpcUrls: [RPC_URL],
+                    blockExplorerUrls: [],
+                }],
+            });
+
+            setStatus('add-chain-status', `✅ Added / switched to VeChain Solo (chainId=${chainId})`, 'ok');
+        } catch (err) {
+            const msg = err.code === 4001
+                ? `MetaMask rejected: ${err.message}`
+                : `Error: ${err.message}`;
+            setStatus('add-chain-status', msg, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // ── Panel ② — Connect Wallet ──────────────────────────────────────────
+
+    document.getElementById('connect').addEventListener('click', async () => {
+        const btn = document.getElementById('connect');
+        btn.disabled = true;
+        setStatus('account', 'Connecting…');
+
+        try {
+            if (!window.ethereum) throw new Error('MetaMask not detected. Please install MetaMask.');
+
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            const address = accounts[0];
+            setStatus('account', `Account: ${address}`);
+
+            const provider = new BrowserProvider(window.ethereum);
+
+            // VET balance via eth_getBalance
+            const vetWei = await provider.getBalance(address);
+            setStatus('vet', 'VET: ' + formatEther(vetWei));
+
+            // VTHO balance via eth_call to Energy precompile
+            const data = '0x70a08231' + address.slice(2).padStart(64, '0');
+            const raw = await provider.send('eth_call', [{ to: ENERGY_ADDR, data }, 'latest']);
+            const vthoWei = BigInt(raw);
+            setStatus('vtho', 'VTHO: ' + formatEther(vthoWei));
+
+            // Chain sanity check
+            const currentChain = await provider.send('eth_chainId', []);
+            const addedChain = await rpcCall('eth_chainId');
+            if (currentChain.toLowerCase() !== addedChain.toLowerCase()) {
+                setStatus('chain-check',
+                    `⚠️ Chain mismatch: MetaMask=${currentChain}, solo=${addedChain}. Switch to VeChain Solo.`,
+                    'error');
+            } else {
+                setStatus('chain-check', `Chain: ${currentChain} ✅`, 'ok');
+            }
+        } catch (err) {
+            const msg = err.code === 4001
+                ? `MetaMask rejected: ${err.message}`
+                : `Error: ${err.message}`;
+            setStatus('account', msg, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
