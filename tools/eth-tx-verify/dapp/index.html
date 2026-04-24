@@ -37,10 +37,12 @@
     <section>
         <h2>② Wallet connect</h2>
         <button id="connect">Connect Wallet</button>
+        <button id="watch-vtho" style="margin-left:8px">Add VTHO to MetaMask</button>
         <div class="status" id="account">Not connected</div>
         <div class="status" id="vet">VET: —</div>
         <div class="status" id="vtho">VTHO: —</div>
         <div class="status" id="chain-check"></div>
+        <div class="status" id="watch-vtho-status"></div>
     </section>
 
     <!-- Panel ③ Send VET (0x02 transfer) -->
@@ -244,6 +246,35 @@
                 ? `MetaMask rejected: ${err.message}`
                 : `Error: ${err.message}`;
             setStatus('account', msg, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // ── Panel ② — Add VTHO to MetaMask (wallet_watchAsset / EIP-747) ─────
+    //
+    // VTHO is Thor's gas token but MetaMask's native currency is VET, so
+    // gas UX stays wrong either way. This button surfaces VTHO as an ERC-20
+    // in the Tokens tab so users can at least see their VTHO balance drop
+    // after each tx.
+    document.getElementById('watch-vtho').addEventListener('click', async () => {
+        const btn = document.getElementById('watch-vtho');
+        btn.disabled = true;
+        setStatus('watch-vtho-status', 'Requesting MetaMask…');
+        try {
+            if (!window.ethereum) throw new Error('MetaMask not detected.');
+            const ok = await window.ethereum.request({
+                method: 'wallet_watchAsset',
+                params: {
+                    type: 'ERC20',
+                    options: { address: ENERGY_ADDR, symbol: 'VTHO', decimals: 18 },
+                },
+            });
+            setStatus('watch-vtho-status',
+                ok ? 'VTHO added to MetaMask ✅' : 'User declined.',
+                ok ? 'ok' : 'error');
+        } catch (err) {
+            setStatus('watch-vtho-status', `Error: ${err.message}`, 'error');
         } finally {
             btn.disabled = false;
         }

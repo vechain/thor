@@ -23,6 +23,7 @@ For each step, confirm the outcome before proceeding.
 
 1. [ ] "Add VeChain Solo to MetaMask" succeeds: chainId appears in MetaMask's network list (value e.g. `0xe558`).
 2. [ ] "Connect Wallet" shows the dev account address, VET balance, and VTHO balance (VTHO via the Energy precompile `0x0...456E65726779`).
+  * Optional — click "Add VTHO to MetaMask" → MetaMask prompts to watch the VTHO token (ERC-20 via the Energy contract). Accept → VTHO appears in MetaMask's Tokens tab with live balance.
 3. [ ] "Send 0.1 VET" succeeds: MetaMask signs, status transitions `pending → mined(blk=N)`. Thor's stdout shows `eth-rpc method=eth_sendRawTransaction code=0`.
 4. [ ] "Deploy Counter" succeeds: receipt.contractAddress matches the local `getCreateAddress(from, nonce)` computation. Green ✅ indicator.
 5. [ ] `+1` and `+5` increment the counter; `value()` reads the updated value.
