@@ -24,131 +24,144 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
-// Solo dev account #0 — infinite VET + VTHO. See
-// thor/genesis/devnet.go (or equivalent) for the canonical list.
+// Solo dev account #0 — infinite VET + VTHO. Used as the default for all
+// tx types except 0x02 RPC (which needs its own signer to avoid a nonce
+// race when the REST path submits in the same batch; see the 0x02-RPC
+// signer note below).
 const defaultSoloDevKey = "99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36"
 
 func main() {
 	url := flag.String("url", "http://localhost:8669", "Solo node base URL")
 	interval := flag.Duration("interval", 2*time.Second, "Batch interval")
 	batch := flag.Int("batch", 1, "Multiplier per (type,path) cell (10 * batch = tx per tick)")
-	keyFlag := flag.String("key", defaultSoloDevKey, "Hex private key (no 0x prefix)")
+	keyFlag := flag.String("key", defaultSoloDevKey, "Hex private key for REST + VET paths (no 0x prefix)")
+	receiptTimeout := flag.Duration("receipt-timeout", 15*time.Second, "Max age before a batch is printed with remaining MISSes (use ~1.5×block interval)")
 	dryRun := flag.Bool("dry-run", false, "Build & sign but do not submit")
 	flag.Parse()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// --- Derive signer address + private key ---
+	// --- Primary signer (REST 0x02 + all 0x00/0x51) ---
 	key, err := crypto.HexToECDSA(*keyFlag)
 	if err != nil {
 		log.Fatalf("bad -key: %v", err)
 	}
-	ethAddr := crypto.PubkeyToAddress(key.PublicKey)
-	signerAddr := ethAddr.Hex()
-	signer := thor.BytesToAddress(ethAddr.Bytes())
-	_ = signer // may be useful for future diagnostics
+	signerAddr := crypto.PubkeyToAddress(key.PublicKey).Hex()
 
-	// --- Fetch chainID ---
+	// --- Secondary signer for 0x02 RPC path (dev account #4) ---
+	// Rationale: within one batch we submit 0x02 on REST and then 0x02 on
+	// RPC back-to-back. Both hit txpool.StrictlyAdd which rejects any tx
+	// whose nonce is ahead of the account's state nonce ("tx is not
+	// executable"). Using the same signer for both forces the second
+	// submission to wait for the first to be mined and for state to
+	// advance — a race that's flaky in timer-based solo and even in
+	// on-demand solo under load. Separating signers gives each path its
+	// own independent nonce counter and removes the dependency entirely.
+	keyRPC := genesis.DevAccounts()[4].PrivateKey
+	signerRPCAddr := crypto.PubkeyToAddress(keyRPC.PublicKey).Hex()
+
+	// --- ChainID / chainTag / blockRef ---
 	chainID, err := GetEthChainID(ctx, *url)
 	if err != nil {
 		log.Fatalf("GetEthChainID: %v", err)
 	}
-	log.Printf("chainID: %d (0x%x)", chainID, chainID)
-
-	// --- Fetch genesis chainTag (last byte of /blocks/0 ID) ---
 	chainTag, err := fetchGenesisChainTag(ctx, *url)
 	if err != nil {
 		log.Fatalf("fetchGenesisChainTag: %v", err)
 	}
-	log.Printf("chainTag: 0x%02x", chainTag)
-
-	// --- Fetch best block blockRef ---
 	blockRef, err := freshBlockRef(ctx, *url)
 	if err != nil {
 		log.Fatalf("freshBlockRef: %v", err)
 	}
-	log.Printf("initial blockRef: 0x%x", blockRef)
 
-	// --- Fetch 0x02 nonce ---
+	// --- Nonce counters: one per 0x02 signer ---
 	initialNonce, err := GetEthNonce(ctx, *url, signerAddr)
 	if err != nil {
-		log.Fatalf("GetEthNonce: %v", err)
+		log.Fatalf("GetEthNonce primary: %v", err)
 	}
 	nonce := NewEthNonce(initialNonce)
-	log.Printf("initial nonce: %d", initialNonce)
 
-	// --- Start banner ---
+	initialNonceRPC, err := GetEthNonce(ctx, *url, signerRPCAddr)
+	if err != nil {
+		log.Fatalf("GetEthNonce rpc: %v", err)
+	}
+	nonceRPC := NewEthNonce(initialNonceRPC)
+
+	// --- Banner ---
 	fmt.Printf("\ntxblast starting\n")
-	fmt.Printf("  url=%s  interval=%s  batch=%d  dry-run=%t\n", *url, *interval, *batch, *dryRun)
-	fmt.Printf("  signer=%s\n", signerAddr)
-	fmt.Printf("  chainID=%d  chainTag=0x%02x  blockRef=0x%x  nonce=%d\n\n",
-		chainID, chainTag, blockRef, initialNonce)
+	fmt.Printf("  url=%s  interval=%s  batch=%d  dry-run=%t  receipt-timeout=%s\n",
+		*url, *interval, *batch, *dryRun, *receiptTimeout)
+	fmt.Printf("  signer (REST + VET)     = %s  nonce=%d\n", signerAddr, initialNonce)
+	fmt.Printf("  signer (RPC 0x02)       = %s  nonce=%d\n", signerRPCAddr, initialNonceRPC)
+	fmt.Printf("  chainID=%d (0x%x)  chainTag=0x%02x  blockRef=0x%x\n\n",
+		chainID, chainID, chainTag, blockRef)
 
-	// --- Batch loop ---
+	// --- Batch loop with pending queue ---
+	// Each tick:
+	//   1. Query receipts for every unresolved row in every pending batch.
+	//   2. While the oldest pending batch is (a) fully resolved or
+	//      (b) older than receiptTimeout, print it and pop.
+	//   3. Submit a new batch; push to the queue tail.
+	//
+	// This decouples "when a batch was submitted" from "when its receipts
+	// are available" so timer-based solo (10s block interval) doesn't
+	// leave rows stuck on MISS forever.
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
 
-	var lastBatch []Row
+	var pending []*pendingBatch
 	batchN := 0
-	var nonceDesyncStreak int
+	var nonceDesyncStreak, nonceRPCDesyncStreak int
+
+	flush := func() {
+		// Called on shutdown — drain whatever's left with one last
+		// receipt pass and print.
+		for _, pb := range pending {
+			queryPendingReceipts(ctx, *url, pb.rows)
+			printBatch(pb)
+		}
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			// Final tick — query receipts for the last batch and print.
-			if len(lastBatch) > 0 {
-				queryReceipts(ctx, *url, lastBatch)
-				PrintBatchHeader(batchN, time.Now())
-				for _, r := range lastBatch {
-					PrintRow(r)
-				}
-				PrintSummary(lastBatch)
-			}
+			flush()
 			fmt.Println("txblast stopping")
 			return
 
 		case <-ticker.C:
-			// Query receipts for the PREVIOUS batch, print it.
-			if len(lastBatch) > 0 {
-				queryReceipts(ctx, *url, lastBatch)
-				PrintBatchHeader(batchN, time.Now())
-				for _, r := range lastBatch {
-					PrintRow(r)
-				}
-				PrintSummary(lastBatch)
+			// 1. Query pending receipts.
+			for _, pb := range pending {
+				queryPendingReceipts(ctx, *url, pb.rows)
+			}
 
-				// Nonce desync recovery.
-				desyncThisBatch := 0
-				for _, r := range lastBatch {
-					if r.Spec.Type == 0x02 && r.Submit.Err != nil &&
-						(strings.Contains(r.Submit.Err.Error(), "nonce_too_low") ||
-							strings.Contains(r.Submit.Err.Error(), "nonce_too_high")) {
-						desyncThisBatch++
-					}
-				}
-				if desyncThisBatch > 0 {
-					nonceDesyncStreak++
+			// 2. Pop & print resolved or aged-out batches (at most one
+			//    per tick keeps the stream readable).
+			for len(pending) > 0 {
+				head := pending[0]
+				if allResolved(head.rows) || time.Since(head.submittedAt) >= *receiptTimeout {
+					printBatch(head)
+					// Nonce recovery check tied to the head (which is oldest).
+					nonceDesyncStreak, nonceRPCDesyncStreak = updateDesyncAndMaybeReset(
+						ctx, *url, head.rows, nonce, nonceRPC,
+						signerAddr, signerRPCAddr, nonceDesyncStreak, nonceRPCDesyncStreak,
+					)
+					pending = pending[1:]
 				} else {
-					nonceDesyncStreak = 0
-				}
-				if nonceDesyncStreak >= 3 {
-					n, err := GetEthNonce(ctx, *url, signerAddr)
-					if err == nil {
-						nonce.Reset(n)
-						fmt.Println("[info] nonce resynced to", n)
-					}
-					nonceDesyncStreak = 0
+					break
 				}
 			}
 
-			// Build + submit the NEW batch.
+			// 3. Submit new batch.
 			batchN++
-			lastBatch = runBatch(ctx, *url, *batch, key, chainTag, chainID, blockRef, nonce, *dryRun)
+			rows := runBatch(ctx, *url, *batch, key, keyRPC, chainTag, chainID, blockRef, nonce, nonceRPC, *dryRun)
+			pending = append(pending, &pendingBatch{batchN: batchN, submittedAt: time.Now(), rows: rows})
 
 			// Refresh blockRef for newer tx validity.
 			if ref, err := freshBlockRef(ctx, *url); err == nil {
@@ -158,17 +171,109 @@ func main() {
 	}
 }
 
-func runBatch(ctx context.Context, url string, mult int, key *ecdsa.PrivateKey,
-	chainTag byte, chainID uint64, blockRef tx.BlockRef, nonce *EthNonce, dryRun bool) []Row {
+// pendingBatch tracks a submitted batch awaiting receipt resolution.
+type pendingBatch struct {
+	batchN      int
+	submittedAt time.Time
+	rows        []Row
+}
 
+// allResolved reports whether every row in rows has reached a terminal state
+// (submit error, dry-run, or a receipt with Found=true or non-nil Err).
+func allResolved(rows []Row) bool {
+	for _, r := range rows {
+		if r.Submit.Err != nil || r.Submit.TxID == "" || r.Submit.TxID == "dry-run" {
+			continue // terminal
+		}
+		if !r.Receipt.Found && r.Receipt.Err == nil {
+			return false // still pending
+		}
+	}
+	return true
+}
+
+func printBatch(pb *pendingBatch) {
+	PrintBatchHeader(pb.batchN, pb.submittedAt)
+	for _, r := range pb.rows {
+		PrintRow(r)
+	}
+	PrintSummary(pb.rows)
+}
+
+// updateDesyncAndMaybeReset is called when a batch's receipts are finalized
+// (either fully resolved or aged out). It tracks consecutive desync streaks
+// per 0x02 signer and resyncs the nonce counter after three bad batches in a
+// row. Returns the updated streak counters.
+func updateDesyncAndMaybeReset(ctx context.Context, url string, rows []Row,
+	nonce, nonceRPC *EthNonce, primaryAddr, rpcAddr string,
+	primaryStreak, rpcStreak int,
+) (int, int) {
+	priDesync, rpcDesync := 0, 0
+	for _, r := range rows {
+		if r.Spec.Type != 0x02 || r.Submit.Err == nil {
+			continue
+		}
+		msg := r.Submit.Err.Error()
+		if !strings.Contains(msg, "nonce_too_low") && !strings.Contains(msg, "nonce_too_high") {
+			continue
+		}
+		if r.Spec.Path == "rest" {
+			priDesync++
+		} else {
+			rpcDesync++
+		}
+	}
+
+	if priDesync > 0 {
+		primaryStreak++
+	} else {
+		primaryStreak = 0
+	}
+	if rpcDesync > 0 {
+		rpcStreak++
+	} else {
+		rpcStreak = 0
+	}
+
+	if primaryStreak >= 3 {
+		if n, err := GetEthNonce(ctx, url, primaryAddr); err == nil {
+			nonce.Reset(n)
+			fmt.Printf("[info] primary nonce resynced to %d\n", n)
+		}
+		primaryStreak = 0
+	}
+	if rpcStreak >= 3 {
+		if n, err := GetEthNonce(ctx, url, rpcAddr); err == nil {
+			nonceRPC.Reset(n)
+			fmt.Printf("[info] RPC-signer nonce resynced to %d\n", n)
+		}
+		rpcStreak = 0
+	}
+
+	return primaryStreak, rpcStreak
+}
+
+func runBatch(ctx context.Context, url string, mult int,
+	key, keyRPC *ecdsa.PrivateKey,
+	chainTag byte, chainID uint64, blockRef tx.BlockRef,
+	nonce, nonceRPC *EthNonce, dryRun bool,
+) []Row {
 	rows := make([]Row, 0, 10*mult)
 	for range mult {
 		for _, spec := range BuildMatrix() {
+			// Pick signer + nonce based on (type, path).
+			// 0x02 RPC uses keyRPC to avoid the same-signer-nonce race.
+			signingKey := key
 			var txNonce uint64
 			if spec.Type == 0x02 {
-				txNonce = nonce.Take()
+				if spec.Path == "rpc" {
+					signingKey = keyRPC
+					txNonce = nonceRPC.Take()
+				} else {
+					txNonce = nonce.Take()
+				}
 			}
-			trx, err := Build(spec, key, txNonce, chainTag, chainID, blockRef)
+			trx, err := Build(spec, signingKey, txNonce, chainTag, chainID, blockRef)
 			if err != nil {
 				rows = append(rows, Row{Spec: spec, Submit: SubmitResult{Err: err}})
 				continue
@@ -195,15 +300,23 @@ func runBatch(ctx context.Context, url string, mult int, key *ecdsa.PrivateKey,
 	return rows
 }
 
-func queryReceipts(ctx context.Context, url string, rows []Row) {
+// queryPendingReceipts updates the Receipt field for every row in rows that
+// has a txid but hasn't yet resolved. Rows in a terminal state (submit error,
+// dry-run, already found, already errored) are skipped so we don't retry
+// indefinitely.
+func queryPendingReceipts(ctx context.Context, url string, rows []Row) {
 	for i := range rows {
-		if rows[i].Submit.Err != nil || rows[i].Submit.TxID == "" || rows[i].Submit.TxID == "dry-run" {
+		r := &rows[i]
+		if r.Submit.Err != nil || r.Submit.TxID == "" || r.Submit.TxID == "dry-run" {
 			continue
 		}
-		if rows[i].Spec.Path == "rest" {
-			rows[i].Receipt = ReceiptREST(ctx, url, rows[i].Submit.TxID)
+		if r.Receipt.Found || r.Receipt.Err != nil {
+			continue
+		}
+		if r.Spec.Path == "rest" {
+			r.Receipt = ReceiptREST(ctx, url, r.Submit.TxID)
 		} else {
-			rows[i].Receipt = ReceiptRPC(ctx, url, rows[i].Submit.TxID)
+			r.Receipt = ReceiptRPC(ctx, url, r.Submit.TxID)
 		}
 	}
 }

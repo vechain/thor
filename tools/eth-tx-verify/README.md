@@ -104,7 +104,19 @@ go run ./tools/eth-tx-verify/txblast -interval 5s                               
 go run ./tools/eth-tx-verify/txblast -batch 3                                        # 30 txs/batch
 go run ./tools/eth-tx-verify/txblast -dry-run                                        # build + sign, don't submit
 go run ./tools/eth-tx-verify/txblast -url http://localhost:8669                      # override URL
+go run ./tools/eth-tx-verify/txblast -receipt-timeout 30s                            # default 15s; raise if solo's block interval is longer
 ```
+
+### Timing model
+
+Each submitted batch enters a **pending queue**. On every tick, txblast retries `eth_getTransactionReceipt` on every unresolved row across **every** pending batch, and prints a batch only when (a) all its rows resolved, or (b) the batch is older than `-receipt-timeout` (then remaining rows stay `MISS`). This means:
+
+- **On-demand solo** (`--on-demand`): batches print after ~1 tick, receipts usually already `OK(blk=N)`.
+- **Timer-based solo** (default 10s block interval): batches may spend multiple ticks in the queue before printing. At 2s interval with 15s timeout, a batch lives for up to ~8 ticks before being printed. This is expected — your output lags ~10-15 seconds behind submission.
+
+### Two signers for 0x02
+
+txblast submits 0x02 on REST and then 0x02 on RPC within the same batch. `txpool.StrictlyAdd` rejects any tx whose nonce is ahead of state — so the same signer can't send two 0x02s in one batch without waiting for the first to mine. To avoid that coupling, **REST 0x02 is signed by `-key` (dev #0 by default), and RPC 0x02 is signed by solo dev #4**. Each signer has its own independent nonce counter. You'll see both addresses in the start banner.
 
 ### Terminal 3 — DApp
 
