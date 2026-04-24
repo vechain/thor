@@ -10,7 +10,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/tx"
 )
+
+const testChainID uint64 = 0xabcd
+const testChainTag byte = 0x01
+
+var testBlockRef = tx.NewBlockRef(0)
 
 func TestBuildMatrix(t *testing.T) {
 	m := BuildMatrix()
@@ -46,4 +54,74 @@ func TestBuildMatrix(t *testing.T) {
 			assert.Equal(t, 1, s.Clauses, "0x02 must be single-clause")
 		}
 	}
+}
+
+func TestBuild_0x00_SingleClause(t *testing.T) {
+	devAccs := genesis.DevAccounts()
+	key := devAccs[0].PrivateKey
+	spec := Spec{Type: 0x00, Clauses: 1, Path: "rest"}
+
+	trx, err := Build(spec, key, 0, testChainTag, testChainID, testBlockRef)
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeLegacy, trx.Type())
+	assert.Len(t, trx.Clauses(), 1)
+	origin, err := trx.Origin()
+	require.NoError(t, err)
+	assert.Equal(t, devAccs[0].Address, origin)
+}
+
+func TestBuild_0x00_MultiClause(t *testing.T) {
+	devAccs := genesis.DevAccounts()
+	key := devAccs[0].PrivateKey
+	spec := Spec{Type: 0x00, Clauses: 3, Path: "rest"}
+
+	trx, err := Build(spec, key, 0, testChainTag, testChainID, testBlockRef)
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeLegacy, trx.Type())
+	assert.Len(t, trx.Clauses(), 3)
+	origin, err := trx.Origin()
+	require.NoError(t, err)
+	assert.Equal(t, devAccs[0].Address, origin)
+}
+
+func TestBuild_0x51_SingleClause(t *testing.T) {
+	devAccs := genesis.DevAccounts()
+	key := devAccs[0].PrivateKey
+	spec := Spec{Type: 0x51, Clauses: 1, Path: "rest"}
+
+	trx, err := Build(spec, key, 0, testChainTag, testChainID, testBlockRef)
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeDynamicFee, trx.Type())
+	assert.Len(t, trx.Clauses(), 1)
+	origin, err := trx.Origin()
+	require.NoError(t, err)
+	assert.Equal(t, devAccs[0].Address, origin)
+}
+
+func TestBuild_0x51_MultiClause(t *testing.T) {
+	devAccs := genesis.DevAccounts()
+	key := devAccs[0].PrivateKey
+	spec := Spec{Type: 0x51, Clauses: 3, Path: "rest"}
+
+	trx, err := Build(spec, key, 0, testChainTag, testChainID, testBlockRef)
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeDynamicFee, trx.Type())
+	assert.Len(t, trx.Clauses(), 3)
+	origin, err := trx.Origin()
+	require.NoError(t, err)
+	assert.Equal(t, devAccs[0].Address, origin)
+}
+
+func TestBuild_0x02_SingleClause(t *testing.T) {
+	devAccs := genesis.DevAccounts()
+	key := devAccs[0].PrivateKey
+	spec := Spec{Type: 0x02, Clauses: 1, Path: "rest"}
+
+	trx, err := Build(spec, key, 42, testChainTag, testChainID, testBlockRef)
+	require.NoError(t, err)
+	assert.Equal(t, tx.TypeEthDynamicFee, trx.Type())
+	assert.Len(t, trx.Clauses(), 1)
+	origin, err := trx.Origin()
+	require.NoError(t, err)
+	assert.Equal(t, devAccs[0].Address, origin)
 }
