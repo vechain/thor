@@ -12,6 +12,7 @@
         .banner { background: #fdecea; border: 1px solid #e74c3c; color: #c0392b; padding: 12px; margin-bottom: 16px; border-radius: 4px; }
         section { background: #fafafa; border: 1px solid #ddd; padding: 16px; margin-bottom: 12px; border-radius: 4px; }
         section h2 { margin-top: 0; font-size: 16px; }
+        label { display: block; margin-bottom: 8px; font-size: 14px; }
         button { padding: 8px 14px; cursor: pointer; }
         .status { font-family: Menlo, monospace; font-size: 13px; color: #555; margin-top: 8px; }
         .error { color: #c0392b; }
@@ -42,16 +43,30 @@
         <div class="status" id="chain-check"></div>
     </section>
 
-    <!-- Panel ③ placeholder — Task 3.3 -->
+    <!-- Panel ③ Send VET (0x02 transfer) -->
     <section>
         <h2>③ Send VET (0x02 transfer)</h2>
-        <div class="status">Coming in Task 3.3.</div>
+        <label>To: <input id="send-to" value="0x435933c8064b4ae76be665428e0307ef2ccfbd68" style="width:100%"></label>
+        <label>Value (VET): <input id="send-value" value="0.1" style="width:100%"></label>
+        <button id="send">Send</button>
+        <div class="status" id="send-status">Connect wallet first.</div>
     </section>
 
-    <!-- Panel ④ placeholder — Task 3.3 -->
+    <!-- Panel ④ Deploy & Call (CREATE address verification) -->
     <section>
-        <h2>④ Deploy &amp; Call (CREATE address verification)</h2>
-        <div class="status">Coming in Task 3.3.</div>
+        <h2>④ Deploy &amp; Call (0x02 CREATE address verification)</h2>
+        <!-- Counter.sol: uint256 public value; function increment(uint256 by) external { value += by; } -->
+        <!-- Compiled: npx solc@0.8.28 --bin --abi --optimize -->
+        <button id="deploy">Deploy Counter</button>
+        <div class="status" id="deploy-status">Click to deploy. After deploy, the panel compares receipt.contractAddress against a locally computed keccak256(rlp([sender, nonce]))[12:].</div>
+        <div id="counter-controls" style="display:none; margin-top:12px">
+            <div class="status">Deployed at: <code id="deployed-addr">—</code></div>
+            <div class="status">Expected (keccak(rlp(sender,nonce))[12:]): <code id="expected-addr">—</code></div>
+            <div class="status" id="match-status">—</div>
+            <div class="status">Counter value: <span id="counter-value">—</span></div>
+            <button id="incr-1">+1</button>
+            <button id="incr-5">+5</button>
+        </div>
     </section>
 </main>
 
@@ -62,10 +77,26 @@
 </aside>
 
 <script type="module">
-    import { BrowserProvider, formatEther, Interface } from 'https://esm.sh/ethers@6.13.4';
+    import {
+        BrowserProvider, formatEther, Interface,
+        parseEther, ContractFactory, Contract, getCreateAddress,
+    } from 'https://esm.sh/ethers@6.13.4';
 
     const RPC_URL = 'http://localhost:8669/rpc';
     const ENERGY_ADDR = '0x0000000000000000000000000000456E65726779';
+
+    // Compiled with solc 0.8.28 --optimize
+    const COUNTER = {
+        bytecode: '0x6080604052348015600e575f5ffd5b5060e48061001b5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80633fa4f2451460345780637cf5dab014604d575b5f5ffd5b603b5f5481565b60405190815260200160405180910390f35b605c60583660046074565b605e565b005b805f5f828254606c9190608a565b909155505050565b5f602082840312156083575f5ffd5b5035919050565b8082018082111560a857634e487b7160e01b5f52601160045260245ffd5b9291505056fea264697066735822122087ce037f7db3ec7fb3a460b9ebc6848943ee38f0fe92deb8198b454bb45c808f64736f6c634300081c0033',
+        abi: [
+            'function value() view returns (uint256)',
+            'function increment(uint256) external',
+        ],
+    };
+
+    let provider = null;
+    let signer = null;
+    let account = null;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -132,17 +163,18 @@
             if (!window.ethereum) throw new Error('MetaMask not detected. Please install MetaMask.');
 
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            const address = accounts[0];
-            setStatus('account', `Account: ${address}`);
+            account = accounts[0];
+            provider = new BrowserProvider(window.ethereum);
+            signer = await provider.getSigner();
 
-            const provider = new BrowserProvider(window.ethereum);
+            setStatus('account', `Account: ${account}`);
 
             // VET balance via eth_getBalance
-            const vetWei = await provider.getBalance(address);
+            const vetWei = await provider.getBalance(account);
             setStatus('vet', 'VET: ' + formatEther(vetWei));
 
             // VTHO balance via eth_call to Energy precompile
-            const data = '0x70a08231' + address.slice(2).padStart(64, '0');
+            const data = '0x70a08231' + account.slice(2).padStart(64, '0');
             const raw = await provider.send('eth_call', [{ to: ENERGY_ADDR, data }, 'latest']);
             const vthoWei = BigInt(raw);
             setStatus('vtho', 'VTHO: ' + formatEther(vthoWei));
@@ -157,6 +189,8 @@
             } else {
                 setStatus('chain-check', `Chain: ${currentChain} ✅`, 'ok');
             }
+
+            setStatus('send-status', 'Ready to send.');
         } catch (err) {
             const msg = err.code === 4001
                 ? `MetaMask rejected: ${err.message}`
@@ -166,6 +200,84 @@
             btn.disabled = false;
         }
     });
+
+    // ── Panel ③ — Send VET ────────────────────────────────────────────────
+
+    document.getElementById('send').addEventListener('click', async () => {
+        if (!account) { setStatus('send-status', 'Connect wallet first.', 'error'); return; }
+        const to = document.getElementById('send-to').value.trim();
+        const value = document.getElementById('send-value').value.trim();
+        setStatus('send-status', 'Sending…');
+        try {
+            const tx = await signer.sendTransaction({ to, value: parseEther(value) });
+            setStatus('send-status', `Sent. txid=${tx.hash} — waiting for receipt…`);
+            // Poll for receipt
+            const start = Date.now();
+            const timer = setInterval(async () => {
+                if (Date.now() - start > 30_000) {
+                    clearInterval(timer);
+                    setStatus('send-status', `Timed out waiting for ${tx.hash}`);
+                    return;
+                }
+                const receipt = await provider.getTransactionReceipt(tx.hash);
+                if (receipt) {
+                    clearInterval(timer);
+                    setStatus('send-status', `✅ Mined in block ${receipt.blockNumber}. txid=${tx.hash}`, 'ok');
+                } else {
+                    setStatus('send-status', `pending… txid=${tx.hash}`);
+                }
+            }, 500);
+        } catch (err) {
+            setStatus('send-status', `Error: ${err.message}`, 'error');
+        }
+    });
+
+    // ── Panel ④ — Deploy Counter & Verify CREATE address ─────────────────
+
+    async function refreshCounterValue() {
+        const v = await window.__counter.value();
+        document.getElementById('counter-value').textContent = v.toString();
+    }
+
+    async function increment(by) {
+        const tx = await window.__counter.increment(by);
+        await tx.wait();
+        await refreshCounterValue();
+    }
+
+    async function deployCounter() {
+        if (!account) { setStatus('deploy-status', 'Connect wallet first.', 'error'); return; }
+        setStatus('deploy-status', 'Deploying Counter…');
+        try {
+            const nonce = await provider.getTransactionCount(account, 'latest');
+            const factory = new ContractFactory(COUNTER.abi, COUNTER.bytecode, signer);
+            const contract = await factory.deploy();
+            const deployTx = contract.deploymentTransaction();
+            const receipt = await deployTx.wait();
+
+            const expected = getCreateAddress({ from: account, nonce });
+            const deployed = receipt.contractAddress;
+
+            document.getElementById('deployed-addr').textContent = deployed;
+            document.getElementById('expected-addr').textContent = expected;
+
+            const match = deployed.toLowerCase() === expected.toLowerCase();
+            document.getElementById('match-status').innerHTML = match
+                ? '<span class="ok">✅ Addresses match — spec 3 D1 verified</span>'
+                : '<span class="error">❌ Mismatch — spec 3 D1 broken</span>';
+
+            window.__counter = new Contract(deployed, COUNTER.abi, signer);
+            document.getElementById('counter-controls').style.display = 'block';
+            setStatus('deploy-status', `Deployed at block ${receipt.blockNumber}.`, 'ok');
+            await refreshCounterValue();
+        } catch (err) {
+            setStatus('deploy-status', `Error: ${err.message}`, 'error');
+        }
+    }
+
+    document.getElementById('deploy').addEventListener('click', deployCounter);
+    document.getElementById('incr-1').addEventListener('click', () => increment(1));
+    document.getElementById('incr-5').addEventListener('click', () => increment(5));
 </script>
 </body>
 </html>
