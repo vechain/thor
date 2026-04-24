@@ -39,14 +39,15 @@ Three terminals. Start them in this order.
 ### Terminal 1 — thor solo with RPC + request logger
 
 ```bash
-./bin/thor solo --on-demand --api-eth-rpc-enabled --enable-api-logs --verbosity 3
+./bin/thor solo --on-demand --api-eth-rpc-enabled --verbosity 3
 ```
 
 Flags explained:
 - `--on-demand` — mines a block immediately after each tx lands. Keeps receipt queries fast.
-- `--api-eth-rpc-enabled` — mounts `POST /rpc` (the spec-2 Ethereum JSON-RPC namespace).
-- `--enable-api-logs` — turns on **both** the REST request logger and the new `/rpc` middleware logger. In `*atomic.Bool` form so it can be flipped at runtime, but for verification you want it on at start.
+- `--api-eth-rpc-enabled` — mounts `POST /rpc` (the spec-2 Ethereum JSON-RPC namespace) **and** automatically turns on the `/rpc` request logger. The eth-RPC logger is deliberately independent of REST's `--enable-api-logs` so verification output isn't drowned in REST chatter.
 - `--verbosity 3` — INFO level; you need INFO to see the `eth-rpc` lines.
+
+> If you *also* want REST request logs (e.g. to correlate `/transactions` traffic from txblast), add `--enable-api-logs`. By default you'll see only `eth-rpc` lines.
 
 You should see (roughly):
 
@@ -142,7 +143,7 @@ The tool fetches the initial nonce once at startup. If solo was restarted under 
 
 ### No `eth-rpc` lines in Terminal 1
 Two causes:
-1. `--enable-api-logs` flag missing → middleware is off (`EnableReqLogger` nil-guarded).
+1. `--api-eth-rpc-enabled` missing → namespace not mounted, so no logger exists either.
 2. `--verbosity 3` missing → logger emits at INFO, default level is higher.
 
 ### DApp: MetaMask rejects "Add network"

@@ -134,12 +134,18 @@ func StartAPIServer(
 	subs.Mount(router, "/subscriptions")
 
 	if config.EthRPCEnabled {
+		// The eth-RPC request logger is independent of --enable-api-logs so that
+		// verification of the /rpc namespace is not drowned in REST chatter.
+		// Enabling the namespace always enables the logger (dev-only surface);
+		// operators who want it off can flip the *atomic.Bool at runtime.
+		ethRPCLog := &atomic.Bool{}
+		ethRPCLog.Store(true)
 		rpcServer := rpc.NewServer(repo, stater, txPool, logDB, forkConfig, bft, rpc.Config{
 			LogsLimit:                  config.LogsLimit,
 			APIBacktraceLimit:          config.APIBacktraceLimit,
 			CallGasLimit:               config.CallGasLimit,
 			PriorityIncreasePercentage: config.PriorityIncreasePercentage,
-			EnableReqLogger:            config.EnableReqLogger,
+			EnableReqLogger:            ethRPCLog,
 		})
 		router.Path("/rpc").Methods(http.MethodPost).Handler(rpcServer)
 	}

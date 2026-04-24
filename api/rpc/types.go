@@ -44,10 +44,14 @@ type Config struct {
 	// unsupported-method requests) produces one structured slog.Info line with
 	// method, status code, latency, and truncated params.
 	//
-	// The field is typed as *atomic.Bool — identical to APIConfig.EnableReqLogger
-	// in cmd/thor/httpserver — so operators can toggle request logging at runtime
-	// (e.g. via the admin server) without restarting the node. A nil pointer is
-	// treated as permanently disabled.
+	// The field is typed as *atomic.Bool so operators can toggle logging at
+	// runtime without restarting the node. A nil pointer is treated as
+	// permanently disabled.
+	//
+	// Ownership note: this flag is deliberately independent of the REST
+	// logger's APIConfig.EnableReqLogger, so verifying the eth-RPC namespace
+	// is not drowned in REST chatter. cmd/thor/httpserver wires its own
+	// always-on *atomic.Bool here whenever --api-eth-rpc-enabled is set.
 	EnableReqLogger *atomic.Bool
 }
 
