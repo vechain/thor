@@ -12,6 +12,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"sync/atomic"
 )
 
 // Config carries the knobs the rpc server needs. Fields mirror the subset of
@@ -37,6 +38,17 @@ type Config struct {
 	// and is passed to the feesvc helpers used by eth_maxPriorityFeePerGas /
 	// eth_gasPrice.
 	PriorityIncreasePercentage int
+
+	// EnableReqLogger enables per-request logging middleware for the eth JSON-RPC
+	// endpoint. Each inbound /rpc request (including oversized, malformed, or
+	// unsupported-method requests) produces one structured slog.Info line with
+	// method, status code, latency, and truncated params.
+	//
+	// The field is typed as *atomic.Bool — identical to APIConfig.EnableReqLogger
+	// in cmd/thor/httpserver — so operators can toggle request logging at runtime
+	// (e.g. via the admin server) without restarting the node. A nil pointer is
+	// treated as permanently disabled.
+	EnableReqLogger *atomic.Bool
 }
 
 const defaultBodyLimit int64 = 200 * 1024 // 200 KiB, matches REST default.
