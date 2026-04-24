@@ -7,6 +7,7 @@ package solo
 
 import (
 	"errors"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -53,7 +54,14 @@ func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	if newTx.ChainTag() != o.engine.repo.ChainTag() {
+	if newTx.Type() == tx.TypeEthDynamicFee {
+		// 0x02 (EIP-1559) uses ChainID for replay protection instead of ChainTag.
+		// Mirror the logic in txpool.TxPool.Add so solo mode accepts the same txs.
+		expected := new(big.Int).SetUint64(thor.ChainID(o.engine.repo.GenesisBlock().Header().ID()))
+		if got := newTx.ChainID(); got == nil || got.Cmp(expected) != 0 {
+			return restutil.BadRequest(errors.New("bad tx: eth tx chain id mismatch"))
+		}
+	} else if newTx.ChainTag() != o.engine.repo.ChainTag() {
 		return restutil.BadRequest(errors.New("bad tx: chain tag mismatch"))
 	}
 
