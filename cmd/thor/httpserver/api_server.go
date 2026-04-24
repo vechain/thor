@@ -139,6 +139,7 @@ func StartAPIServer(
 			APIBacktraceLimit:          config.APIBacktraceLimit,
 			CallGasLimit:               config.CallGasLimit,
 			PriorityIncreasePercentage: config.PriorityIncreasePercentage,
+			EnableReqLogger:            config.EnableReqLogger,
 		})
 		router.Path("/rpc").Methods(http.MethodPost).Handler(rpcServer)
 	}
