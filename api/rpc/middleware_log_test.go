@@ -345,19 +345,6 @@ func TestParamsPreview(t *testing.T) {
 	assert.Equal(t, string(exact), paramsPreview(exact), "exactly at limit: no truncation")
 }
 
-// --- TestLogger_ResultSize ----------------------------------------------------
-
-func TestLogger_ResultSize(t *testing.T) {
-	s, buf := newTestServerWithLog(t)
-	req := httptest.NewRequest(http.MethodPost, "/rpc", strings.NewReader(`{"jsonrpc":"2.0","method":"eth_blockNumber","id":1}`))
-	w := httptest.NewRecorder()
-	s.ServeHTTP(w, req)
-
-	out := buf.String()
-	assert.Contains(t, out, "result_size=", "success path must include result_size field")
-	assert.NotContains(t, out, "result_size=0", "result_size should be > 0 for non-nil result")
-}
-
 // --- Benchmarks ---------------------------------------------------------------
 
 // newBenchServer builds a minimal Server for benchmarking ServeHTTP.

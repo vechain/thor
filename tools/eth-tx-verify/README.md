@@ -59,7 +59,7 @@ INFO solo block packer started
 Leave this terminal running. Every request from txblast and the DApp will print one `eth-rpc` line here. Example line on a successful `eth_sendRawTransaction`:
 
 ```
-INFO[...] eth-rpc         pkg=eth-rpc method=eth_sendRawTransaction code=0 req_size=312 result_size=68 latency_ms=4.2 params_preview=["0x02f8..."] result_preview=0x55a44...b565
+INFO[...] eth-rpc         pkg=eth-rpc method=eth_sendRawTransaction code=0 latency_ms=4.2 params_preview=["0x02f8..."] result_preview=0x55a44...b565
 ```
 
 ### Terminal 2 — txblast

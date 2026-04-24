@@ -6,7 +6,6 @@
 package rpc
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,20 +31,13 @@ func (s *Server) logExchange(method string, env rpcResponse, body []byte, latenc
 	attrs := []any{
 		"method", method,
 		"code", errorCode(env),
-		"req_size", len(body),
 		"latency_ms", float64(latency.Microseconds()) / 1000.0,
 		"params_preview", paramsPreview(body),
 	}
 	if env.Error != nil {
 		attrs = append(attrs, "reason", reasonFromError(env.Error))
-	} else {
-		// Success branch: env.resultSet is always true here.
-		// A handler returning (nil, nil) still reaches this path.
-		b, _ := json.Marshal(env.Result)
-		attrs = append(attrs, "result_size", len(b))
-		if preview := resultSummary(method, env.Result); preview != "" {
-			attrs = append(attrs, "result_preview", preview)
-		}
+	} else if preview := resultSummary(method, env.Result); preview != "" {
+		attrs = append(attrs, "result_preview", preview)
 	}
 	logger.Info("eth-rpc", attrs...)
 }
