@@ -104,7 +104,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// MaxBytesReader produces http.MaxBytesError after the limit; treat
 		// either error as a parse-time failure rather than a transport one so
 		// the client gets a JSON-RPC envelope back.
-		writeEnvelope(w, rpcResponse{JSONRPC: "2.0", Error: ReasonError(ReasonOversizedData, "request body too large: "+err.Error())})
+		env := rpcResponse{JSONRPC: "2.0", Error: ReasonError(ReasonOversizedData, "request body too large: "+err.Error())}
+		writeEnvelope(w, env)
+		s.logExchange("(unknown)", env, body, time.Since(start))
 		return
 	}
 
@@ -113,12 +115,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // dispatchAndLog handles the dispatch logic for a single JSON-RPC request,
-// returning the response envelope. The ctx and start parameters are reserved
-// for Task 1.3's logging middleware (a future defer will emit one log line per
-// call using these values). The named return value env allows that future defer
-// to read the final envelope without additional wiring.
+// returning the response envelope. A deferred call to logExchange emits exactly
+// one structured log line per invocation (when request logging is enabled).
 func (s *Server) dispatchAndLog(ctx context.Context, body []byte, start time.Time) (env rpcResponse) {
-	_ = start // reserved for Task 1.3 logging
+	method := "(unknown)"
+	defer func() { s.logExchange(method, env, body, time.Since(start)) }()
 
 	// Reject array-form (batch) requests up-front with a clear message.
 	// Scan for the first non-whitespace byte.
@@ -142,6 +143,9 @@ func (s *Server) dispatchAndLog(ctx context.Context, body []byte, start time.Tim
 		env = rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: InvalidRequest("method required")}
 		return
 	}
+
+	// Method is known at this point; update so the defer captures it.
+	method = req.Method
 
 	handler, ok := s.dispatch[req.Method]
 	if !ok {
