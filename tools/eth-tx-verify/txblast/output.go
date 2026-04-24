@@ -50,15 +50,6 @@ func shortHex(s string) string {
 	return s[:7] + "..." + s[len(s)-4:]
 }
 
-// shortErr clips error messages to 40 chars.
-func shortErr(e error) string {
-	s := e.Error()
-	if len(s) <= 40 {
-		return s
-	}
-	return s[:37] + "..."
-}
-
 // PrintBatchHeader prints the batch number and a column header line.
 func PrintBatchHeader(batch int, t time.Time) {
 	fmt.Printf("\n=== Batch %d @ %s ===\n", batch, t.UTC().Format(time.RFC3339))
@@ -93,7 +84,7 @@ func PrintRow(r Row) {
 
 	var submitCol string
 	if r.Submit.Err != nil {
-		submitCol = padColored(fmt.Sprintf("ERR(%s)", shortErr(r.Submit.Err)), ansiRed, submitColWidth)
+		submitCol = padColored(fmt.Sprintf("ERR(%s)", r.Submit.Err.Error()), ansiRed, submitColWidth)
 	} else {
 		submitCol = padColored("OK", ansiGreen, submitColWidth)
 	}
@@ -101,7 +92,7 @@ func PrintRow(r Row) {
 	var receiptCol string
 	switch {
 	case r.Receipt.Err != nil:
-		receiptCol = padColored(fmt.Sprintf("ERR(%s)", shortErr(r.Receipt.Err)), ansiRed, 0)
+		receiptCol = padColored(fmt.Sprintf("ERR(%s)", r.Receipt.Err.Error()), ansiRed, 0)
 	case !r.Receipt.Found:
 		receiptCol = padColored("MISS", ansiYellow, 0)
 	default:
