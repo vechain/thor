@@ -7,6 +7,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -120,6 +121,35 @@ func TestHandle_EstimateGas_Call(t *testing.T) {
 	// TxGas (5000) + ClauseGas (16000) = 21000. No binary search; the answer
 	// is the sum of the one execution + intrinsic.
 	assert.Equal(t, "0x5208", got, "expected intrinsic-only 21000")
+}
+
+// TestHandle_EstimateGas_Create guards against regressing the intrinsic-add
+// for contract creation. A CREATE with empty init code: EVM consumes some
+// gas for the CREATE opcode / empty code deposition (non-zero), and the
+// returned estimate must be at least TxGas+ClauseGasContractCreation = 53000
+// — which is the floor txpool enforces on admission.
+func TestHandle_EstimateGas_Create(t *testing.T) {
+	s, _ := newTestServerWithPool(t)
+	s.cfg.CallGasLimit = 50_000_000
+
+	devAddr := genesis.DevAccounts()[0].Address
+	// Minimal init code that returns empty runtime: 0x60006000F3 (PUSH1 0 PUSH1 0 RETURN).
+	body := `{"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"` + devAddr.String() + `","data":"0x60006000f3"},"latest"],"id":1}`
+	result, errField := postJSON(t, s, body)
+	require.Empty(t, errField, "err: %s", string(errField))
+
+	var got string
+	require.NoError(t, json.Unmarshal(result, &got))
+
+	var estimate uint64
+	_, err := fmt.Sscanf(got, "0x%x", &estimate)
+	require.NoError(t, err)
+
+	// Must include the 53k CREATE intrinsic floor, otherwise MetaMask wallets
+	// submitting the tx after a 1.0-1.5x buffer will still trip thor's
+	// "intrinsic gas exceeds provided gas" check at admission time.
+	require.GreaterOrEqual(t, estimate, uint64(53_000),
+		"CREATE estimate %d must be at least 53000 (TxGas+ClauseGasContractCreation)", estimate)
 }
 
 // --- decodeRevertReason unit test ---------------------------------------
