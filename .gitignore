@@ -25,6 +25,8 @@ package.json
 /.vscode/
 /vendor/
 
+.claude/
+
 .fake_gopath_suffix
 coverage.out
 

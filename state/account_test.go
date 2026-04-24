@@ -17,8 +17,88 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
+type OldAccount struct {
+	Balance     *big.Int
+	Energy      *big.Int
+	BlockTime   uint64
+	Master      []byte
+	CodeHash    []byte
+	StorageRoot []byte
+}
+
 func M(a ...any) []any {
 	return a
+}
+
+func TestAccountRLPOptional(t *testing.T) {
+	// Encode an Account (without EthNonce) and decode into NewAccount
+	oldAcc := OldAccount{
+		Balance:     big.NewInt(100),
+		Energy:      big.NewInt(200),
+		BlockTime:   1000,
+		Master:      []byte("master"),
+		CodeHash:    []byte("codehash"),
+		StorageRoot: []byte("storageroot"),
+	}
+
+	encoded, err := rlp.EncodeToBytes(&oldAcc)
+	assert.NoError(t, err)
+
+	var newAcc Account
+	err = rlp.DecodeBytes(encoded, &newAcc)
+	assert.NoError(t, err, "decoding OldAccount bytes into Account should succeed with optional field")
+
+	// The original fields should match
+	assert.Equal(t, oldAcc.Balance.Int64(), newAcc.Balance.Int64())
+	assert.Equal(t, oldAcc.Energy.Int64(), newAcc.Energy.Int64())
+	assert.Equal(t, oldAcc.BlockTime, newAcc.BlockTime)
+	assert.Equal(t, oldAcc.Master, newAcc.Master)
+	assert.Equal(t, oldAcc.CodeHash, newAcc.CodeHash)
+	assert.Equal(t, oldAcc.StorageRoot, newAcc.StorageRoot)
+
+	// The optional EthNonce should default to zero
+	assert.Equal(t, uint64(0), newAcc.EthNonce)
+
+	// Encode a NewAccount with EthNonce set, decode back into NewAccount
+	newAcc2 := Account{
+		Balance:     big.NewInt(100),
+		Energy:      big.NewInt(200),
+		BlockTime:   1000,
+		Master:      []byte("master"),
+		CodeHash:    []byte("codehash"),
+		StorageRoot: []byte("storageroot"),
+		EthNonce:    42,
+	}
+
+	encoded2, err := rlp.EncodeToBytes(&newAcc2)
+	assert.NoError(t, err)
+
+	var newAcc3 Account
+	err = rlp.DecodeBytes(encoded2, &newAcc3)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(42), newAcc3.EthNonce)
+
+	// Encode a NewAccount with EthNonce set, decode into old Account
+	// RLP does NOT allow extra fields — old struct rejects new data with additional fields
+	var oldAcc2 OldAccount
+	err = rlp.DecodeBytes(encoded2, &oldAcc2)
+	assert.Error(t, err, "decoding NewAccount bytes (with extra field) into OldAccount should fail")
+
+	// When EthNonce=0 (zero value), rlp:"optional" omits it from encoding,
+	// so OldAccount CAN decode it — backward compatible when optional field is zero.
+	newAcc5 := Account{
+		Balance:   big.NewInt(100),
+		Energy:    big.NewInt(200),
+		BlockTime: 1000,
+		EthNonce:  0,
+	}
+	encoded5, err := rlp.EncodeToBytes(&newAcc5)
+	assert.NoError(t, err)
+
+	var oldAcc3 OldAccount
+	err = rlp.DecodeBytes(encoded5, &oldAcc3)
+	assert.NoError(t, err, "Account with zero optional field is backward compatible with OldAccount")
+	assert.Equal(t, newAcc5.Balance.Int64(), oldAcc3.Balance.Int64())
 }
 
 func TestAccount(t *testing.T) {
@@ -78,12 +158,12 @@ func TestTrie(t *testing.T) {
 		"should load an empty account")
 
 	acc1 := Account{
-		big.NewInt(1),
-		big.NewInt(0),
-		0,
-		[]byte("master"),
-		[]byte("code hash"),
-		[]byte("storage root"),
+		Balance:     big.NewInt(1),
+		Energy:      big.NewInt(0),
+		BlockTime:   0,
+		Master:      []byte("master"),
+		CodeHash:    []byte("code hash"),
+		StorageRoot: []byte("storage root"),
 	}
 	meta1 := AccountMetadata{
 		StorageID:       []byte("sid"),
