@@ -85,36 +85,20 @@ func handleCall(_ context.Context, s *Server, params json.RawMessage) (any, *RPC
 	return hexutil.Bytes(output.data), nil
 }
 
-// handleEstimateGas runs a binary search for the minimum gas that lets the
-// call execute without OOG / revert. Semantics mirror go-ethereum's estimate
-// within Thor's gas envelope.
+// handleEstimateGas runs the call ONCE at the full gas budget — mirroring the
+// REST POST /accounts endpoint — and returns (consumed EVM gas) + (intrinsic
+// gas). This is intentionally NOT a binary search: the EVM already reports the
+// exact consumed gas via LeftOverGas, so any additional probing would only
+// duplicate work. Intrinsic gas (TxGas + per-clause + per-data-byte) is added
+// back because the runtime.PrepareClause budget covers EVM execution only;
+// a real tx on-chain pays intrinsic before the EVM starts.
 func handleEstimateGas(_ context.Context, s *Server, params json.RawMessage) (any, *RPCError) {
 	args, tag, rerr := parseExecParams(params)
 	if rerr != nil {
 		return nil, rerr
 	}
 
-	// Upper bound: user-supplied gas or the server-wide cap.
-	hi := uint64(s.cfg.CallGasLimit)
-	if hi == 0 {
-		hi = 50_000_000 // safety default when config is bare
-	}
-	if args.Gas != nil && uint64(*args.Gas) < hi {
-		hi = uint64(*args.Gas)
-	}
-	// Lower bound: 21k (intrinsic gas for a plain transfer). The EVM will
-	// floor at intrinsic gas inside the runtime too.
-	lo := uint64(21_000)
-	if hi < lo {
-		lo = hi
-	}
-
-	// Probe at hi first — if that doesn't succeed, estimation is impossible.
-	argsCopy := *args
-	gas := hexutil.Uint64(hi)
-	argsCopy.Gas = &gas
-
-	output, rerr := runEthCall(s, &argsCopy, tag)
+	output, rerr := runEthCall(s, args, tag)
 	if rerr != nil {
 		return nil, rerr
 	}
@@ -122,29 +106,31 @@ func handleEstimateGas(_ context.Context, s *Server, params json.RawMessage) (an
 		return nil, ReasonError(ReasonExecutionReverted, decodeRevertReason(output.data, output.vmErr))
 	}
 
-	// Binary-search the minimal gas that succeeds.
-	for lo+1 < hi {
-		mid := (lo + hi) / 2
-		midGas := hexutil.Uint64(mid)
-		argsCopy.Gas = &midGas
-		out, rerr := runEthCall(s, &argsCopy, tag)
-		if rerr != nil {
-			return nil, rerr
-		}
-		if out.vmErr != nil {
-			lo = mid
-		} else {
-			hi = mid
-		}
+	// Consumed EVM gas for this call.
+	execGas := output.inputGas - output.leftOverGas
+
+	// Intrinsic gas: derive from the same clause we executed. Re-resolves
+	// data bytes once — cheap compared to an EVM run.
+	data, rerr := args.resolveCallData()
+	if rerr != nil {
+		return nil, rerr
 	}
-	return hexutil.Uint64(hi), nil
+	clause := tx.NewClause(args.To).WithData(data)
+	intrinsic, err := tx.IntrinsicGas(clause)
+	if err != nil {
+		return nil, InternalError(err)
+	}
+
+	return hexutil.Uint64(execGas + intrinsic), nil
 }
 
 // --- shared execution pipeline -------------------------------------------
 
 type callResult struct {
-	data  []byte
-	vmErr error
+	data        []byte
+	vmErr       error
+	inputGas    uint64 // gas budget fed to PrepareClause
+	leftOverGas uint64 // EVM leftover after execution (valid when vmErr == nil)
 }
 
 // parseExecParams unpacks the [args, blockTag] shape and enforces the reason-
@@ -258,7 +244,12 @@ func runEthCall(s *Server, args *ethCallArgs, tag BlockTag) (*callResult, *RPCEr
 	if execErr != nil {
 		return nil, InternalError(execErr)
 	}
-	return &callResult{data: out.Data, vmErr: out.VMErr}, nil
+	return &callResult{
+		data:        out.Data,
+		vmErr:       out.VMErr,
+		inputGas:    gas,
+		leftOverGas: out.LeftOverGas,
+	}, nil
 }
 
 // decodeRevertReason extracts the ABI-encoded revert reason from the raw

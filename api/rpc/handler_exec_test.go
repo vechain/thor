@@ -116,10 +116,10 @@ func TestHandle_EstimateGas_Call(t *testing.T) {
 
 	var got string
 	require.NoError(t, json.Unmarshal(result, &got))
-	// Should be non-empty hex. We don't pin the exact value; binary search
-	// converges on some point between 21k and the cap.
-	assert.NotEmpty(t, got)
-	assert.Regexp(t, `^0x[0-9a-f]+$`, got)
+	// Empty-data transfer to a non-contract: EVM consumes 0, intrinsic is
+	// TxGas (5000) + ClauseGas (16000) = 21000. No binary search; the answer
+	// is the sum of the one execution + intrinsic.
+	assert.Equal(t, "0x5208", got, "expected intrinsic-only 21000")
 }
 
 // --- decodeRevertReason unit test ---------------------------------------
