@@ -27,6 +27,13 @@ func (n *EthNonce) Take() uint64 {
 	return v
 }
 
+// Peek returns the current nonce without advancing it.
+func (n *EthNonce) Peek() uint64 {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.current
+}
+
 // Reset overwrites the counter (used when recovering from nonce desync).
 func (n *EthNonce) Reset(v uint64) {
 	n.mu.Lock()

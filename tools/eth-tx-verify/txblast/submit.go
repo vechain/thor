@@ -20,6 +20,12 @@ import (
 
 var httpClient = &http.Client{Timeout: 5 * time.Second}
 
+// refererValue is sent on every outbound HTTP request so the server-side
+// per-request log (eth-rpc.log via --api-eth-rpc-log-file) can attribute
+// traffic to txblast and distinguish it from MetaMask (chrome-extension://…)
+// and the verification DApp (http://localhost:8080/).
+const refererValue = "txblast/eth-tx-verify"
+
 // SubmitResult is returned by SubmitREST and SubmitRPC.
 type SubmitResult struct {
 	TxID string // hex "0x..." on success
@@ -69,6 +75,7 @@ func callRPC(ctx context.Context, base, method string, params any) (json.RawMess
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Referer", refererValue)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -94,6 +101,7 @@ func SubmitREST(ctx context.Context, base string, raw []byte) SubmitResult {
 		return SubmitResult{Err: err}
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Referer", refererValue)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return SubmitResult{Err: err}
@@ -134,6 +142,7 @@ func ReceiptREST(ctx context.Context, base, txID string) ReceiptResult {
 	if err != nil {
 		return ReceiptResult{Err: err}
 	}
+	req.Header.Set("Referer", refererValue)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return ReceiptResult{Err: err}

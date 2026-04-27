@@ -113,9 +113,13 @@ Each submitted batch enters a **pending queue**. On every tick, txblast retries 
 - **On-demand solo** (`--on-demand`): batches print after ~1 tick, receipts usually already `OK(blk=N)`.
 - **Timer-based solo** (default 10s block interval): batches may spend multiple ticks in the queue before printing. At 2s interval with 15s timeout, a batch lives for up to ~8 ticks before being printed. This is expected — your output lags ~10-15 seconds behind submission.
 
-### Two signers for 0x02
+### Random signer pool (dev[3..9])
 
-txblast submits 0x02 on REST and then 0x02 on RPC within the same batch. `txpool.StrictlyAdd` rejects any tx whose nonce is ahead of state — so the same signer can't send two 0x02s in one batch without waiting for the first to mine. To avoid that coupling, **REST 0x02 is signed by `-key` (dev #0 by default), and RPC 0x02 is signed by solo dev #4**. Each signer has its own independent nonce counter. You'll see both addresses in the start banner.
+Every tx in a batch is signed by an account picked uniformly at random from the **dev[3..9]** range — seven solo dev accounts with effectively infinite VET / VTHO. dev[0] and dev[1] are deliberately excluded so they remain free for the DApp's MetaMask import and other tooling.
+
+`txpool.StrictlyAdd` rejects any 0x02 tx whose nonce is ahead of state, so within one batch the **REST 0x02** and **RPC 0x02** rows are routed to *different* signers chosen up front (the rest of the matrix may share). Each pool account has its own independent EthNonce counter; if a 0x02 ever submits with `nonce_too_low` / `nonce_too_high` (e.g. another tool also sent from that account), the next finalized batch automatically resyncs that account's counter from on-chain state — you'll see `[info] nonce resynced  0x… → N`.
+
+The `from` column in each batch's output shows which dev account signed each row. The startup banner lists the full pool with current nonces.
 
 ### Terminal 3 — DApp
 

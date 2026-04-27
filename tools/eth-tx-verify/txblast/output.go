@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
 const (
@@ -38,6 +40,7 @@ func padColored(text, colorCode string, width int) string {
 // Row captures everything printed for one (spec, submit, receipt) triple.
 type Row struct {
 	Spec    Spec
+	Origin  thor.Address // tx signer (random pick from the dev[3..9] pool)
 	Submit  SubmitResult
 	Receipt ReceiptResult
 }
@@ -53,7 +56,7 @@ func shortHex(s string) string {
 // PrintBatchHeader prints the batch number and a column header line.
 func PrintBatchHeader(batch int, t time.Time) {
 	fmt.Printf("\n=== Batch %d @ %s ===\n", batch, t.UTC().Format(time.RFC3339))
-	fmt.Println("type    clauses   path   txid                                                           submit       receipt")
+	fmt.Println("type    clauses   path   from           txid                                                           submit       receipt")
 }
 
 // PrintRow prints one row with ANSI colors:
@@ -99,8 +102,9 @@ func PrintRow(r Row) {
 		receiptCol = padColored(fmt.Sprintf("OK(blk=%d)", r.Receipt.Block), ansiGreen, 0)
 	}
 
-	fmt.Printf("%-7s %-9d %-6s %-62s %s %s\n",
-		typeStr, r.Spec.Clauses, strings.ToUpper(r.Spec.Path), txid, submitCol, receiptCol)
+	fmt.Printf("%-7s %-9d %-6s %-14s %-62s %s %s\n",
+		typeStr, r.Spec.Clauses, strings.ToUpper(r.Spec.Path),
+		shortHex(r.Origin.String()), txid, submitCol, receiptCol)
 }
 
 // PrintSummary tallies submit/receipt OK counts, errors, and whether the
