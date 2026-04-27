@@ -13,6 +13,8 @@ package rpc
 import (
 	"encoding/json"
 	"sync/atomic"
+
+	"github.com/vechain/thor/v2/log"
 )
 
 // Config carries the knobs the rpc server needs. Fields mirror the subset of
@@ -51,8 +53,16 @@ type Config struct {
 	// Ownership note: this flag is deliberately independent of the REST
 	// logger's APIConfig.EnableReqLogger, so verifying the eth-RPC namespace
 	// is not drowned in REST chatter. cmd/thor/httpserver wires its own
-	// always-on *atomic.Bool here whenever --api-eth-rpc-enabled is set.
+	// always-on *atomic.Bool here whenever --api-eth-rpc-log-file is set.
 	EnableReqLogger *atomic.Bool
+
+	// Logger, if non-nil, receives the per-request "eth-rpc" lines instead
+	// of the project-wide log root. cmd/thor/httpserver opens an
+	// append-mode file from --api-eth-rpc-log-file and supplies a logger
+	// over it, so /rpc traffic can be captured without the rest of thor's
+	// stdout polluting the trace. A nil Logger falls back to the default
+	// package logger (log.WithContext("pkg","eth-rpc")).
+	Logger log.Logger
 }
 
 const defaultBodyLimit int64 = 200 * 1024 // 200 KiB, matches REST default.

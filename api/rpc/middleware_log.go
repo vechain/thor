@@ -12,7 +12,10 @@ import (
 	"github.com/vechain/thor/v2/log"
 )
 
-var logger = log.WithContext("pkg", "eth-rpc")
+// defaultLogger is the fallback when Config.Logger is not provided. It maps
+// to the project-wide log root with a "pkg=eth-rpc" tag so the line still
+// stands out in mixed-output stdout.
+var defaultLogger = log.WithContext("pkg", "eth-rpc")
 
 const paramsPreviewLimit = 200
 
@@ -23,8 +26,14 @@ const (
 )
 
 // logExchange emits one structured slog.Info line per /rpc exchange. Guarded
-// by s.cfg.EnableReqLogger (nil-safe; nil pointer means disabled).
-func (s *Server) logExchange(method string, env rpcResponse, body []byte, latency time.Duration) {
+// by s.cfg.EnableReqLogger (nil-safe; nil pointer means disabled). Output goes
+// to s.cfg.Logger when set, otherwise to the package default.
+//
+// referer is the value of the inbound request's Referer header (may be ""
+// when the caller is a non-browser client like txblast or curl). It is
+// included so the eth-rpc trace can distinguish DApp / MetaMask traffic
+// from tooling without parsing the params themselves.
+func (s *Server) logExchange(method, referer string, env rpcResponse, body []byte, latency time.Duration) {
 	if s.cfg.EnableReqLogger == nil || !s.cfg.EnableReqLogger.Load() {
 		return
 	}
@@ -32,6 +41,7 @@ func (s *Server) logExchange(method string, env rpcResponse, body []byte, latenc
 		"method", method,
 		"code", errorCode(env),
 		"latency_ms", float64(latency.Microseconds()) / 1000.0,
+		"referer", referer,
 		"params_preview", paramsPreview(body),
 	}
 	if env.Error != nil {
@@ -39,7 +49,11 @@ func (s *Server) logExchange(method string, env rpcResponse, body []byte, latenc
 	} else if preview := resultSummary(method, env.Result); preview != "" {
 		attrs = append(attrs, "result_preview", preview)
 	}
-	logger.Info("eth-rpc", attrs...)
+	lg := s.cfg.Logger
+	if lg == nil {
+		lg = defaultLogger
+	}
+	lg.Info("eth-rpc", attrs...)
 }
 
 func errorCode(env rpcResponse) int {

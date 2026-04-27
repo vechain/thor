@@ -39,28 +39,27 @@ Three terminals. Start them in this order.
 ### Terminal 1 — thor solo with RPC + request logger
 
 ```bash
-./bin/thor solo --on-demand --api-eth-rpc-enabled --verbosity 3
+./bin/thor solo --on-demand --api-eth-rpc-log-file ./eth-rpc.log --verbosity 3
 ```
 
 Flags explained:
 - `--on-demand` — mines a block immediately after each tx lands. Keeps receipt queries fast.
-- `--api-eth-rpc-enabled` — mounts `POST /rpc` (the spec-2 Ethereum JSON-RPC namespace) **and** automatically turns on the `/rpc` request logger. The eth-RPC logger is deliberately independent of REST's `--enable-api-logs` so verification output isn't drowned in REST chatter.
-- `--verbosity 3` — INFO level; you need INFO to see the `eth-rpc` lines.
+- `--api-eth-rpc-log-file <path>` — single switch: mounts `POST /rpc` (the spec-2 Ethereum JSON-RPC namespace) **and** appends one structured JSON log line per request to `<path>` (`O_APPEND|O_CREATE`). Empty/absent = `/rpc` is not mounted at all. The eth-RPC logger is deliberately a separate file so REST chatter doesn't drown verification output.
+- `--verbosity 3` — INFO level; affects thor's main stdout, unrelated to the dedicated eth-rpc file.
 
-> If you *also* want REST request logs (e.g. to correlate `/transactions` traffic from txblast), add `--enable-api-logs`. By default you'll see only `eth-rpc` lines.
+In a second pane, tail the file to watch traffic:
 
-You should see (roughly):
-
-```
-INFO http server started on [::]:8669
-INFO solo block packer started
+```bash
+tail -f ./eth-rpc.log | jq -c '{m:.method, ref:.referer, ms:.latency_ms, code:.code}'
 ```
 
-Leave this terminal running. Every request from txblast and the DApp will print one `eth-rpc` line here. Example line on a successful `eth_sendRawTransaction`:
+Example line on a successful `eth_sendRawTransaction`:
 
+```json
+{"time":"...","level":"INFO","msg":"eth-rpc","method":"eth_sendRawTransaction","code":0,"latency_ms":4.2,"referer":"http://localhost:5173/","params_preview":"[\"0x02f8...\"]","result_preview":"0x55a44...b565"}
 ```
-INFO[...] eth-rpc         pkg=eth-rpc method=eth_sendRawTransaction code=0 latency_ms=4.2 params_preview=["0x02f8..."] result_preview=0x55a44...b565
-```
+
+The `referer` field tells you the origin: dapp page URL, MetaMask extension origin, or empty for non-browser callers like txblast / curl.
 
 ### Terminal 2 — txblast
 
@@ -153,10 +152,10 @@ Thor's solo mode had a bug where `OnDemandTxPool.AddLocal` unconditionally check
 ### `nonce_too_low` every 0x02 RPC submit
 The tool fetches the initial nonce once at startup. If solo was restarted under txblast, the cached nonce is stale. txblast auto-recovers after 3 consecutive streaks — or just restart txblast.
 
-### No `eth-rpc` lines in Terminal 1
+### No `eth-rpc` lines in the log file
 Two causes:
-1. `--api-eth-rpc-enabled` missing → namespace not mounted, so no logger exists either.
-2. `--verbosity 3` missing → logger emits at INFO, default level is higher.
+1. `--api-eth-rpc-log-file <path>` missing → namespace not mounted, so no logger exists either.
+2. The path can't be opened (perm/dir missing) → thor exits at startup with `open eth-rpc log file [...]` — check stderr.
 
 ### DApp: MetaMask rejects "Add network"
 MetaMask requires `chainId` sent to `wallet_addEthereumChain` to match the RPC's `eth_chainId` exactly. The DApp fetches it live before adding, so a mismatch means your solo instance isn't the one serving `:8669`. Double-check the RPC URL in MetaMask settings.

@@ -6,9 +6,9 @@ Verifies spec 1/2/3 of the ETH-Tx branch through a real MetaMask wallet: add cha
 
 - thor solo running with the eth RPC namespace enabled:
   ```
-  ./bin/thor solo --on-demand --api-eth-rpc-enabled
+  ./bin/thor solo --on-demand --api-eth-rpc-log-file ./eth-rpc.log
   ```
-  The `/rpc` request logger turns on automatically when this flag is set.
+  `--api-eth-rpc-log-file` is the single switch: it mounts `/rpc` and appends one JSON log line per request to the given file. Tail it (`tail -f ./eth-rpc.log | jq -c .`) to watch traffic; the `referer` field distinguishes the DApp from MetaMask / non-browser callers.
 - MetaMask installed in your browser.
 - A static file server on port 8080:
   ```

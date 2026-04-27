@@ -6,9 +6,11 @@
 package httpserver
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -67,8 +69,13 @@ type APIConfig struct {
 	PriorityIncreasePercentage int
 	Timeout                    int
 	SlowQueriesThreshold       int
-	Log5XXErrors               bool
-	EthRPCEnabled              bool
+	Log5XXErrors bool
+
+	// EthRPCLogFile is the dual-purpose toggle for the experimental eth_*
+	// JSON-RPC namespace at POST /rpc. When non-empty, /rpc is mounted and
+	// per-request logs are appended to this path (O_APPEND|O_CREATE|O_WRONLY,
+	// mode 0644). When empty, /rpc is not registered at all.
+	EthRPCLogFile string
 }
 
 func StartAPIServer(
@@ -133,19 +140,34 @@ func StartAPIServer(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
-	if config.EthRPCEnabled {
-		// The eth-RPC request logger is independent of --enable-api-logs so that
-		// verification of the /rpc namespace is not drowned in REST chatter.
-		// Enabling the namespace always enables the logger (dev-only surface);
-		// operators who want it off can flip the *atomic.Bool at runtime.
+	// ethRPCLogFile is closed on server shutdown when --api-eth-rpc-log-file
+	// opened a dedicated sink. Declared in the outer scope so the returned
+	// cleanup closure can reach it.
+	var ethRPCLogFile *os.File
+	if config.EthRPCLogFile != "" {
+		// --api-eth-rpc-log-file is the single switch for the experimental
+		// /rpc namespace: setting it both mounts the handler and pins logs
+		// to a dedicated append-mode file (independent of --enable-api-logs
+		// so REST chatter doesn't drown the trace).
+		f, err := os.OpenFile(config.EthRPCLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			return "", nil, errors.Wrapf(err, "open eth-rpc log file [%v]", config.EthRPCLogFile)
+		}
+		ethRPCLogFile = f
+		lvl := &slog.LevelVar{}
+		lvl.Set(slog.LevelInfo)
+		ethRPCLogger := log.NewLogger(log.JSONHandlerWithLevel(f, lvl))
+
 		ethRPCLog := &atomic.Bool{}
 		ethRPCLog.Store(true)
+
 		rpcServer := rpc.NewServer(repo, stater, txPool, logDB, forkConfig, bft, rpc.Config{
 			LogsLimit:                  config.LogsLimit,
 			APIBacktraceLimit:          config.APIBacktraceLimit,
 			CallGasLimit:               config.CallGasLimit,
 			PriorityIncreasePercentage: config.PriorityIncreasePercentage,
 			EnableReqLogger:            ethRPCLog,
+			Logger:                     ethRPCLogger,
 		})
 		router.Path("/rpc").Methods(http.MethodPost).Handler(rpcServer)
 	}
@@ -191,5 +213,8 @@ func StartAPIServer(
 		srv.Close()
 		subs.Close()
 		goes.Wait()
+		if ethRPCLogFile != nil {
+			ethRPCLogFile.Close()
+		}
 	}, nil
 }

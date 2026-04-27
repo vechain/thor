@@ -98,6 +98,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start := time.Now()
+	referer := r.Header.Get("Referer")
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, s.cfg.bodyLimit()))
 	defer r.Body.Close()
 	if err != nil {
@@ -106,25 +107,25 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// the client gets a JSON-RPC envelope back.
 		env := rpcResponse{JSONRPC: "2.0", Error: ReasonError(ReasonOversizedData, "request body too large: "+err.Error())}
 		writeEnvelope(w, env)
-		s.logExchange("(unknown)", env, body, time.Since(start))
+		s.logExchange("(unknown)", referer, env, body, time.Since(start))
 		return
 	}
 
-	env := s.dispatchAndLog(r.Context(), body, start)
+	env := s.dispatchAndLog(r.Context(), referer, body, start)
 	writeEnvelope(w, env)
 }
 
 // dispatchAndLog handles the dispatch logic for a single JSON-RPC request,
 // returning the response envelope. A deferred call to logExchange emits exactly
 // one structured log line per invocation (when request logging is enabled).
-func (s *Server) dispatchAndLog(ctx context.Context, body []byte, start time.Time) (env rpcResponse) {
+func (s *Server) dispatchAndLog(ctx context.Context, referer string, body []byte, start time.Time) (env rpcResponse) {
 	method := "(unknown)"
 	// previewSrc is what logExchange reads for params_preview. Default to the
 	// raw body (useful on parse/batch errors). Once the envelope parses, we
 	// swap to req.Params so the log shows only the actual parameters — no
 	// duplicated "jsonrpc":"2.0","method":"..." envelope noise.
 	var previewSrc []byte = body
-	defer func() { s.logExchange(method, env, previewSrc, time.Since(start)) }()
+	defer func() { s.logExchange(method, referer, env, previewSrc, time.Since(start)) }()
 
 	// Reject array-form (batch) requests up-front with a clear message.
 	// Scan for the first non-whitespace byte.
