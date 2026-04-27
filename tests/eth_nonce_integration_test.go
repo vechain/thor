@@ -110,26 +110,27 @@ func TestEthNonce_TooLowIsRejected(t *testing.T) {
 	assert.Equal(t, "nonce_too_low", data["reason"])
 }
 
-func TestEthNonce_FutureNonceNotExecutable(t *testing.T) {
+func TestEthNonce_FutureNonceQueued(t *testing.T) {
 	srv, tc, _ := newE2EServer(t)
 	chainID := new(big.Int).SetUint64(thor.ChainID(tc.Repo().GenesisBlock().Header().ID()))
 	sender := genesis.DevAccounts()[0]
 	to := thor.BytesToAddress([]byte("dst"))
 
-	// Sending nonce=3 on a fresh account via StrictlyAdd (which is what
-	// eth_sendRawTransaction uses) must fail with tx_validation_failed
-	// because Executable() returns false — spec 3 §4.2.
+	// Sending nonce=3 on a fresh account via pool.AddLocal (which is what
+	// eth_sendRawTransaction uses) returns the canonical txid — the tx is
+	// parked in the non-executable queue until state nonce catches up,
+	// matching go-ethereum's "queued" pool semantics.
 	trx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(chainID).EthTo(&to).EthValue(big.NewInt(0)).
 		MaxFeePerGas(big.NewInt(10_000_000_000_000)).
 		MaxPriorityFeePerGas(big.NewInt(1_000_000_000)).
 		Gas(21000).Nonce(3).Build(), sender.PrivateKey)
 	raw, _ := trx.MarshalBinary()
-	_, errField := callRPC(t, srv, "eth_sendRawTransaction", "0x"+hex.EncodeToString(raw))
-	require.NotEmpty(t, errField, "future-nonce under StrictlyAdd must not silently succeed")
-	var e map[string]any
-	require.NoError(t, json.Unmarshal(errField, &e))
-	assert.Equal(t, float64(-32000), e["code"])
+	resultField, errField := callRPC(t, srv, "eth_sendRawTransaction", "0x"+hex.EncodeToString(raw))
+	require.Empty(t, errField, "future-nonce under AddLocal must be accepted, not rejected")
+	var txid string
+	require.NoError(t, json.Unmarshal(resultField, &txid))
+	assert.Equal(t, trx.CanonicalTxID().String(), txid)
 }
 
 func TestEthNonce_EthStyleCreateAddress(t *testing.T) {

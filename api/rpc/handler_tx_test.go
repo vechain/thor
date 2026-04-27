@@ -113,10 +113,6 @@ func TestHandle_SendRaw_Duplicate_IsIdempotent(t *testing.T) {
 
 	chainID := new(big.Int).SetUint64(thor.ChainID(tc.Repo().GenesisBlock().Header().ID()))
 	to := thor.BytesToAddress([]byte("dup"))
-	// Must use nonce=0 for a fresh account; spec 3 §4.2 requires
-	// `tx.Nonce == state.Nonce` for executability, and a future-nonce (e.g. 5)
-	// would otherwise be pushed to the non-executable queue and rejected under
-	// StrictlyAdd.
 	raw := rawEth02(t, chainID, 0, &to, 10_000_000_000_000, 1_000_000_000)
 
 	result1, errField := send(t, s, raw)

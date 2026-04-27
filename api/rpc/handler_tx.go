@@ -35,6 +35,12 @@ func init() {
 // On successful pool admission the canonical txid (keccak256 of signed RLP)
 // is returned as a DATA string; admission errors map to data.reason codes
 // per spec §3 D3 / §7.2.
+//
+// Admission goes through pool.AddLocal (non-strict): future-nonce 0x02 txs
+// (tx.Nonce > state.Nonce) are queued as non-executable and promoted once
+// state catches up — matching go-ethereum's "queued" pool semantics. Hard
+// validation failures (signature, chainId, nonce_too_low, intrinsic gas,
+// fee caps) still surface synchronously through mapTxPoolError.
 func handleSendRawTransaction(_ context.Context, s *Server, params json.RawMessage) (any, *RPCError) {
 	var args []hexutil.Bytes
 	if err := json.Unmarshal(params, &args); err != nil {
@@ -59,7 +65,7 @@ func handleSendRawTransaction(_ context.Context, s *Server, params json.RawMessa
 		return nil, InvalidParams("raw tx decode: " + err.Error())
 	}
 
-	if err := s.pool.StrictlyAdd(trx); err != nil {
+	if err := s.pool.AddLocal(trx); err != nil {
 		return nil, mapTxPoolError(err)
 	}
 	return trx.CanonicalTxID(), nil
