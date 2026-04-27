@@ -543,6 +543,24 @@ func (s *State) Stage(newVer trie.Version) (*Stage, error) {
 	}, nil
 }
 
+func (s *State) GetNonce(addr thor.Address) uint64 {
+	acc, err := s.getAccount(addr)
+	if err != nil {
+		return 0
+	}
+	return acc.Nonce
+}
+
+func (s *State) SetNonce(addr thor.Address, nonce uint64) error {
+	cpy, err := s.getAccountCopy(addr)
+	if err != nil {
+		return &Error{err}
+	}
+	cpy.Nonce = nonce
+	s.updateAccount(addr, &cpy)
+	return nil
+}
+
 type (
 	storageKey struct {
 		addr    thor.Address

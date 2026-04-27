@@ -31,7 +31,7 @@ func M(a ...any) []any {
 }
 
 func TestAccountRLPOptional(t *testing.T) {
-	// Encode an Account (without EthNonce) and decode into NewAccount
+	// Encode an Account (without Nonce) and decode into NewAccount
 	oldAcc := OldAccount{
 		Balance:     big.NewInt(100),
 		Energy:      big.NewInt(200),
@@ -56,10 +56,10 @@ func TestAccountRLPOptional(t *testing.T) {
 	assert.Equal(t, oldAcc.CodeHash, newAcc.CodeHash)
 	assert.Equal(t, oldAcc.StorageRoot, newAcc.StorageRoot)
 
-	// The optional EthNonce should default to zero
-	assert.Equal(t, uint64(0), newAcc.EthNonce)
+	// The optional Nonce should default to zero
+	assert.Equal(t, uint64(0), newAcc.Nonce)
 
-	// Encode a NewAccount with EthNonce set, decode back into NewAccount
+	// Encode a NewAccount with Nonce set, decode back into NewAccount
 	newAcc2 := Account{
 		Balance:     big.NewInt(100),
 		Energy:      big.NewInt(200),
@@ -67,7 +67,7 @@ func TestAccountRLPOptional(t *testing.T) {
 		Master:      []byte("master"),
 		CodeHash:    []byte("codehash"),
 		StorageRoot: []byte("storageroot"),
-		EthNonce:    42,
+		Nonce:       42,
 	}
 
 	encoded2, err := rlp.EncodeToBytes(&newAcc2)
@@ -76,21 +76,21 @@ func TestAccountRLPOptional(t *testing.T) {
 	var newAcc3 Account
 	err = rlp.DecodeBytes(encoded2, &newAcc3)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(42), newAcc3.EthNonce)
+	assert.Equal(t, uint64(42), newAcc3.Nonce)
 
-	// Encode a NewAccount with EthNonce set, decode into old Account
+	// Encode a NewAccount with Nonce set, decode into old Account
 	// RLP does NOT allow extra fields — old struct rejects new data with additional fields
 	var oldAcc2 OldAccount
 	err = rlp.DecodeBytes(encoded2, &oldAcc2)
 	assert.Error(t, err, "decoding NewAccount bytes (with extra field) into OldAccount should fail")
 
-	// When EthNonce=0 (zero value), rlp:"optional" omits it from encoding,
+	// When Nonce=0 (zero value), rlp:"optional" omits it from encoding,
 	// so OldAccount CAN decode it — backward compatible when optional field is zero.
 	newAcc5 := Account{
 		Balance:   big.NewInt(100),
 		Energy:    big.NewInt(200),
 		BlockTime: 1000,
-		EthNonce:  0,
+		Nonce:     0,
 	}
 	encoded5, err := rlp.EncodeToBytes(&newAcc5)
 	assert.NoError(t, err)

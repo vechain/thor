@@ -457,7 +457,13 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
+
+	// TODO: Discuss which family tx need update nonce or only eth tx.
 	nonce := evm.StateDB.GetNonce(caller.Address())
+	if nonce+1 < nonce {
+		return nil, common.Address{}, gas, ErrNonceUintOverflow
+	}
+
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 
 	// Increase counter, same behavior as Create()

@@ -137,10 +137,16 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 }
 
 // GetNonce stub.
-func (s *StateDB) GetNonce(_ common.Address) uint64 { return 0 }
+func (s *StateDB) GetNonce(addr common.Address) uint64 {
+	return s.state.GetNonce(thor.Address(addr))
+}
 
 // SetNonce stub.
-func (s *StateDB) SetNonce(_ common.Address, _ uint64) {}
+func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
+	if err := s.state.SetNonce(thor.Address(addr), nonce); err != nil {
+		panic(err)
+	}
+}
 
 // GetCodeHash stub.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
