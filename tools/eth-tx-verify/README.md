@@ -39,27 +39,52 @@ Three terminals. Start them in this order.
 ### Terminal 1 — thor solo with RPC + request logger
 
 ```bash
-./bin/thor solo --on-demand --api-eth-rpc-log-file ./eth-rpc.log --verbosity 3
+./bin/thor solo --on-demand --api-cors='*' --api-eth-rpc-log-file ./eth-rpc.log --verbosity 3
 ```
 
 Flags explained:
 - `--on-demand` — mines a block immediately after each tx lands. Keeps receipt queries fast.
+- `--api-cors='*'` — let MetaMask and the DApp page reach `/rpc`. solo defaults to empty (cross-origin blocked at preflight). Lock down to specific origins for non-dev use.
 - `--api-eth-rpc-log-file <path>` — single switch: mounts `POST /rpc` (the spec-2 Ethereum JSON-RPC namespace) **and** appends one structured JSON log line per request to `<path>` (`O_APPEND|O_CREATE`). Empty/absent = `/rpc` is not mounted at all. The eth-RPC logger is deliberately a separate file so REST chatter doesn't drown verification output.
 - `--verbosity 3` — INFO level; affects thor's main stdout, unrelated to the dedicated eth-rpc file.
 
 In a second pane, tail the file to watch traffic:
 
 ```bash
-tail -f ./eth-rpc.log | jq -c '{m:.method, ref:.referer, ms:.latency_ms, code:.code}'
+tail -f ./eth-rpc.log | jq -c '{m:.method, ref:.referer, o:.origin, ms:.latency_ms, code:.code}'
 ```
 
-Example line on a successful `eth_sendRawTransaction`:
+Example line on a successful `eth_sendRawTransaction` from MetaMask:
 
 ```json
-{"time":"...","level":"INFO","msg":"eth-rpc","method":"eth_sendRawTransaction","code":0,"latency_ms":4.2,"referer":"http://localhost:5173/","params_preview":"[\"0x02f8...\"]","result_preview":"0x55a44...b565"}
+{"t":"...","lvl":"info","msg":"eth-rpc","method":"eth_sendRawTransaction","code":0,"latency_ms":4.2,"referer":"","origin":"chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn","params_preview":"[\"0x02f8...\"]","result_preview":"0x55a44...b565"}
 ```
 
-The `referer` field tells you the origin: dapp page URL, MetaMask extension origin, or empty for non-browser callers like txblast / curl.
+Two fields together attribute every request:
+
+| client | `referer` | `origin` |
+|---|---|---|
+| MetaMask (Chrome) | `""` (extension strips it) | `chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn` |
+| MetaMask (Firefox) | `""` | `moz-extension://<uuid>` |
+| DApp page JS (bypassing MM) | `http://localhost:8080/` | `http://localhost:8080` |
+| txblast | `txblast/eth-tx-verify` | `""` (not a browser) |
+| curl / generic tooling | `""` | `""` |
+
+Use `origin` to identify MetaMask — `referer` alone reads as empty for almost all wallet traffic because browser extensions suppress it. CORS forces the browser to set `Origin` on every cross-origin POST, including from extensions, so it's reliable.
+
+```bash
+# Just MetaMask traffic
+jq -c 'select(.origin | startswith("chrome-extension://") or startswith("moz-extension://"))' eth-rpc.log
+
+# Per-client method totals
+jq -r '[
+  (if   .origin == ""                                 then (.referer // "non-browser")
+   elif .origin | startswith("chrome-extension://")   then "metamask-chrome"
+   elif .origin | startswith("moz-extension://")      then "metamask-firefox"
+   else "page:" + .origin end),
+  .method
+] | @tsv' eth-rpc.log | sort | uniq -c | sort -rn
+```
 
 ### Terminal 2 — txblast
 
@@ -70,21 +95,21 @@ go run ./tools/eth-tx-verify/txblast
 Default: 2 s interval, 1 copy of the 10-row matrix per batch. What you want to see — **every row green, V1 HOLDS**:
 
 ```
-=== Batch 1 @ 2026-04-24T17:05:22Z ===
-type    clauses   path   txid                                                           submit                                        receipt
-0x00    1         REST   0xabc1...def0                                                  OK                                            MISS
-0x00    1         RPC    0x1234...5678                                                  OK                                            MISS
+=== Batch 1 @ 2026-04-27T17:05:22Z ===
+type    clauses   path   from           txid                                                           submit       receipt
+0x00    1         REST   0xa3a4...3ad   0xabc1...def0                                                  OK           MISS
+0x00    1         RPC    0xc7c0...001   0x1234...5678                                                  OK           MISS
 ...
-0x02    1         RPC    0x55a4...b565                                                  OK                                            MISS
+0x02    1         RPC    0x99f0...fd36  0x55a4...b565                                                  OK           MISS
 === summary: submit 10/10  receipt 0/10  errors 0  invariant V1: HOLDS ===
 ```
 
-First batch's receipts will be `MISS` (nothing mined yet). From batch 2 onward you'll see `OK(blk=N)` for most rows:
+The `from` column shows which dev account signed each row — randomly picked from `dev[3..9]` per tx (see "Random signer pool" below). First batch's receipts will be `MISS` (nothing mined yet). From batch 2 onward you'll see `OK(blk=N)` for most rows:
 
 ```
-=== Batch 2 @ 2026-04-24T17:05:24Z ===
-0x00    1         REST   0xaaaa...aaaa                                                  OK                                            OK(blk=8)
-0x00    3         RPC    0xbbbb...bbbb                                                  OK                                            ERR(tx_not_representable)   ← expected
+=== Batch 2 @ 2026-04-27T17:05:24Z ===
+0x00    1         REST   0xa3a4...3ad   0xaaaa...aaaa                                                  OK           OK(blk=8)
+0x00    3         RPC    0xc7c0...001   0xbbbb...bbbb                                                  OK           ERR(tx_not_representable)   ← expected
 ...
 === summary: submit 10/10  receipt 7/10  errors 3  invariant V1: HOLDS ===
 ```
@@ -117,9 +142,15 @@ Each submitted batch enters a **pending queue**. On every tick, txblast retries 
 
 Every tx in a batch is signed by an account picked uniformly at random from the **dev[3..9]** range — seven solo dev accounts with effectively infinite VET / VTHO. dev[0] and dev[1] are deliberately excluded so they remain free for the DApp's MetaMask import and other tooling.
 
-`txpool.StrictlyAdd` rejects any 0x02 tx whose nonce is ahead of state, so within one batch the **REST 0x02** and **RPC 0x02** rows are routed to *different* signers chosen up front (the rest of the matrix may share). Each pool account has its own independent EthNonce counter; if a 0x02 ever submits with `nonce_too_low` / `nonce_too_high` (e.g. another tool also sent from that account), the next finalized batch automatically resyncs that account's counter from on-chain state — you'll see `[info] nonce resynced  0x… → N`.
+Each pool account has its own independent EthNonce counter (only 0x02 needs sequential nonces; 0x00 / 0x51 use random nonces and ignore the counter). Within a batch the **REST 0x02** and **RPC 0x02** rows are routed to *different* signers chosen up front — even though `eth_sendRawTransaction` now uses `pool.AddLocal` (which queues future-nonce instead of rejecting it), distinct signers keep both rows immediately executable so receipts resolve in the same batch instead of waiting for the queued one to promote.
+
+If a 0x02 ever surfaces `nonce_too_low` / `nonce_too_high` (e.g. another tool sent from the same account behind txblast's back), the next finalized batch resyncs **just that account's** counter from on-chain state — you'll see `[info] nonce resynced  0x… → N`. No three-batch streak required, and other accounts keep their local counters intact.
 
 The `from` column in each batch's output shows which dev account signed each row. The startup banner lists the full pool with current nonces.
+
+### Sending Referer from txblast
+
+txblast tags every outbound HTTP request (RPC + REST + GET) with `Referer: txblast/eth-tx-verify` so server-side `eth-rpc.log` can distinguish its traffic from MetaMask / DApp without payload parsing. See the client-identification matrix above.
 
 ### Terminal 3 — DApp
 
@@ -139,8 +170,8 @@ Then browser → `http://localhost:8080` → MetaMask installed → work through
 | Invariant | Spec § | How to see it | Where to look |
 |---|---|---|---|
 | **V1** — REST+RPC submit path symmetry | §2.2, §3 | `submit 10/10` and `V1: HOLDS` on every batch | Terminal 2 summary line |
-| **V2** — one log line per `/rpc` request | §2.2, §4 | One `eth-rpc` line in Terminal 1 per click/tx | Terminal 1 stdout |
-| **V2'** — `method` field always present | §2.2 | Every `eth-rpc` line has `method=xxx` (never missing). Parse/garbage requests show `method=(unknown)`. | Terminal 1 stdout |
+| **V2** — one log line per `/rpc` request | §2.2, §4 | One JSON line per click/tx in `eth-rpc.log` | `tail -f eth-rpc.log` |
+| **V2'** — `method` field always present | §2.2 | Every line has `"method":"…"`. Parse/garbage requests show `"method":"(unknown)"`. | `jq -r .method eth-rpc.log \| sort -u` |
 | **Spec 3 D1** — 0x02 CREATE = keccak(rlp(from,nonce))[12:] | spec 3 §4 | Green `✅ Addresses match` in DApp panel ④ | DApp browser |
 
 ---
@@ -153,8 +184,8 @@ Thor's solo mode had a bug where `OnDemandTxPool.AddLocal` unconditionally check
 ### `receipt MISS` persistent for all rows
 `--on-demand` must be passed to solo — otherwise blocks only produce on a timer and the receipt-on-next-tick pattern starves. Confirm Terminal 1 shows the `--on-demand` flag on the command line.
 
-### `nonce_too_low` every 0x02 RPC submit
-The tool fetches the initial nonce once at startup. If solo was restarted under txblast, the cached nonce is stale. txblast auto-recovers after 3 consecutive streaks — or just restart txblast.
+### `nonce_too_low` / `nonce_too_high` repeating for one signer
+Every pool account has its own EthNonce; on a 0x02 submit error the next finalized batch resyncs *that* account from on-chain state and other accounts keep their local counters. If the same account keeps failing, solo was likely restarted under txblast (its state nonce reset to 0). Restart txblast — startup re-queries every account.
 
 ### No `eth-rpc` lines in the log file
 Two causes:
@@ -180,9 +211,9 @@ From spec §6.2, listed with what automates vs what's manual:
 
 - **A1** — `go test ./api/rpc/...` all green → fully automated, run on every commit.
 - **A2** — 5 consecutive txblast batches, each `submit 10/10` + `V1 HOLDS` → run Terminal 2 for ~12 s.
-- **A3** — Terminal 1 shows ≥10 `eth-rpc` INFO lines per txblast batch (5 RPC submits + 5 receipt queries), each carrying a `method=` field → eyeball or grep.
+- **A3** — `eth-rpc.log` shows ≥10 lines per txblast batch (5 RPC submits + 5 receipt queries), each carrying a `"method":"…"` field → `jq -r 'select(.referer=="txblast/eth-tx-verify") | .method' eth-rpc.log | wc -l`.
 - **A4** — DApp checklist 1–6 all pass, especially step 4 showing `✅` → manual, needs MetaMask.
-- **A5** — Cross-reference any 5 DApp sidebar entries with Terminal 1 output → manual sampling.
+- **A5** — Cross-reference any 5 DApp sidebar entries with `eth-rpc.log` rows whose `origin` starts with `chrome-extension://` (or `moz-extension://`) → manual sampling.
 
 Running all five takes ~10 minutes end to end if MetaMask is already installed.
 

@@ -6,9 +6,14 @@ Verifies spec 1/2/3 of the ETH-Tx branch through a real MetaMask wallet: add cha
 
 - thor solo running with the eth RPC namespace enabled:
   ```
-  ./bin/thor solo --on-demand --api-eth-rpc-log-file ./eth-rpc.log
+  ./bin/thor solo --on-demand --api-cors='*' --api-eth-rpc-log-file ./eth-rpc.log
   ```
-  `--api-eth-rpc-log-file` is the single switch: it mounts `/rpc` and appends one JSON log line per request to the given file. Tail it (`tail -f ./eth-rpc.log | jq -c .`) to watch traffic; the `referer` field distinguishes the DApp from MetaMask / non-browser callers.
+  `--api-eth-rpc-log-file` is the single switch: it mounts `/rpc` and appends one JSON log line per request to the given file. Tail it (`tail -f ./eth-rpc.log | jq -c '{m:.method, ref:.referer, o:.origin}'`) to watch traffic. `--api-cors='*'` is required so MetaMask's cross-origin POSTs aren't blocked at preflight; lock down to specific origins for non-dev use.
+
+  Identifying clients in the log:
+  - **MetaMask** — `referer:""` + `origin:"chrome-extension://nkbihfb...knn"` (Chrome) or `origin:"moz-extension://<uuid>"` (Firefox). The extension strips `Referer`, but the browser must send `Origin` for CORS, so it's the reliable fingerprint.
+  - **DApp page JS** (rare — most calls go through MM) — `referer:"http://localhost:8080/"` + `origin:"http://localhost:8080"`.
+  - **Non-browser tooling** (e.g. txblast, curl) — `referer:"txblast/eth-tx-verify"` or empty; `origin:""`.
 - MetaMask installed in your browser.
 - A static file server on port 8080:
   ```
@@ -24,10 +29,10 @@ For each step, confirm the outcome before proceeding.
 1. [ ] "Add VeChain Solo to MetaMask" succeeds: chainId appears in MetaMask's network list (value e.g. `0xe558`).
 2. [ ] "Connect Wallet" shows the dev account address, VET balance, and VTHO balance (VTHO via the Energy precompile `0x0...456E65726779`).
   * Optional — click "Add VTHO to MetaMask" → MetaMask prompts to watch the VTHO token (ERC-20 via the Energy contract). Accept → VTHO appears in MetaMask's Tokens tab with live balance.
-3. [ ] "Send 0.1 VET" succeeds: MetaMask signs, status transitions `pending → mined(blk=N)`. Thor's stdout shows `eth-rpc method=eth_sendRawTransaction code=0`.
+3. [ ] "Send 0.1 VET" succeeds: MetaMask signs, status transitions `pending → mined(blk=N)`. `eth-rpc.log` shows a JSON record with `"method":"eth_sendRawTransaction"`, `"code":0`, and `"origin":"chrome-extension://…"`.
 4. [ ] "Deploy Counter" succeeds: receipt.contractAddress matches the local `getCreateAddress(from, nonce)` computation. Green ✅ indicator.
 5. [ ] `+1` and `+5` increment the counter; `value()` reads the updated value.
-6. [ ] Right sidebar (⑤ RPC log) shows a scrolling list of every ethers.js RPC call with method name, params, result, and latency. Five random sampled entries align 1:1 with thor's stdout `eth-rpc` lines.
+6. [ ] Right sidebar (⑤ RPC log) shows a scrolling list of every ethers.js RPC call with method name, params, result, and latency. Five random sampled entries align 1:1 with rows in `eth-rpc.log` whose `origin` starts with `chrome-extension://` (or `moz-extension://`).
 
 ## Known limitations
 
