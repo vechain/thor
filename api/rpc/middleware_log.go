@@ -29,11 +29,15 @@ const (
 // by s.cfg.EnableReqLogger (nil-safe; nil pointer means disabled). Output goes
 // to s.cfg.Logger when set, otherwise to the package default.
 //
-// referer is the value of the inbound request's Referer header (may be ""
-// when the caller is a non-browser client like txblast or curl). It is
-// included so the eth-rpc trace can distinguish DApp / MetaMask traffic
-// from tooling without parsing the params themselves.
-func (s *Server) logExchange(method, referer string, env rpcResponse, body []byte, latency time.Duration) {
+// referer is the inbound Referer header — set by browsers on page-level
+// fetches (e.g. http://localhost:8080/), suppressed by browser extensions
+// like MetaMask, opt-in for non-browser clients (txblast sets it).
+//
+// origin is the inbound Origin header — set by browsers on every cross-origin
+// POST as a CORS requirement, including from extensions. This is what makes
+// MetaMask traffic identifiable: chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn
+// (Chrome) or moz-extension://<uuid> (Firefox). Empty for non-browser callers.
+func (s *Server) logExchange(method, referer, origin string, env rpcResponse, body []byte, latency time.Duration) {
 	if s.cfg.EnableReqLogger == nil || !s.cfg.EnableReqLogger.Load() {
 		return
 	}
@@ -42,6 +46,7 @@ func (s *Server) logExchange(method, referer string, env rpcResponse, body []byt
 		"code", errorCode(env),
 		"latency_ms", float64(latency.Microseconds()) / 1000.0,
 		"referer", referer,
+		"origin", origin,
 		"params_preview", paramsPreview(body),
 	}
 	if env.Error != nil {
