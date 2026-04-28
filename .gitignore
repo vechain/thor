@@ -32,3 +32,6 @@ coverage.out
 
 dist/
 custom-net
+
+node_modules/
+artifacts/

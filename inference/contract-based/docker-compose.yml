@@ -1,0 +1,81 @@
+services:
+  # ── VeChain solo node ───────────────────────────────────────────────────── #
+  thor:
+    image: ghcr.io/vechain/thor:latest
+    command: ["solo", "--api-addr", "0.0.0.0:8669", "--api-cors", "*", "--api-enable-txpool"]
+    ports:
+      - "8669:8669"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8669/blocks/best"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Inference Explorer ──────────────────────────────────────────────────── #
+  # Reads contract events and serves dashboard at :8088
+  explorer:
+    build: .
+    entrypoint:
+      - "python"
+      - "-m"
+      - "uvicorn"
+      - "explorer:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8088"
+    ports:
+      - "8088:8088"
+    environment:
+      - THOR_URL=http://thor:8669
+    volumes:
+      - ./deployment.json:/app/deployment.json:ro
+    depends_on:
+      thor:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Inference node (containerised) ─────────────────────────────────────── #
+  # Not started by default — start.sh runs it locally (MPS/GPU).
+  # Use this for CPU-only or CI environments.
+  inference:
+    profiles: [full]
+    build: .
+    entrypoint:
+      - "python"
+      - "/app/py/inference_node.py"
+      - "7b067f53d350f1cf20ec13df416b7b73e88a1dc7331bc904b92108b1e76a08b1"
+      - "Qwen/Qwen2.5-1.5B-Instruct"
+      - "http://thor:8669"
+    volumes:
+      - ~/.cache/huggingface:/hf_cache
+      - ./deployment.json:/app/deployment.json:ro
+    environment:
+      - HF_HOME=/hf_cache
+    depends_on:
+      thor:
+        condition: service_healthy
+
+  # ── Checker node (containerised) ───────────────────────────────────────── #
+  checker:
+    profiles: [full]
+    build: .
+    entrypoint:
+      - "python"
+      - "/app/py/checker_node.py"
+      - "f4a1a17039216f535d42ec23732c79943ffb45a089fbb78a14daad0dae93e991"
+      - "http://thor:8669"
+    volumes:
+      - ~/.cache/huggingface:/hf_cache
+      - ./deployment.json:/app/deployment.json:ro
+    environment:
+      - HF_HOME=/hf_cache
+    depends_on:
+      thor:
+        condition: service_healthy
+
+volumes: {}
