@@ -32,6 +32,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+// eth1559EmptyReserved is a package-level zero-value sentinel returned by reserved().
+// Avoids a heap allocation on every call since eth1559TxData never sets any reserved flags.
+var eth1559EmptyReserved reserved
+
 // eth1559TxData implements txData for EIP-1559 typed Ethereum transactions
 // (type byte 0x02; wire format: 0x02 || RLP([chainId, nonce, ...])).
 type eth1559TxData struct {
@@ -61,7 +65,7 @@ func (d *eth1559TxData) expiration() uint32       { return math.MaxUint32 }
 func (d *eth1559TxData) gas() uint64              { return d.gasLimit }
 func (d *eth1559TxData) dependsOn() *thor.Bytes32 { return nil }
 func (d *eth1559TxData) nonce() uint64            { return d.txNonce }
-func (d *eth1559TxData) reserved() *reserved      { return &reserved{} }
+func (d *eth1559TxData) reserved() *reserved      { return &eth1559EmptyReserved }
 func (d *eth1559TxData) ethTxHash() thor.Bytes32  { return d.ethHash }
 
 func (d *eth1559TxData) clauses() []*Clause {
@@ -71,9 +75,13 @@ func (d *eth1559TxData) clauses() []*Clause {
 func (d *eth1559TxData) maxFeePerGas() *big.Int         { return new(big.Int).Set(d.maxFee) }
 func (d *eth1559TxData) maxPriorityFeePerGas() *big.Int { return new(big.Int).Set(d.maxPriority) }
 
-// signingFields is unused for Ethereum tx types: Transaction.SigningHash() type-asserts
-// to computeEthSigningHash() instead, which handles the nil-To rlp:"nil" tag correctly.
-func (d *eth1559TxData) signingFields() []any { return nil }
+// signingFields must never be called on an Ethereum tx. Transaction.SigningHash()
+// type-asserts to *eth1559TxData and calls computeEthSigningHash() directly, bypassing
+// this method entirely. Panicking here turns a silent wrong-hash bug (nil → empty RLP
+// list → wrong Keccak256) into an immediate, obvious programming error.
+func (d *eth1559TxData) signingFields() []any {
+	panic("eth1559TxData: signingFields must not be called; Ethereum txs use computeEthSigningHash()")
+}
 
 func (d *eth1559TxData) signature() []byte {
 	sig := make([]byte, 65)
@@ -148,6 +156,11 @@ func (d *eth1559TxData) encode(w *bytes.Buffer) error {
 }
 
 // decode parses the rlpBody (without the leading 0x02 byte) from the block body.
+// It performs only structural/syntactic parsing: field ranges, signature scalar
+// bounds, and chain ID are NOT validated here. Semantic validation is the
+// responsibility of the caller — consensus runs it via tr.Origin() (ECDSA
+// recovery) and the switch checks in validateBlockBody; the mempool runs the
+// full NormalizeEthereumTx pipeline before any tx enters the pool.
 func (d *eth1559TxData) decode(input []byte) error {
 	var body eth1559Transaction
 	if err := rlp.DecodeBytes(input, &body); err != nil {

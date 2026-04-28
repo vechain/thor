@@ -19,7 +19,6 @@ const (
 	EthErrNonCanonicalRLP          EthTxErrorCode = "non_canonical_rlp"
 	EthErrInvalidField             EthTxErrorCode = "invalid_field"
 	EthErrFeeInconsistency         EthTxErrorCode = "fee_inconsistency"
-	EthErrEIP155Required           EthTxErrorCode = "eip155_required"
 	EthErrChainIDMismatch          EthTxErrorCode = "chain_id_mismatch"
 	EthErrInvalidR                 EthTxErrorCode = "invalid_r"
 	EthErrInvalidS                 EthTxErrorCode = "invalid_s"

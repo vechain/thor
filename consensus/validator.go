@@ -221,6 +221,19 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 				tr.EthChainID(), ethChainID))
 		}
 
+		// Enforce low-S signature canonicity for Ethereum transactions at the block level.
+		// The mempool rejects high-S via validateSigScalars at ingestion time, but a
+		// validator that builds blocks directly (bypassing the pool) could include a
+		// high-S tx that crypto.SigToPub (used by Origin() above) silently accepts.
+		// Without this check, two txs with the same payload but opposite S values would
+		// both pass consensus and receive different IDs, breaking indexers and explorers
+		// that assume canonical Ethereum signatures (EIP-2 / go-ethereum behaviour).
+		if tr.Type() == tx.TypeEthTyped1559 {
+			if err := tr.EnforceSignatureLowS(); err != nil {
+				return consensusError("eth tx non-canonical signature: " + err.Error())
+			}
+		}
+
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
 			return consensusError("invalid tx: " + err.Error())
 		}

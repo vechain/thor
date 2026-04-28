@@ -499,7 +499,12 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 	}
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
-	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
+	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee).
+	// baseFee must be non-nil for all post-GALACTICA blocks; treat nil as zero only as
+	// a defensive fallback (e.g. API simulation calls that omit block context).
+	if baseFee == nil {
+		baseFee = new(big.Int)
+	}
 	tip := new(big.Int).Add(t.body.maxPriorityFeePerGas(), baseFee)
 	return math.BigMin(t.body.maxFeePerGas(), tip)
 }
@@ -523,6 +528,11 @@ func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseG
 		maxFeePerGas = t.body.maxFeePerGas()
 	}
 
+	// baseFee must be non-nil for post-GALACTICA blocks; treat nil as zero as a
+	// defensive fallback for API simulation calls that omit block context.
+	if baseFee == nil {
+		baseFee = new(big.Int)
+	}
 	priorityFeePerGas := new(big.Int).Sub(maxFeePerGas, baseFee)
 	return math.BigMin(priorityFeePerGas, maxPriorityFeePerGas)
 }
