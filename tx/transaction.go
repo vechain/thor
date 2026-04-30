@@ -122,14 +122,12 @@ type txData interface {
 // For VeChain legacy, it returns the raw RLP list (no type prefix).
 // For all other typed transactions, it returns the type byte followed by the RLP body.
 func (t *Transaction) MarshalBinary() ([]byte, error) {
-	switch t.Type() {
-	case TypeLegacy:
+	if t.Type() == TypeLegacy {
 		return rlp.EncodeToBytes(t.body)
-	default:
-		var buf bytes.Buffer
-		err := t.encodeTyped(&buf)
-		return buf.Bytes(), err
 	}
+	var buf bytes.Buffer
+	err := t.encodeTyped(&buf)
+	return buf.Bytes(), err
 }
 
 // encodeTyped writes the canonical encoding of a typed transaction to w.
@@ -140,18 +138,18 @@ func (t *Transaction) encodeTyped(w *bytes.Buffer) error {
 
 // EncodeRLP implements rlp.Encoder
 func (t *Transaction) EncodeRLP(w io.Writer) error {
-	switch t.Type() {
-	case TypeLegacy:
+	if t.Type() == TypeLegacy {
 		return rlp.Encode(w, &t.body)
-	default:
-		buf := encodeBufferPool.Get().(*bytes.Buffer)
-		defer encodeBufferPool.Put(buf)
-		buf.Reset()
-		if err := t.encodeTyped(buf); err != nil {
-			return err
-		}
-		return rlp.Encode(w, buf.Bytes())
 	}
+
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+
+	if err := t.encodeTyped(buf); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
 }
 
 // UnmarshalBinary decodes the canonical encoding of transactions.
@@ -205,20 +203,21 @@ func (t *Transaction) setDecoded(body txData, size uint64) {
 
 // DecodeRLP implements rlp.Decoder
 func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
-	kind, _, err := s.Kind()
-
-	switch {
-	case err != nil:
+	kind, size, err := s.Kind()
+	if err != nil {
 		return err
-	case kind == rlp.List:
+	}
+
+	switch kind {
+	case rlp.List:
 		// Raw RLP list — VeChain TypeLegacy.
 		var data legacyTransaction
-		if err := s.Decode(&data); err != nil {
+		if err = s.Decode(&data); err != nil {
 			return err
 		}
-		t.setDecoded(&data, 0)
+		t.setDecoded(&data, rlp.ListSize(size))
 		return nil
-	case kind == rlp.Byte:
+	case rlp.Byte:
 		return errShortTypedTx
 	default:
 		// It's a TX envelope.
@@ -243,6 +242,7 @@ func (t *Transaction) Size() thor.StorageSize {
 
 	var size thor.StorageSize
 	rlp.Encode(&size, t.body)
+
 	// For typed transactions, the encoding also includes the leading type byte.
 	if t.body.txType() != TypeLegacy {
 		size += 1
@@ -298,7 +298,7 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 	defer func() { t.cache.id.Store(id) }()
 
 	// Ethereum transactions identify themselves by their wire hash.
-	if hash := t.body.ethTxHash(); hash != (thor.Bytes32{}) {
+	if hash := t.body.ethTxHash(); !hash.IsZero() {
 		return hash
 	}
 
@@ -320,7 +320,7 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 	// Ethereum tx types have unexported fields; rlp.Encode would silently produce an
 	// empty encoding and every Ethereum tx would share the same Hash(). Use ethTxHash
 	// (Keccak256 of raw wire bytes) instead — same as ID() — so pool deduplication works.
-	if h := t.body.ethTxHash(); h != (thor.Bytes32{}) {
+	if h := t.body.ethTxHash(); !h.IsZero() {
 		return h
 	}
 
@@ -499,14 +499,8 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 	}
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
-	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee).
-	// baseFee must be non-nil for all post-GALACTICA blocks; treat nil as zero only as
-	// a defensive fallback (e.g. API simulation calls that omit block context).
-	if baseFee == nil {
-		baseFee = new(big.Int)
-	}
-	tip := new(big.Int).Add(t.body.maxPriorityFeePerGas(), baseFee)
-	return math.BigMin(t.body.maxFeePerGas(), tip)
+	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
+	return math.BigMin(t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas().Add(t.body.maxPriorityFeePerGas(), baseFee))
 }
 
 // EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction. If maxFeePerGas is less than
@@ -528,11 +522,6 @@ func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseG
 		maxFeePerGas = t.body.maxFeePerGas()
 	}
 
-	// baseFee must be non-nil for post-GALACTICA blocks; treat nil as zero as a
-	// defensive fallback for API simulation calls that omit block context.
-	if baseFee == nil {
-		baseFee = new(big.Int)
-	}
 	priorityFeePerGas := new(big.Int).Sub(maxFeePerGas, baseFee)
 	return math.BigMin(priorityFeePerGas, maxPriorityFeePerGas)
 }

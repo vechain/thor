@@ -155,13 +155,16 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseF
 		return nil, nil, thor.Address{}, nil, nil, errors.New("insufficient energy")
 	}
 
-	// VeChain's fee-sponsorship model applies to all tx types, including TypeEthTyped1559.
-	// If the Ethereum tx has a single non-nil To address (i.e. it is not a contract
-	// creation), CommonTo() returns that address. If the sender is enrolled as a "user"
-	// of that contract and the contract has a sponsor with sufficient energy, the gas fee
-	// is deducted from the sponsor rather than the sender. This is intentional — it means
-	// Ethereum-compatible txs can participate in VeChain's sponsored-gas ecosystem.
-	// Ethereum users may find this surprising; document it at the API layer.
+	// Fee sponsorship (Prototype credit plan) applies to all tx types via CommonTo().
+	// For a TypeEthTyped1559 tx, CommonTo() returns the single To field when non-nil
+	// (contract calls); nil (contract creation) skips this path.
+	//
+	// Payer priority:
+	//   1. Active sponsor (IsSponsor + sufficient energy)
+	//   2. CommonTo contract's own energy balance
+	//   3. Fallback: origin (below)
+	//
+	// Non-user or insufficient-credit senders fall straight through to the origin fallback.
 	commonTo := r.CommonTo()
 	if commonTo != nil {
 		binding := builtin.Prototype.Native(state).Bind(*commonTo)
