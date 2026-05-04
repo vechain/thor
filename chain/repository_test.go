@@ -194,12 +194,8 @@ func TestScanHeads(t *testing.T) {
 	}
 }
 
-// ethChainID is an arbitrary Ethereum replay-protection chain ID used in repository tests.
-// TODO: revisit once chain ID is derivable from network config rather than hard-coded.
-const ethChainID = uint64(1337)
-
 // ethRepoTestKey is a deterministic secp256k1 private key for signing Ethereum txs in
-// repository tests.  Using a fixed key makes ethTxHash values stable across test runs.
+// repository tests. Using a fixed key makes ethTxHash values stable across test runs.
 var ethRepoTestKey, _ = crypto.HexToECDSA("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 
 // TestRepository_EthReceiptColdRead verifies that Ethereum-typed receipts (TypeEthTyped1559)
@@ -212,17 +208,18 @@ var ethRepoTestKey, _ = crypto.HexToECDSA("1234567890abcdef1234567890abcdef12345
 func TestRepository_EthReceiptColdRead(t *testing.T) {
 	db, repo1 := newTestRepo()
 	b0 := repo1.GenesisBlock()
+	ethChainID := thor.GetEthChainID(b0.Header().ID())
 
-	to := thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+	to := new(thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e"))
 
 	// Build a real EthTyped1559 tx.
 	eth1559Tx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
-		ChainID(ethChainID). // TODO: derive from network config
+		ChainID(ethChainID).
 		Nonce(1).
 		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		MaxFeePerGas(big.NewInt(10e9)).
 		GasLimit(21000).
-		To(&to).
+		To(to).
 		Value(big.NewInt(0)).
 		Build(ethRepoTestKey)
 	require.NoError(t, err)

@@ -288,8 +288,6 @@ func (t *Transaction) IsExpired(blockNum uint32) bool {
 // ID returns id of tx.
 // For VeChain-native txs: ID = Blake2b(signingHash, origin).
 // For Ethereum txs: ID = Keccak256(rawEthBytes) — the standard ethTxHash.
-// TODO: the Ethereum branch diverges from the VeChain txID formula; revisit if a
-// separate ethTxHash→VeChain-txID index is ever needed for internal lookups.
 // It returns zero Bytes32 if origin not available.
 func (t *Transaction) ID() (id thor.Bytes32) {
 	if cached := t.cache.id.Load(); cached != nil {
