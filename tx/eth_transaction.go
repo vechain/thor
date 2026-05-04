@@ -3,23 +3,22 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-// Package tx — EthereumTx ingestion engine.
+// Package tx — Ethereum transaction parsing.
 //
-// NormalizeEthereumTx turns raw bytes into a validated NormalizedEthereumTx for
-// EthTyped1559 transactions. The pipeline is:
+// ParseEthTransaction validates raw Ethereum wire bytes and returns a *Transaction
+// ready for pool ingestion and EVM execution. The parsing pipeline is:
 //
-//	Step 0: size check                    (< 128 KiB)
-//	Step 1: detect tx kind                (Detector)
-//	Step 2: RLP decode into typed struct  (Decoder)
-//	Step 3: validate CHAIN_ID            (before ECDSA — cheap rejection)
-//	Step 4: validate field ranges         (stateless)
-//	Step 5: validate r, s bounds          (before ECDSA recovery)
-//	Step 6: recover sender via secp256k1  (Recoverer)
-//	Step 7: compute ethTxHash             (Hasher)
-//	Step 8: assemble NormalizedEthereumTx (Normalizer)
+//	Step 0: size check                   (< 64 KiB)
+//	Step 1: detect tx kind               (type-byte switch)
+//	Step 2: RLP decode into typed struct
+//	Step 3: validate chain ID            (before ECDSA — cheap rejection)
+//	Step 4: validate field ranges        (stateless)
+//	Step 5: validate r, s bounds         (before ECDSA recovery)
+//	Step 6: recover sender via secp256k1
+//	Step 7: compute ethTxHash            (Keccak256 of raw wire bytes)
+//	Step 8: construct *Transaction       (directly from parsed body — no re-decode)
 //
-// Everything below stays out of scope: mempool, replacement, base-fee checks,
-// JSON-RPC formatting, block projection.
+// Out of scope: mempool replacement, base-fee checks, JSON-RPC formatting, block projection.
 
 package tx
 
@@ -36,56 +35,26 @@ import (
 )
 
 const (
-	// maxEthTxSize is the maximum serialised transaction size accepted by the engine.
-	maxEthTxSize = 128 * 1024 // 128 KiB
+	// maxEthTxSize is the maximum serialised size accepted by ParseEthTransaction.
+	// TODO: confirm alignment with Ethereum node mempool limits before mainnet activation.
+	maxEthTxSize = 64 * 1024
 
 	// max256BitLen is the maximum bit-length for 256-bit unsigned integer fields (value).
 	max256BitLen = 256
 )
 
-// NormalizedEthereumTx is the engine's output — a fully decoded, validated, and
-// sender-recovered Ethereum transaction ready for pool ingestion, execution, and
-// RPC projection. It is the canonical boundary object passed between the engine
-// and its consumers.
+// ParseEthTransaction parses and validates raw Ethereum wire-format bytes,
+// recovers the sender via ECDSA, and returns a *Transaction with sender
+// and ID pre-cached, ready for pool submission and EVM execution.
 //
-// Hash is computed once at engine time; consumers must never recompute or replace it.
-// Raw is preserved so consumers can re-broadcast without re-encoding.
-type NormalizedEthereumTx struct {
-	// Identity
-	Hash   thor.Bytes32 // ethTxHash = Keccak256(rawEthBytes)
-	TxType Type         // TypeEthTyped1559
-
-	// Sender recovered via secp256k1 ECDSA — not present on the wire.
-	Sender thor.Address
-
-	// Common fields
-	Nonce    uint64
-	GasLimit uint64
-	To       *thor.Address // nil = contract creation
-	Value    *big.Int
-	Data     []byte
-	ChainID  uint64
-
-	// Fee fields.
-	MaxFeePerGas         *big.Int
-	MaxPriorityFeePerGas *big.Int
-
-	// Raw Ethereum wire bytes, preserved for re-broadcast and hash verification.
-	// For EthTyped1559: the 0x02-prefixed full encoding.
-	Raw []byte
-}
-
-// NormalizeEthereumTx validates and normalizes raw Ethereum transaction bytes.
+// chainID is the network's EIP-155 replay-protection chain ID. The caller is
+// responsible for providing the correct value from the fork config.
 //
-// chainID is the CHAIN_ID this network enforces for EIP-155 replay protection.
-// The caller is responsible for providing the correct CHAIN_ID from the fork config.
-//
-// On success, it returns a NormalizedEthereumTx.
-// On failure, it returns an *EthTxError with a machine-readable EthTxErrorCode.
-func NormalizeEthereumTx(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx, error) {
+// On failure it returns an *EthTxError with a machine-readable EthTxErrorCode.
+func ParseEthTransaction(rawBytes []byte, chainID uint64) (*Transaction, error) {
 	// Step 0: size check — before any parsing.
 	if len(rawBytes) > maxEthTxSize {
-		return nil, ethErr(EthErrOversized, "transaction exceeds 128 KiB limit")
+		return nil, ethErr(EthErrOversized, "transaction exceeds 64 KiB limit")
 	}
 
 	// Step 1: detect tx kind.
@@ -98,7 +67,7 @@ func NormalizeEthereumTx(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx
 	case first >= 0xC0:
 		return nil, ethErr(EthErrUnsupportedTxType, "Ethereum legacy (type-0 RLP) transactions are not supported; use EIP-1559 (type 0x02)")
 	case first == TypeEthTyped1559:
-		return processEth1559(rawBytes, chainID)
+		return parseEth1559(rawBytes, chainID)
 	case first == 0x01:
 		return nil, ethErr(EthErrUnsupportedTxType, "EIP-2930 (type 0x01) transactions are not supported")
 	case first == 0x03:
@@ -110,8 +79,8 @@ func NormalizeEthereumTx(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx
 	}
 }
 
-// processEth1559 runs the full pipeline for an EthTyped1559 transaction.
-func processEth1559(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx, error) {
+// parseEth1559 runs the full pipeline for an EIP-1559 typed transaction.
+func parseEth1559(rawBytes []byte, chainID uint64) (*Transaction, error) {
 	// rawBytes = 0x02 || rlpBody; strip the type prefix before RLP decoding.
 	if len(rawBytes) < 2 {
 		return nil, ethErr(EthErrMalformedEncoding, "EIP-1559 transaction too short")
@@ -124,7 +93,7 @@ func processEth1559(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx, err
 		return nil, wrapRLPErr(err)
 	}
 
-	// Step 3: validate CHAIN_ID.
+	// Step 3: validate chain ID.
 	if body.ChainID.Cmp(new(big.Int).SetUint64(chainID)) != 0 {
 		return nil, ethErrf(EthErrChainIDMismatch, "chain ID %s does not match expected %d", body.ChainID, chainID)
 	}
@@ -148,21 +117,27 @@ func processEth1559(rawBytes []byte, chainID uint64) (*NormalizedEthereumTx, err
 	// Step 7: compute ethTxHash from original raw bytes (includes 0x02 prefix).
 	hash := thor.Keccak256(rawBytes)
 
-	// Step 8: assemble.
-	return &NormalizedEthereumTx{
-		Hash:                 hash,
-		TxType:               TypeEthTyped1559,
-		Sender:               sender,
-		Nonce:                body.Nonce,
-		GasLimit:             body.GasLimit,
-		To:                   cloneAddress(body.To),
-		Value:                new(big.Int).Set(body.Value),
-		Data:                 bytes.Clone(body.Data),
-		ChainID:              chainID,
-		MaxFeePerGas:         new(big.Int).Set(body.MaxFeePerGas),
-		MaxPriorityFeePerGas: new(big.Int).Set(body.MaxPriorityFeePerGas),
-		Raw:                  rawBytes,
-	}, nil
+	// Step 8: construct *Transaction directly from the parsed body — no re-decode.
+	d := &eth1559TxData{
+		chainID:     chainID,
+		txNonce:     body.Nonce,
+		maxPriority: new(big.Int).Set(body.MaxPriorityFeePerGas),
+		maxFee:      new(big.Int).Set(body.MaxFeePerGas),
+		gasLimit:    body.GasLimit,
+		to:          cloneAddress(body.To),
+		value:       new(big.Int).Set(body.Value),
+		data:        bytes.Clone(body.Data),
+		yParity:     body.YParity,
+		r:           new(big.Int).Set(body.R),
+		s:           new(big.Int).Set(body.S),
+		ethHash:     hash,
+		rawBytes:    bytes.Clone(rawBytes),
+	}
+	t := &Transaction{body: d}
+	t.cache.id.Store(hash)
+	t.cache.origin.Store(sender)
+	t.cache.size.Store(uint64(len(rawBytes)))
+	return t, nil
 }
 
 // validateEth1559Fields performs stateless range checks on EthTyped1559 fields.
@@ -197,11 +172,10 @@ func validateEth1559Fields(t *eth1559Transaction) error {
 }
 
 // validateSigScalars checks the r and s signature components against the secp256k1 curve order.
-//
-// Required invariants (encoding-hashing.md §6.4):
+// Low-S is mandatory to prevent signature malleability:
 //
 //	r ≠ 0 and r < N
-//	s ≠ 0 and s ≤ N/2  (low-S mandatory)
+//	s ≠ 0 and s ≤ N/2
 func validateSigScalars(r, s *big.Int) error {
 	if r.Sign() == 0 || r.Cmp(secp256k1N) >= 0 {
 		return ethErr(EthErrInvalidR, "r must satisfy 0 < r < N")
@@ -220,7 +194,7 @@ func validateSigScalars(r, s *big.Int) error {
 }
 
 // cloneAddress returns a heap copy of a *thor.Address, or nil if a is nil.
-// Used to keep NormalizedEthereumTx.To independent of the decoded body struct.
+// Used to keep eth1559TxData.to independent of the decoded body struct.
 func cloneAddress(a *thor.Address) *thor.Address {
 	if a == nil {
 		return nil

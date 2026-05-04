@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestNormalizeEthereumTx_TypeDetection covers the type-detection switch in
-// NormalizeEthereumTx before any per-type decoding occurs.
-func TestNormalizeEthereumTx_TypeDetection(t *testing.T) {
+// TestParseEthTransaction_TypeDetection covers the type-detection switch in
+// ParseEthTransaction before any per-type decoding occurs.
+func TestParseEthTransaction_TypeDetection(t *testing.T) {
 	tests := []struct {
 		name     string
 		raw      []byte
@@ -65,7 +65,7 @@ func TestNormalizeEthereumTx_TypeDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NormalizeEthereumTx(tt.raw, testChainID)
+			_, err := ParseEthTransaction(tt.raw, testChainID)
 			require.Error(t, err)
 			assert.Equal(t, tt.wantCode, err.(*EthTxError).Code)
 		})

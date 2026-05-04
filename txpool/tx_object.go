@@ -84,6 +84,7 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	case !thor.IsForked(nextBlockNum, forkConfig.GALACTICA) && o.Type() != tx.TypeLegacy:
 		// reject non legacy tx before GALACTICA
 		return false, tx.ErrTxTypeNotSupported
+		// TODO might need to add a !IsForked(INTERSTELLAR) && Type == TypeEthTyped1559
 	}
 
 	// test features on next block

@@ -27,9 +27,9 @@ import (
 // VeChain rejects non-empty access lists at the engine level, so no setter
 // is provided — any such transaction would be rejected immediately.
 //
-// Unset *big.Int fields (GasPrice, MaxFeePerGas, MaxPriorityFeePerGas, Value)
-// default to zero. Build returns an error if NormalizeEthereumTx rejects the
-// encoded bytes (e.g. gasPrice == 0, gasLimit == 0).
+// Unset *big.Int fields (MaxFeePerGas, MaxPriorityFeePerGas, Value) default to
+// zero. Build returns an error if the encoded bytes fail validation
+// (e.g. maxFeePerGas == 0, gasLimit == 0).
 type EthBuilder struct {
 	txType               Type
 	chainID              uint64
@@ -52,8 +52,8 @@ func NewEthBuilder(txType Type) *EthBuilder {
 }
 
 // ChainID sets the Ethereum EIP-155 / EIP-1559 replay-protection chain ID.
-// This is embedded in the signing preimage (EthTyped1559)
-// and verified by NormalizeEthereumTx.
+// Embedded in the signing preimage; must match the network's chain ID
+// or Build returns an error.
 func (b *EthBuilder) ChainID(id uint64) *EthBuilder {
 	b.chainID = id
 	return b
@@ -66,15 +66,15 @@ func (b *EthBuilder) Nonce(n uint64) *EthBuilder {
 }
 
 // MaxFeePerGas sets the maxFeePerGas field.
-// NormalizeEthereumTx requires maxFeePerGas > 0.
+// Must be > 0, or Build returns an error.
 // The value is copied; mutating v after this call has no effect.
 func (b *EthBuilder) MaxFeePerGas(v *big.Int) *EthBuilder {
 	b.maxFeePerGas = cloneBigInt(v)
 	return b
 }
 
-// MaxPriorityFeePerGas sets the maxPriorityFeePerGas field. Only meaningful for TypeEthTyped1559.
-// NormalizeEthereumTx requires maxPriorityFeePerGas ≤ maxFeePerGas.
+// MaxPriorityFeePerGas sets the maxPriorityFeePerGas field.
+// Must be ≤ maxFeePerGas, or Build returns an error.
 // The value is copied; mutating v after this call has no effect.
 func (b *EthBuilder) MaxPriorityFeePerGas(v *big.Int) *EthBuilder {
 	b.maxPriorityFeePerGas = cloneBigInt(v)
@@ -82,7 +82,7 @@ func (b *EthBuilder) MaxPriorityFeePerGas(v *big.Int) *EthBuilder {
 }
 
 // GasLimit sets the gas limit.
-// NormalizeEthereumTx requires gasLimit > 0.
+// Must be > 0, or Build returns an error.
 func (b *EthBuilder) GasLimit(n uint64) *EthBuilder {
 	b.gasLimit = n
 	return b
@@ -109,11 +109,10 @@ func (b *EthBuilder) Data(d []byte) *EthBuilder {
 
 // BuildRaw signs the transaction and returns Ethereum wire-format bytes: 0x02 || RLP(body).
 //
-// BuildRaw does not validate field semantics; NormalizeEthereumTx (called by
+// BuildRaw does not validate field semantics; ParseEthTransaction (called by
 // Build) performs those checks. Call BuildRaw directly when you need the raw
-// bytes — for example to broadcast to an Ethereum node, or to construct
-// negative-path test cases by tampering specific fields before passing them
-// to NormalizeEthereumTx.
+// bytes — for example to construct negative-path test cases by tampering fields
+// before passing them to ParseEthTransaction.
 func (b *EthBuilder) BuildRaw(key *ecdsa.PrivateKey) ([]byte, error) {
 	if key == nil {
 		return nil, fmt.Errorf("EthBuilder: private key must not be nil")
@@ -121,21 +120,17 @@ func (b *EthBuilder) BuildRaw(key *ecdsa.PrivateKey) ([]byte, error) {
 	return b.buildEth1559Wire(key)
 }
 
-// Build signs, encodes, normalises, and wraps the transaction as a *Transaction
-// ready for pool submission, EVM execution, and block inclusion.
+// Build signs, encodes, validates, and returns a *Transaction ready for pool
+// submission, EVM execution, and block inclusion.
 //
-// Returns an error if signing fails or if NormalizeEthereumTx rejects the
-// encoded bytes (e.g. gasPrice == 0, gasLimit == 0, chainID mismatch, low-S violation).
+// Returns an error if signing fails or if validation rejects the encoded bytes
+// (e.g. maxFeePerGas == 0, gasLimit == 0, chainID mismatch, high-S signature).
 func (b *EthBuilder) Build(key *ecdsa.PrivateKey) (*Transaction, error) {
 	rawBytes, err := b.BuildRaw(key)
 	if err != nil {
 		return nil, err
 	}
-	norm, err := NormalizeEthereumTx(rawBytes, b.chainID)
-	if err != nil {
-		return nil, err
-	}
-	return NewEthereumTransaction(norm), nil
+	return ParseEthTransaction(rawBytes, b.chainID)
 }
 
 // buildEth1559Wire produces EIP-1559 signed wire bytes: 0x02 || RLP(body).

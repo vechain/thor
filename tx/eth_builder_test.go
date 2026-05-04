@@ -44,13 +44,13 @@ func TestEthBuilder_MutatingInputAfterSet(t *testing.T) {
 	rawBytes, err := b.BuildRaw(ethTestKey)
 	require.NoError(t, err, "mutating the input *big.Int must not affect the built tx")
 
-	ntx, err := NormalizeEthereumTx(rawBytes, testChainID)
+	trx, err := ParseEthTransaction(rawBytes, testChainID)
 	require.NoError(t, err)
-	assert.Equal(t, big.NewInt(20e9), ntx.MaxFeePerGas, "maxFeePerGas must reflect the value at Set time, not after mutation")
+	assert.Equal(t, big.NewInt(20e9), trx.MaxFeePerGas(), "maxFeePerGas must reflect the value at Set time, not after mutation")
 }
 
 // TestEthBuilder_BuildErrorPropagates verifies that Build() returns an error when
-// NormalizeEthereumTx rejects the encoded bytes due to invalid field values.
+// ParseEthTransaction rejects the encoded bytes due to invalid field values.
 func TestEthBuilder_BuildErrorPropagates(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -75,7 +75,7 @@ func TestEthBuilder_BuildErrorPropagates(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := tc.builder.Build(ethTestKey)
-			require.Error(t, err, "Build must propagate NormalizeEthereumTx validation errors")
+			require.Error(t, err, "Build must propagate ParseEthTransaction validation errors")
 		})
 	}
 }

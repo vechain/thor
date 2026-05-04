@@ -178,13 +178,13 @@ func (t *Transaction) decodeTyped(b []byte) (txData, error) {
 	if len(b) <= 1 {
 		return nil, errShortTypedTx
 	}
+	// Block-body format: 0x02 || rlpBody
 	switch b[0] {
 	case TypeDynamicFee:
 		var body dynamicFeeTransaction
 		err := body.decode(b[1:])
 		return &body, err
 	case TypeEthTyped1559:
-		// Block-body format: 0x02 || rlpBody — identical to the EIP-1559 wire format.
 		var body eth1559TxData
 		err := body.decode(b[1:])
 		return &body, err
