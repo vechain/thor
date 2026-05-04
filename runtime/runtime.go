@@ -474,7 +474,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 		return nil, errors.New("tx gas exceeds block gas limit")
 	}
 
-	if rt.ctx.Number >= rt.forkConfig.INTERSTELLAR && trx.Gas() > thor.MaxTxGasLimit {
+	if thor.IsForked(rt.ctx.Number, rt.forkConfig.INTERSTELLAR) && trx.Gas() > thor.MaxTxGasLimit {
 		return nil, errors.New("tx gas limit exceeds the maximum allowed")
 	}
 
