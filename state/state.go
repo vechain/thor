@@ -219,6 +219,34 @@ func (s *State) SetMaster(addr thor.Address, master thor.Address) error {
 	return nil
 }
 
+// GetNonce returns the Ethereum nonce for the given address.
+// Returns 0 for addresses that have never sent an EthereumTx.
+func (s *State) GetNonce(addr thor.Address) (uint64, error) {
+	acc, err := s.getAccount(addr)
+	if err != nil {
+		return 0, &Error{err}
+	}
+	if len(acc.Nonce) > 0 {
+		return acc.Nonce[0], nil
+	}
+	return 0, nil
+}
+
+// SetNonce sets the Ethereum nonce for the given address.
+func (s *State) SetNonce(addr thor.Address, nonce uint64) error {
+	cpy, err := s.getAccountCopy(addr)
+	if err != nil {
+		return &Error{err}
+	}
+	if nonce == 0 {
+		cpy.Nonce = nil
+	} else {
+		cpy.Nonce = []uint64{nonce}
+	}
+	s.updateAccount(addr, &cpy)
+	return nil
+}
+
 // GetStorage returns storage value for the given address and key.
 func (s *State) GetStorage(addr thor.Address, key thor.Bytes32) (thor.Bytes32, error) {
 	raw, err := s.GetRawStorage(addr, key)

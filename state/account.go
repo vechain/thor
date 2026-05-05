@@ -31,6 +31,10 @@ type Account struct {
 	Master      []byte // master address
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
+	// Nonce is the Ethereum-compatible transaction counter for TypeEthTyped1559 senders.
+	// Stored as a single-element slice so rlp:"tail" gives backward-compatible encoding:
+	// zero nonce → nil slice → same 6-field RLP as pre-INTERSTELLAR accounts.
+	Nonce []uint64 `rlp:"tail"`
 }
 
 // IsEmpty returns if an account is empty.
@@ -39,7 +43,8 @@ func (a *Account) IsEmpty() bool {
 	return a.Balance.Sign() == 0 &&
 		a.Energy.Sign() == 0 &&
 		len(a.Master) == 0 &&
-		len(a.CodeHash) == 0
+		len(a.CodeHash) == 0 &&
+		len(a.Nonce) == 0
 }
 
 var bigE18 = big.NewInt(1e18)
@@ -100,6 +105,11 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, *AccountMetadat
 	var a Account
 	if err := rlp.DecodeBytes(data, &a); err != nil {
 		return nil, nil, err
+	}
+	// rlp:"tail" decodes absent elements as an empty (non-nil) slice;
+	// normalize to nil so zero-nonce accounts compare equal to emptyAccount().
+	if len(a.Nonce) == 0 {
+		a.Nonce = nil
 	}
 
 	var am AccountMetadata
