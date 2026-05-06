@@ -277,6 +277,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	txTypeString := "Legacy"
 	if newTx.Type() == tx.TypeDynamicFee {
 		txTypeString = "DynamicFee"
+	} else if newTx.Type() == tx.TypeEthTyped1559 {
+		txTypeString = "EthTyped1559"
 	}
 	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 
@@ -456,6 +458,8 @@ func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 			txTypeString = "Legacy"
 		} else if removedTransaction.Type() == tx.TypeDynamicFee {
 			txTypeString = "DynamicFee"
+		} else if removedTransaction.Type() == tx.TypeEthTyped1559 {
+			txTypeString = "EthTyped1559"
 		}
 		metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "type": txTypeString})
 		logger.Debug("tx removed", "id", txID)
@@ -718,6 +722,10 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 				return badTxError{fmt.Sprintf("Ethereum chain ID %d does not match network chain ID %d",
 					trx.EthChainID(), p.ethChainID)}
 			}
+			// TODO(mempool-nonce): validate trx.Nonce() == state.GetNonce(sender).
+			// Without this, stale and future-nonce txs enter the pool and sit there
+			// indefinitely. Requires state access at add-time and a matching eviction
+			// path in Executable() — deferred to dedicated ETH mempool work.
 		}
 	} else {
 		// Before INTERSTELLAR: Ethereum tx types are not yet supported.

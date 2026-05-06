@@ -57,6 +57,13 @@ var (
 		Usage:   "API service listening address",
 		Sources: envVar("API_ADDR"),
 	}
+	ethRPCAddrFlag = &cli.StringFlag{
+		Name:    "eth-rpc-addr",
+		Local:   true,
+		Value:   "localhost:8545",
+		Usage:   "Ethereum JSON-RPC service listening address",
+		Sources: envVar("ETH_RPC_ADDR"),
+	}
 	apiCorsFlag = &cli.StringFlag{
 		Name:    "api-cors",
 		Local:   true,

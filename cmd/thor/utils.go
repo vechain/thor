@@ -281,6 +281,15 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool)
 	}
 }
 
+func makeEthRPCConfig(ctx *cli.Command, clientVersion string) httpserver.EthRPCConfig {
+	return httpserver.EthRPCConfig{
+		AllowedOrigins: ctx.String(apiCorsFlag.Name),
+		BacktraceLimit: uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		CallGasLimit:   ctx.Uint64(apiCallGasLimitFlag.Name),
+		ClientVersion:  clientVersion,
+	}
+}
+
 func makeConfigDir(ctx *cli.Command) (string, error) {
 	dir := ctx.String(configDirFlag.Name)
 	if dir == "" {

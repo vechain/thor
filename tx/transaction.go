@@ -296,6 +296,10 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 	defer func() { t.cache.id.Store(id) }()
 
 	// Ethereum transactions identify themselves by their wire hash.
+	// TODO: using !hash.IsZero() as a sentinel to detect Ethereum txs is fragile —
+	// a tx whose Keccak256(rawBytes) == [32]byte{} (probability 2^-256) would silently
+	// fall through to the VeChain Blake2b formula, giving it the wrong ID. Prefer an
+	// IsEthTx() bool on the txData interface, or a concrete type assertion here.
 	if hash := t.body.ethTxHash(); !hash.IsZero() {
 		return hash
 	}

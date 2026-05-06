@@ -240,6 +240,12 @@ func wrapRLPErr(err error) *EthTxError {
 	case errors.Is(err, rlp.ErrMoreThanOneValue):
 		return ethErr(EthErrNonCanonicalRLP, "trailing bytes after RLP item")
 	default:
+		// TODO: strings.Contains on the error message is fragile — go-ethereum could
+		// change its wording across dependency upgrades, causing non-canonical errors
+		// to be silently reclassified as EthErrMalformedEncoding. The clean fix is to
+		// export go-ethereum's *decodeError type so proper sentinel matching is possible.
+		// Add a test that covers the wrapped-field path (error originating inside a struct
+		// field) to catch any future regression.
 		if strings.Contains(err.Error(), "non-canonical") {
 			return ethErrf(EthErrNonCanonicalRLP, "non-canonical RLP encoding: %v", err)
 		}
