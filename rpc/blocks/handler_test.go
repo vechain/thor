@@ -1,0 +1,117 @@
+// Copyright (c) 2026 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package blocks_test
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/rpc/blocks"
+	"github.com/vechain/thor/v2/rpc/testutil"
+	"github.com/vechain/thor/v2/tx"
+)
+
+func TestBlocksHandler(t *testing.T) {
+	fx := testutil.NewChainFixture(t)
+	ts := testutil.NewMinimalServer(t, blocks.New(fx.Chain.Repo(), fx.ChainID))
+
+	t.Run("eth_getBlockByNumber_latest", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"latest", false})
+		var blk map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &blk))
+
+		var num hexutil.Uint64
+		require.NoError(t, json.Unmarshal(blk["number"], &num))
+		assert.Equal(t, uint64(1), uint64(num))
+
+		// Only the ETH tx hash is present; the VeChain legacy tx is excluded.
+		var txHashes []string
+		require.NoError(t, json.Unmarshal(blk["transactions"], &txHashes))
+		require.Len(t, txHashes, 1)
+		assert.Equal(t, fx.EthTxHash, txHashes[0])
+
+		// gasUsed counts only the ETH tx.
+		var gasUsed hexutil.Uint64
+		require.NoError(t, json.Unmarshal(blk["gasUsed"], &gasUsed))
+		assert.Greater(t, uint64(gasUsed), uint64(0))
+
+		// baseFeePerGas is present because GALACTICA is active from block 0.
+		_, hasBF := blk["baseFeePerGas"]
+		assert.True(t, hasBF, "baseFeePerGas should be present for a GALACTICA block")
+	})
+
+	t.Run("eth_getBlockByNumber_earliest", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"earliest", false})
+		var blk map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &blk))
+
+		var num hexutil.Uint64
+		require.NoError(t, json.Unmarshal(blk["number"], &num))
+		assert.Equal(t, uint64(0), uint64(num))
+	})
+
+	t.Run("eth_getBlockByNumber_hex", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"0x1", false})
+		var blk map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &blk))
+
+		var num hexutil.Uint64
+		require.NoError(t, json.Unmarshal(blk["number"], &num))
+		assert.Equal(t, uint64(1), uint64(num))
+	})
+
+	t.Run("eth_getBlockByNumber_notfound", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"0xffff", false})
+		assert.Equal(t, "null", string(result))
+	})
+
+	t.Run("eth_getBlockByNumber_fullTxs", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"latest", true})
+		var blk map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &blk))
+
+		var txObjs []map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(blk["transactions"], &txObjs))
+		require.Len(t, txObjs, 1)
+
+		var txHash string
+		require.NoError(t, json.Unmarshal(txObjs[0]["hash"], &txHash))
+		assert.Equal(t, fx.EthTxHash, txHash)
+
+		var txType hexutil.Uint64
+		require.NoError(t, json.Unmarshal(txObjs[0]["type"], &txType))
+		assert.Equal(t, uint64(tx.TypeEthTyped1559), uint64(txType))
+
+		// Projected ETH index: the ETH tx is at canonical position 1 but it is
+		// the first (and only) ETH tx, so its projected index is 0.
+		var txIdx hexutil.Uint64
+		require.NoError(t, json.Unmarshal(txObjs[0]["transactionIndex"], &txIdx))
+		assert.Equal(t, uint64(0), uint64(txIdx))
+	})
+
+	t.Run("eth_getBlockByHash", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByHash", []any{fx.BlockHash, false})
+		var blk map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &blk))
+
+		var num hexutil.Uint64
+		require.NoError(t, json.Unmarshal(blk["number"], &num))
+		assert.Equal(t, uint64(1), uint64(num))
+
+		var gotHash string
+		require.NoError(t, json.Unmarshal(blk["hash"], &gotHash))
+		assert.Equal(t, fx.BlockHash, gotHash)
+	})
+
+	t.Run("eth_getBlockByHash_notfound", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByHash", []any{"0x0000000000000000000000000000000000000000000000000000000000000001", false})
+		assert.Equal(t, "null", string(result))
+	})
+}
