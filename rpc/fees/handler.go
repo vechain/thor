@@ -27,10 +27,10 @@ func New(repo *chain.Repository, backtrace uint32) *Handler {
 }
 
 // Mount registers all fee market methods on the dispatcher.
-func (h *Handler) Mount(d *rpc.Dispatcher) {
-	d.Register("eth_gasPrice", h.ethGasPrice)
-	d.Register("eth_maxPriorityFeePerGas", h.ethMaxPriorityFeePerGas)
-	d.Register("eth_feeHistory", h.ethFeeHistory)
+func (h *Handler) Mount(s *rpc.Server) {
+	s.Register("eth_gasPrice", h.ethGasPrice)
+	s.Register("eth_maxPriorityFeePerGas", h.ethMaxPriorityFeePerGas)
+	s.Register("eth_feeHistory", h.ethFeeHistory)
 }
 
 func (h *Handler) ethGasPrice(req rpc.Request) rpc.Response {

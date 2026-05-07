@@ -111,7 +111,7 @@ func NewChainFixture(t *testing.T) *ChainFixture {
 
 // Mounter is satisfied by any sub-package handler that exposes Mount.
 type Mounter interface {
-	Mount(d *rpc.Dispatcher)
+	Mount(s *rpc.Server)
 }
 
 // NewMinimalServer creates an httptest.Server with only m's methods registered.
@@ -119,9 +119,9 @@ type Mounter interface {
 // is mounted, so an accidental call to another namespace fails with method-not-found.
 func NewMinimalServer(t *testing.T, m Mounter) *httptest.Server {
 	t.Helper()
-	d := rpc.NewDispatcher()
-	m.Mount(d)
-	ts := httptest.NewServer(rpc.New(d))
+	srv := rpc.NewServer()
+	m.Mount(srv)
+	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	return ts
 }

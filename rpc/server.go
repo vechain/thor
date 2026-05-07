@@ -20,14 +20,24 @@ const maxRequestBodySize = 2 * 1024 * 1024 // 2 MB
 const maxBatchRequests = 10
 
 // Server is an HTTP handler that implements the Ethereum JSON-RPC protocol.
-// It supports both single and batch requests.
+// It acts as both the method registry (via Register) and the HTTP handler,
+// mirroring the role mux.Router plays in the REST API.
 type Server struct {
-	d *Dispatcher
+	methods map[string]func(Request) Response
 }
 
-// New creates a new Server backed by the given Dispatcher.
-func New(d *Dispatcher) *Server {
-	return &Server{d: d}
+// NewServer creates a new Server.
+func NewServer() *Server {
+	return &Server{methods: make(map[string]func(Request) Response)}
+}
+
+// Register adds a handler for the given JSON-RPC method name.
+// Panics if the method name is already registered — catches wiring mistakes at startup.
+func (s *Server) Register(method string, handler func(Request) Response) {
+	if _, exists := s.methods[method]; exists {
+		panic("rpc: duplicate method registration: " + method)
+	}
+	s.methods[method] = handler
 }
 
 // ServeHTTP implements http.Handler.
@@ -61,13 +71,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) dispatch(req Request) Response {
+	h, ok := s.methods[req.Method]
+	if !ok {
+		return ErrResponse(req.ID, CodeMethodNotFound, fmt.Sprintf("method %q not found", req.Method))
+	}
+	return h(req)
+}
+
 func (s *Server) handleSingle(w http.ResponseWriter, body []byte) {
 	var req Request
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeJSON(w, ErrResponse(nil, CodeParseError, "invalid JSON: "+err.Error()))
 		return
 	}
-	writeJSON(w, s.d.dispatch(req))
+	writeJSON(w, s.dispatch(req))
 }
 
 func (s *Server) handleBatch(w http.ResponseWriter, body []byte) {
@@ -92,7 +110,7 @@ func (s *Server) handleBatch(w http.ResponseWriter, body []byte) {
 			responses[i] = ErrResponse(nil, CodeParseError, "invalid request in batch: "+err.Error())
 			continue
 		}
-		responses[i] = s.d.dispatch(req)
+		responses[i] = s.dispatch(req)
 	}
 	writeJSON(w, responses)
 }

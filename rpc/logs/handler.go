@@ -33,8 +33,8 @@ func New(repo *chain.Repository, logDB *logdb.LogDB, backtrace uint32) *Handler 
 }
 
 // Mount registers all log methods on the dispatcher.
-func (h *Handler) Mount(d *rpc.Dispatcher) {
-	d.Register("eth_getLogs", h.ethGetLogs)
+func (h *Handler) Mount(s *rpc.Server) {
+	s.Register("eth_getLogs", h.ethGetLogs)
 }
 
 // LogFilter mirrors the Ethereum eth_getLogs filter parameter.

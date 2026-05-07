@@ -36,9 +36,9 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConf
 }
 
 // Mount registers all simulation methods on the dispatcher.
-func (h *Handler) Mount(d *rpc.Dispatcher) {
-	d.Register("eth_call", h.ethCall)
-	d.Register("eth_estimateGas", h.ethEstimateGas)
+func (h *Handler) Mount(s *rpc.Server) {
+	s.Register("eth_call", h.ethCall)
+	s.Register("eth_estimateGas", h.ethEstimateGas)
 }
 
 // CallArgs mirrors the Ethereum eth_call / eth_estimateGas parameter object.

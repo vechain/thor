@@ -32,12 +32,12 @@ func New(repo *chain.Repository, chainID uint64, txPool txpool.Pool) *Handler {
 }
 
 // Mount registers all transaction methods on the dispatcher.
-func (h *Handler) Mount(d *rpc.Dispatcher) {
-	d.Register("eth_getTransactionByHash", h.ethGetTransactionByHash)
-	d.Register("eth_getTransactionByBlockHashAndIndex", h.ethGetTransactionByBlockHashAndIndex)
-	d.Register("eth_getTransactionByBlockNumberAndIndex", h.ethGetTransactionByBlockNumberAndIndex)
-	d.Register("eth_getTransactionReceipt", h.ethGetTransactionReceipt)
-	d.Register("eth_sendRawTransaction", h.ethSendRawTransaction)
+func (h *Handler) Mount(s *rpc.Server) {
+	s.Register("eth_getTransactionByHash", h.ethGetTransactionByHash)
+	s.Register("eth_getTransactionByBlockHashAndIndex", h.ethGetTransactionByBlockHashAndIndex)
+	s.Register("eth_getTransactionByBlockNumberAndIndex", h.ethGetTransactionByBlockNumberAndIndex)
+	s.Register("eth_getTransactionReceipt", h.ethGetTransactionReceipt)
+	s.Register("eth_sendRawTransaction", h.ethSendRawTransaction)
 }
 
 func (h *Handler) ethGetTransactionByHash(req rpc.Request) rpc.Response {

@@ -27,15 +27,15 @@ func New(repo *chain.Repository, chainID uint64, clientVersion string) *Handler 
 }
 
 // Mount registers all chain metadata methods on the dispatcher.
-func (h *Handler) Mount(d *rpc.Dispatcher) {
-	d.Register("eth_chainId", h.ethChainID)
-	d.Register("net_version", h.netVersion)
-	d.Register("web3_clientVersion", h.web3ClientVersion)
-	d.Register("eth_blockNumber", h.ethBlockNumber)
-	d.Register("eth_syncing", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
-	d.Register("eth_accounts", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, []string{}) })
-	d.Register("eth_mining", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
-	d.Register("eth_hashrate", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, "0x0") })
+func (h *Handler) Mount(s *rpc.Server) {
+	s.Register("eth_chainId", h.ethChainID)
+	s.Register("net_version", h.netVersion)
+	s.Register("web3_clientVersion", h.web3ClientVersion)
+	s.Register("eth_blockNumber", h.ethBlockNumber)
+	s.Register("eth_syncing", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
+	s.Register("eth_accounts", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, []string{}) })
+	s.Register("eth_mining", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
+	s.Register("eth_hashrate", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, "0x0") })
 }
 
 func (h *Handler) ethChainID(req rpc.Request) rpc.Response {

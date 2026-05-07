@@ -24,9 +24,9 @@ func New(repo *chain.Repository, chainID uint64) *Handler {
 }
 
 // Mount registers all block query methods on the dispatcher.
-func (h *Handler) Mount(d *rpc.Dispatcher) {
-	d.Register("eth_getBlockByHash", h.ethGetBlockByHash)
-	d.Register("eth_getBlockByNumber", h.ethGetBlockByNumber)
+func (h *Handler) Mount(s *rpc.Server) {
+	s.Register("eth_getBlockByHash", h.ethGetBlockByHash)
+	s.Register("eth_getBlockByNumber", h.ethGetBlockByNumber)
 }
 
 func (h *Handler) ethGetBlockByHash(req rpc.Request) rpc.Response {

@@ -30,11 +30,11 @@ func New(repo *chain.Repository, stater *state.Stater) *Handler {
 }
 
 // Mount registers all account state methods on the dispatcher.
-func (h *Handler) Mount(d *rpc.Dispatcher) {
-	d.Register("eth_getBalance", h.ethGetBalance)
-	d.Register("eth_getCode", h.ethGetCode)
-	d.Register("eth_getStorageAt", h.ethGetStorageAt)
-	d.Register("eth_getTransactionCount", h.ethGetTransactionCount)
+func (h *Handler) Mount(s *rpc.Server) {
+	s.Register("eth_getBalance", h.ethGetBalance)
+	s.Register("eth_getCode", h.ethGetCode)
+	s.Register("eth_getStorageAt", h.ethGetStorageAt)
+	s.Register("eth_getTransactionCount", h.ethGetTransactionCount)
 }
 
 func (h *Handler) ethGetBalance(req rpc.Request) rpc.Response {

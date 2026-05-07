@@ -26,21 +26,21 @@ import (
 	"github.com/vechain/thor/v2/rpc/transactions"
 )
 
-// newFullServer assembles all sub-packages onto a single Dispatcher and returns
+// newFullServer assembles all sub-packages onto a single Server and returns
 // an httptest.Server. Used only by integration_test.go for dispatch-level tests
 // that need the full method table to be reachable.
 func newFullServer(t *testing.T, fx *testutil.ChainFixture) *httptest.Server {
 	t.Helper()
 	pool := testutil.DefaultPool(t, fx.Chain, &fx.Forks)
-	d := rpc.NewDispatcher()
-	rpcchain.New(fx.Chain.Repo(), fx.ChainID, "test/1.0").Mount(d)
-	blocks.New(fx.Chain.Repo(), fx.ChainID).Mount(d)
-	transactions.New(fx.Chain.Repo(), fx.ChainID, pool).Mount(d)
-	accounts.New(fx.Chain.Repo(), fx.Chain.Stater()).Mount(d)
-	logs.New(fx.Chain.Repo(), fx.Chain.LogDB(), 100).Mount(d)
-	fees.New(fx.Chain.Repo(), 100).Mount(d)
-	simulation.New(fx.Chain.Repo(), fx.Chain.Stater(), &fx.Forks, 1_000_000).Mount(d)
-	ts := httptest.NewServer(rpc.New(d))
+	srv := rpc.NewServer()
+	rpcchain.New(fx.Chain.Repo(), fx.ChainID, "test/1.0").Mount(srv)
+	blocks.New(fx.Chain.Repo(), fx.ChainID).Mount(srv)
+	transactions.New(fx.Chain.Repo(), fx.ChainID, pool).Mount(srv)
+	accounts.New(fx.Chain.Repo(), fx.Chain.Stater()).Mount(srv)
+	logs.New(fx.Chain.Repo(), fx.Chain.LogDB(), 100).Mount(srv)
+	fees.New(fx.Chain.Repo(), 100).Mount(srv)
+	simulation.New(fx.Chain.Repo(), fx.Chain.Stater(), &fx.Forks, 1_000_000).Mount(srv)
+	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	return ts
 }
