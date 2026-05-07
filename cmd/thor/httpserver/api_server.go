@@ -163,14 +163,7 @@ func StartAPIServer(
 
 	// middlewares
 	// /rpc enforces its own 2 MB limit internally; all other routes get 200 KB
-	router.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasPrefix(r.URL.Path, "/rpc") {
-				r.Body = http.MaxBytesReader(w, r.Body, defaultRequestBodyLimit)
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
+	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit, "/rpc"))
 	if config.Timeout > 0 {
 		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
 	}

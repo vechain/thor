@@ -394,6 +394,35 @@ func TestHandleRequestBodyLimitExceeded(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), "http: request body too large")
 }
 
+func TestHandleRequestBodyLimitException(t *testing.T) {
+	largeBody := strings.Repeat("x", 200)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := HandleRequestBodyLimit(10, "/rpc")
+
+	t.Run("exception_path_bypasses_limit", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/rpc", strings.NewReader(largeBody))
+		rr := httptest.NewRecorder()
+		mw(handler).ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("non_exception_path_is_limited", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/accounts", strings.NewReader(largeBody))
+		rr := httptest.NewRecorder()
+		mw(handler).ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
+	})
+}
+
 func TestBodyLimitWithRequestLogger(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := io.ReadAll(r.Body)
