@@ -121,15 +121,15 @@ func (h *Handler) ethFeeHistory(req rpc.Request) rpc.Response {
 	baseFees = append(baseFees, baseFees[len(baseFees)-1])
 
 	type feeHistoryResult struct {
-		OldestBlock   hexutil.Uint64  `json:"oldestBlock"`
-		BaseFeePerGas []*hexutil.Big  `json:"baseFeePerGas"`
-		GasUsedRatio  []float64       `json:"gasUsedRatio"`
-		Reward        [][]interface{} `json:"reward"`
+		OldestBlock   hexutil.Uint64 `json:"oldestBlock"`
+		BaseFeePerGas []*hexutil.Big `json:"baseFeePerGas"`
+		GasUsedRatio  []float64      `json:"gasUsedRatio"`
+		Reward        [][]any        `json:"reward"`
 	}
 	return rpc.OkResponse(req.ID, feeHistoryResult{
 		OldestBlock:   hexutil.Uint64(oldestNum),
 		BaseFeePerGas: baseFees,
 		GasUsedRatio:  gasUsedRatios,
-		Reward:        [][]interface{}{},
+		Reward:        [][]any{},
 	})
 }
