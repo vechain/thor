@@ -245,3 +245,8 @@ func (c *Chain) RemoveValidator(address thor.Address) {
 func (c *Chain) AddValidator(validator genesis.DevAccount) {
 	c.validators = append(c.validators, validator)
 }
+
+// ChainID returns the current genesis chain id.
+func (c *Chain) ChainID() uint64 {
+	return thor.GetEthChainID(c.GenesisBlock().Header().ID())
+}

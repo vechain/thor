@@ -15,11 +15,25 @@ import (
 
 	"github.com/vechain/thor/v2/rpc/fees"
 	"github.com/vechain/thor/v2/rpc/testutil"
+	"github.com/vechain/thor/v2/test/testchain"
 )
 
+type fixture struct {
+	chain *testchain.Chain
+}
+
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	require.NoError(t, c.MintBlock())
+	return &fixture{chain: c}
+}
+
 func TestFeesHandler(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	ts := testutil.NewMinimalServer(t, fees.New(fx.Chain.Repo(), 100))
+	fx := newFixture(t)
+	ts := testutil.NewTestServer(t, fees.New(fx.chain.Repo(), 100))
 
 	t.Run("eth_gasPrice", func(t *testing.T) {
 		// gasPrice = baseFee + 1 gwei tip; must be > 0 after GALACTICA.

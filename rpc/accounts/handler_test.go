@@ -17,16 +17,39 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/rpc/accounts"
 	"github.com/vechain/thor/v2/rpc/testutil"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 )
 
-func TestAccountsHandler(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	ts := testutil.NewMinimalServer(t, accounts.New(fx.Chain.Repo(), fx.Chain.Stater()))
+type fixture struct {
+	chain      *testchain.Chain
+	senderAddr string
+}
 
-	senderAddr := fx.Sender.Address.String()
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := thor.GetEthChainID(c.GenesisBlock().Header().ID())
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+
+	ethTx := testutil.BuildEthTx(t, chainID, sender, 0, &recipient.Address)
+	require.NoError(t, c.MintBlock(ethTx))
+
+	return &fixture{
+		chain:      c,
+		senderAddr: sender.Address.String(),
+	}
+}
+
+func TestAccountsHandler(t *testing.T) {
+	fx := newFixture(t)
+	ts := testutil.NewTestServer(t, accounts.New(fx.chain.Repo(), fx.chain.Stater()))
 
 	t.Run("eth_getBalance", func(t *testing.T) {
-		result := testutil.Call(t, ts, "eth_getBalance", []any{senderAddr, "latest"})
+		result := testutil.Call(t, ts, "eth_getBalance", []any{fx.senderAddr, "latest"})
 		var bal hexutil.Big
 		require.NoError(t, json.Unmarshal(result, &bal))
 		assert.True(t, bal.ToInt().Sign() > 0, "funded dev account should have non-zero balance")
@@ -34,7 +57,7 @@ func TestAccountsHandler(t *testing.T) {
 
 	t.Run("eth_getCode_eoa", func(t *testing.T) {
 		// EOAs have no code.
-		result := testutil.Call(t, ts, "eth_getCode", []any{senderAddr, "latest"})
+		result := testutil.Call(t, ts, "eth_getCode", []any{fx.senderAddr, "latest"})
 		var code hexutil.Bytes
 		require.NoError(t, json.Unmarshal(result, &code))
 		assert.Empty(t, code)
@@ -42,7 +65,7 @@ func TestAccountsHandler(t *testing.T) {
 
 	t.Run("eth_getStorageAt_zero_slot", func(t *testing.T) {
 		// Slot 0 of an EOA is always zero.
-		result := testutil.Call(t, ts, "eth_getStorageAt", []any{senderAddr, "0x0", "latest"})
+		result := testutil.Call(t, ts, "eth_getStorageAt", []any{fx.senderAddr, "0x0", "latest"})
 		var slot common.Hash
 		require.NoError(t, json.Unmarshal(result, &slot))
 		assert.Equal(t, common.Hash{}, slot)
@@ -51,7 +74,7 @@ func TestAccountsHandler(t *testing.T) {
 	t.Run("eth_getTransactionCount_after_eth_tx", func(t *testing.T) {
 		// The fixture sender sent one ETH tx with nonce 0; the runtime increments
 		// the nonce to 1 and persists it in the committed trie.
-		result := testutil.Call(t, ts, "eth_getTransactionCount", []any{senderAddr, "latest"})
+		result := testutil.Call(t, ts, "eth_getTransactionCount", []any{fx.senderAddr, "latest"})
 		var nonce hexutil.Uint64
 		require.NoError(t, json.Unmarshal(result, &nonce))
 		assert.Equal(t, uint64(1), uint64(nonce))

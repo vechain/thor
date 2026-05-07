@@ -11,6 +11,10 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/vechain/thor/v2/rpc"
+
+	"github.com/vechain/thor/v2/thor"
+
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -26,6 +30,14 @@ import (
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
+
+	rpcaccounts "github.com/vechain/thor/v2/rpc/accounts"
+	rpcblocks "github.com/vechain/thor/v2/rpc/blocks"
+	rpcchain "github.com/vechain/thor/v2/rpc/chain"
+	rpcfees "github.com/vechain/thor/v2/rpc/fees"
+	rpclogs "github.com/vechain/thor/v2/rpc/logs"
+	rpcsimulation "github.com/vechain/thor/v2/rpc/simulation"
+	rpctransactions "github.com/vechain/thor/v2/rpc/transactions"
 )
 
 // Node represents a complete test node with chain, API server, and transaction pool capabilities
@@ -75,6 +87,7 @@ func (n *node) Start() error {
 	logDB := n.chain.LogDB()
 	forkConfig := n.chain.GetForkConfig()
 	engine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
+	chainID := thor.GetEthChainID(repo.GenesisBlock().Header().ID())
 
 	accounts.New(repo, stater, 40_000_000, 5*1024*1024/2, forkConfig, engine, true).Mount(router, "/accounts")
 	events.New(repo, logDB, 1000, 10).Mount(router, "/logs/event")
@@ -95,6 +108,17 @@ func (n *node) Start() error {
 	}).Mount(router, "/fees")
 	subs := subscriptions.New(repo, []string{"*"}, 1000, n.txPool, true)
 	subs.Mount(router, "/subscriptions")
+
+	// pool := testutil.DefaultPool(t, c, &testchain.DefaultForkConfig)
+	rpcSrv := rpc.NewServer()
+	rpcchain.New(repo, chainID, "test/1.0").Mount(rpcSrv)
+	rpcblocks.New(repo, chainID).Mount(rpcSrv)
+	rpctransactions.New(repo, chainID, n.txPool).Mount(rpcSrv)
+	rpcaccounts.New(repo, stater).Mount(rpcSrv)
+	rpclogs.New(repo, logDB, 100).Mount(rpcSrv)
+	rpcfees.New(repo, 100).Mount(rpcSrv)
+	rpcsimulation.New(repo, stater, &testchain.DefaultForkConfig, 1_000_000).Mount(rpcSrv)
+	router.PathPrefix("/rpc").Handler(rpcSrv)
 
 	n.apiServer = httptest.NewServer(router)
 	n.apiServerCloser = func() {

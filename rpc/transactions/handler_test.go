@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
@@ -17,25 +18,61 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/rpc/transactions"
+	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
+type fixture struct {
+	chain     *testchain.Chain
+	chainID   uint64
+	ethTxHash string
+	vcTxHash  string
+	blockHash string
+}
+
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := thor.GetEthChainID(c.GenesisBlock().Header().ID())
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+	vcTx := testutil.BuildVcTx(t, c, sender, &recipient.Address)
+	ethTx := testutil.BuildEthTx(t, chainID, sender, 0, &recipient.Address)
+	require.NoError(t, c.MintBlock(vcTx, ethTx))
+	bestBlock, err := c.BestBlock()
+	require.NoError(t, err)
+	return &fixture{
+		chain:     c,
+		chainID:   chainID,
+		ethTxHash: ethTx.ID().String(),
+		vcTxHash:  vcTx.ID().String(),
+		blockHash: bestBlock.Header().ID().String(),
+	}
+}
+
 func TestTransactionsHandler(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	pool := testutil.DefaultPool(t, fx.Chain, &fx.Forks)
-	ts := testutil.NewMinimalServer(t, transactions.New(fx.Chain.Repo(), fx.ChainID, pool))
+	fx := newFixture(t)
+	pool := txpool.New(fx.chain.Repo(), fx.chain.Stater(), txpool.Options{
+		Limit:           10000,
+		LimitPerAccount: 16,
+		MaxLifetime:     10 * time.Minute,
+	}, &testchain.DefaultForkConfig)
+	ts := testutil.NewTestServer(t, transactions.New(fx.chain.Repo(), fx.chainID, pool))
 
 	// ---- eth_getTransactionByHash ----
 
 	t.Run("eth_getTransactionByHash_eth", func(t *testing.T) {
-		result := testutil.Call(t, ts, "eth_getTransactionByHash", []any{fx.EthTxHash})
+		result := testutil.Call(t, ts, "eth_getTransactionByHash", []any{fx.ethTxHash})
 		var txObj map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(result, &txObj))
 
 		var gotHash string
 		require.NoError(t, json.Unmarshal(txObj["hash"], &gotHash))
-		assert.Equal(t, fx.EthTxHash, gotHash)
+		assert.Equal(t, fx.ethTxHash, gotHash)
 
 		// The ETH tx sits at canonical index 1 but is the only ETH tx → projected index 0.
 		var txIdx hexutil.Uint64
@@ -45,7 +82,7 @@ func TestTransactionsHandler(t *testing.T) {
 
 	t.Run("eth_getTransactionByHash_vechain", func(t *testing.T) {
 		// VeChain legacy txs are invisible from the ETH endpoint.
-		result := testutil.Call(t, ts, "eth_getTransactionByHash", []any{fx.VcTxHash})
+		result := testutil.Call(t, ts, "eth_getTransactionByHash", []any{fx.vcTxHash})
 		assert.Equal(t, "null", string(result))
 	})
 
@@ -58,17 +95,17 @@ func TestTransactionsHandler(t *testing.T) {
 
 	t.Run("eth_getTransactionByBlockHashAndIndex", func(t *testing.T) {
 		// Projected ETH index 0x0 = first (and only) ETH tx in the block.
-		result := testutil.Call(t, ts, "eth_getTransactionByBlockHashAndIndex", []any{fx.BlockHash, "0x0"})
+		result := testutil.Call(t, ts, "eth_getTransactionByBlockHashAndIndex", []any{fx.blockHash, "0x0"})
 		var txObj map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(result, &txObj))
 
 		var gotHash string
 		require.NoError(t, json.Unmarshal(txObj["hash"], &gotHash))
-		assert.Equal(t, fx.EthTxHash, gotHash)
+		assert.Equal(t, fx.ethTxHash, gotHash)
 	})
 
 	t.Run("eth_getTransactionByBlockHashAndIndex_outofrange", func(t *testing.T) {
-		result := testutil.Call(t, ts, "eth_getTransactionByBlockHashAndIndex", []any{fx.BlockHash, "0x1"})
+		result := testutil.Call(t, ts, "eth_getTransactionByBlockHashAndIndex", []any{fx.blockHash, "0x1"})
 		assert.Equal(t, "null", string(result))
 	})
 
@@ -81,7 +118,7 @@ func TestTransactionsHandler(t *testing.T) {
 
 		var gotHash string
 		require.NoError(t, json.Unmarshal(txObj["hash"], &gotHash))
-		assert.Equal(t, fx.EthTxHash, gotHash)
+		assert.Equal(t, fx.ethTxHash, gotHash)
 	})
 
 	t.Run("eth_getTransactionByBlockNumberAndIndex_outofrange", func(t *testing.T) {
@@ -92,13 +129,13 @@ func TestTransactionsHandler(t *testing.T) {
 	// ---- eth_getTransactionReceipt ----
 
 	t.Run("eth_getTransactionReceipt_eth", func(t *testing.T) {
-		result := testutil.Call(t, ts, "eth_getTransactionReceipt", []any{fx.EthTxHash})
+		result := testutil.Call(t, ts, "eth_getTransactionReceipt", []any{fx.ethTxHash})
 		var receipt map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(result, &receipt))
 
 		var gotHash string
 		require.NoError(t, json.Unmarshal(receipt["transactionHash"], &gotHash))
-		assert.Equal(t, fx.EthTxHash, gotHash)
+		assert.Equal(t, fx.ethTxHash, gotHash)
 
 		var txIdx hexutil.Uint64
 		require.NoError(t, json.Unmarshal(receipt["transactionIndex"], &txIdx))
@@ -119,7 +156,7 @@ func TestTransactionsHandler(t *testing.T) {
 
 	t.Run("eth_getTransactionReceipt_vechain", func(t *testing.T) {
 		// VeChain txs have no ETH receipt.
-		result := testutil.Call(t, ts, "eth_getTransactionReceipt", []any{fx.VcTxHash})
+		result := testutil.Call(t, ts, "eth_getTransactionReceipt", []any{fx.vcTxHash})
 		assert.Equal(t, "null", string(result))
 	})
 
@@ -131,7 +168,7 @@ func TestTransactionsHandler(t *testing.T) {
 		freshRecipient := genesis.DevAccounts()[3].Address
 
 		freshTx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
-			ChainID(fx.ChainID).
+			ChainID(fx.chainID).
 			Nonce(0).
 			MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
 			MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).

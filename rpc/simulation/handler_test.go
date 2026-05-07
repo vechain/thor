@@ -13,25 +13,49 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/rpc/simulation"
 	"github.com/vechain/thor/v2/rpc/testutil"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 )
 
-func TestSimulationHandler(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	ts := testutil.NewMinimalServer(t, simulation.New(
-		fx.Chain.Repo(), fx.Chain.Stater(), &fx.Forks, 1_000_000,
-	))
+type fixture struct {
+	chain         *testchain.Chain
+	forks         thor.ForkConfig
+	senderAddr    string
+	recipientAddr string
+}
 
-	senderAddr := fx.Sender.Address.String()
-	recipientAddr := fx.Recipient.Address.String()
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	// No block minted — genesis dev accounts are funded and simulation runs
+	// against the latest state directly.
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+	return &fixture{
+		chain:         c,
+		forks:         testchain.DefaultForkConfig,
+		senderAddr:    sender.Address.String(),
+		recipientAddr: recipient.Address.String(),
+	}
+}
+
+func TestSimulationHandler(t *testing.T) {
+	fx := newFixture(t)
+	ts := testutil.NewTestServer(t, simulation.New(
+		fx.chain.Repo(), fx.chain.Stater(), &fx.forks, 1_000_000,
+	))
 
 	t.Run("eth_call_transfer", func(t *testing.T) {
 		// A plain VET transfer returns empty output data.
 		result := testutil.Call(t, ts, "eth_call", []any{
 			map[string]any{
-				"from":  senderAddr,
-				"to":    recipientAddr,
+				"from":  fx.senderAddr,
+				"to":    fx.recipientAddr,
 				"value": "0x1",
 			},
 			"latest",
@@ -46,8 +70,8 @@ func TestSimulationHandler(t *testing.T) {
 		// 5000 (tx base) + 16000 (per-clause) = 21000 intrinsic, 0 EVM gas.
 		result := testutil.Call(t, ts, "eth_estimateGas", []any{
 			map[string]any{
-				"from":  senderAddr,
-				"to":    recipientAddr,
+				"from":  fx.senderAddr,
+				"to":    fx.recipientAddr,
 				"value": "0x1",
 			},
 		})
@@ -62,8 +86,8 @@ func TestSimulationHandler(t *testing.T) {
 		// Here we pass gas = 21000 which is exactly the estimate.
 		result := testutil.Call(t, ts, "eth_estimateGas", []any{
 			map[string]any{
-				"from":  senderAddr,
-				"to":    recipientAddr,
+				"from":  fx.senderAddr,
+				"to":    fx.recipientAddr,
 				"value": "0x1",
 				"gas":   "0x5208", // 0x5208 = 21000
 			},

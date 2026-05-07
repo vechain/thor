@@ -15,17 +15,36 @@ import (
 
 	"github.com/vechain/thor/v2/rpc/chain"
 	"github.com/vechain/thor/v2/rpc/testutil"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 )
 
+type fixture struct {
+	chain   *testchain.Chain
+	chainID uint64
+}
+
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	require.NoError(t, c.MintBlock())
+	return &fixture{
+		chain:   c,
+		chainID: thor.GetEthChainID(c.GenesisBlock().Header().ID()),
+	}
+}
+
 func TestChainHandler(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	ts := testutil.NewMinimalServer(t, chain.New(fx.Chain.Repo(), fx.ChainID, "test/1.0"))
+	fx := newFixture(t)
+	ts := testutil.NewTestServer(t, chain.New(fx.chain.Repo(), fx.chainID, "test/1.0"))
 
 	t.Run("eth_chainId", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_chainId", []any{})
 		var got hexutil.Uint64
 		require.NoError(t, json.Unmarshal(result, &got))
-		assert.Equal(t, fx.ChainID, uint64(got))
+		assert.Equal(t, fx.chainID, uint64(got))
 	})
 
 	t.Run("net_version", func(t *testing.T) {

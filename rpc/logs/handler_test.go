@@ -14,17 +14,37 @@ import (
 
 	"github.com/vechain/thor/v2/rpc/logs"
 	"github.com/vechain/thor/v2/rpc/testutil"
+	"github.com/vechain/thor/v2/test/testchain"
 )
 
+type fixture struct {
+	chain     *testchain.Chain
+	blockHash string
+}
+
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	require.NoError(t, c.MintBlock())
+	bestBlock, err := c.BestBlock()
+	require.NoError(t, err)
+	return &fixture{
+		chain:     c,
+		blockHash: bestBlock.Header().ID().String(),
+	}
+}
+
 func TestLogsHandler(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	ts := testutil.NewMinimalServer(t, logs.New(fx.Chain.Repo(), fx.Chain.LogDB(), 100))
+	fx := newFixture(t)
+	ts := testutil.NewTestServer(t, logs.New(fx.chain.Repo(), fx.chain.LogDB(), 100))
 
 	t.Run("eth_getLogs_empty", func(t *testing.T) {
-		// The fixture ETH tx is a plain VET transfer — it emits no contract events.
+		// The fixture block contains no contract events.
 		// eth_getLogs therefore returns an empty array.
 		//
-		// TODO: extend ChainFixture with a contract-deploy tx that emits events so we
+		// TODO: extend with a contract-deploy tx that emits events so we
 		// can assert on non-empty log results (address filter, topic filter, EIP-234
 		// blockHash filter, etc.).
 		result := testutil.Call(t, ts, "eth_getLogs", []any{
@@ -38,7 +58,7 @@ func TestLogsHandler(t *testing.T) {
 	t.Run("eth_getLogs_blockHash_filter", func(t *testing.T) {
 		// EIP-234: single-block query via blockHash.
 		result := testutil.Call(t, ts, "eth_getLogs", []any{
-			map[string]any{"blockHash": fx.BlockHash},
+			map[string]any{"blockHash": fx.blockHash},
 		})
 		var got []any
 		require.NoError(t, json.Unmarshal(result, &got))

@@ -11,9 +11,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/txpool"
 
 	"github.com/vechain/thor/v2/rpc"
 	"github.com/vechain/thor/v2/rpc/accounts"
@@ -26,30 +32,38 @@ import (
 	"github.com/vechain/thor/v2/rpc/transactions"
 )
 
-// newFullServer assembles all sub-packages onto a single Server and returns
-// an httptest.Server. Used only by integration_test.go for dispatch-level tests
-// that need the full method table to be reachable.
-func newFullServer(t *testing.T, fx *testutil.ChainFixture) *httptest.Server {
-	t.Helper()
-	pool := testutil.DefaultPool(t, fx.Chain, &fx.Forks)
-	srv := rpc.NewServer()
-	rpcchain.New(fx.Chain.Repo(), fx.ChainID, "test/1.0").Mount(srv)
-	blocks.New(fx.Chain.Repo(), fx.ChainID).Mount(srv)
-	transactions.New(fx.Chain.Repo(), fx.ChainID, pool).Mount(srv)
-	accounts.New(fx.Chain.Repo(), fx.Chain.Stater()).Mount(srv)
-	logs.New(fx.Chain.Repo(), fx.Chain.LogDB(), 100).Mount(srv)
-	fees.New(fx.Chain.Repo(), 100).Mount(srv)
-	simulation.New(fx.Chain.Repo(), fx.Chain.Stater(), &fx.Forks, 1_000_000).Mount(srv)
-	ts := httptest.NewServer(srv)
-	t.Cleanup(ts.Close)
-	return ts
-}
-
 // TestDispatch covers server- and dispatcher-level behaviour that is independent
 // of any individual method namespace. Per-method tests live in each sub-package.
 func TestDispatch(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	ts := newFullServer(t, fx)
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := thor.GetEthChainID(c.GenesisBlock().Header().ID())
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+
+	vcTx := testutil.BuildVcTx(t, c, sender, &recipient.Address)
+	ethTx := testutil.BuildEthTx(t, chainID, sender, 0, &recipient.Address)
+
+	require.NoError(t, c.MintBlock(vcTx, ethTx))
+	require.Equal(t, uint32(1), c.Repo().BestBlockSummary().Header.Number())
+
+	pool := txpool.New(c.Repo(), c.Stater(), txpool.Options{
+		Limit:           10000,
+		LimitPerAccount: 16,
+		MaxLifetime:     10 * time.Minute,
+	}, &testchain.DefaultForkConfig)
+	srv := rpc.NewServer()
+	rpcchain.New(c.Repo(), chainID, "test/1.0").Mount(srv)
+	blocks.New(c.Repo(), chainID).Mount(srv)
+	transactions.New(c.Repo(), chainID, pool).Mount(srv)
+	accounts.New(c.Repo(), c.Stater()).Mount(srv)
+	logs.New(c.Repo(), c.LogDB(), 100).Mount(srv)
+	fees.New(c.Repo(), 100).Mount(srv)
+	simulation.New(c.Repo(), c.Stater(), &testchain.DefaultForkConfig, 1_000_000).Mount(srv)
+
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
 
 	t.Run("unknown_method", func(t *testing.T) {
 		rpcErr := testutil.CallExpectError(t, ts, "eth_nonExistentMethod", []any{})

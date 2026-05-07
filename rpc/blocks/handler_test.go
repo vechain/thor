@@ -13,14 +13,47 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/rpc/blocks"
 	"github.com/vechain/thor/v2/rpc/testutil"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
+type fixture struct {
+	chain     *testchain.Chain
+	chainID   uint64
+	ethTxHash string
+	blockHash string
+}
+
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := thor.GetEthChainID(c.GenesisBlock().Header().ID())
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+
+	vcTx := testutil.BuildVcTx(t, c, sender, &recipient.Address)
+	ethTx := testutil.BuildEthTx(t, chainID, sender, 0, &recipient.Address)
+	require.NoError(t, c.MintBlock(vcTx, ethTx))
+
+	bestBlock, err := c.BestBlock()
+	require.NoError(t, err)
+	return &fixture{
+		chain:     c,
+		chainID:   chainID,
+		ethTxHash: ethTx.ID().String(),
+		blockHash: bestBlock.Header().ID().String(),
+	}
+}
+
 func TestBlocksHandler(t *testing.T) {
-	fx := testutil.NewChainFixture(t)
-	ts := testutil.NewMinimalServer(t, blocks.New(fx.Chain.Repo(), fx.ChainID))
+	fx := newFixture(t)
+	ts := testutil.NewTestServer(t, blocks.New(fx.chain.Repo(), fx.chainID))
 
 	t.Run("eth_getBlockByNumber_latest", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"latest", false})
@@ -35,7 +68,7 @@ func TestBlocksHandler(t *testing.T) {
 		var txHashes []string
 		require.NoError(t, json.Unmarshal(blk["transactions"], &txHashes))
 		require.Len(t, txHashes, 1)
-		assert.Equal(t, fx.EthTxHash, txHashes[0])
+		assert.Equal(t, fx.ethTxHash, txHashes[0])
 
 		// gasUsed counts only the ETH tx.
 		var gasUsed hexutil.Uint64
@@ -83,7 +116,7 @@ func TestBlocksHandler(t *testing.T) {
 
 		var txHash string
 		require.NoError(t, json.Unmarshal(txObjs[0]["hash"], &txHash))
-		assert.Equal(t, fx.EthTxHash, txHash)
+		assert.Equal(t, fx.ethTxHash, txHash)
 
 		var txType hexutil.Uint64
 		require.NoError(t, json.Unmarshal(txObjs[0]["type"], &txType))
@@ -97,7 +130,7 @@ func TestBlocksHandler(t *testing.T) {
 	})
 
 	t.Run("eth_getBlockByHash", func(t *testing.T) {
-		result := testutil.Call(t, ts, "eth_getBlockByHash", []any{fx.BlockHash, false})
+		result := testutil.Call(t, ts, "eth_getBlockByHash", []any{fx.blockHash, false})
 		var blk map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(result, &blk))
 
@@ -107,7 +140,7 @@ func TestBlocksHandler(t *testing.T) {
 
 		var gotHash string
 		require.NoError(t, json.Unmarshal(blk["hash"], &gotHash))
-		assert.Equal(t, fx.BlockHash, gotHash)
+		assert.Equal(t, fx.blockHash, gotHash)
 	})
 
 	t.Run("eth_getBlockByHash_notfound", func(t *testing.T) {
