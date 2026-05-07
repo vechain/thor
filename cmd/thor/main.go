@@ -98,7 +98,6 @@ func main() {
 			beneficiaryFlag,
 			targetGasLimitFlag,
 			apiAddrFlag,
-			ethRPCAddrFlag,
 			apiCorsFlag,
 			apiTimeoutFlag,
 			apiCallGasLimitFlag,
@@ -144,7 +143,6 @@ func main() {
 					logDbAdditionalIndexesFlag,
 					apiTxpoolFlag,
 					apiAddrFlag,
-					ethRPCAddrFlag,
 					apiCorsFlag,
 					apiTimeoutFlag,
 					apiCallGasLimitFlag,
@@ -324,29 +322,14 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, false),
+		makeAPIConfig(ctx, logAPIRequests, false, version),
 	)
 	if err != nil {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	ethRPCURL, ethRPCCloser, err := httpserver.StartEthRPCServer(
-		ctx.String(ethRPCAddrFlag.Name),
-		repo,
-		state.NewStater(mainDB),
-		txPool,
-		logDB,
-		forkConfig,
-		makeEthRPCConfig(ctx, version),
-	)
-	if err != nil {
-		return err
-	}
-	defer func() { log.Info("stopping Eth RPC server..."); ethRPCCloser() }()
-
-	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL, false)
-	log.Info("Eth RPC started", "url", ethRPCURL)
+	printStartupMessage2(apiURL, apiURL+"rpc", p2pCommunicator.Enode(), metricsURL, adminURL, false)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err
@@ -535,29 +518,14 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, true),
+		makeAPIConfig(ctx, logAPIRequests, true, version),
 	)
 	if err != nil {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	ethRPCURL, ethRPCCloser, err := httpserver.StartEthRPCServer(
-		ctx.String(ethRPCAddrFlag.Name),
-		repo,
-		stater,
-		pool,
-		logDB,
-		forkConfig,
-		makeEthRPCConfig(ctx, version),
-	)
-	if err != nil {
-		return err
-	}
-	defer func() { log.Info("stopping Eth RPC server..."); ethRPCCloser() }()
-
-	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
-	log.Info("Eth RPC started", "url", ethRPCURL)
+	printStartupMessage2(apiURL, apiURL+"rpc", "", metricsURL, adminURL, isDevnet)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
 		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)

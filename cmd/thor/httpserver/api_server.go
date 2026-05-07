@@ -34,9 +34,18 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/rpc"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
+
+	rpcaccounts "github.com/vechain/thor/v2/rpc/accounts"
+	rpcblocks "github.com/vechain/thor/v2/rpc/blocks"
+	rpcchain "github.com/vechain/thor/v2/rpc/chain"
+	rpcfees "github.com/vechain/thor/v2/rpc/fees"
+	rpclogs "github.com/vechain/thor/v2/rpc/logs"
+	rpcsimulation "github.com/vechain/thor/v2/rpc/simulation"
+	rpctransactions "github.com/vechain/thor/v2/rpc/transactions"
 )
 
 var logger = log.WithContext("pkg", "api")
@@ -52,6 +61,7 @@ type APIConfig struct {
 	BacktraceLimit             uint32
 	CallGasLimit               uint64
 	BatchDataMaxSize           uint64
+	ClientVersion              string
 	PprofOn                    bool
 	SkipLogs                   bool
 	AllowCustomTracer          bool
@@ -131,6 +141,18 @@ func StartAPIServer(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
+	// Ethereum JSON-RPC at /rpc — body limit enforced internally by rpc.Server (2 MB via io.LimitReader)
+	chainID := thor.GetEthChainID(repo.GenesisBlock().Header().ID())
+	rpcDisp := rpc.NewDispatcher()
+	rpcchain.New(repo, chainID, config.ClientVersion).Mount(rpcDisp)
+	rpcblocks.New(repo, chainID).Mount(rpcDisp)
+	rpctransactions.New(repo, chainID, txPool).Mount(rpcDisp)
+	rpcaccounts.New(repo, stater).Mount(rpcDisp)
+	rpclogs.New(repo, logDB, config.BacktraceLimit).Mount(rpcDisp)
+	rpcfees.New(repo, config.BacktraceLimit).Mount(rpcDisp)
+	rpcsimulation.New(repo, stater, forkConfig, config.CallGasLimit).Mount(rpcDisp)
+	router.PathPrefix("/rpc").Handler(rpc.New(rpcDisp))
+
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
@@ -140,8 +162,15 @@ func StartAPIServer(
 	}
 
 	// middlewares
-	// body limit and timeout
-	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
+	// /rpc enforces its own 2 MB limit internally; all other routes get 200 KB
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasPrefix(r.URL.Path, "/rpc") {
+				r.Body = http.MaxBytesReader(w, r.Body, defaultRequestBodyLimit)
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	if config.Timeout > 0 {
 		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
 	}
