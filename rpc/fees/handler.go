@@ -65,7 +65,7 @@ func (h *Handler) ethFeeHistory(req rpc.Request) rpc.Response {
 	var blockCount uint64
 	var s string
 	if err := json.Unmarshal(blockCountRaw, &s); err == nil {
-		n, err := rpc.ParseHexUint64(s)
+		n, err := hexutil.DecodeUint64(s)
 		if err != nil {
 			return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid blockCount")
 		}

@@ -85,11 +85,11 @@ func (h *Handler) ethGetStorageAt(req rpc.Request) rpc.Response {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block tag")
 	}
 
-	addr, err := rpc.ParseThorAddress(addrStr)
+	addr, err := thor.ParseAddress(addrStr)
 	if err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid address")
 	}
-	slot, err := rpc.ParseThorBytes32(slotStr)
+	slot, err := rpc.ParseBytes32Compact(slotStr)
 	if err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid slot")
 	}
@@ -133,7 +133,7 @@ func parseAddrAndTag(raw json.RawMessage) (thor.Address, string, error) {
 	if err := json.Unmarshal(params[1], &tag); err != nil {
 		return thor.Address{}, "", fmt.Errorf("invalid block tag")
 	}
-	addr, err := rpc.ParseThorAddress(addrStr)
+	addr, err := thor.ParseAddress(addrStr)
 	if err != nil {
 		return thor.Address{}, "", fmt.Errorf("invalid address: %w", err)
 	}

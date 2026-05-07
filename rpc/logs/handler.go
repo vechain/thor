@@ -99,7 +99,7 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		var single string
 		var multi []string
 		if err := json.Unmarshal(f.Address, &single); err == nil {
-			addr, err := rpc.ParseThorAddress(single)
+			addr, err := thor.ParseAddress(single)
 			if err != nil {
 				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid address in filter")
 			}
@@ -107,7 +107,7 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 			addresses = append(addresses, &a)
 		} else if err := json.Unmarshal(f.Address, &multi); err == nil {
 			for _, s := range multi {
-				addr, err := rpc.ParseThorAddress(s)
+				addr, err := thor.ParseAddress(s)
 				if err != nil {
 					return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid address in filter")
 				}
@@ -135,14 +135,14 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		var single string
 		var multi []string
 		if err := json.Unmarshal(raw, &single); err == nil {
-			h32, err := rpc.ParseThorBytes32(single)
+			h32, err := thor.ParseBytes32(single)
 			if err != nil {
 				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid topic")
 			}
 			h32Copy := h32
 			topicSlot[i] = &h32Copy
 		} else if err := json.Unmarshal(raw, &multi); err == nil && len(multi) > 0 {
-			h32, err := rpc.ParseThorBytes32(multi[0])
+			h32, err := thor.ParseBytes32(multi[0])
 			if err != nil {
 				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid topic")
 			}

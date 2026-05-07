@@ -6,6 +6,7 @@
 package rpc
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -43,7 +44,7 @@ func ResolveBlockTag(tag string, repo *chain.Repository) (*chain.BlockSummary, e
 	// 32-byte hash (0x + 64 hex chars = 66 chars)
 	if strings.HasPrefix(tag, "0x") && len(tag) == 66 {
 		var id thor.Bytes32
-		b, err := hexDecode(tag[2:])
+		b, err := hex.DecodeString(tag[2:])
 		if err != nil {
 			return nil, fmt.Errorf("invalid block hash %q: %w", tag, err)
 		}
@@ -196,70 +197,25 @@ func EthLogOffset(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 	return offset
 }
 
-// ParseThorAddress parses a 0x-prefixed Ethereum address string into thor.Address.
-func ParseThorAddress(s string) (thor.Address, error) {
-	if !isHexPrefix(s) || len(s) != 42 {
-		return thor.Address{}, fmt.Errorf("invalid address %q", s)
-	}
-	b, err := hexDecode(s[2:])
-	if err != nil {
-		return thor.Address{}, err
-	}
-	var addr thor.Address
-	copy(addr[:], b)
-	return addr, nil
-}
-
-// ParseThorBytes32 parses a 0x-prefixed 32-byte hex string.
-func ParseThorBytes32(s string) (thor.Bytes32, error) {
-	if !isHexPrefix(s) {
+// ParseBytes32Compact parses a 0x-prefixed hex string of variable length into a
+// right-aligned Bytes32. Unlike thor.ParseBytes32, it accepts compact Ethereum
+// encoding such as "0x0" for storage slot 0.
+func ParseBytes32Compact(s string) (thor.Bytes32, error) {
+	if len(s) < 2 || s[0] != '0' || (s[1] != 'x' && s[1] != 'X') {
 		return thor.Bytes32{}, fmt.Errorf("invalid hex %q", s)
 	}
-	b, err := hexDecode(s[2:])
+	raw := s[2:]
+	if len(raw)%2 != 0 {
+		raw = "0" + raw
+	}
+	b, err := hex.DecodeString(raw)
 	if err != nil {
-		return thor.Bytes32{}, err
+		return thor.Bytes32{}, fmt.Errorf("invalid hex %q: %w", s, err)
+	}
+	if len(b) > 32 {
+		return thor.Bytes32{}, fmt.Errorf("hex value too long for bytes32 %q", s)
 	}
 	var h32 thor.Bytes32
 	copy(h32[32-len(b):], b)
 	return h32, nil
-}
-
-// ParseHexUint64 parses a 0x-prefixed hex string to uint64.
-func ParseHexUint64(s string) (uint64, error) {
-	if !isHexPrefix(s) {
-		return 0, fmt.Errorf("invalid hex %q", s)
-	}
-	return strconv.ParseUint(s[2:], 16, 64)
-}
-
-func hexDecode(s string) ([]byte, error) {
-	if len(s)%2 != 0 {
-		s = "0" + s
-	}
-	b := make([]byte, len(s)/2)
-	for i := range b {
-		hi, ok1 := fromHexChar(s[2*i])
-		lo, ok2 := fromHexChar(s[2*i+1])
-		if !ok1 || !ok2 {
-			return nil, fmt.Errorf("invalid hex character at position %d", 2*i)
-		}
-		b[i] = (hi << 4) | lo
-	}
-	return b, nil
-}
-
-func fromHexChar(c byte) (byte, bool) {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0', true
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10, true
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10, true
-	}
-	return 0, false
-}
-
-func isHexPrefix(s string) bool {
-	return len(s) >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')
 }

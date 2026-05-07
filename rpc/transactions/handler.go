@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -44,7 +45,7 @@ func (h *Handler) ethGetTransactionByHash(req rpc.Request) rpc.Response {
 	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [txHash]")
 	}
-	id, err := rpc.ParseThorBytes32(params[0])
+	id, err := thor.ParseBytes32(params[0])
 	if err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid tx hash")
 	}
@@ -111,7 +112,7 @@ func (h *Handler) ethGetTransactionByBlockNumberAndIndex(req rpc.Request) rpc.Re
 }
 
 func (h *Handler) txByBlockAndEthIndex(req rpc.Request, header *block.Header, idxStr string) rpc.Response {
-	ethIdx, err := rpc.ParseHexUint64(idxStr)
+	ethIdx, err := hexutil.DecodeUint64(idxStr)
 	if err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid index")
 	}
@@ -147,7 +148,7 @@ func (h *Handler) ethGetTransactionReceipt(req rpc.Request) rpc.Response {
 	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [txHash]")
 	}
-	id, err := rpc.ParseThorBytes32(params[0])
+	id, err := thor.ParseBytes32(params[0])
 	if err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid tx hash")
 	}
