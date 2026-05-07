@@ -162,7 +162,7 @@ func StartAPIServer(
 	}
 
 	// middlewares
-	// /rpc enforces its own 2 MB limit internally; all other routes get 200 KB
+	// /rpc owns its body limit inside rpc.Server; skip the REST 200 KB cap for that path.
 	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit, "/rpc"))
 	if config.Timeout > 0 {
 		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))

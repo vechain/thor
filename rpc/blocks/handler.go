@@ -42,16 +42,7 @@ func (h *Handler) ethGetBlockByHash(req rpc.Request) rpc.Response {
 	if err := json.Unmarshal(params[1], &fullTxs); err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid fullTransactions flag")
 	}
-
-	summary, err := rpc.ResolveBlockTag(hashStr, h.repo)
-	if err != nil {
-		return rpc.OkResponse(req.ID, nil)
-	}
-	blk, err := rpc.BuildEthBlock(summary.Header, h.repo, h.chainID, fullTxs)
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
-	}
-	return rpc.OkResponse(req.ID, blk)
+	return h.getBlockByTag(req.ID, hashStr, fullTxs)
 }
 
 func (h *Handler) ethGetBlockByNumber(req rpc.Request) rpc.Response {
@@ -67,14 +58,17 @@ func (h *Handler) ethGetBlockByNumber(req rpc.Request) rpc.Response {
 	if err := json.Unmarshal(params[1], &fullTxs); err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid fullTransactions flag")
 	}
+	return h.getBlockByTag(req.ID, tag, fullTxs)
+}
 
+func (h *Handler) getBlockByTag(id json.RawMessage, tag string, fullTxs bool) rpc.Response {
 	summary, err := rpc.ResolveBlockTag(tag, h.repo)
 	if err != nil {
-		return rpc.OkResponse(req.ID, nil)
+		return rpc.OkResponse(id, nil)
 	}
 	blk, err := rpc.BuildEthBlock(summary.Header, h.repo, h.chainID, fullTxs)
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
 	}
-	return rpc.OkResponse(req.ID, blk)
+	return rpc.OkResponse(id, blk)
 }

@@ -40,6 +40,31 @@ func (h *Handler) Mount(s *rpc.Server) {
 	s.Register("eth_sendRawTransaction", h.ethSendRawTransaction)
 }
 
+type ethTxContext struct {
+	transaction *tx.Transaction
+	meta        *chain.TxMeta
+	header      *block.Header
+	receipts    tx.Receipts
+}
+
+// fetchEthTxContext looks up an ETH-typed tx by hash and loads its block header and receipts.
+// Returns nil, nil when the tx does not exist or is not an ETH-typed transaction.
+func (h *Handler) fetchEthTxContext(bestChain *chain.Chain, id thor.Bytes32) (*ethTxContext, error) {
+	t, meta, err := bestChain.GetTransaction(id)
+	if err != nil || t.Type() != tx.TypeEthTyped1559 {
+		return nil, nil
+	}
+	header, err := bestChain.GetBlockHeader(meta.BlockNum)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := h.repo.GetBlockReceipts(header.ID())
+	if err != nil {
+		return nil, err
+	}
+	return &ethTxContext{transaction: t, meta: meta, header: header, receipts: receipts}, nil
+}
+
 func (h *Handler) ethGetTransactionByHash(req rpc.Request) rpc.Response {
 	var params []string
 	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
@@ -50,23 +75,19 @@ func (h *Handler) ethGetTransactionByHash(req rpc.Request) rpc.Response {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid tx hash")
 	}
 
-	bestChain := h.repo.NewBestChain()
-	t, meta, err := bestChain.GetTransaction(id)
-	if err != nil || t.Type() != tx.TypeEthTyped1559 {
+	ctx, err := h.fetchEthTxContext(h.repo.NewBestChain(), id)
+	if err != nil {
+		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+	}
+	if ctx == nil {
 		return rpc.OkResponse(req.ID, nil)
 	}
 
-	header, err := bestChain.GetBlockHeader(meta.BlockNum)
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
-	}
-	receipts, err := h.repo.GetBlockReceipts(header.ID())
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
-	}
-
-	projIdx := rpc.ProjectedEthIndex(receipts, meta.Index)
-	return rpc.OkResponse(req.ID, rpc.ToEthTx(t, h.chainID, common.Hash(header.ID()), uint64(header.Number()), projIdx, header.BaseFee()))
+	projIdx := rpc.ProjectedEthIndex(ctx.receipts, ctx.meta.Index)
+	return rpc.OkResponse(
+		req.ID,
+		rpc.ToEthTx(ctx.transaction, h.chainID, common.Hash(ctx.header.ID()), uint64(ctx.header.Number()), projIdx, ctx.header.BaseFee()),
+	)
 }
 
 func (h *Handler) ethGetTransactionByBlockHashAndIndex(req rpc.Request) rpc.Response {
@@ -153,30 +174,23 @@ func (h *Handler) ethGetTransactionReceipt(req rpc.Request) rpc.Response {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid tx hash")
 	}
 
-	bestChain := h.repo.NewBestChain()
-	t, meta, err := bestChain.GetTransaction(id)
-	if err != nil || t.Type() != tx.TypeEthTyped1559 {
+	ctx, err := h.fetchEthTxContext(h.repo.NewBestChain(), id)
+	if err != nil {
+		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+	}
+	if ctx == nil {
 		return rpc.OkResponse(req.ID, nil)
 	}
 
-	header, err := bestChain.GetBlockHeader(meta.BlockNum)
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
-	}
-	receipts, err := h.repo.GetBlockReceipts(header.ID())
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
-	}
-
-	receipt := receipts[meta.Index]
-	projIdx := rpc.ProjectedEthIndex(receipts, meta.Index)
-	cumGas := rpc.CumulativeEthGasUsed(receipts, meta.Index)
-	logOff := rpc.EthLogOffset(receipts, meta.Index)
+	receipt := ctx.receipts[ctx.meta.Index]
+	projIdx := rpc.ProjectedEthIndex(ctx.receipts, ctx.meta.Index)
+	cumGas := rpc.CumulativeEthGasUsed(ctx.receipts, ctx.meta.Index)
+	logOff := rpc.EthLogOffset(ctx.receipts, ctx.meta.Index)
 
 	return rpc.OkResponse(req.ID, rpc.ToEthReceipt(
-		t, receipt, h.chainID,
-		common.Hash(header.ID()), uint64(header.Number()),
-		projIdx, cumGas, logOff, header.BaseFee(),
+		ctx.transaction, receipt, h.chainID,
+		common.Hash(ctx.header.ID()), uint64(ctx.header.Number()),
+		projIdx, cumGas, logOff, ctx.header.BaseFee(),
 	))
 }
 

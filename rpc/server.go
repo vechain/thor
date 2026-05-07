@@ -8,6 +8,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,7 +44,7 @@ func (s *Server) Register(method string, handler func(Request) Response) {
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
-		// CORS preflight handled by the gorilla/handlers CORS middleware applied externally.
+		// CORS preflight handled by the handlers CORS middleware applied externally.
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -52,9 +53,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodySize))
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeJSON(w, ErrResponse(nil, CodeParseError, "failed to read request body"))
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			writeJSON(w, ErrResponse(nil, CodeInvalidRequest, "request body too large"))
+		} else {
+			writeJSON(w, ErrResponse(nil, CodeParseError, "failed to read request body"))
+		}
 		return
 	}
 

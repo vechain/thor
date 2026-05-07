@@ -128,6 +128,24 @@ func TestDispatch(t *testing.T) {
 		assert.Equal(t, rpc.CodeParseError, rpcResp.Error.Code)
 	})
 
+	t.Run("body_too_large", func(t *testing.T) {
+		// Send a body that exceeds the 2 MB server limit.
+		oversized := make([]byte, 2*1024*1024+1)
+		for i := range oversized {
+			oversized[i] = 'x'
+		}
+		resp, err := http.Post(ts.URL+"/", "application/json", bytes.NewReader(oversized))
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		var rpcResp struct {
+			Error *rpc.RPCError `json:"error"`
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rpcResp))
+		require.NotNil(t, rpcResp.Error)
+		assert.Equal(t, rpc.CodeInvalidRequest, rpcResp.Error.Code)
+	})
+
 	t.Run("wrong_http_method", func(t *testing.T) {
 		resp, err := http.Get(ts.URL + "/")
 		require.NoError(t, err)
