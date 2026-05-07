@@ -80,7 +80,7 @@ func TestDispatch(t *testing.T) {
 	t.Run("batch_exceeds_limit", func(t *testing.T) {
 		// Build a batch of 11 requests (maxBatchRequests = 10).
 		var batch []map[string]any
-		for i := 0; i < 11; i++ {
+		for i := range 11 {
 			batch = append(batch, map[string]any{
 				"jsonrpc": "2.0",
 				"id":      i + 1,

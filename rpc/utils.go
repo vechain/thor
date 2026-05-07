@@ -164,7 +164,7 @@ func BuildEthBlock(
 // canonicalIdx is the tx's position counting all tx types in the block.
 func ProjectedEthIndex(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 	var count uint64
-	for i := uint64(0); i < canonicalIdx; i++ {
+	for i := range canonicalIdx {
 		if receipts[i].Type == tx.TypeEthTyped1559 {
 			count++
 		}
@@ -188,7 +188,7 @@ func CumulativeEthGasUsed(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 // strictly before canonicalIdx (used as the starting logIndex for a tx's logs).
 func EthLogOffset(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 	var offset uint64
-	for i := uint64(0); i < canonicalIdx; i++ {
+	for i := range canonicalIdx {
 		if receipts[i].Type == tx.TypeEthTyped1559 && len(receipts[i].Outputs) > 0 {
 			offset += uint64(len(receipts[i].Outputs[0].Events))
 		}
