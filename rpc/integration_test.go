@@ -57,7 +57,7 @@ func TestDispatch(t *testing.T) {
 	blocks.New(c.Repo(), chainID).Mount(srv)
 	transactions.New(c.Repo(), chainID, pool).Mount(srv)
 	accounts.New(c.Repo(), c.Stater()).Mount(srv)
-	logs.New(c.Repo(), c.LogDB(), 100).Mount(srv)
+	logs.New(c.Repo(), c.LogDB(), 100, 1000).Mount(srv)
 	fees.New(c.Repo(), 100).Mount(srv)
 	simulation.New(c.Repo(), c.Stater(), &testchain.DefaultForkConfig, 1_000_000).Mount(srv)
 

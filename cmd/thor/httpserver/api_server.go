@@ -148,7 +148,7 @@ func StartAPIServer(
 	rpcblocks.New(repo, chainID).Mount(rpcSrv)
 	rpctransactions.New(repo, chainID, txPool).Mount(rpcSrv)
 	rpcaccounts.New(repo, stater).Mount(rpcSrv)
-	rpclogs.New(repo, logDB, config.BacktraceLimit).Mount(rpcSrv)
+	rpclogs.New(repo, logDB, config.BacktraceLimit, config.LogsLimit).Mount(rpcSrv)
 	rpcfees.New(repo, config.BacktraceLimit).Mount(rpcSrv)
 	rpcsimulation.New(repo, stater, forkConfig, config.CallGasLimit).Mount(rpcSrv)
 	router.PathPrefix("/rpc").Handler(rpcSrv)

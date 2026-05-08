@@ -6,6 +6,7 @@
 package rpc
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -13,12 +14,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 // ResolveBlockTag maps an Ethereum block tag, hex block number, or block hash to
@@ -102,9 +106,16 @@ func BuildEthBlock(
 	blockHash := common.Hash(header.ID())
 	blockNum := uint64(header.Number())
 
-	var ethTxHashes []common.Hash
-	var ethTxFull []*EthTx
-	var ethGasUsed uint64
+	var (
+		ethTxHashes    []common.Hash
+		ethTxFull      []*EthTx
+		ethGasUsed     uint64
+		ethProjIdx     uint64
+		logOffset      uint64
+		ethTxsForRoot  []*tx.Transaction
+		ethRecsForRoot []*EthReceipt
+		blockBloom     [256]byte
+	)
 
 	baseFee := header.BaseFee()
 
@@ -112,13 +123,25 @@ func BuildEthBlock(
 		if t.Type() != tx.TypeEthDynamicFee {
 			continue
 		}
-		projIdx := ProjectedEthIndex(receipts, uint64(i))
 		ethGasUsed += receipts[i].GasUsed
+
+		rec := ToEthReceipt(t, receipts[i], chainID, blockHash, blockNum, ethProjIdx, ethGasUsed, logOffset, baseFee)
+		logOffset += uint64(len(rec.Logs))
+
+		// OR this receipt's bloom into the block-level bloom.
+		for j, b := range rec.LogsBloom {
+			blockBloom[j] |= b
+		}
+
+		ethTxsForRoot = append(ethTxsForRoot, t)
+		ethRecsForRoot = append(ethRecsForRoot, rec)
+
 		if fullTxs {
-			ethTxFull = append(ethTxFull, ToEthTx(t, chainID, blockHash, blockNum, projIdx, baseFee))
+			ethTxFull = append(ethTxFull, ToEthTx(t, chainID, blockHash, blockNum, ethProjIdx, baseFee))
 		} else {
 			ethTxHashes = append(ethTxHashes, common.Hash(t.ID()))
 		}
+		ethProjIdx++
 	}
 
 	var transactions any
@@ -145,10 +168,10 @@ func BuildEthBlock(
 		ParentHash:       common.Hash(header.ParentID()),
 		Nonce:            zeroNonce,
 		Sha3Uncles:       emptyUncleHash,
-		LogsBloom:        zeroLogsBloom,
-		TransactionsRoot: common.Hash{}, // TODO: compute Merkle root over projected ETH txs
+		LogsBloom:        blockBloom[:],
+		TransactionsRoot: ethTransactionsRoot(ethTxsForRoot),
 		StateRoot:        common.Hash(header.StateRoot()),
-		ReceiptsRoot:     common.Hash{}, // TODO: compute Merkle root over projected ETH receipts
+		ReceiptsRoot:     ethReceiptsRoot(ethRecsForRoot),
 		Miner:            common.Address(header.Beneficiary()),
 		ExtraData:        []byte{},
 		Size:             hexutil.Uint64(blk.Size()),
@@ -159,6 +182,83 @@ func BuildEthBlock(
 		Transactions:     transactions,
 		Uncles:           []common.Hash{},
 	}, nil
+}
+
+// rlpLogEntry is the consensus RLP encoding of an event log: only address, topics, data.
+type rlpLogEntry struct {
+	Address common.Address
+	Topics  []common.Hash
+	Data    []byte
+}
+
+// rlpReceiptBody is the consensus encoding of an EIP-1559 (type 2) receipt.
+type rlpReceiptBody struct {
+	PostStateOrStatus []byte
+	CumulativeGasUsed uint64
+	Bloom             [256]byte
+	Logs              []rlpLogEntry
+}
+
+// ethReceiptWireBytes encodes an EthReceipt as the EIP-2718 type-2 consensus bytes:
+// 0x02 || RLP(status, cumulativeGasUsed, bloom, logs).
+func ethReceiptWireBytes(rec *EthReceipt) []byte {
+	status := []byte{0x01}
+	if rec.Status == 0 {
+		status = []byte{}
+	}
+
+	var bloom [256]byte
+	copy(bloom[:], rec.LogsBloom)
+
+	logs := make([]rlpLogEntry, len(rec.Logs))
+	for i, log := range rec.Logs {
+		logs[i] = rlpLogEntry{Address: log.Address, Topics: log.Topics, Data: log.Data}
+	}
+
+	body := rlpReceiptBody{
+		PostStateOrStatus: status,
+		CumulativeGasUsed: uint64(rec.CumulativeGasUsed),
+		Bloom:             bloom,
+		Logs:              logs,
+	}
+
+	var buf bytes.Buffer
+	buf.WriteByte(0x02) // EIP-1559 receipt type byte
+	if err := rlp.Encode(&buf, body); err != nil {
+		panic(err) // only fails on unencodable types, which rlpReceiptBody is not
+	}
+	return buf.Bytes()
+}
+
+// ethTxDerivableList wraps []*tx.Transaction for use with ethtypes.DeriveSha.
+// GetRlp returns the EIP-2718 wire bytes (0x02 || RLP body) for each tx.
+type ethTxDerivableList []*tx.Transaction
+
+func (l ethTxDerivableList) Len() int { return len(l) }
+func (l ethTxDerivableList) GetRlp(i int) []byte {
+	b, err := l[i].MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// ethReceiptDerivableList wraps []*EthReceipt for use with ethtypes.DeriveSha.
+type ethReceiptDerivableList []*EthReceipt
+
+func (l ethReceiptDerivableList) Len() int            { return len(l) }
+func (l ethReceiptDerivableList) GetRlp(i int) []byte { return ethReceiptWireBytes(l[i]) }
+
+// ethTransactionsRoot computes the Ethereum Keccak256 MPT root over the EIP-1559
+// encoded wire bytes of the given ETH transactions (projected tx index as trie key).
+func ethTransactionsRoot(txs []*tx.Transaction) common.Hash {
+	return ethtypes.DeriveSha(ethTxDerivableList(txs))
+}
+
+// ethReceiptsRoot computes the Ethereum Keccak256 MPT root over the EIP-1559
+// encoded consensus bytes of the given ETH receipts.
+func ethReceiptsRoot(recs []*EthReceipt) common.Hash {
+	return ethtypes.DeriveSha(ethReceiptDerivableList(recs))
 }
 
 // ProjectedEthIndex returns the 0-based Ethereum transaction index for a TypeEthTyped1559 tx.

@@ -113,7 +113,7 @@ func (n *node) Start() error {
 	rpcblocks.New(repo, chainID).Mount(rpcSrv)
 	rpctransactions.New(repo, chainID, n.txPool).Mount(rpcSrv)
 	rpcaccounts.New(repo, stater).Mount(rpcSrv)
-	rpclogs.New(repo, logDB, 100).Mount(rpcSrv)
+	rpclogs.New(repo, logDB, 100, 1000).Mount(rpcSrv)
 	rpcfees.New(repo, 100).Mount(rpcSrv)
 	rpcsimulation.New(repo, stater, &testchain.DefaultForkConfig, 1_000_000).Mount(rpcSrv)
 	router.PathPrefix("/rpc").Handler(rpcSrv)

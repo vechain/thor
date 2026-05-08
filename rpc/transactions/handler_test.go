@@ -6,15 +6,19 @@
 package transactions_test
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"math/big"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/rpc/transactions"
@@ -152,6 +156,12 @@ func TestTransactionsHandler(t *testing.T) {
 		var txType hexutil.Uint64
 		require.NoError(t, json.Unmarshal(receipt["type"], &txType))
 		assert.Equal(t, uint64(tx.TypeEthDynamicFee), uint64(txType))
+
+		// Simple value transfer emits no events → logsBloom must be all zeros.
+		var logsBloom hexutil.Bytes
+		require.NoError(t, json.Unmarshal(receipt["logsBloom"], &logsBloom))
+		require.Len(t, logsBloom, 256)
+		assert.Equal(t, make([]byte, 256), []byte(logsBloom))
 	})
 
 	t.Run("eth_getTransactionReceipt_vechain", func(t *testing.T) {
@@ -182,7 +192,7 @@ func TestTransactionsHandler(t *testing.T) {
 		rawBytes, err := freshTx.MarshalBinary()
 		require.NoError(t, err)
 
-		result := testutil.Call(t, ts, "eth_sendRawTransaction", []any{"0x" + hexBytesToString(rawBytes)})
+		result := testutil.Call(t, ts, "eth_sendRawTransaction", []any{"0x" + hex.EncodeToString(rawBytes)})
 		var gotHash string
 		require.NoError(t, json.Unmarshal(result, &gotHash))
 		assert.NotEmpty(t, gotHash)
@@ -194,12 +204,45 @@ func TestTransactionsHandler(t *testing.T) {
 	})
 }
 
-func hexBytesToString(b []byte) string {
-	const hextable = "0123456789abcdef"
-	buf := make([]byte, len(b)*2)
-	for i, v := range b {
-		buf[i*2] = hextable[v>>4]
-		buf[i*2+1] = hextable[v&0x0f]
-	}
-	return string(buf)
+// TestTransactionReceiptBloom verifies that eth_getTransactionReceipt populates
+// logsBloom correctly for an ETH typed tx that emits contract events.
+func TestTransactionReceiptBloom(t *testing.T) {
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := c.Repo().ChainID()
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+
+	// Mint a block with an ETH call to Energy.transfer, which emits a Transfer event.
+	transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+	require.True(t, ok)
+	callData, err := transferMethod.EncodeInput(recipient.Address, big.NewInt(1e9))
+	require.NoError(t, err)
+	energyAddr := builtin.Energy.Address
+	ethCallTx := testutil.BuildEthCallTx(t, chainID, sender, 0, &energyAddr, callData, 200_000)
+	require.NoError(t, c.MintBlock(ethCallTx))
+
+	pool := txpool.New(c.Repo(), c.Stater(), txpool.Options{
+		Limit:           10000,
+		LimitPerAccount: 16,
+		MaxLifetime:     10 * time.Minute,
+	}, &testchain.DefaultForkConfig)
+	ts := testutil.NewTestServer(t, transactions.New(c.Repo(), chainID, pool))
+
+	result := testutil.Call(t, ts, "eth_getTransactionReceipt", []any{ethCallTx.ID().String()})
+	var receipt map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(result, &receipt))
+
+	// logsBloom must be non-zero: Energy.transfer emits a Transfer event.
+	var logsBloom hexutil.Bytes
+	require.NoError(t, json.Unmarshal(receipt["logsBloom"], &logsBloom))
+	require.Len(t, logsBloom, 256)
+	assert.NotEqual(t, make([]byte, 256), []byte(logsBloom), "logsBloom should be non-zero for receipt with events")
+
+	// The bloom must contain the Energy contract address.
+	var bloom256 [256]byte
+	copy(bloom256[:], logsBloom)
+	ethBloom := ethtypes.BytesToBloom(bloom256[:])
+	assert.True(t, ethtypes.BloomLookup(ethBloom, common.Address(builtin.Energy.Address)), "receipt bloom should contain Energy contract address")
 }

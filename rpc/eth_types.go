@@ -25,12 +25,12 @@ type EthBlock struct {
 	Nonce hexutil.Bytes `json:"nonce"`
 	// Sha3Uncles is the empty uncle hash — VeChain has no uncles.
 	Sha3Uncles common.Hash `json:"sha3Uncles"`
-	// TODO: compute from ETH tx logs once Phase 1 is complete.
+	// LogsBloom is the OR of all receipt blooms for ETH-typed transactions in this block.
 	LogsBloom hexutil.Bytes `json:"logsBloom"`
-	// TODO: compute Merkle root over projected ETH transactions.
+	// TransactionsRoot is the Keccak256 MPT root over the projected ETH transaction list.
 	TransactionsRoot common.Hash `json:"transactionsRoot"`
 	StateRoot        common.Hash `json:"stateRoot"`
-	// TODO: compute Merkle root over projected ETH receipts.
+	// ReceiptsRoot is the Keccak256 MPT root over the projected ETH receipt list.
 	ReceiptsRoot common.Hash `json:"receiptsRoot"`
 	// Miner is the block beneficiary declared in the VeChain block header.
 	Miner           common.Address `json:"miner"`
@@ -53,12 +53,37 @@ type EthBlock struct {
 // there are no uncle blocks (always the case for VeChain).
 var emptyUncleHash = common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
 
-// zeroLogsBloom is a 256-byte zero bloom filter returned as a placeholder.
-// TODO: compute from ETH tx events once Phase 1 bloom computation is implemented.
-var zeroLogsBloom = make(hexutil.Bytes, 256)
-
 // zeroNonce is an 8-byte zero block nonce — VeChain uses PoA, not PoW.
 var zeroNonce = make(hexutil.Bytes, 8)
+
+// ethBloom9 sets 3 bits in a 2048-bit (256-byte) Bloom filter for the given byte slice,
+// following the Ethereum Yellow Paper Appendix H algorithm (EIP-2981).
+func ethBloom9(b []byte) *big.Int {
+	b = crypto.Keccak256(b)
+	r := new(big.Int)
+	for i := 0; i < 6; i += 2 {
+		t := big.NewInt(1)
+		bit := (uint(b[i+1]) + (uint(b[i]) << 8)) & 2047
+		r.Or(r, t.Lsh(t, bit))
+	}
+	return r
+}
+
+// ethLogsBloom computes the 256-byte Ethereum bloom filter for a slice of logs.
+// It ORs the bloom contribution of each log's address and topics.
+func ethLogsBloom(logs []*EthLog) hexutil.Bytes {
+	bin := new(big.Int)
+	for _, log := range logs {
+		bin.Or(bin, ethBloom9(log.Address.Bytes()))
+		for _, topic := range log.Topics {
+			bin.Or(bin, ethBloom9(topic[:]))
+		}
+	}
+	bloom := make(hexutil.Bytes, 256)
+	b := bin.Bytes()
+	copy(bloom[256-len(b):], b)
+	return bloom
+}
 
 // EthTx is the Ethereum JSON representation of a TypeEthTyped1559 transaction.
 type EthTx struct {
@@ -163,7 +188,7 @@ type EthReceipt struct {
 	CumulativeGasUsed hexutil.Uint64  `json:"cumulativeGasUsed"`
 	ContractAddress   *common.Address `json:"contractAddress"`
 	Logs              []*EthLog       `json:"logs"`
-	// TODO: compute bloom filter from ETH tx event logs.
+	// LogsBloom is computed from the ETH-typed transaction's event logs (bloom9 over address and topics).
 	LogsBloom hexutil.Bytes `json:"logsBloom"`
 	// Status: 1 = success, 0 = reverted.
 	Status hexutil.Uint64 `json:"status"`
@@ -258,7 +283,7 @@ func ToEthReceipt(
 		CumulativeGasUsed: hexutil.Uint64(cumulativeGas),
 		ContractAddress:   contractAddress,
 		Logs:              logs,
-		LogsBloom:         zeroLogsBloom,
+		LogsBloom:         ethLogsBloom(logs),
 		Status:            status,
 		Type:              hexutil.Uint64(tx.TypeEthDynamicFee),
 		EffectiveGasPrice: (*hexutil.Big)(effectiveGasPrice),

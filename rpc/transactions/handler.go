@@ -142,23 +142,18 @@ func (h *Handler) txByBlockAndEthIndex(req rpc.Request, header *block.Header, id
 	if err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
 	}
-	receipts, err := h.repo.GetBlockReceipts(header.ID())
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
-	}
 
 	blockHash := common.Hash(header.ID())
 	blockNum := uint64(header.Number())
 	var projIdx uint64
 
-	for i, t := range blk.Transactions() {
+	for _, t := range blk.Transactions() {
 		if t.Type() != tx.TypeEthDynamicFee {
 			continue
 		}
 		if projIdx == ethIdx {
 			return rpc.OkResponse(req.ID, rpc.ToEthTx(t, h.chainID, blockHash, blockNum, projIdx, header.BaseFee()))
 		}
-		_ = receipts[i] // bounds check
 		projIdx++
 	}
 	return rpc.OkResponse(req.ID, nil)

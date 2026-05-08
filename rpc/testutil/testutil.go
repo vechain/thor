@@ -43,6 +43,39 @@ func BuildEthTx(t *testing.T, chainID uint64, sender genesis.DevAccount, nonce u
 	return ethTx
 }
 
+// BuildEthCallTx creates a signed EIP-1559 contract-call tx (no VET value, arbitrary data).
+func BuildEthCallTx(t *testing.T, chainID uint64, sender genesis.DevAccount, nonce uint64, to *thor.Address, data []byte, gas uint64) *tx.Transaction {
+	t.Helper()
+	unsigned := tx.NewBuilder(tx.TypeEthDynamicFee).
+		ChainID(chainID).
+		Nonce(nonce).
+		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
+		Gas(gas).
+		To(to).
+		Value(big.NewInt(0)).
+		Data(data).
+		Build()
+	ethTx, err := tx.Sign(unsigned, sender.PrivateKey)
+	require.NoError(t, err)
+	return ethTx
+}
+
+// BuildVcCallTx creates a signed TypeLegacy VeChain tx with a contract-call clause (no VET value, arbitrary data).
+func BuildVcCallTx(t *testing.T, c *testchain.Chain, sender genesis.DevAccount, to *thor.Address, data []byte, gas uint64) *tx.Transaction {
+	t.Helper()
+	vcTx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(c.Repo().ChainTag()).
+		BlockRef(tx.NewBlockRef(c.Repo().BestBlockSummary().Header.Number())).
+		Expiration(1000).
+		GasPriceCoef(255).
+		Gas(gas).
+		Nonce(datagen.RandUint64()).
+		Clause(tx.NewClause(to).WithData(data)).
+		Build()
+	return tx.MustSign(vcTx, sender.PrivateKey)
+}
+
 // BuildVcTx creates a signed TypeLegacy VeChain tx from sender to to.
 func BuildVcTx(t *testing.T, c *testchain.Chain, sender genesis.DevAccount, to *thor.Address) *tx.Transaction {
 	t.Helper()

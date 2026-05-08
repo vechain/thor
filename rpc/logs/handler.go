@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -25,11 +26,12 @@ type Handler struct {
 	repo      *chain.Repository
 	logDB     *logdb.LogDB
 	backtrace uint32
+	logsLimit uint64
 }
 
 // New creates a logs Handler.
-func New(repo *chain.Repository, logDB *logdb.LogDB, backtrace uint32) *Handler {
-	return &Handler{repo: repo, logDB: logDB, backtrace: backtrace}
+func New(repo *chain.Repository, logDB *logdb.LogDB, backtrace uint32, logsLimit uint64) *Handler {
+	return &Handler{repo: repo, logDB: logDB, backtrace: backtrace, logsLimit: logsLimit}
 }
 
 // Mount registers all log methods on the dispatcher.
@@ -53,21 +55,27 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 	}
 	f := params[0]
 
-	bestChain := h.repo.NewBestChain()
-	bestNum := h.repo.BestBlockSummary().Header.Number()
+	// Single BestBlockSummary read so bestChain and bestNum are always consistent.
+	bestSummary := h.repo.BestBlockSummary()
+	bestChain := h.repo.NewChain(bestSummary.Header.ID())
+	bestNum := bestSummary.Header.Number()
 
 	var fromNum, toNum uint32
 
 	if f.BlockHash != nil {
-		// EIP-234: single block identified by hash
+		// EIP-234: blockHash is mutually exclusive with fromBlock/toBlock.
+		if (f.FromBlock != nil && *f.FromBlock != "") || (f.ToBlock != nil && *f.ToBlock != "") {
+			return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "can't specify fromBlock/toBlock with blockHash")
+		}
 		summary, err := rpc.ResolveBlockTag(*f.BlockHash, h.repo)
 		if err != nil {
-			return rpc.OkResponse(req.ID, []*rpc.EthLog{})
+			return rpc.ErrResponse(req.ID, rpc.CodeServerError, "unknown block")
 		}
 		fromNum = summary.Header.Number()
 		toNum = summary.Header.Number()
 	} else {
-		// Default range
+		// Per Ethereum spec, absent fromBlock and toBlock both default to "latest".
+		fromNum = bestNum
 		toNum = bestNum
 
 		if f.FromBlock != nil && *f.FromBlock != "" {
@@ -88,7 +96,10 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		if toNum > bestNum {
 			toNum = bestNum
 		}
-		if toNum > fromNum && toNum-fromNum > h.backtrace {
+		if fromNum > toNum {
+			return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block range params")
+		}
+		if toNum-fromNum > h.backtrace {
 			return rpc.ErrResponse(req.ID, rpc.CodeServerError, fmt.Sprintf("block range exceeds backtrace limit of %d", h.backtrace))
 		}
 	}
@@ -169,13 +180,19 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		}
 	}
 
+	// Fetch one extra result to detect truncation: if the logdb returns more than
+	// logsLimit rows, return an error instead of a silently incomplete result.
+	queryLimit := h.logsLimit
+	if queryLimit < math.MaxUint64 {
+		queryLimit++
+	}
 	filter := &logdb.EventFilter{
 		CriteriaSet: criteriaSet,
 		Range: &logdb.Range{
 			From: fromNum,
 			To:   toNum,
 		},
-		Options: &logdb.Options{Limit: 10000},
+		Options: &logdb.Options{Limit: queryLimit},
 		Order:   logdb.ASC,
 	}
 
@@ -183,41 +200,83 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 	if err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
 	}
+	if uint64(len(events)) > h.logsLimit {
+		return rpc.ErrResponse(req.ID, rpc.CodeServerError,
+			fmt.Sprintf("query returned more than %d results, use a smaller block range or a more specific filter", h.logsLimit))
+	}
 
-	// Post-filter: only return logs from TypeEthTyped1559 transactions.
-	// Cache tx type lookups per unique TxID to avoid redundant chain reads.
-	typeCache := make(map[thor.Bytes32]bool)
-	isEthTx := func(txID thor.Bytes32) bool {
-		if v, ok := typeCache[txID]; ok {
-			return v
+	// Post-filter: only return logs from TypeEthDynamicFee transactions.
+	// Projected transactionIndex and logIndex are computed relative to ETH-typed txs only,
+	// so that they remain consistent with eth_getTransactionByHash etc. in mixed blocks.
+	//
+	// blockTxsByNum caches the full tx list per block (one GetBlock call per unique block).
+	// ethProjTxIdx caches canonical-position → projected-ETH-index per tx (avoids recount
+	// when the same tx emits multiple events).
+	// ethLogIdxByBlock counts ETH events seen so far per block (becomes the projected logIndex).
+	blockTxsByNum := make(map[uint32][]*tx.Transaction)
+	ethProjTxIdx := make(map[thor.Bytes32]uint32)
+	ethLogIdxByBlock := make(map[thor.Bytes32]uint32)
+
+	getBlockTxs := func(blockNum uint32) ([]*tx.Transaction, error) {
+		if txs, ok := blockTxsByNum[blockNum]; ok {
+			return txs, nil
 		}
-		t, _, err := bestChain.GetTransaction(txID)
-		ok2 := err == nil && t.Type() == tx.TypeEthDynamicFee
-		typeCache[txID] = ok2
-		return ok2
+		blk, err := bestChain.GetBlock(blockNum)
+		if err != nil {
+			return nil, err
+		}
+		txs := blk.Transactions()
+		blockTxsByNum[blockNum] = txs
+		return txs, nil
 	}
 
 	var ethLogs []*rpc.EthLog
 	for _, ev := range events {
-		if !isEthTx(ev.TxID) {
+		blockTxs, err := getBlockTxs(ev.BlockNumber)
+		if err != nil {
+			return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		}
+
+		// Bounds-check and ID-verify before using the canonical index.
+		if int(ev.TxIndex) >= len(blockTxs) || blockTxs[ev.TxIndex].ID() != ev.TxID {
 			continue
 		}
-		topics := make([]common.Hash, 0, 5)
+		if blockTxs[ev.TxIndex].Type() != tx.TypeEthDynamicFee {
+			continue
+		}
+
+		// Projected ETH tx index: number of TypeEthDynamicFee txs at canonical positions < ev.TxIndex.
+		projTxIdx, ok := ethProjTxIdx[ev.TxID]
+		if !ok {
+			for i := uint32(0); i < ev.TxIndex; i++ {
+				if blockTxs[i].Type() == tx.TypeEthDynamicFee {
+					projTxIdx++
+				}
+			}
+			ethProjTxIdx[ev.TxID] = projTxIdx
+		}
+
+		// Projected ETH log index: running count of ETH events in this block so far.
+		logIdx := ethLogIdxByBlock[ev.BlockID]
+		ethLogIdxByBlock[ev.BlockID]++
+
+		evTopics := make([]common.Hash, 0, 5)
 		for _, tp := range ev.Topics {
 			if tp == nil {
 				break
 			}
-			topics = append(topics, common.Hash(*tp))
+			evTopics = append(evTopics, common.Hash(*tp))
 		}
+
 		ethLogs = append(ethLogs, &rpc.EthLog{
 			Address:     common.Address(ev.Address),
-			Topics:      topics,
+			Topics:      evTopics,
 			Data:        ev.Data,
 			BlockNumber: hexutil.Uint64(ev.BlockNumber),
 			TxHash:      common.Hash(ev.TxID),
-			TxIndex:     hexutil.Uint64(ev.TxIndex),
+			TxIndex:     hexutil.Uint64(projTxIdx),
 			BlockHash:   common.Hash(ev.BlockID),
-			LogIndex:    hexutil.Uint64(ev.LogIndex),
+			LogIndex:    hexutil.Uint64(logIdx),
 			Removed:     false,
 		})
 	}

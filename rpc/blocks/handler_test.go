@@ -7,17 +7,23 @@ package blocks_test
 
 import (
 	"encoding/json"
+	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/rpc/blocks"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/tx"
+
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 type fixture struct {
@@ -220,5 +226,70 @@ func TestBlocksHandler(t *testing.T) {
 	t.Run("eth_getUncleByBlockNumberAndIndex", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_getUncleByBlockNumberAndIndex", []any{"latest", "0x0"})
 		assert.Equal(t, "null", string(result))
+	})
+}
+
+// TestBlocksBloomAndRoots verifies that LogsBloom, TransactionsRoot and ReceiptsRoot
+// are correctly populated for blocks containing ETH typed transactions.
+func TestBlocksBloomAndRoots(t *testing.T) {
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := c.Repo().ChainID()
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+
+	// Block 1: ETH call to the Energy (VTHO) contract, which emits a Transfer event.
+	transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+	require.True(t, ok)
+	callData, err := transferMethod.EncodeInput(recipient.Address, big.NewInt(1e9))
+	require.NoError(t, err)
+	energyAddr := builtin.Energy.Address
+	ethCallTx := testutil.BuildEthCallTx(t, chainID, sender, 0, &energyAddr, callData, 200_000)
+	require.NoError(t, c.MintBlock(ethCallTx))
+
+	ts := testutil.NewTestServer(t, blocks.New(c.Repo(), chainID))
+
+	t.Run("genesis_has_empty_trie_roots_and_zero_bloom", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"0x0", false})
+		var blk map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &blk))
+
+		var txRoot, recRoot common.Hash
+		require.NoError(t, json.Unmarshal(blk["transactionsRoot"], &txRoot))
+		require.NoError(t, json.Unmarshal(blk["receiptsRoot"], &recRoot))
+		assert.Equal(t, ethtypes.EmptyRootHash, txRoot, "genesis transactionsRoot should be Ethereum empty trie root")
+		assert.Equal(t, ethtypes.EmptyRootHash, recRoot, "genesis receiptsRoot should be Ethereum empty trie root")
+
+		var logsBloom hexutil.Bytes
+		require.NoError(t, json.Unmarshal(blk["logsBloom"], &logsBloom))
+		assert.Equal(t, make([]byte, 256), []byte(logsBloom), "genesis logsBloom should be all zeros")
+	})
+
+	t.Run("event_block_bloom_contains_energy_address", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"latest", false})
+		var blk map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &blk))
+
+		// logsBloom must be non-zero: Energy.transfer emits a Transfer event.
+		var logsBloom hexutil.Bytes
+		require.NoError(t, json.Unmarshal(blk["logsBloom"], &logsBloom))
+		require.Len(t, logsBloom, 256)
+		assert.NotEqual(t, make([]byte, 256), []byte(logsBloom), "logsBloom should be non-zero for a block with ETH event logs")
+
+		// The bloom must contain the Energy contract address.
+		var bloom256 [256]byte
+		copy(bloom256[:], logsBloom)
+		ethBloom := ethtypes.BytesToBloom(bloom256[:])
+		assert.True(t, ethtypes.BloomLookup(ethBloom, common.Address(builtin.Energy.Address)), "block bloom should contain Energy contract address")
+
+		// transactionsRoot and receiptsRoot must be non-zero and not the empty trie root.
+		var txRoot, recRoot common.Hash
+		require.NoError(t, json.Unmarshal(blk["transactionsRoot"], &txRoot))
+		require.NoError(t, json.Unmarshal(blk["receiptsRoot"], &recRoot))
+		assert.NotEqual(t, (common.Hash{}), txRoot)
+		assert.NotEqual(t, ethtypes.EmptyRootHash, txRoot, "transactionsRoot should not be empty trie root when block has ETH txs")
+		assert.NotEqual(t, (common.Hash{}), recRoot)
+		assert.NotEqual(t, ethtypes.EmptyRootHash, recRoot, "receiptsRoot should not be empty trie root when block has ETH txs")
 	})
 }
