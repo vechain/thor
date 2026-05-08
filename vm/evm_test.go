@@ -13,6 +13,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/runtime/statedb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
 )
 
 var _ Logger = (*noopTracer)(nil)
@@ -40,7 +45,8 @@ func (*noopTracer) CaptureClauseStart(_ uint64) {}
 func (*noopTracer) CaptureClauseEnd(_ uint64)   {}
 
 func setupEvmTestContract(codeAddr *common.Address) (*EVM, *Contract) {
-	statedb := NoopStateDB{}
+	db := muxdb.NewMem()
+	stateDB := statedb.New(state.NewStater(db).NewState(trie.Root{}))
 
 	evmConfig := Config{
 		Tracer: &noopTracer{},
@@ -54,7 +60,7 @@ func setupEvmTestContract(codeAddr *common.Address) (*EVM, *Contract) {
 			Transfer:           NoopTransfer,
 			NewContractAddress: newContractAddress,
 		},
-		statedb,
+		stateDB,
 		&ChainConfig{ChainConfig: *params.TestChainConfig}, evmConfig)
 
 	contract := &Contract{
@@ -80,11 +86,16 @@ func TestCall(t *testing.T) {
 	contractAddr := common.HexToAddress("0x1")
 	input := []byte{}
 
+	callBeforeNonce := evm.StateDB.GetNonce(caller.Address())
+
 	ret, leftOverGas, err := evm.Call(caller, contractAddr, input, 1000000, big.NewInt(100000))
 
 	assert.Nil(t, err)
 	assert.Nil(t, ret)
 	assert.NotNil(t, leftOverGas)
+
+	callAfterNonce := evm.StateDB.GetNonce(caller.Address())
+	assert.Equal(t, callBeforeNonce, callAfterNonce)
 }
 
 func TestCallCode(t *testing.T) {
@@ -145,12 +156,20 @@ func TestCreate(t *testing.T) {
 	parentCallerAddress := common.HexToAddress("0x01234567A")
 	input := []byte{}
 
+	createBeforeNonce := evm.StateDB.GetNonce(parentCallerAddress)
+
 	ret, addr, leftOverGas, err := evm.Create(AccountRef(parentCallerAddress), input, 1000000, big.NewInt(2000))
 
 	assert.Nil(t, err)
 	assert.NotNil(t, addr)
 	assert.Nil(t, ret)
 	assert.NotNil(t, leftOverGas)
+
+	createAfterNonce := evm.StateDB.GetNonce(parentCallerAddress)
+	assert.Equal(t, createBeforeNonce, createAfterNonce)
+
+	contractNonce := evm.StateDB.GetNonce(addr)
+	assert.Equal(t, uint64(1), contractNonce)
 }
 
 func TestMaxCodeSize(t *testing.T) {
@@ -214,4 +233,49 @@ func TestCreate2(t *testing.T) {
 	assert.NotNil(t, addr)
 	assert.Nil(t, ret)
 	assert.NotNil(t, leftOverGas)
+}
+
+func TestCallForEthTx(t *testing.T) {
+	codeAddr := common.BytesToAddress([]byte{1})
+	evm, _ := setupEvmTestContract(&codeAddr)
+	evm.TxType = tx.TypeEthDynamicFee
+
+	caller := AccountRef(common.HexToAddress("0x01"))
+	contractAddr := common.HexToAddress("0x1")
+	input := []byte{}
+
+	callBeforeNonce := evm.StateDB.GetNonce(caller.Address())
+
+	ret, leftOverGas, err := evm.Call(caller, contractAddr, input, 1000000, big.NewInt(100000))
+
+	assert.Nil(t, err)
+	assert.Nil(t, ret)
+	assert.NotNil(t, leftOverGas)
+
+	callAfterNonce := evm.StateDB.GetNonce(caller.Address())
+	assert.Equal(t, callBeforeNonce+1, callAfterNonce)
+}
+
+func TestCreateForEthTx(t *testing.T) {
+	codeAddr := common.BytesToAddress([]byte{1})
+	evm, _ := setupEvmTestContract(&codeAddr)
+	evm.TxType = tx.TypeEthDynamicFee
+
+	parentCallerAddress := common.HexToAddress("0x01234567A")
+	input := []byte{}
+
+	createBeforeNonce := evm.StateDB.GetNonce(parentCallerAddress)
+
+	ret, addr, leftOverGas, err := evm.Create(AccountRef(parentCallerAddress), input, 1000000, big.NewInt(2000))
+
+	assert.Nil(t, err)
+	assert.NotNil(t, addr)
+	assert.Nil(t, ret)
+	assert.NotNil(t, leftOverGas)
+
+	createAfterNonce := evm.StateDB.GetNonce(parentCallerAddress)
+	assert.Equal(t, createBeforeNonce+1, createAfterNonce)
+
+	contractNonce := evm.StateDB.GetNonce(addr)
+	assert.Equal(t, uint64(1), contractNonce)
 }

@@ -325,6 +325,24 @@ func (s *State) SetCode(addr thor.Address, code []byte) error {
 	return nil
 }
 
+func (s *State) GetNonce(addr thor.Address) (uint64, error) {
+	acc, err := s.getAccount(addr)
+	if err != nil {
+		return 0, &Error{err}
+	}
+	return acc.Nonce, nil
+}
+
+func (s *State) SetNonce(addr thor.Address, nonce uint64) error {
+	cpy, err := s.getAccountCopy(addr)
+	if err != nil {
+		return &Error{err}
+	}
+	cpy.Nonce = nonce
+	s.updateAccount(addr, &cpy)
+	return nil
+}
+
 // Exists returns whether an account exists at the given address.
 // See Account.IsEmpty()
 func (s *State) Exists(addr thor.Address) (bool, error) {

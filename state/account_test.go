@@ -84,6 +84,7 @@ func TestTrie(t *testing.T) {
 		[]byte("master"),
 		[]byte("code hash"),
 		[]byte("storage root"),
+		0,
 	}
 	meta1 := AccountMetadata{
 		StorageID:       []byte("sid"),
@@ -122,4 +123,39 @@ func TestStorageTrie(t *testing.T) {
 		M(tr.Get(key[:])),
 		M([]byte(nil), []byte(nil), nil),
 		"empty storage value should be deleted")
+}
+
+type NoNonceAccount struct {
+	Balance     *big.Int
+	Energy      *big.Int
+	BlockTime   uint64
+	Master      []byte // master address
+	CodeHash    []byte // hash of code
+	StorageRoot []byte // merkle root of the storage trie
+}
+
+func TestNoNonceAccountRLPCompatibility(t *testing.T) {
+	legacy := NoNonceAccount{
+		Balance:     big.NewInt(100),
+		Energy:      big.NewInt(200),
+		BlockTime:   123456,
+		Master:      []byte("master"),
+		CodeHash:    []byte("code hash"),
+		StorageRoot: []byte("storage root"),
+	}
+
+	data, err := rlp.EncodeToBytes(&legacy)
+	assert.Nil(t, err)
+
+	var decoded Account
+	err = rlp.DecodeBytes(data, &decoded)
+	assert.Nil(t, err)
+
+	assert.Equal(t, legacy.Balance, decoded.Balance)
+	assert.Equal(t, legacy.Energy, decoded.Energy)
+	assert.Equal(t, legacy.BlockTime, decoded.BlockTime)
+	assert.Equal(t, legacy.Master, decoded.Master)
+	assert.Equal(t, legacy.CodeHash, decoded.CodeHash)
+	assert.Equal(t, legacy.StorageRoot, decoded.StorageRoot)
+	assert.Equal(t, uint64(0), decoded.Nonce, "Nonce should default to 0 when missing from RLP")
 }

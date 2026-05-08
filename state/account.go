@@ -31,6 +31,7 @@ type Account struct {
 	Master      []byte // master address
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
+	Nonce       uint64 `rlp:"optional"` // optional field for Ethereum compatibility, not used in Thor consensus
 }
 
 // IsEmpty returns if an account is empty.

@@ -25,6 +25,7 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -95,6 +96,7 @@ type Context struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE (0 if vm runs with NoBaseFee flag and 0 gas price)
+	TxType      byte           // Provides information for TXTYPE (0 for legacy transactions)
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -213,6 +215,16 @@ func (evm *EVM) call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
+
+	// Only Eth tx types increment the nonce on call
+	if evm.TxType == tx.TypeEthDynamicFee {
+		nonce := evm.StateDB.GetNonce(caller.Address())
+		if nonce+1 < nonce {
+			return nil, gas, ErrNonceUintOverflow
+		}
+		evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	}
+
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
@@ -457,8 +469,15 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
-	nonce := evm.StateDB.GetNonce(caller.Address())
-	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+
+	// Only Eth tx types increment the nonce on contract creation.
+	if evm.TxType == tx.TypeEthDynamicFee {
+		nonce := evm.StateDB.GetNonce(caller.Address())
+		if nonce+1 < nonce {
+			return nil, common.Address{}, gas, ErrNonceUintOverflow
+		}
+		evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	}
 
 	// Increase counter, same behavior as Create()
 	// We already have address, just need to increase the counter.
