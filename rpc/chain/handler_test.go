@@ -95,4 +95,25 @@ func TestChainHandler(t *testing.T) {
 		require.NoError(t, json.Unmarshal(result, &got))
 		assert.Equal(t, "0x0", got)
 	})
+
+	t.Run("net_listening", func(t *testing.T) {
+		result := testutil.Call(t, ts, "net_listening", []any{})
+		var got bool
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.True(t, got)
+	})
+
+	t.Run("net_peerCount", func(t *testing.T) {
+		result := testutil.Call(t, ts, "net_peerCount", []any{})
+		var got hexutil.Uint64
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Equal(t, uint64(0), uint64(got))
+	})
+
+	t.Run("eth_coinbase", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_coinbase", []any{})
+		var got string
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Equal(t, "0x0000000000000000000000000000000000000000", got)
+	})
 }

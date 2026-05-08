@@ -8,6 +8,7 @@ package chain
 import (
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/chain"
@@ -30,8 +31,11 @@ func New(repo *chain.Repository, chainID uint64, clientVersion string) *Handler 
 func (h *Handler) Mount(s *rpc.Server) {
 	s.Register("eth_chainId", h.ethChainID)
 	s.Register("net_version", h.netVersion)
+	s.Register("net_listening", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, true) })
+	s.Register("net_peerCount", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, hexutil.Uint64(0)) }) // TODO do we want to hook this up ?
 	s.Register("web3_clientVersion", h.web3ClientVersion)
 	s.Register("eth_blockNumber", h.ethBlockNumber)
+	s.Register("eth_coinbase", h.ethCoinbase)
 	s.Register("eth_syncing", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
 	s.Register("eth_accounts", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, []string{}) })
 	s.Register("eth_mining", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
@@ -53,4 +57,8 @@ func (h *Handler) web3ClientVersion(req rpc.Request) rpc.Response {
 func (h *Handler) ethBlockNumber(req rpc.Request) rpc.Response {
 	num := h.repo.BestBlockSummary().Header.Number()
 	return rpc.OkResponse(req.ID, hexutil.Uint64(num))
+}
+
+func (h *Handler) ethCoinbase(req rpc.Request) rpc.Response {
+	return rpc.OkResponse(req.ID, common.Address{})
 }

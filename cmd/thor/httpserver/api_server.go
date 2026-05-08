@@ -141,7 +141,7 @@ func StartAPIServer(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
-	// Ethereum JSON-RPC at /rpc — body limit enforced internally by rpc.Server (2 MB via io.LimitReader)
+	// Ethereum JSON-RPC at /rpc — body limit enforced internally by rpc.Server (2 MB via MaxBytesReader)
 	chainID := repo.ChainID()
 	rpcSrv := rpc.NewServer()
 	rpcchain.New(repo, chainID, config.ClientVersion).Mount(rpcSrv)

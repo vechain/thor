@@ -146,4 +146,79 @@ func TestBlocksHandler(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_getBlockByHash", []any{"0x0000000000000000000000000000000000000000000000000000000000000001", false})
 		assert.Equal(t, "null", string(result))
 	})
+
+	t.Run("eth_getBlockTransactionCountByNumber", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockTransactionCountByNumber", []any{"latest"})
+		var got hexutil.Uint64
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Equal(t, uint64(1), uint64(got)) // one ETH tx in the block
+	})
+
+	t.Run("eth_getBlockTransactionCountByNumber_notfound", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockTransactionCountByNumber", []any{"0xffff"})
+		assert.Equal(t, "null", string(result))
+	})
+
+	t.Run("eth_getBlockTransactionCountByHash", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockTransactionCountByHash", []any{fx.blockHash})
+		var got hexutil.Uint64
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Equal(t, uint64(1), uint64(got))
+	})
+
+	t.Run("eth_getBlockTransactionCountByHash_notfound", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockTransactionCountByHash", []any{"0x0000000000000000000000000000000000000000000000000000000000000001"})
+		assert.Equal(t, "null", string(result))
+	})
+
+	t.Run("eth_getBlockReceipts", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockReceipts", []any{"latest"})
+		var receipts []map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &receipts))
+		require.Len(t, receipts, 1) // one ETH tx receipt
+		var txHash string
+		require.NoError(t, json.Unmarshal(receipts[0]["transactionHash"], &txHash))
+		assert.Equal(t, fx.ethTxHash, txHash)
+	})
+
+	t.Run("eth_getBlockReceipts_notfound", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockReceipts", []any{"0xffff"})
+		assert.Equal(t, "null", string(result))
+	})
+
+	t.Run("eth_getBlockReceipts_empty", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockReceipts", []any{"earliest"})
+		var receipts []map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &receipts))
+		assert.Empty(t, receipts)
+	})
+
+	t.Run("eth_getUncleCountByBlockNumber", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getUncleCountByBlockNumber", []any{"latest"})
+		var got hexutil.Uint64
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Equal(t, uint64(0), uint64(got))
+	})
+
+	t.Run("eth_getUncleCountByBlockNumber_notfound", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getUncleCountByBlockNumber", []any{"0xffff"})
+		assert.Equal(t, "null", string(result))
+	})
+
+	t.Run("eth_getUncleCountByBlockHash", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getUncleCountByBlockHash", []any{fx.blockHash})
+		var got hexutil.Uint64
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Equal(t, uint64(0), uint64(got))
+	})
+
+	t.Run("eth_getUncleByBlockHashAndIndex", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getUncleByBlockHashAndIndex", []any{fx.blockHash, "0x0"})
+		assert.Equal(t, "null", string(result))
+	})
+
+	t.Run("eth_getUncleByBlockNumberAndIndex", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getUncleByBlockNumberAndIndex", []any{"latest", "0x0"})
+		assert.Equal(t, "null", string(result))
+	})
 }
