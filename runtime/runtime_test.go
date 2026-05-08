@@ -1117,7 +1117,7 @@ func TestEthTxNonce(t *testing.T) {
 	assert.Nil(t, err)
 	repo, _ := chain.NewRepository(db, b0)
 
-	ethChainID := thor.GetEthChainID(b0.Header().ID())
+	ethChainID := repo.ChainID()
 	senderKey := genesis.DevAccounts()[0].PrivateKey
 	sender := genesis.DevAccounts()[0].Address
 
@@ -1132,15 +1132,16 @@ func TestEthTxNonce(t *testing.T) {
 	}
 
 	buildEthTx := func(nonce uint64, to *thor.Address, data []byte) *tx.Transaction {
-		trx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+		unsigned := tx.NewBuilder(tx.TypeEthDynamicFee).
 			ChainID(ethChainID).
 			Nonce(nonce).
 			MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
 			MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
-			GasLimit(300_000).
+			Gas(300_000).
 			To(to).
 			Data(data).
-			Build(senderKey)
+			Build()
+		trx, err := tx.Sign(unsigned, senderKey)
 		assert.Nil(t, err)
 		return trx
 	}

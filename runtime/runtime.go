@@ -390,7 +390,7 @@ func (rt *Runtime) PrepareClause(
 	txCtx *xenv.TransactionContext,
 ) (exec func() (output *Output, interrupted bool, err error), interrupt func()) {
 	var (
-		stateDB       = statedb.New(rt.state, txCtx.TxType)
+		stateDB       = statedb.New(rt.state, txCtx.Type)
 		evm           = rt.newEVM(stateDB, clauseIndex, txCtx)
 		data          []byte
 		leftOverGas   uint64
@@ -574,7 +574,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 			// stateDB.SetNonce before the inner snapshot; that survived the tx.
 			// For CREATE txs that reverted, rt.state.RevertTo(checkpoint) undid the EVM's
 			// increment, so we must re-apply it here.
-			if trx.Type() == tx.TypeEthTyped1559 {
+			if trx.Type() == tx.TypeEthDynamicFee {
 				isCreate := resolvedTx.Clauses[0].IsCreatingContract()
 				if !isCreate || reverted {
 					nonce, err := rt.state.GetNonce(txCtx.Origin)
