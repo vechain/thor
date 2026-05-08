@@ -16,7 +16,6 @@ import (
 	"github.com/vechain/thor/v2/rpc/chain"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/thor"
 )
 
 type fixture struct {
@@ -32,7 +31,7 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, c.MintBlock())
 	return &fixture{
 		chain:   c,
-		chainID: thor.GetEthChainID(c.GenesisBlock().Header().ID()),
+		chainID: c.Repo().ChainID(),
 	}
 }
 

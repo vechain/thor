@@ -130,7 +130,7 @@ func ToEthTx(t *tx.Transaction, chainID uint64, blockHash common.Hash, blockNum 
 		To:                   to,
 		TransactionIndex:     &idx,
 		Value:                (*hexutil.Big)(new(big.Int).Set(clauses[0].Value())),
-		Type:                 hexutil.Uint64(tx.TypeEthTyped1559),
+		Type:                 hexutil.Uint64(tx.TypeEthDynamicFee),
 		ChainID:              (*hexutil.Big)(new(big.Int).SetUint64(chainID)),
 		V:                    (*hexutil.Big)(v),
 		R:                    (*hexutil.Big)(r),
@@ -260,7 +260,7 @@ func ToEthReceipt(
 		Logs:              logs,
 		LogsBloom:         zeroLogsBloom,
 		Status:            status,
-		Type:              hexutil.Uint64(tx.TypeEthTyped1559),
+		Type:              hexutil.Uint64(tx.TypeEthDynamicFee),
 		EffectiveGasPrice: (*hexutil.Big)(effectiveGasPrice),
 	}
 }

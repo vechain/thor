@@ -51,7 +51,7 @@ type ethTxContext struct {
 // Returns nil, nil when the tx does not exist or is not an ETH-typed transaction.
 func (h *Handler) fetchEthTxContext(bestChain *chain.Chain, id thor.Bytes32) (*ethTxContext, error) {
 	t, meta, err := bestChain.GetTransaction(id)
-	if err != nil || t.Type() != tx.TypeEthTyped1559 {
+	if err != nil || t.Type() != tx.TypeEthDynamicFee {
 		return nil, nil
 	}
 	header, err := bestChain.GetBlockHeader(meta.BlockNum)
@@ -152,7 +152,7 @@ func (h *Handler) txByBlockAndEthIndex(req rpc.Request, header *block.Header, id
 	var projIdx uint64
 
 	for i, t := range blk.Transactions() {
-		if t.Type() != tx.TypeEthTyped1559 {
+		if t.Type() != tx.TypeEthDynamicFee {
 			continue
 		}
 		if projIdx == ethIdx {
@@ -204,9 +204,9 @@ func (h *Handler) ethSendRawTransaction(req rpc.Request) rpc.Response {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid hex encoding")
 	}
 
-	parsed, err := tx.ParseEthTransaction(raw, h.chainID)
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeServerError, err.Error())
+	parsed := new(tx.Transaction)
+	if err := parsed.UnmarshalBinary(raw); err != nil {
+		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, err.Error())
 	}
 	if err := h.txPool.AddLocal(parsed); err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeServerError, err.Error())

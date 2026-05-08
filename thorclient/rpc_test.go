@@ -55,26 +55,28 @@ func TestEthRPC(t *testing.T) {
 	// transactionIndex and cumulativeGasUsed on the second receipt.
 	sender2 := genesis.DevAccounts()[2]
 
-	ethTx2, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+	unsigned2 := tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(testNode.Chain().ChainID()).
 		Nonce(1). // sender's next nonce: used nonce=0 in block 1
 		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
-		GasLimit(21000).
+		Gas(21000).
 		To(&recipient.Address).
 		Value(big.NewInt(1e9)).
-		Build(sender.PrivateKey)
+		Build()
+	ethTx2, err := tx.Sign(unsigned2, sender.PrivateKey)
 	require.NoError(t, err)
 
-	ethTx3, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+	unsigned3 := tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(testNode.Chain().ChainID()).
 		Nonce(0).
 		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
-		GasLimit(21000).
+		Gas(21000).
 		To(&recipient.Address).
 		Value(big.NewInt(1e9)).
-		Build(sender2.PrivateKey)
+		Build()
+	ethTx3, err := tx.Sign(unsigned3, sender2.PrivateKey)
 	require.NoError(t, err)
 
 	block2, err := testNode.Chain().BestBlock()
@@ -401,15 +403,16 @@ func TestEthRPC(t *testing.T) {
 
 	t.Run("eth_sendRawTransaction", func(t *testing.T) {
 		// Sender has used nonce=0 (block 1) and nonce=1 (block 2); next nonce is 2.
-		newTx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+		unsigned := tx.NewBuilder(tx.TypeEthDynamicFee).
 			ChainID(testNode.Chain().ChainID()).
 			Nonce(2).
 			MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
 			MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
-			GasLimit(21000).
+			Gas(21000).
 			To(&recipient.Address).
 			Value(big.NewInt(1e9)).
-			Build(sender.PrivateKey)
+			Build()
+		newTx, err := tx.Sign(unsigned, sender.PrivateKey)
 		require.NoError(t, err)
 
 		rawBytes, err := newTx.MarshalBinary()

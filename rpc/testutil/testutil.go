@@ -29,15 +29,16 @@ import (
 // BuildEthTx creates a signed EIP-1559 tx from sender (at the given nonce) to to.
 func BuildEthTx(t *testing.T, chainID uint64, sender genesis.DevAccount, nonce uint64, to *thor.Address) *tx.Transaction {
 	t.Helper()
-	ethTx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+	unsigned := tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(chainID).
 		Nonce(nonce).
 		MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
 		MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
-		GasLimit(21000).
+		Gas(21000).
 		To(to).
 		Value(big.NewInt(1e9)).
-		Build(sender.PrivateKey)
+		Build()
+	ethTx, err := tx.Sign(unsigned, sender.PrivateKey)
 	require.NoError(t, err)
 	return ethTx
 }

@@ -37,7 +37,7 @@ func newFixture(t *testing.T) *fixture {
 	c, err := testchain.NewDefault()
 	require.NoError(t, err)
 
-	chainID := thor.GetEthChainID(c.GenesisBlock().Header().ID())
+	chainID := c.Repo().ChainID()
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1]
 	vcTx := testutil.BuildVcTx(t, c, sender, &recipient.Address)
@@ -151,7 +151,7 @@ func TestTransactionsHandler(t *testing.T) {
 
 		var txType hexutil.Uint64
 		require.NoError(t, json.Unmarshal(receipt["type"], &txType))
-		assert.Equal(t, uint64(tx.TypeEthTyped1559), uint64(txType))
+		assert.Equal(t, uint64(tx.TypeEthDynamicFee), uint64(txType))
 	})
 
 	t.Run("eth_getTransactionReceipt_vechain", func(t *testing.T) {
@@ -167,15 +167,16 @@ func TestTransactionsHandler(t *testing.T) {
 		freshSender := genesis.DevAccounts()[2]
 		freshRecipient := genesis.DevAccounts()[3].Address
 
-		freshTx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+		unsigned := tx.NewBuilder(tx.TypeEthDynamicFee).
 			ChainID(fx.chainID).
 			Nonce(0).
 			MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
 			MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
-			GasLimit(21000).
+			Gas(21000).
 			To(&freshRecipient).
 			Value(big.NewInt(1e9)).
-			Build(freshSender.PrivateKey)
+			Build()
+		freshTx, err := tx.Sign(unsigned, freshSender.PrivateKey)
 		require.NoError(t, err)
 
 		rawBytes, err := freshTx.MarshalBinary()

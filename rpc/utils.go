@@ -109,7 +109,7 @@ func BuildEthBlock(
 	baseFee := header.BaseFee()
 
 	for i, t := range txs {
-		if t.Type() != tx.TypeEthTyped1559 {
+		if t.Type() != tx.TypeEthDynamicFee {
 			continue
 		}
 		projIdx := ProjectedEthIndex(receipts, uint64(i))
@@ -166,7 +166,7 @@ func BuildEthBlock(
 func ProjectedEthIndex(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 	var count uint64
 	for i := range canonicalIdx {
-		if receipts[i].Type == tx.TypeEthTyped1559 {
+		if receipts[i].Type == tx.TypeEthDynamicFee {
 			count++
 		}
 	}
@@ -178,7 +178,7 @@ func ProjectedEthIndex(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 func CumulativeEthGasUsed(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 	var total uint64
 	for i := uint64(0); i <= canonicalIdx; i++ {
-		if receipts[i].Type == tx.TypeEthTyped1559 {
+		if receipts[i].Type == tx.TypeEthDynamicFee {
 			total += receipts[i].GasUsed
 		}
 	}
@@ -190,7 +190,7 @@ func CumulativeEthGasUsed(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 func EthLogOffset(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 	var offset uint64
 	for i := range canonicalIdx {
-		if receipts[i].Type == tx.TypeEthTyped1559 && len(receipts[i].Outputs) > 0 {
+		if receipts[i].Type == tx.TypeEthDynamicFee && len(receipts[i].Outputs) > 0 {
 			offset += uint64(len(receipts[i].Outputs[0].Events))
 		}
 	}

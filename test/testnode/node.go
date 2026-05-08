@@ -13,8 +13,6 @@ import (
 
 	"github.com/vechain/thor/v2/rpc"
 
-	"github.com/vechain/thor/v2/thor"
-
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -87,7 +85,7 @@ func (n *node) Start() error {
 	logDB := n.chain.LogDB()
 	forkConfig := n.chain.GetForkConfig()
 	engine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
-	chainID := thor.GetEthChainID(repo.GenesisBlock().Header().ID())
+	chainID := repo.ChainID()
 
 	accounts.New(repo, stater, 40_000_000, 5*1024*1024/2, forkConfig, engine, true).Mount(router, "/accounts")
 	events.New(repo, logDB, 1000, 10).Mount(router, "/logs/event")

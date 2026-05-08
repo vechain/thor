@@ -142,7 +142,7 @@ func StartAPIServer(
 	subs.Mount(router, "/subscriptions")
 
 	// Ethereum JSON-RPC at /rpc — body limit enforced internally by rpc.Server (2 MB via io.LimitReader)
-	chainID := thor.GetEthChainID(repo.GenesisBlock().Header().ID())
+	chainID := repo.ChainID()
 	rpcSrv := rpc.NewServer()
 	rpcchain.New(repo, chainID, config.ClientVersion).Mount(rpcSrv)
 	rpcblocks.New(repo, chainID).Mount(rpcSrv)

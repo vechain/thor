@@ -18,7 +18,6 @@ import (
 
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 
 	"github.com/vechain/thor/v2/rpc"
@@ -38,7 +37,7 @@ func TestDispatch(t *testing.T) {
 	c, err := testchain.NewDefault()
 	require.NoError(t, err)
 
-	chainID := thor.GetEthChainID(c.GenesisBlock().Header().ID())
+	chainID := c.Repo().ChainID()
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1]
 

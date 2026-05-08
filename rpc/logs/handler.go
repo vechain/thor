@@ -192,7 +192,7 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 			return v
 		}
 		t, _, err := bestChain.GetTransaction(txID)
-		ok2 := err == nil && t.Type() == tx.TypeEthTyped1559
+		ok2 := err == nil && t.Type() == tx.TypeEthDynamicFee
 		typeCache[txID] = ok2
 		return ok2
 	}

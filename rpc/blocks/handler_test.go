@@ -17,7 +17,6 @@ import (
 	"github.com/vechain/thor/v2/rpc/blocks"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -33,7 +32,7 @@ func newFixture(t *testing.T) *fixture {
 	c, err := testchain.NewDefault()
 	require.NoError(t, err)
 
-	chainID := thor.GetEthChainID(c.GenesisBlock().Header().ID())
+	chainID := c.Repo().ChainID()
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1]
 
@@ -120,7 +119,7 @@ func TestBlocksHandler(t *testing.T) {
 
 		var txType hexutil.Uint64
 		require.NoError(t, json.Unmarshal(txObjs[0]["type"], &txType))
-		assert.Equal(t, uint64(tx.TypeEthTyped1559), uint64(txType))
+		assert.Equal(t, uint64(tx.TypeEthDynamicFee), uint64(txType))
 
 		// Projected ETH index: the ETH tx is at canonical position 1 but it is
 		// the first (and only) ETH tx, so its projected index is 0.

@@ -157,7 +157,7 @@ func (h *Handler) simulate(args CallArgs, tag string, gasLimit uint64) (*runtime
 		Origin:      origin,
 		GasPrice:    gasPrice,
 		ClauseCount: 1,
-		TxType:      tx.TypeEthTyped1559,
+		Type:        tx.TypeEthDynamicFee,
 	}
 
 	exec, _ := rt.PrepareClause(clause, 0, gasLimit, txCtx)
