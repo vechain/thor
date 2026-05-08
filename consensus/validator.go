@@ -180,10 +180,6 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
 	}
 
-	// Compute the expected Ethereum chain ID once per block — used inside the loop for
-	// EthTyped1559 validation so we don't recompute it on every transaction.
-	ethChainID := thor.GetEthChainID(c.repo.GenesisBlock().Header().ID())
-
 	for _, tr := range txs {
 		origin, err := tr.Origin()
 		if err != nil {
@@ -203,7 +199,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		}
 
 		switch {
-		case tr.ChainTag() != c.repo.ChainTag() && tr.Type() != tx.TypeEthTyped1559:
+		case tr.ChainTag() != c.repo.ChainTag() && tr.Type() != tx.TypeEthDynamicFee:
 			// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
 		case header.Number() < tr.BlockRef().Number():
@@ -213,24 +209,17 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		case !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) && tr.Type() != tx.TypeLegacy:
 			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
 		// Ethereum EIP-1559 transactions require the INTERSTELLAR fork.
-		case !thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && tr.Type() == tx.TypeEthTyped1559:
+		case !thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && tr.Type() == tx.TypeEthDynamicFee:
 			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
-		// After INTERSTELLAR: validate the Ethereum chain ID embedded in the transaction.
-		case thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && tr.Type() == tx.TypeEthTyped1559 && tr.EthChainID() != ethChainID:
-			return consensusError(fmt.Sprintf("tx Ethereum chain ID %d does not match network chain ID %d",
-				tr.EthChainID(), ethChainID))
 		}
 
-		// Enforce low-S signature canonicity for Ethereum transactions at the block level.
-		// The mempool rejects high-S via validateSigScalars at ingestion time, but a
-		// validator that builds blocks directly (bypassing the pool) could include a
-		// high-S tx that crypto.SigToPub (used by Origin() above) silently accepts.
-		// Without this check, two txs with the same payload but opposite S values would
-		// both pass consensus and receive different IDs, breaking indexers and explorers
-		// that assume canonical Ethereum signatures (EIP-2 / go-ethereum behaviour).
-		if tr.Type() == tx.TypeEthTyped1559 {
-			if err := tr.EnforceSignatureLowS(); err != nil {
-				return consensusError("eth tx non-canonical signature: " + err.Error())
+		// Validate the Ethereum chain ID embedded in EIP-1559 transactions.
+		// Pre-INTERSTELLAR eth txs were already rejected by the switch above.
+		if tr.Type() == tx.TypeEthDynamicFee {
+			cid := tr.ChainID()
+			if cid == nil || cid.BitLen() > 64 || cid.Uint64() != c.repo.ChainID() {
+				return consensusError(fmt.Sprintf("tx Ethereum chain ID %v does not match network chain ID %d",
+					cid, c.repo.ChainID()))
 			}
 		}
 

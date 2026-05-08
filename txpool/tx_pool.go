@@ -72,7 +72,6 @@ type TxPool struct {
 	stater       *state.Stater
 	blocklist    blocklist
 	forkConfig   *thor.ForkConfig
-	ethChainID   uint64 // derived once at construction from forkConfig + genesis ID
 	baseFeeCache *baseFeeCache
 
 	executables    atomic.Value
@@ -98,7 +97,6 @@ func New(repo *chain.Repository, stater *state.Stater, options Options, forkConf
 		ctx:          ctx,
 		cancel:       cancel,
 		forkConfig:   forkConfig,
-		ethChainID:   thor.GetEthChainID(repo.GenesisBlock().Header().ID()),
 		baseFeeCache: newBaseFeeCache(forkConfig),
 	}
 
@@ -698,7 +696,7 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return badTxError{err.Error()}
 	}
 
-	if trx.ChainTag() != p.repo.ChainTag() && trx.Type() != tx.TypeEthTyped1559 {
+	if trx.ChainTag() != p.repo.ChainTag() && trx.Type() != tx.TypeEthDynamicFee {
 		// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 		return badTxError{"chain tag mismatch"}
 	}
@@ -707,23 +705,29 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return txRejectedError{"size too large"}
 	}
 
+	// Type whitelist by fork:
+	//   pre-GALACTICA    → TypeLegacy only
+	//   pre-INTERSTELLAR → TypeLegacy + TypeDynamicFee (0x02 needs INTERSTELLAR)
+	//   post-INTERSTELLAR → all three types allowed
 	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
-	if thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) {
-		if trx.Gas() > thor.MaxTxGasLimit {
-			return badTxError{"tx gas limit exceeds the maximum allowed"}
+	switch {
+	case !thor.IsForked(nextBlockNum, p.forkConfig.GALACTICA) && trx.Type() != tx.TypeLegacy:
+		return badTxError{"invalid tx type"}
+	case !thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) && trx.Type() == tx.TypeEthDynamicFee:
+		return badTxError{"invalid tx type"}
+	}
+
+	// Validate that EIP-1559 transactions carry the correct Ethereum chain ID.
+	if trx.Type() == tx.TypeEthDynamicFee {
+		cid := trx.ChainID()
+		if cid == nil || cid.BitLen() > 64 || cid.Uint64() != p.repo.ChainID() {
+			return badTxError{fmt.Sprintf("Ethereum chain ID %v does not match network chain ID %d",
+				cid, p.repo.ChainID())}
 		}
-		// Validate that EIP-1559 transactions carry the correct Ethereum chain ID.
-		if trx.Type() == tx.TypeEthTyped1559 {
-			if trx.EthChainID() != p.ethChainID {
-				return badTxError{fmt.Sprintf("Ethereum chain ID %d does not match network chain ID %d",
-					trx.EthChainID(), p.ethChainID)}
-			}
-		}
-	} else {
-		// Before INTERSTELLAR: Ethereum tx types are not yet supported.
-		if trx.Type() == tx.TypeEthTyped1559 {
-			return badTxError{"Ethereum EIP-1559 transactions are not supported before the INTERSTELLAR fork"}
-		}
+	}
+
+	if thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) && trx.Gas() > thor.MaxTxGasLimit {
+		return badTxError{"tx gas limit exceeds the maximum allowed"}
 	}
 
 	return nil

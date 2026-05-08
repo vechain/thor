@@ -1983,7 +1983,7 @@ func TestValidateTxBasics(t *testing.T) {
 	}
 }
 
-func TestValidateTxBasics_EthTyped1559ChainID(t *testing.T) {
+func TestValidateTxBasics_EthDynamicFeeChainID(t *testing.T) {
 	// INTERSTELLAR = 0 means it activates from block 0; genesis (block 0) is
 	// already past the fork, so nextBlockNum=1 satisfies the >=0 condition.
 	fc := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 0}
@@ -1991,17 +1991,17 @@ func TestValidateTxBasics_EthTyped1559ChainID(t *testing.T) {
 	defer pool.Close()
 
 	// Derive the network chain ID from the genesis — no hardcoded value needed.
-	networkChainID := pool.ethChainID
+	networkChainID := pool.repo.ChainID()
 
 	buildEth1559 := func(chainID uint64) *tx.Transaction {
-		trx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+		return tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
 			ChainID(chainID).
-			GasLimit(21000).
+			Gas(21000).
 			MaxFeePerGas(big.NewInt(10e9)).
 			MaxPriorityFeePerGas(big.NewInt(1e9)).
-			Build(devAccounts[0].PrivateKey)
-		require.NoError(t, err)
-		return trx
+			Clause(tx.NewClause(nil)).
+			Build(),
+			devAccounts[0].PrivateKey)
 	}
 
 	t.Run("correct chain ID accepted", func(t *testing.T) {
@@ -2015,15 +2015,47 @@ func TestValidateTxBasics_EthTyped1559ChainID(t *testing.T) {
 			networkChainID+1, networkChainID)}, err)
 	})
 
-	// Before INTERSTELLAR: TypeEthTyped1559 must be rejected outright regardless of chain ID.
+	// Pre-INTERSTELLAR fork: TypeEthDynamicFee is rejected by the type whitelist
+	// regardless of chain ID — eth tx (0x02) needs INTERSTELLAR to be active.
 	t.Run("rejected before INTERSTELLAR", func(t *testing.T) {
 		preFork := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 1<<32 - 1}
 		prePool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &preFork)
 		defer prePool.Close()
 
-		err := prePool.validateTxBasics(buildEth1559(prePool.ethChainID))
-		assert.Equal(t, badTxError{"Ethereum EIP-1559 transactions are not supported before the INTERSTELLAR fork"}, err)
+		err := prePool.validateTxBasics(buildEth1559(prePool.repo.ChainID()))
+		assert.Equal(t, badTxError{"invalid tx type"}, err)
 	})
+}
+
+// TestValidateTxBasics_TypeForkWhitelist verifies the type-fork rule in
+// validateTxBasics: pre-GALACTICA admits only TypeLegacy; pre-INTERSTELLAR
+// admits TypeLegacy + TypeDynamicFee but not TypeEthDynamicFee.
+func TestValidateTxBasics_TypeForkWhitelist(t *testing.T) {
+	preGalactica := thor.ForkConfig{GALACTICA: 1<<32 - 1, INTERSTELLAR: 1<<32 - 1}
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &preGalactica)
+	defer pool.Close()
+
+	// TypeDynamicFee pre-GALACTICA → rejected
+	dynTx := tx.MustSign(tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(pool.repo.ChainTag()).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxPriorityFeePerGas(big.NewInt(0)).
+		Clause(tx.NewClause(nil)).
+		Build(),
+		devAccounts[0].PrivateKey)
+	err := pool.validateTxBasics(dynTx)
+	assert.Equal(t, badTxError{"invalid tx type"}, err)
+
+	// TypeLegacy pre-GALACTICA → accepted
+	legacyTx := tx.MustSign(tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(pool.repo.ChainTag()).
+		Gas(21000).
+		GasPriceCoef(0).
+		Clause(tx.NewClause(nil)).
+		Build(),
+		devAccounts[0].PrivateKey)
+	assert.NoError(t, pool.validateTxBasics(legacyTx))
 }
 
 func TestTxPool_Local_IncreasingPriority(t *testing.T) {
