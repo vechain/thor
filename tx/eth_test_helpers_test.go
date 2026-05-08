@@ -48,7 +48,8 @@ func defaultEthDynamicFeeBuilder() *ethTxFactory {
 		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		MaxFeePerGas(big.NewInt(10e9)).
 		Gas(21000).
-		Clause(NewClause(&to).WithValue(big.NewInt(1e9)))}
+		To(&to).
+		Value(big.NewInt(1e9))}
 }
 
 // MaxPriorityFeePerGas overrides the priority fee on the underlying builder.
@@ -63,19 +64,15 @@ func (f *ethTxFactory) ChainID(id uint64) *ethTxFactory {
 	return f
 }
 
-// To replaces the single clause's To address (use nil for contract creation).
+// To overrides the recipient (nil for contract creation).
 func (f *ethTxFactory) To(to *thor.Address) *ethTxFactory {
-	f.b = withSingleClauseOverride(f.b, func(c *Clause) *Clause {
-		return NewClause(to).WithValue(c.Value()).WithData(c.Data())
-	})
+	f.b.To(to)
 	return f
 }
 
-// Data replaces the single clause's call data.
+// Data overrides the call data.
 func (f *ethTxFactory) Data(d []byte) *ethTxFactory {
-	f.b = withSingleClauseOverride(f.b, func(c *Clause) *Clause {
-		return NewClause(c.To()).WithValue(c.Value()).WithData(d)
-	})
+	f.b.Data(d)
 	return f
 }
 
@@ -91,15 +88,4 @@ func (f *ethTxFactory) BuildRaw(key *ecdsa.PrivateKey) ([]byte, error) {
 // Build signs and returns the *Transaction.
 func (f *ethTxFactory) Build(key *ecdsa.PrivateKey) (*Transaction, error) {
 	return Sign(f.b.Build(), key)
-}
-
-// withSingleClauseOverride replaces clauses[0] with the result of f.
-// Helper for ethTxFactory's To/Data overrides; assumes the builder has a
-// single clause already (the eth tx wire format has exactly one).
-func withSingleClauseOverride(b *Builder, f func(*Clause) *Clause) *Builder {
-	if len(b.clauses) != 1 {
-		panic("eth tx test builder must have exactly one clause")
-	}
-	b.clauses[0] = f(b.clauses[0])
-	return b
 }

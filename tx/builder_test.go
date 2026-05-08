@@ -140,7 +140,8 @@ func TestBuilder_Build_EthDynamicFee(t *testing.T) {
 		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		MaxFeePerGas(big.NewInt(10e9)).
 		Gas(21000).
-		Clause(NewClause(&to).WithValue(big.NewInt(42))).
+		To(&to).
+		Value(big.NewInt(42)).
 		Build()
 
 	require.NotNil(t, trx)
@@ -157,30 +158,21 @@ func TestBuilder_Build_EthDynamicFee(t *testing.T) {
 	assert.Equal(t, big.NewInt(42), body.Value)
 }
 
-// TestBuilder_Build_EthDynamicFee_PanicsWithoutSingleClause verifies the eth tx
-// envelope's single-clause invariant. Building a TypeEthDynamicFee with zero
-// or multiple clauses is a programming error since the wire format only
-// encodes one (to, value, data) tuple.
-func TestBuilder_Build_EthDynamicFee_PanicsWithoutSingleClause(t *testing.T) {
-	t.Run("zero_clauses", func(t *testing.T) {
-		assert.Panics(t, func() {
-			NewBuilder(TypeEthDynamicFee).
-				ChainID(1).
-				MaxFeePerGas(big.NewInt(1)).
-				Gas(21000).
-				Build()
-		})
-	})
+// TestBuilder_Build_EthDynamicFee_NoFields verifies that a TypeEthDynamicFee
+// can be built without To/Value/Data — this is the contract-creation, zero-value
+// shape and is a valid 0x02 envelope.
+func TestBuilder_Build_EthDynamicFee_NoFields(t *testing.T) {
+	trx := NewBuilder(TypeEthDynamicFee).
+		ChainID(1).
+		MaxFeePerGas(big.NewInt(1)).
+		MaxPriorityFeePerGas(big.NewInt(0)).
+		Gas(21000).
+		Build()
 
-	t.Run("two_clauses", func(t *testing.T) {
-		assert.Panics(t, func() {
-			NewBuilder(TypeEthDynamicFee).
-				ChainID(1).
-				MaxFeePerGas(big.NewInt(1)).
-				Gas(21000).
-				Clause(NewClause(nil)).
-				Clause(NewClause(nil)).
-				Build()
-		})
-	})
+	require.NotNil(t, trx)
+	body, ok := trx.body.(*ethDynamicFeeTransaction)
+	require.True(t, ok)
+	assert.Nil(t, body.To)
+	assert.Equal(t, big.NewInt(0), body.Value)
+	assert.Empty(t, body.Data)
 }

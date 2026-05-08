@@ -74,7 +74,8 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 		MaxPriorityFeePerGas(feeForPriority).
 		MaxFeePerGas(feeAboveBase).
 		Gas(21000).
-		Clause(tx.NewClause(&recipient).WithValue(transferPerTx)).
+		To(&recipient).
+		Value(transferPerTx).
 		Build(),
 		sender.PrivateKey)
 

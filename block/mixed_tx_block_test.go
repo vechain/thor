@@ -85,7 +85,8 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		MaxFeePerGas(big.NewInt(20e9)).
 		Gas(21000).
-		Clause(tx.NewClause(&addrA).WithValue(value)).
+		To(&addrA).
+		Value(value).
 		Build(),
 		mixedBlockTestKey)
 

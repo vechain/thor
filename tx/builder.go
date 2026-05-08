@@ -16,7 +16,6 @@ import (
 type Builder struct {
 	txType               Type
 	chainTag             byte
-	chainID              uint64 // EIP-155 chain id, used by TypeEthDynamicFee only
 	clauses              []*Clause
 	gasPriceCoef         uint8
 	maxFeePerGas         *big.Int
@@ -27,6 +26,14 @@ type Builder struct {
 	nonce                uint64
 	dependsOn            *thor.Bytes32
 	reserved             reserved
+
+	// TypeEthDynamicFee-only fields. The 0x02 wire envelope carries an
+	// EIP-155 chain id and one (To, Value, Data) tuple; set them via
+	// ChainID/To/Value/Data. Ignored by VeChain-native types.
+	chainID uint64
+	to      *thor.Address
+	value   *big.Int
+	data    []byte
 }
 
 func NewBuilder(txType Type) *Builder {
@@ -36,13 +43,6 @@ func NewBuilder(txType Type) *Builder {
 // ChainTag set chain tag.
 func (b *Builder) ChainTag(tag byte) *Builder {
 	b.chainTag = tag
-	return b
-}
-
-// ChainID sets the EIP-155 chain id used by TypeEthDynamicFee transactions.
-// Ignored for VeChain-native types (which use ChainTag).
-func (b *Builder) ChainID(id uint64) *Builder {
-	b.chainID = id
 	return b
 }
 
@@ -118,6 +118,47 @@ func (b *Builder) Features(feat Features) *Builder {
 	return b
 }
 
+// ChainID sets the EIP-155 chain id for TypeEthDynamicFee.
+// Ignored by VeChain-native types (which use ChainTag).
+func (b *Builder) ChainID(id uint64) *Builder {
+	b.chainID = id
+	return b
+}
+
+// To sets the recipient for TypeEthDynamicFee. nil means contract creation.
+// Ignored by VeChain-native types (which use Clause).
+func (b *Builder) To(to *thor.Address) *Builder {
+	if to == nil {
+		b.to = nil
+	} else {
+		cpy := *to
+		b.to = &cpy
+	}
+	return b
+}
+
+// Value sets the call value for TypeEthDynamicFee.
+// Ignored by VeChain-native types (which use Clause).
+func (b *Builder) Value(v *big.Int) *Builder {
+	if v == nil {
+		b.value = nil
+	} else {
+		b.value = new(big.Int).Set(v)
+	}
+	return b
+}
+
+// Data sets the call data for TypeEthDynamicFee.
+// Ignored by VeChain-native types (which use Clause).
+func (b *Builder) Data(d []byte) *Builder {
+	if d == nil {
+		b.data = nil
+	} else {
+		b.data = append([]byte(nil), d...)
+	}
+	return b
+}
+
 // Build builds a tx object.
 func (b *Builder) Build() *Transaction {
 	switch b.txType {
@@ -136,21 +177,17 @@ func (b *Builder) Build() *Transaction {
 			},
 		}
 	case TypeEthDynamicFee:
-		// 0x02 is single-clause at the wire level; pull (to, value, data) from
-		// the first clause. Any extra clauses are a programming error since the
-		// envelope can't represent them.
-		if len(b.clauses) != 1 {
-			panic("tx: TypeEthDynamicFee requires exactly one clause")
-		}
-		c := b.clauses[0]
+		// 0x02 envelope carries one (To, Value, Data) tuple, set via
+		// Builder.To/Value/Data. Clauses (if any) are silently ignored,
+		// matching how ChainID is ignored on VeChain-native types.
 		var to *thor.Address
-		if dst := c.To(); dst != nil {
-			cpy := *dst
+		if b.to != nil {
+			cpy := *b.to
 			to = &cpy
 		}
 		value := new(big.Int)
-		if v := c.Value(); v != nil {
-			value.Set(v)
+		if b.value != nil {
+			value.Set(b.value)
 		}
 		maxFee := new(big.Int)
 		if b.maxFeePerGas != nil {
@@ -169,7 +206,7 @@ func (b *Builder) Build() *Transaction {
 				GasLimit:             b.gas,
 				To:                   to,
 				Value:                value,
-				Data:                 append([]byte(nil), c.Data()...),
+				Data:                 append([]byte(nil), b.data...),
 				YParity:              0,
 				R:                    new(big.Int),
 				S:                    new(big.Int),

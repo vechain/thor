@@ -1999,7 +1999,6 @@ func TestValidateTxBasics_EthDynamicFeeChainID(t *testing.T) {
 			Gas(21000).
 			MaxFeePerGas(big.NewInt(10e9)).
 			MaxPriorityFeePerGas(big.NewInt(1e9)).
-			Clause(tx.NewClause(nil)).
 			Build(),
 			devAccounts[0].PrivateKey)
 	}

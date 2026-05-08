@@ -219,7 +219,8 @@ func TestRepository_EthReceiptColdRead(t *testing.T) {
 		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		MaxFeePerGas(big.NewInt(10e9)).
 		Gas(21000).
-		Clause(tx.NewClause(to).WithValue(big.NewInt(0))).
+		To(to).
+		Value(big.NewInt(0)).
 		Build(),
 		ethRepoTestKey)
 
