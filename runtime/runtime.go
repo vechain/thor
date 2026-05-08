@@ -114,17 +114,12 @@ func New(
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
 	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
-		// Pre-INTERSTELLAR: preserve the original genesis-derived value so that
-		// historical block re-execution returns the same result as when the block
-		// was first processed.
-		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
-
+		// Pre-INTERSTELLAR: full 32-byte genesis id (legacy). Post-INTERSTELLAR:
+		// 64-bit chain id (EIP-155) shared by all tx types.
 		if thor.IsForked(ctx.Number, forkConfig.INTERSTELLAR) {
-			// From INTERSTELLAR onward: use the configured Ethereum chain ID.
-			// All tx types (VeChain-native and Ethereum) see the same CHAINID opcode
-			// value, which is required for EIP-712 consistency — block.chainid inside
-			// contracts must match the chain ID wallets embed in off-chain signatures.
-			currentChainConfig.ChainID = new(big.Int).SetUint64(thor.GetEthChainID(chain.GenesisID()))
+			currentChainConfig.ChainID = new(big.Int).SetUint64(chain.ChainID())
+		} else {
+			currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
 		}
 	}
 
@@ -238,8 +233,8 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			return common.Hash(id)
 		},
 		NewContractAddress: func(_ *vm.EVM, caller common.Address, counter uint32) common.Address {
-			switch txCtx.TxType {
-			case tx.TypeEthTyped1559:
+			switch txCtx.Type {
+			case tx.TypeEthDynamicFee:
 				// Ethereum formula: keccak256(rlp([caller, nonce])). counter is unused here —
 				// nonces play the equivalent role for Ethereum txs. With nonce tracking stubbed,
 				// stateDB.GetNonce always returns 0; sequential creates from the same caller

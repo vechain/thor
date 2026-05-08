@@ -145,7 +145,7 @@ func TestEVMFunction(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
 
-				expectedChainID := thor.GetEthChainID(ctx.chain.GenesisID())
+				expectedChainID := ctx.chain.ChainID()
 				expectedBI := new(big.Int).SetUint64(expectedChainID)
 				assert.Equal(t, thor.BytesToBytes32(expectedBI.Bytes()), thor.BytesToBytes32(out.Data))
 
@@ -1044,7 +1044,7 @@ func TestCall(t *testing.T) {
 
 // TestCreateAddressDerivation verifies that the NewContractAddress hook dispatches to the
 // correct formula based on the transaction type:
-//   - TypeEthTyped1559 → crypto.CreateAddress(caller, nonce)
+//   - TypeEthDynamicFee → crypto.CreateAddress(caller, nonce)
 //   - VeChain types (TypeLegacy, TypeDynamicFee) → thor.CreateContractAddress(txID, clauseIndex, counter)
 func TestCreateAddressDerivation(t *testing.T) {
 	db := muxdb.NewMem()
@@ -1075,8 +1075,8 @@ func TestCreateAddressDerivation(t *testing.T) {
 			want:   thor.CreateContractAddress(txID, 0, 0),
 		},
 		{
-			name:   "EthTyped1559 uses crypto.CreateAddress",
-			txType: tx.TypeEthTyped1559,
+			name:   "EthDynamicFee uses crypto.CreateAddress",
+			txType: tx.TypeEthDynamicFee,
 			want:   thor.Address(crypto.CreateAddress(common.Address(origin), 0)),
 		},
 	}
@@ -1086,7 +1086,7 @@ func TestCreateAddressDerivation(t *testing.T) {
 			txCtx := &xenv.TransactionContext{
 				ID:     txID,
 				Origin: origin,
-				TxType: tt.txType,
+				Type:   tt.txType,
 			}
 			exec, _ := runtime.New(ch, st, &xenv.BlockContext{}, forkFromStart).
 				PrepareClause(tx.NewClause(nil).WithData(initcode), 0, math.MaxUint64, txCtx)

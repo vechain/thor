@@ -42,7 +42,7 @@ type TransactionContext struct {
 	BlockRef    tx.BlockRef
 	Expiration  uint32
 	ClauseCount uint32
-	TxType      tx.Type
+	Type        tx.Type
 }
 
 // Environment an env to execute native method.

@@ -25,7 +25,7 @@ import (
 
 // TestMintBlock_MixedTxFamilies mints a single block containing:
 //  1. A VeChain TypeLegacy tx (VET transfer)
-//  2. An Ethereum EthTyped1559 tx  (VET transfer)
+//  2. An Ethereum EthDynamicFee tx  (VET transfer)
 //
 // Assertions:
 //   - MintBlock succeeds (packer adoption, EVM execution, consensus validation all pass).
@@ -37,8 +37,8 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 	chain, err := NewWithFork(&fc, 180)
 	require.NoError(t, err)
 
-	// Derive the Ethereum chain ID from the genesis block — no hardcoded value needed.
-	ethChainID := thor.GetEthChainID(chain.GenesisBlock().Header().ID())
+	// Derive the Ethereum chain ID from the repository (cached at construction).
+	ethChainID := chain.Repo().ChainID()
 
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1].Address
@@ -67,17 +67,16 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 		Build()
 	vcTx = tx.MustSign(vcTx, sender.PrivateKey)
 
-	// --- 2. Ethereum EthTyped1559 tx ---
-	eth1559Tx, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+	// --- 2. Ethereum EthDynamicFee tx ---
+	eth1559Tx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(ethChainID).
 		Nonce(1).
 		MaxPriorityFeePerGas(feeForPriority).
 		MaxFeePerGas(feeAboveBase).
-		GasLimit(21000).
-		To(&recipient).
-		Value(transferPerTx).
-		Build(sender.PrivateKey)
-	require.NoError(t, err)
+		Gas(21000).
+		Clause(tx.NewClause(&recipient).WithValue(transferPerTx)).
+		Build(),
+		sender.PrivateKey)
 
 	// Mint a block containing both transactions.
 	require.NoError(t, chain.MintBlock(vcTx, eth1559Tx))

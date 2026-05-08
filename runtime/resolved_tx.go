@@ -76,6 +76,10 @@ func ResolveTransaction(trx *tx.Transaction) (*ResolvedTransaction, error) {
 		if trx.MaxFeePerGas().Cmp(trx.MaxPriorityFeePerGas()) < 0 {
 			return nil, errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
 		}
+
+		if trx.Type() == tx.TypeEthDynamicFee && len(trx.AccessList()) > 0 {
+			return nil, errors.New("access list not supported")
+		}
 	}
 
 	return &ResolvedTransaction{
@@ -156,7 +160,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseF
 	}
 
 	// Fee sponsorship (Prototype credit plan) applies to all tx types via CommonTo().
-	// For a TypeEthTyped1559 tx, CommonTo() returns the single To field when non-nil
+	// For a TypeEthDynamicFee tx, CommonTo() returns the single To field when non-nil
 	// (contract calls); nil (contract creation) skips this path.
 	//
 	// Payer priority:
@@ -256,6 +260,6 @@ func (r *ResolvedTransaction) ToContext(
 		BlockRef:    r.tx.BlockRef(),
 		Expiration:  r.tx.Expiration(),
 		ClauseCount: uint32(len(r.Clauses)),
-		TxType:      r.tx.Type(),
+		Type:        r.tx.Type(),
 	}, nil
 }

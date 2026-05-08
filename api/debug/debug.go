@@ -487,7 +487,7 @@ func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.Transacti
 		gas = d.callGasLimit
 	}
 
-	// TODO: TxType is not set here. If this path replays an Ethereum tx (TypeEthTyped1559),
+	// TODO: Type is not set here. If this path replays an Ethereum tx (TypeEthDynamicFee),
 	// CREATE address derivation will fall through to the VeChain formula
 	// (keccak256(txID, clauseIndex, counter)) instead of the Ethereum formula
 	// (keccak256(rlp([caller, nonce]))). Fix once debug API can identify tx type from the block.

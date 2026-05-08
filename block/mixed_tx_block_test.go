@@ -6,7 +6,7 @@
 package block
 
 // mixed_tx_block_test.go — verifies that a block body containing transactions from all
-// three type families (TypeLegacy, TypeDynamicFee, TypeEthTyped1559) encodes
+// three type families (TypeLegacy, TypeDynamicFee, TypeEthDynamicFee) encodes
 // and decodes correctly via RLP, with every transaction preserving its type, identity
 // (including ethTxHash for Ethereum types), gas, and signer address.
 
@@ -79,16 +79,15 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 	)
 
 	// --- Ethereum EIP-1559 transaction ---
-	eth1559, err := tx.NewEthBuilder(tx.TypeEthTyped1559).
+	eth1559 := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(mixedBlockChainID).
 		Nonce(20).
 		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		MaxFeePerGas(big.NewInt(20e9)).
-		GasLimit(21000).
-		To(&addrA).
-		Value(value).
-		Build(mixedBlockTestKey)
-	require.NoError(t, err)
+		Gas(21000).
+		Clause(tx.NewClause(&addrA).WithValue(value)).
+		Build(),
+		mixedBlockTestKey)
 
 	// Build the block.
 	blk := new(Builder).
@@ -127,8 +126,8 @@ func TestMixedTxFamilyBlock_Roundtrip(t *testing.T) {
 	assert.Equal(t, vcDynFee.Gas(), got[1].Gas())
 	mixedBlockAssertOrigin(t, vcDynFee, got[1])
 
-	// 2: TypeEthTyped1559
-	assert.Equal(t, tx.TypeEthTyped1559, got[2].Type())
+	// 2: TypeEthDynamicFee
+	assert.Equal(t, tx.TypeEthDynamicFee, got[2].Type())
 	assert.Equal(t, eth1559.ID(), got[2].ID(), "ethTxHash must survive block body round-trip")
 	assert.Equal(t, eth1559.Gas(), got[2].Gas())
 	mixedBlockAssertOrigin(t, eth1559, got[2])
