@@ -88,7 +88,7 @@ func TestEmptyRootHash(t *testing.T) {
 }
 
 func TestMarshalAndUnmarshalBinary(t *testing.T) {
-	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthTyped1559} {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthDynamicFee} {
 		originalReceipt := getMockReceipt(txType)
 
 		data, err := originalReceipt.MarshalBinary()
@@ -103,7 +103,7 @@ func TestMarshalAndUnmarshalBinary(t *testing.T) {
 }
 
 func TestEncodeAndDecodeReceipt(t *testing.T) {
-	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthTyped1559} {
+	for _, txType := range []Type{TypeLegacy, TypeDynamicFee, TypeEthDynamicFee} {
 		originalReceipt := getMockReceipt(txType)
 		receiptBuf := new(bytes.Buffer)
 		// Encoding
@@ -210,7 +210,7 @@ func TestReceiptRootHashRoundtrip(t *testing.T) {
 	originals := Receipts{
 		ptr(getMockReceipt(TypeLegacy)),
 		ptr(getMockReceipt(TypeDynamicFee)),
-		ptr(getMockReceipt(TypeEthTyped1559)),
+		ptr(getMockReceipt(TypeEthDynamicFee)),
 	}
 	originalRoot := originals.RootHash()
 

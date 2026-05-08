@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -129,4 +130,57 @@ func TestBuilder_Build_DynamicFee(t *testing.T) {
 	tx := builder.Build()
 	assert.NotNil(t, tx)
 	assert.IsType(t, &dynamicFeeTransaction{}, tx.body)
+}
+
+func TestBuilder_Build_EthDynamicFee(t *testing.T) {
+	to := thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+	trx := NewBuilder(TypeEthDynamicFee).
+		ChainID(1337).
+		Nonce(7).
+		MaxPriorityFeePerGas(big.NewInt(1e9)).
+		MaxFeePerGas(big.NewInt(10e9)).
+		Gas(21000).
+		Clause(NewClause(&to).WithValue(big.NewInt(42))).
+		Build()
+
+	require.NotNil(t, trx)
+	body, ok := trx.body.(*ethDynamicFeeTransaction)
+	require.True(t, ok, "body must be *ethDynamicFeeTransaction")
+
+	assert.Equal(t, big.NewInt(1337), body.ChainID)
+	assert.Equal(t, uint64(7), body.Nonce)
+	assert.Equal(t, big.NewInt(1e9), body.MaxPriorityFeePerGas)
+	assert.Equal(t, big.NewInt(10e9), body.MaxFeePerGas)
+	assert.Equal(t, uint64(21000), body.GasLimit)
+	require.NotNil(t, body.To)
+	assert.Equal(t, to, *body.To)
+	assert.Equal(t, big.NewInt(42), body.Value)
+}
+
+// TestBuilder_Build_EthDynamicFee_PanicsWithoutSingleClause verifies the eth tx
+// envelope's single-clause invariant. Building a TypeEthDynamicFee with zero
+// or multiple clauses is a programming error since the wire format only
+// encodes one (to, value, data) tuple.
+func TestBuilder_Build_EthDynamicFee_PanicsWithoutSingleClause(t *testing.T) {
+	t.Run("zero_clauses", func(t *testing.T) {
+		assert.Panics(t, func() {
+			NewBuilder(TypeEthDynamicFee).
+				ChainID(1).
+				MaxFeePerGas(big.NewInt(1)).
+				Gas(21000).
+				Build()
+		})
+	})
+
+	t.Run("two_clauses", func(t *testing.T) {
+		assert.Panics(t, func() {
+			NewBuilder(TypeEthDynamicFee).
+				ChainID(1).
+				MaxFeePerGas(big.NewInt(1)).
+				Gas(21000).
+				Clause(NewClause(nil)).
+				Clause(NewClause(nil)).
+				Build()
+		})
+	})
 }

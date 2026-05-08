@@ -32,17 +32,74 @@ var ethTestKey = func() *ecdsa.PrivateKey {
 
 var testSenderAddress = thor.Address(crypto.PubkeyToAddress(ethTestKey.PublicKey))
 
-// defaultEth1559Builder returns a pre-configured EthBuilder for an EIP-1559 typed
-// transaction using ethTestKey and testChainID.  Callers can chain additional setters to
-// override individual fields before calling BuildRaw(ethTestKey) or Build(ethTestKey).
-func defaultEth1559Builder() *EthBuilder {
+// defaultEthDynamicFeeBuilder returns a pre-configured *Builder for an EIP-1559 typed
+// transaction using ethTestKey and testChainID. Tests chain `.With…()` helpers
+// (or thor Builder setters) and call `.SignRaw()` / `.Sign()` for the wire
+// bytes / *Transaction respectively.
+type ethTxFactory struct {
+	b *Builder
+}
+
+func defaultEthDynamicFeeBuilder() *ethTxFactory {
 	to := thor.MustParseAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
-	return NewEthBuilder(TypeEthTyped1559).
+	return &ethTxFactory{b: NewBuilder(TypeEthDynamicFee).
 		ChainID(testChainID).
 		Nonce(3).
 		MaxPriorityFeePerGas(big.NewInt(1e9)).
 		MaxFeePerGas(big.NewInt(10e9)).
-		GasLimit(21000).
-		To(&to).
-		Value(big.NewInt(1e9))
+		Gas(21000).
+		Clause(NewClause(&to).WithValue(big.NewInt(1e9)))}
+}
+
+// MaxPriorityFeePerGas overrides the priority fee on the underlying builder.
+func (f *ethTxFactory) MaxPriorityFeePerGas(v *big.Int) *ethTxFactory {
+	f.b.MaxPriorityFeePerGas(v)
+	return f
+}
+
+// ChainID overrides the chain id on the underlying builder.
+func (f *ethTxFactory) ChainID(id uint64) *ethTxFactory {
+	f.b.ChainID(id)
+	return f
+}
+
+// To replaces the single clause's To address (use nil for contract creation).
+func (f *ethTxFactory) To(to *thor.Address) *ethTxFactory {
+	f.b = withSingleClauseOverride(f.b, func(c *Clause) *Clause {
+		return NewClause(to).WithValue(c.Value()).WithData(c.Data())
+	})
+	return f
+}
+
+// Data replaces the single clause's call data.
+func (f *ethTxFactory) Data(d []byte) *ethTxFactory {
+	f.b = withSingleClauseOverride(f.b, func(c *Clause) *Clause {
+		return NewClause(c.To()).WithValue(c.Value()).WithData(d)
+	})
+	return f
+}
+
+// BuildRaw signs and returns canonical wire bytes for the eth tx.
+func (f *ethTxFactory) BuildRaw(key *ecdsa.PrivateKey) ([]byte, error) {
+	signed, err := Sign(f.b.Build(), key)
+	if err != nil {
+		return nil, err
+	}
+	return signed.MarshalBinary()
+}
+
+// Build signs and returns the *Transaction.
+func (f *ethTxFactory) Build(key *ecdsa.PrivateKey) (*Transaction, error) {
+	return Sign(f.b.Build(), key)
+}
+
+// withSingleClauseOverride replaces clauses[0] with the result of f.
+// Helper for ethTxFactory's To/Data overrides; assumes the builder has a
+// single clause already (the eth tx wire format has exactly one).
+func withSingleClauseOverride(b *Builder, f func(*Clause) *Clause) *Builder {
+	if len(b.clauses) != 1 {
+		panic("eth tx test builder must have exactly one clause")
+	}
+	b.clauses[0] = f(b.clauses[0])
+	return b
 }

@@ -54,7 +54,7 @@ const (
 
 	// EthereumTx type constants.
 
-	TypeEthTyped1559 = Type(0x02)
+	TypeEthDynamicFee = Type(0x02)
 )
 
 const (
@@ -105,11 +105,6 @@ type txData interface {
 	signature() []byte
 	setSignature(sig []byte)
 	signingFields() []any // signingFields returns the fields that are used to compute the signing hash.
-
-	// ethTxHash returns the Ethereum wire hash (Keccak256 of raw wire bytes) for Ethereum
-	// tx types, and the zero value for VeChain-native tx types.
-	// See Transaction.ID() for why this is used as the tx identifier for Ethereum txs.
-	ethTxHash() thor.Bytes32
 
 	// Encode/decode encodes/decodes the tx body into binary format, the format is defined by the tx data itself.
 	// This allows different tx types to have different encoding formats. The coding function are designed only
@@ -184,8 +179,8 @@ func (t *Transaction) decodeTyped(b []byte) (txData, error) {
 		var body dynamicFeeTransaction
 		err := body.decode(b[1:])
 		return &body, err
-	case TypeEthTyped1559:
-		var body eth1559TxData
+	case TypeEthDynamicFee:
+		var body ethDynamicFeeTransaction
 		err := body.decode(b[1:])
 		return &body, err
 	default:
@@ -287,46 +282,44 @@ func (t *Transaction) IsExpired(blockNum uint32) bool {
 
 // ID returns id of tx.
 // For VeChain-native txs: ID = Blake2b(signingHash, origin).
-// For Ethereum txs: ID = Keccak256(rawEthBytes) — the standard ethTxHash.
-// It returns zero Bytes32 if origin not available.
+// ID returns id of tx. Zero on origin recovery failure.
+//   - native (0x00 / 0x51): Blake2b(SigningHash, Origin)
+//   - 0x02 ETH:             Keccak256(0x02 || RLP(body)) — eth canonical txhash,
+//                           equal to Hash() so both cache slots get filled in one keccak.
 func (t *Transaction) ID() (id thor.Bytes32) {
 	if cached := t.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.id.Store(id) }()
 
-	// Ethereum transactions identify themselves by their wire hash.
-	if hash := t.body.ethTxHash(); !hash.IsZero() {
-		return hash
-	}
-
 	origin, err := t.Origin()
 	if err != nil {
 		return
+	}
+	if t.Type() == TypeEthDynamicFee {
+		return t.Hash()
 	}
 	return thor.Blake2b(t.SigningHash().Bytes(), origin[:])
 }
 
 // Hash returns hash of tx.
-// Unlike ID, it's the hash of RLP encoded tx.
+//   - 0x00 legacy:    Blake2b(RLP(body))
+//   - 0x51 dynamicFee: Blake2b(0x51 || RLP(body))
+//   - 0x02 ETH:       Keccak256(0x02 || RLP(body)) — eth canonical txhash
 func (t *Transaction) Hash() (hash thor.Bytes32) {
 	if cached := t.cache.hash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.hash.Store(hash) }()
 
-	// Ethereum tx types have unexported fields; rlp.Encode would silently produce an
-	// empty encoding and every Ethereum tx would share the same Hash(). Use ethTxHash
-	// (Keccak256 of raw wire bytes) instead — same as ID() — so pool deduplication works.
-	if h := t.body.ethTxHash(); !h.IsZero() {
-		return h
-	}
-
-	// Legacy tx don't have type prefix.
-	if t.Type() == TypeLegacy {
+	switch t.Type() {
+	case TypeLegacy:
 		return rlpHash(t.body)
+	case TypeEthDynamicFee:
+		return keccakPrefixedRlpHash(t.Type(), t.body)
+	default:
+		return prefixedRlpHash(t.Type(), t.body)
 	}
-	return prefixedRlpHash(t.Type(), t.body)
 }
 
 // SigningHash returns hash of tx excludes signature.
@@ -336,17 +329,12 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { t.cache.signingHash.Store(hash) }()
 
-	// Ethereum tx types use Keccak256-based signing hashes. We type-assert to the
-	// concrete type so computeEthSigningHash() can use rlp:"nil"-tagged structs,
-	// which is required to correctly encode a nil To field (contract creation).
-	if body, ok := t.body.(*eth1559TxData); ok {
-		// EIP-1559: Keccak256(0x02 || RLP([chainId, nonce, maxPriorityFeePerGas, ...]))
-		return body.computeEthSigningHash()
-	}
-
-	// VeChain-native tx types use Blake2b.
 	if t.Type() == TypeLegacy {
 		return rlpHash(t.body.signingFields())
+	}
+	if t.Type() == TypeEthDynamicFee {
+		// EIP-1559: Keccak256(0x02 || RLP([chainId, nonce, ...accessList])).
+		return keccakPrefixedRlpHash(t.Type(), t.body.signingFields())
 	}
 	// Include type prefix for typed VeChain tx.
 	return prefixedRlpHash(t.Type(), t.body.signingFields())
@@ -393,7 +381,7 @@ func (t *Transaction) Features() Features {
 
 // Origin extract address of tx originator from signature.
 func (t *Transaction) Origin() (thor.Address, error) {
-	if err := t.validateSignatureLength(); err != nil {
+	if err := t.validateSignatureFormat(); err != nil {
 		return thor.Address{}, err
 	}
 
@@ -418,7 +406,7 @@ func (t *Transaction) DelegatorSigningHash(origin thor.Address) (hash thor.Bytes
 
 // Delegator returns delegator address who would like to pay for gas fee.
 func (t *Transaction) Delegator() (*thor.Address, error) {
-	if err := t.validateSignatureLength(); err != nil {
+	if err := t.validateSignatureFormat(); err != nil {
 		return nil, err
 	}
 
@@ -498,7 +486,8 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
 	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
-	return math.BigMin(t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas().Add(t.body.maxPriorityFeePerGas(), baseFee))
+	priorityPlusBase := new(big.Int).Add(t.body.maxPriorityFeePerGas(), baseFee)
+	return math.BigMin(t.body.maxFeePerGas(), priorityPlusBase)
 }
 
 // EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction. If maxFeePerGas is less than
@@ -679,7 +668,24 @@ func (t *Transaction) String() string {
 		`, s, t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas())
 }
 
-func (t *Transaction) validateSignatureLength() error {
+// validateSignatureFormat checks that t.body.signature() conforms to the
+// type's required byte-level shape. For native types (0x00 / 0x51) that's a
+// length check (65 or 130 depending on VIP-191 delegation). For 0x02 it's
+// length 65 plus the EIP-2 low-S constraint (S ∈ [1, N/2]) — without it,
+// flipping S yields a second valid keccak256(signed-binary), splitting the
+// chain index. Native types skip low-S here because Transaction.ID() is
+// keccak(SigningHash || origin) and is invariant under S-flip.
+func (t *Transaction) validateSignatureFormat() error {
+	if t.Type() == TypeEthDynamicFee {
+		sig := t.body.signature()
+		if len(sig) != 65 {
+			return secp256k1.ErrInvalidSignatureLen
+		}
+		if bytes.Compare(sig[32:64], secp256k1HalfN[:]) > 0 {
+			return ErrHighSInSignature
+		}
+		return nil
+	}
 	expectedSigLen := 65
 	if t.Features().IsDelegated() {
 		expectedSigLen *= 2
@@ -691,19 +697,33 @@ func (t *Transaction) validateSignatureLength() error {
 	return nil
 }
 
-// EthChainID returns the Ethereum chain ID embedded in an EIP-1559 transaction.
-// Returns 0 for VeChain-native transaction types, which use chainTag for replay protection.
-func (t *Transaction) EthChainID() uint64 {
-	if d, ok := t.body.(*eth1559TxData); ok {
-		return d.chainID
+// ChainID returns the Ethereum chain ID embedded in an EIP-1559 transaction
+// as a defensive copy. Returns nil for VeChain-native transaction types,
+// which use ChainTag for replay protection. Callers are responsible for
+// range checks (BitLen <= 64) and equality comparison against the network
+// chain id.
+func (t *Transaction) ChainID() *big.Int {
+	if d, ok := t.body.(*ethDynamicFeeTransaction); ok && d.ChainID != nil {
+		return new(big.Int).Set(d.ChainID)
 	}
-	return 0
+	return nil
+}
+
+// AccessList returns the EIP-2930 access list for type 0x02 transactions, or
+// nil for other types. Non-empty access lists are rejected at the runtime
+// resolution stage (see runtime.ResolveTransaction) until EIP-2930 warm/cold
+// gas accounting is implemented.
+func (t *Transaction) AccessList() []AccessListEntry {
+	if d, ok := t.body.(*ethDynamicFeeTransaction); ok {
+		return d.AccessList
+	}
+	return nil
 }
 
 // EnforceSignatureLowS checks that the S value in the signature are <= secp256k1 N/2.
 // This is not required for consensus, but a protection against signature malleability.
 func (t *Transaction) EnforceSignatureLowS() error {
-	if err := t.validateSignatureLength(); err != nil {
+	if err := t.validateSignatureFormat(); err != nil {
 		return err
 	}
 
