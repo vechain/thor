@@ -39,30 +39,6 @@ func TestNoFork(t *testing.T) {
 	}
 }
 
-// TestGetEthChainID verifies the GetEthChainID formula.
-func TestGetEthChainID(t *testing.T) {
-	// The chain ID is always uint16BE(genesisID[30:32]).
-	// Low byte equals the ChainTag by construction.
-	tests := []struct {
-		name string
-		b30  byte
-		b31  byte
-		want uint64
-	}{
-		{"arbitrary", 0xab, 0xcd, 0xabcd},
-		{"mainnet bytes", 0x1b, 0x4a, 6986},  // mainnet genesisID[30:31] = 0x1b4a
-		{"testnet bytes", 0xb1, 0x27, 45351}, // testnet genesisID[30:31] = 0xb127
-	}
-	for _, tt := range tests {
-		var genesis Bytes32
-		genesis[30] = tt.b30
-		genesis[31] = tt.b31
-		if got := GetEthChainID(genesis); got != tt.want {
-			t.Errorf("%s: GetEthChainID got %d, want %d", tt.name, got, tt.want)
-		}
-	}
-}
-
 // TestGetForkConfig checks retrieval of fork configurations for known genesis IDs.
 func TestGetForkConfig(t *testing.T) {
 	// You'll need to adjust these based on the actual genesis IDs and expected configurations

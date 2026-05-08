@@ -6,7 +6,6 @@
 package thor
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math"
 	"strings"
@@ -106,18 +105,6 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 // Only works for the well-known networks.Custom network will get nil.
 func GetForkConfig(genesisID Bytes32) *ForkConfig {
 	return forkConfigs[genesisID]
-}
-
-// GetEthChainID returns the Ethereum-compatible chain ID for the given genesis ID.
-// It is used for the CHAINID opcode and EIP-1559 transaction validation from the
-// INTERSTELLAR fork onward.
-//
-// The chain ID is derived from genesisID[30:32] (the last two bytes of the genesis
-// block ID) interpreted as a big-endian uint16. By construction, genesisID[31] is the
-// VeChain ChainTag, so the chain ID's low byte always equals the ChainTag. This gives
-// every network a unique, compact chain ID that can be looked up on ChainList.
-func GetEthChainID(genesisID Bytes32) uint64 {
-	return uint64(binary.BigEndian.Uint16(genesisID[30:32]))
 }
 
 // IsForked returns true if the given block number is already forked comparing to the given fork number.
