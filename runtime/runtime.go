@@ -390,7 +390,7 @@ func (rt *Runtime) PrepareClause(
 	txCtx *xenv.TransactionContext,
 ) (exec func() (output *Output, interrupted bool, err error), interrupt func()) {
 	var (
-		stateDB       = statedb.New(rt.state)
+		stateDB       = statedb.New(rt.state, txCtx.Type)
 		evm           = rt.newEVM(stateDB, clauseIndex, txCtx)
 		data          []byte
 		leftOverGas   uint64
@@ -566,6 +566,25 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 
 			if err := returnGas(leftOverGas); err != nil {
 				return nil, err
+			}
+
+			// EIP-2: nonce is always consumed for EthereumTx, even if the tx reverts.
+			// For CALL txs the EVM never touches the nonce, so we always increment here.
+			// For CREATE txs that succeeded the EVM already incremented the nonce via
+			// stateDB.SetNonce before the inner snapshot; that survived the tx.
+			// For CREATE txs that reverted, rt.state.RevertTo(checkpoint) undid the EVM's
+			// increment, so we must re-apply it here.
+			if trx.Type() == tx.TypeEthDynamicFee {
+				isCreate := resolvedTx.Clauses[0].IsCreatingContract()
+				if !isCreate || reverted {
+					nonce, err := rt.state.GetNonce(txCtx.Origin)
+					if err != nil {
+						return nil, err
+					}
+					if err := rt.state.SetNonce(txCtx.Origin, nonce+1); err != nil {
+						return nil, err
+					}
+				}
 			}
 
 			if !thor.IsForked(rt.ctx.Number, rt.forkConfig.GALACTICA) {

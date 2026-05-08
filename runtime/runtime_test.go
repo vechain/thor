@@ -1099,6 +1099,126 @@ func TestCreateAddressDerivation(t *testing.T) {
 	}
 }
 
+// TestEthTxNonce verifies the nonce increment in Finalize for all four EthereumTx paths
+// plus the VeChain isolation guard.
+//
+// The nonce source differs per path:
+//
+//	CALL success        → Finalize (!isCreate = true)
+//	CALL reverted       → Finalize (!isCreate || , EIP-2: nonce consumed evenreverted on revert)
+//	CREATE success      → EVM's create() before snapshot; Finalize condition is false and skips
+//	CREATE reverted     → rt.state.RevertTo undoes EVM's write; Finalize re-applies
+//	TypeLegacy CREATE   → txType guard in StateDB prevents any Ethereum nonce write
+func TestEthTxNonce(t *testing.T) {
+	db := muxdb.NewMem()
+	g, _ := genesis.NewDevnet()
+	stater := state.NewStater(db)
+	b0, _, _, err := g.Build(stater)
+	assert.Nil(t, err)
+	repo, _ := chain.NewRepository(db, b0)
+
+	ethChainID := repo.ChainID()
+	senderKey := genesis.DevAccounts()[0].PrivateKey
+	sender := genesis.DevAccounts()[0].Address
+
+	ethBlkCtx := &xenv.BlockContext{
+		BaseFee:  big.NewInt(thor.InitialBaseFee),
+		GasLimit: b0.Header().GasLimit(),
+	}
+
+	newRT := func(blkCtx *xenv.BlockContext) (*runtime.Runtime, *state.State) {
+		st := stater.NewState(trie.Root{Hash: b0.Header().StateRoot()})
+		return runtime.New(repo.NewChain(b0.Header().ID()), st, blkCtx, forkFromStart), st
+	}
+
+	buildEthTx := func(nonce uint64, to *thor.Address, data []byte) *tx.Transaction {
+		unsigned := tx.NewBuilder(tx.TypeEthDynamicFee).
+			ChainID(ethChainID).
+			Nonce(nonce).
+			MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
+			MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
+			Gas(300_000).
+			To(to).
+			Data(data).
+			Build()
+		trx, err := tx.Sign(unsigned, senderKey)
+		assert.Nil(t, err)
+		return trx
+	}
+
+	// PUSH1 0 PUSH1 0 RETURN — deploys an empty contract without reverting.
+	successInitcode := []byte{0x60, 0x00, 0x60, 0x00, 0xf3}
+	// PUSH1 0 PUSH1 0 REVERT — reverts whether used as initcode or as deployed code.
+	revertCode := []byte{0x60, 0x00, 0x60, 0x00, 0xfd}
+
+	t.Run("call success: Finalize always increments nonce", func(t *testing.T) {
+		rt, st := newRT(ethBlkCtx)
+		recipient := genesis.DevAccounts()[1].Address
+		receipt, err := rt.ExecuteTransaction(buildEthTx(0, &recipient, nil))
+		assert.Nil(t, err)
+		assert.False(t, receipt.Reverted)
+		nonce, err := st.GetNonce(sender)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(1), nonce)
+	})
+
+	t.Run("call reverted: nonce consumed even on revert", func(t *testing.T) {
+		rt, st := newRT(ethBlkCtx)
+		// Pre-load a contract whose runtime code always reverts.
+		contractAddr := thor.BytesToAddress([]byte("reverter"))
+		assert.Nil(t, st.SetCode(contractAddr, revertCode))
+		receipt, err := rt.ExecuteTransaction(buildEthTx(0, &contractAddr, nil))
+		assert.Nil(t, err)
+		assert.True(t, receipt.Reverted)
+		nonce, err := st.GetNonce(sender)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(1), nonce)
+	})
+
+	t.Run("create success: EVM increments nonce before snapshot; Finalize skips", func(t *testing.T) {
+		rt, st := newRT(ethBlkCtx)
+		receipt, err := rt.ExecuteTransaction(buildEthTx(0, nil, successInitcode))
+		assert.Nil(t, err)
+		assert.False(t, receipt.Reverted)
+		nonce, err := st.GetNonce(sender)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(1), nonce)
+	})
+
+	t.Run("create reverted: rt.state.RevertTo undoes EVM's increment; Finalize re-applies", func(t *testing.T) {
+		rt, st := newRT(ethBlkCtx)
+		receipt, err := rt.ExecuteTransaction(buildEthTx(0, nil, revertCode))
+		assert.Nil(t, err)
+		assert.True(t, receipt.Reverted)
+		nonce, err := st.GetNonce(sender)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(1), nonce)
+	})
+
+	t.Run("vechain legacy create: Ethereum nonce domain untouched", func(t *testing.T) {
+		// BaseFee=0 (not nil): avoids nil-deref in EffectivePriorityFeePerGas (GALACTICA
+		// reward path) while keeping effectiveGasPrice >= baseFee trivially true for TypeLegacy.
+		vcBlkCtx := &xenv.BlockContext{BaseFee: new(big.Int), GasLimit: b0.Header().GasLimit()}
+		rt, st := newRT(vcBlkCtx)
+		vcSender := genesis.DevAccounts()[1]
+		vcTx := tx.NewBuilder(tx.TypeLegacy).
+			ChainTag(repo.ChainTag()).
+			BlockRef(tx.NewBlockRef(0)).
+			Expiration(100).
+			GasPriceCoef(255).
+			Gas(300_000).
+			Clause(tx.NewClause(nil).WithData(successInitcode)).
+			Build()
+		vcTx = tx.MustSign(vcTx, vcSender.PrivateKey)
+		receipt, err := rt.ExecuteTransaction(vcTx)
+		assert.Nil(t, err)
+		assert.False(t, receipt.Reverted)
+		nonce, err := st.GetNonce(vcSender.Address)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(0), nonce)
+	})
+}
+
 func getMockTx(repo *chain.Repository, txType tx.Type, t *testing.T) *tx.Transaction {
 	blockRef := tx.NewBlockRef(0)
 	chainTag := repo.ChainTag()
