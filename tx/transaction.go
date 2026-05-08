@@ -486,8 +486,11 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 
 	// For dynamic fee transactions, effective gas price take block base fee into account.
 	// Which is MIN(maxFeePerGas, maxPriorityFeePerGas + baseFee)
-	priorityPlusBase := new(big.Int).Add(t.body.maxPriorityFeePerGas(), baseFee)
-	return math.BigMin(t.body.maxFeePerGas(), priorityPlusBase)
+
+	return math.BigMin(t.body.maxFeePerGas(), new(big.Int).Add(
+		t.body.maxPriorityFeePerGas(),
+		baseFee,
+	))
 }
 
 // EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction. If maxFeePerGas is less than
@@ -674,7 +677,7 @@ func (t *Transaction) String() string {
 // length 65 plus the EIP-2 low-S constraint (S ∈ [1, N/2]) — without it,
 // flipping S yields a second valid keccak256(signed-binary), splitting the
 // chain index. Native types skip low-S here because Transaction.ID() is
-// keccak(SigningHash || origin) and is invariant under S-flip.
+// blake2b(SigningHash || origin) and is invariant under S-flip.
 func (t *Transaction) validateSignatureFormat() error {
 	if t.Type() == TypeEthDynamicFee {
 		sig := t.body.signature()

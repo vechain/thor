@@ -726,6 +726,7 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		}
 	}
 
+	// TODO add a comment with the EIP that activates this filter
 	if thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) && trx.Gas() > thor.MaxTxGasLimit {
 		return badTxError{"tx gas limit exceeds the maximum allowed"}
 	}
