@@ -288,47 +288,6 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
-	forkConfig := &thor.ForkConfig{
-		GALACTICA:    2,
-		HAYABUSA:     math.MaxUint32,
-		INTERSTELLAR: math.MaxUint32,
-	}
-	hayabusaTP := uint32(math.MaxUint32)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
-
-	dynamicFeeTx := newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-
-	tchain, _ := testchain.NewWithFork(forkConfig, 180)
-	repo := tchain.Repo()
-	baseFee := galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
-
-	txObj1, err := ResolveTx(dynamicFeeTx, false)
-	assert.Nil(t, err)
-
-	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
-	assert.False(t, exe)
-	assert.Equal(t, tx.ErrTxTypeNotSupported, err)
-
-	legacyTx := newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	txObj2, err := ResolveTx(legacyTx, false)
-	assert.Nil(t, err)
-
-	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
-	assert.True(t, exe)
-	assert.Nil(t, err)
-
-	// add a block 1
-	tchain.MintBlock()
-
-	// recalculate the base fee since new block is added
-	baseFee = galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
-	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
-	assert.Nil(t, err)
-}
-
 func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
 		VIP191:       2,

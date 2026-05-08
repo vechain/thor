@@ -77,6 +77,12 @@ func (c *Chain) GenesisID() thor.Bytes32 {
 	return c.repo.GenesisBlock().Header().ID()
 }
 
+// ChainID returns the Ethereum-compatible chain id (uint16 derived from
+// genesis id). Convenience wrapper around Repository.ChainID.
+func (c *Chain) ChainID() uint64 {
+	return c.repo.ChainID()
+}
+
 // HeadID returns the head block id.
 func (c *Chain) HeadID() thor.Bytes32 {
 	return c.headID

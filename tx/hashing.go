@@ -34,3 +34,12 @@ func prefixedRlpHash(prefix byte, x any) thor.Bytes32 {
 		rlp.Encode(w, x)
 	})
 }
+
+// keccakPrefixedRlpHash computes Keccak256(prefix || RLP(x)).
+// Used for EIP-2718 typed transaction hashing (e.g., 0x02 prefix for EIP-1559).
+func keccakPrefixedRlpHash(prefix byte, x any) thor.Bytes32 {
+	return thor.EthKeccak256Fn(func(w io.Writer) {
+		w.Write([]byte{prefix})
+		rlp.Encode(w, x)
+	})
+}

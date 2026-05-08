@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"math/rand/v2"
 	"os"
@@ -695,7 +696,8 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return badTxError{err.Error()}
 	}
 
-	if trx.ChainTag() != p.repo.ChainTag() {
+	if trx.ChainTag() != p.repo.ChainTag() && trx.Type() != tx.TypeEthDynamicFee {
+		// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 		return badTxError{"chain tag mismatch"}
 	}
 
@@ -703,11 +705,30 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 		return txRejectedError{"size too large"}
 	}
 
+	// Type whitelist by fork:
+	//   pre-GALACTICA    → TypeLegacy only
+	//   pre-INTERSTELLAR → TypeLegacy + TypeDynamicFee (0x02 needs INTERSTELLAR)
+	//   post-INTERSTELLAR → all three types allowed
 	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
-	if nextBlockNum >= p.forkConfig.INTERSTELLAR {
-		if trx.Gas() > thor.MaxTxGasLimit {
-			return badTxError{"tx gas limit exceeds the maximum allowed"}
+	switch {
+	case !thor.IsForked(nextBlockNum, p.forkConfig.GALACTICA) && trx.Type() != tx.TypeLegacy:
+		return badTxError{"invalid tx type"}
+	case !thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) && trx.Type() == tx.TypeEthDynamicFee:
+		return badTxError{"invalid tx type"}
+	}
+
+	// Validate that EIP-1559 transactions carry the correct Ethereum chain ID.
+	if trx.Type() == tx.TypeEthDynamicFee {
+		cid := trx.ChainID()
+		if cid == nil || cid.BitLen() > 64 || cid.Uint64() != p.repo.ChainID() {
+			return badTxError{fmt.Sprintf("Ethereum chain ID %v does not match network chain ID %d",
+				cid, p.repo.ChainID())}
 		}
+	}
+
+	// TODO add a comment with the EIP that activates this filter
+	if thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) && trx.Gas() > thor.MaxTxGasLimit {
+		return badTxError{"tx gas limit exceeds the maximum allowed"}
 	}
 
 	return nil

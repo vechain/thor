@@ -76,6 +76,10 @@ func ResolveTransaction(trx *tx.Transaction) (*ResolvedTransaction, error) {
 		if trx.MaxFeePerGas().Cmp(trx.MaxPriorityFeePerGas()) < 0 {
 			return nil, errors.New("maxFeePerGas is less than maxPriorityFeePerGas")
 		}
+
+		if trx.Type() == tx.TypeEthDynamicFee && len(trx.AccessList()) > 0 {
+			return nil, errors.New("access list not supported")
+		}
 	}
 
 	return &ResolvedTransaction{
@@ -155,6 +159,16 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64, baseF
 		return nil, nil, thor.Address{}, nil, nil, errors.New("insufficient energy")
 	}
 
+	// Fee sponsorship (Prototype credit plan) applies to all tx types via CommonTo().
+	// For a TypeEthDynamicFee tx, CommonTo() returns the single To field when non-nil
+	// (contract calls); nil (contract creation) skips this path.
+	//
+	// Payer priority:
+	//   1. Active sponsor (IsSponsor + sufficient energy)
+	//   2. CommonTo contract's own energy balance
+	//   3. Fallback: origin (below)
+	//
+	// Non-user or insufficient-credit senders fall straight through to the origin fallback.
 	commonTo := r.CommonTo()
 	if commonTo != nil {
 		binding := builtin.Prototype.Native(state).Bind(*commonTo)
@@ -246,5 +260,6 @@ func (r *ResolvedTransaction) ToContext(
 		BlockRef:    r.tx.BlockRef(),
 		Expiration:  r.tx.Expiration(),
 		ClauseCount: uint32(len(r.Clauses)),
+		Type:        r.tx.Type(),
 	}, nil
 }

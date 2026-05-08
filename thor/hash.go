@@ -92,3 +92,15 @@ func Keccak256(data ...[]byte) (h Bytes32) {
 	keccak256Pool.Put(hasher)
 	return
 }
+
+// EthKeccak256Fn computes keccak256 checksum for the provided writer function.
+// It mirrors Blake2bFn but uses keccak256 for Ethereum-compatible hashing.
+func EthKeccak256Fn(fn func(w io.Writer)) (h Bytes32) {
+	hasher := keccak256Pool.Get().(*keccak256)
+	fn(hasher.state)
+	hasher.state.Read(hasher.b32[:])
+	h = hasher.b32
+	hasher.state.Reset()
+	keccak256Pool.Put(hasher)
+	return
+}
