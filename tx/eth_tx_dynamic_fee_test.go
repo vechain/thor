@@ -115,7 +115,7 @@ func TestEthDynamicFeeTx_ToWireEncoding(t *testing.T) {
 
 			// Strip 0x02 type prefix; decode the rlpBody through the canonical struct.
 			require.NotEmpty(t, rawBytes)
-			require.Equal(t, byte(TypeEthDynamicFee), rawBytes[0])
+			require.Equal(t, TypeEthDynamicFee, rawBytes[0])
 
 			var canonical canonicalEthTxStruct
 			require.NoError(t, rlp.DecodeBytes(rawBytes[1:], &canonical),

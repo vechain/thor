@@ -285,7 +285,7 @@ func (t *Transaction) IsExpired(blockNum uint32) bool {
 // ID returns id of tx. Zero on origin recovery failure.
 //   - native (0x00 / 0x51): Blake2b(SigningHash, Origin)
 //   - 0x02 ETH:             Keccak256(0x02 || RLP(body)) — eth canonical txhash,
-//                           equal to Hash() so both cache slots get filled in one keccak.
+//     equal to Hash() so both cache slots get filled in one keccak.
 func (t *Transaction) ID() (id thor.Bytes32) {
 	if cached := t.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)
