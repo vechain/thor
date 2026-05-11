@@ -187,14 +187,9 @@ func (s *stateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
-// GetNonce reads the on-state nonce.
-func (s *stateDB) GetNonce(addr common.Address) uint64 {
-	n, err := s.state.GetNonce(thor.Address(addr))
-	if err != nil {
-		panic(err)
-	}
-	return n
-}
+// GetNonce returns 0 in V1; VeChain-native txs never observe a real nonce.
+// V2 overrides to read from state.
+func (s *stateDB) GetNonce(_ common.Address) uint64 { return 0 }
 
 // SetNonce is a no-op in V1; only V2 writes nonces.
 func (s *stateDB) SetNonce(_ common.Address, _ uint64) {}

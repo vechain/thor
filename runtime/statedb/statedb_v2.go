@@ -12,7 +12,8 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// stateDBV2 inherits V1 and overrides SetNonce to persist the nonce.
+// stateDBV2 inherits V1 and overrides Get/SetNonce to read/persist the
+// on-state account nonce for eth tx execution.
 type stateDBV2 struct {
 	*stateDB
 }
@@ -20,6 +21,15 @@ type stateDBV2 struct {
 // NewV2 creates a V2 statedb.
 func NewV2(state *state.State) StateDB {
 	return &stateDBV2{stateDB: newV1(state)}
+}
+
+// GetNonce reads the on-state nonce, shadowing V1's zero stub.
+func (s *stateDBV2) GetNonce(addr common.Address) uint64 {
+	n, err := s.state.GetNonce(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	return n
 }
 
 // SetNonce persists the nonce, shadowing V1's no-op.

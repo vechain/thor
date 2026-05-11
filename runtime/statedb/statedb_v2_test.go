@@ -18,16 +18,14 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-// TestStateDBV2_SetNonceWrites confirms V2.SetNonce persists to underlying
-// state, while V1.SetNonce remains a no-op.
+// TestStateDBV2_SetNonceWrites confirms V2 Get/SetNonce hit the underlying
+// state, while V1 Get/SetNonce are both stubs that don't touch state.
 func TestStateDBV2_SetNonceWrites(t *testing.T) {
 	st := State.New(muxdb.NewMem(), trie.Root{})
 	addr := common.Address(thor.BytesToAddress([]byte("acc1")))
 
 	v2 := NewV2(st)
 	v2.SetNonce(addr, 7)
-
-	// Read via V2's inherited GetNonce (from V1).
 	assert.Equal(t, uint64(7), v2.GetNonce(addr), "V2 SetNonce must persist")
 
 	// Verify directly on state.
@@ -35,10 +33,14 @@ func TestStateDBV2_SetNonceWrites(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(7), n)
 
-	// V1 SetNonce remains a no-op.
+	// V1 doesn't observe nonces: GetNonce always returns 0, SetNonce is a
+	// no-op (state nonce stays at 7 from V2's write).
 	v1 := New(st)
+	assert.Equal(t, uint64(0), v1.GetNonce(addr), "V1 GetNonce must always return 0")
 	v1.SetNonce(addr, 99)
-	assert.Equal(t, uint64(7), v1.GetNonce(addr), "V1 SetNonce must not change state")
+	n, err = st.GetNonce(thor.Address(addr))
+	assert.Nil(t, err)
+	assert.Equal(t, uint64(7), n, "V1 SetNonce must not change state")
 }
 
 // TestStateDBV2_InheritsV1 confirms V2 embeds V1 — non-overridden methods
