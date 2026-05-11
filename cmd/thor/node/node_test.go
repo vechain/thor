@@ -77,6 +77,14 @@ func (m *mockTxPool) Get(id thor.Bytes32) *tx.Transaction {
 	return nil
 }
 
+func (m *mockTxPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
+	return nil
+}
+
+func (m *mockTxPool) PoolNonce(addr thor.Address) uint64 {
+	return 0
+}
+
 func (m *mockTxPool) StrictlyAdd(newTx *tx.Transaction) error {
 	return nil
 }

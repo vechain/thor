@@ -101,6 +101,12 @@ func (m *txObjectMap) GetByID(id thor.Bytes32) *TxObject {
 	return m.mapByID[id]
 }
 
+func (m *txObjectMap) GetByHash(hash thor.Bytes32) *TxObject {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.mapByHash[hash]
+}
+
 func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()

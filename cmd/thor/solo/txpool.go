@@ -45,6 +45,22 @@ func (o *OnDemandTxPool) Get(txID thor.Bytes32) *tx.Transaction {
 	return o.txsByID[txID]
 }
 
+func (o *OnDemandTxPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	for _, trx := range o.txsByID {
+		if trx.Hash() == hash {
+			return trx
+		}
+	}
+	return nil
+}
+
+func (o *OnDemandTxPool) PoolNonce(_ thor.Address) uint64 {
+	return 0
+}
+
 func (o *OnDemandTxPool) Add(newTx *tx.Transaction) error {
 	return o.AddLocal(newTx)
 }

@@ -790,3 +790,7 @@ func dataGas(data []byte) (uint64, error) {
 	}
 	return gas, nil
 }
+
+func (t *Transaction) IsEthereumTx() bool {
+	return t.Type() == TypeEthTyped1559
+}
