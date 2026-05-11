@@ -239,7 +239,6 @@ func (s *State) SetMaster(addr thor.Address, master thor.Address) error {
 	return nil
 }
 
-
 // GetStorage returns storage value for the given address and key.
 func (s *State) GetStorage(addr thor.Address, key thor.Bytes32) (thor.Bytes32, error) {
 	raw, err := s.GetRawStorage(addr, key)
