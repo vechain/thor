@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/rpc/accounts"
 	"github.com/vechain/thor/v2/rpc/testutil"
@@ -86,5 +87,15 @@ func TestAccountsHandler(t *testing.T) {
 		var nonce hexutil.Uint64
 		require.NoError(t, json.Unmarshal(result, &nonce))
 		assert.Equal(t, uint64(0), uint64(nonce))
+	})
+
+	t.Run("eth_getCode_contract", func(t *testing.T) {
+		// The Energy built-in is a deployed contract — its code must be non-empty.
+		result := testutil.Call(t, ts, "eth_getCode", []any{
+			builtin.Energy.Address.String(), "latest",
+		})
+		var code hexutil.Bytes
+		require.NoError(t, json.Unmarshal(result, &code))
+		assert.NotEmpty(t, code, "Energy built-in contract should have non-empty code")
 	})
 }

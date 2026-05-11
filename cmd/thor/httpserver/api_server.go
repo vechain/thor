@@ -43,6 +43,7 @@ import (
 	rpcblocks "github.com/vechain/thor/v2/rpc/blocks"
 	rpcchain "github.com/vechain/thor/v2/rpc/chain"
 	rpcfees "github.com/vechain/thor/v2/rpc/fees"
+	rpcfilters "github.com/vechain/thor/v2/rpc/filters"
 	rpclogs "github.com/vechain/thor/v2/rpc/logs"
 	rpcsimulation "github.com/vechain/thor/v2/rpc/simulation"
 	rpctransactions "github.com/vechain/thor/v2/rpc/transactions"
@@ -151,6 +152,8 @@ func StartAPIServer(
 	rpclogs.New(repo, logDB, config.BacktraceLimit, config.LogsLimit).Mount(rpcSrv)
 	rpcfees.New(repo, config.BacktraceLimit).Mount(rpcSrv)
 	rpcsimulation.New(repo, stater, forkConfig, config.CallGasLimit).Mount(rpcSrv)
+	rpcFilters := rpcfilters.New(repo, txPool, config.BacktraceLimit)
+	rpcFilters.Mount(rpcSrv)
 	router.PathPrefix("/rpc").Handler(rpcSrv)
 
 	if config.PprofOn {
@@ -193,6 +196,7 @@ func StartAPIServer(
 	return "http://" + listener.Addr().String() + "/", func() {
 		srv.Close()
 		subs.Close()
+		rpcFilters.Close()
 		goes.Wait()
 	}, nil
 }

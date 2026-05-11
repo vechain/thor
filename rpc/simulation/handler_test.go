@@ -7,13 +7,16 @@ package simulation_test
 
 import (
 	"encoding/json"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/rpc"
 	"github.com/vechain/thor/v2/rpc/simulation"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -95,5 +98,45 @@ func TestSimulationHandler(t *testing.T) {
 		var gasEst hexutil.Uint64
 		require.NoError(t, json.Unmarshal(result, &gasEst))
 		assert.Equal(t, uint64(21000), uint64(gasEst))
+	})
+
+	t.Run("eth_call_revert", func(t *testing.T) {
+		// Call Energy.transfer from a zero-VTHO address — the balance check reverts.
+		transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+		require.True(t, ok)
+		callData, err := transferMethod.EncodeInput(
+			genesis.DevAccounts()[1].Address, big.NewInt(1),
+		)
+		require.NoError(t, err)
+
+		rpcErr := testutil.CallExpectError(t, ts, "eth_call", []any{
+			map[string]any{
+				"from": "0x000000000000000000000000000000000000000a", // no VTHO
+				"to":   builtin.Energy.Address.String(),
+				"data": hexutil.Encode(callData),
+			},
+			"latest",
+		})
+		assert.Equal(t, rpc.CodeServerError, rpcErr.Code)
+		assert.Equal(t, "execution reverted", rpcErr.Message)
+	})
+
+	t.Run("eth_estimateGas_revert", func(t *testing.T) {
+		// Same call via eth_estimateGas — must also return a server error.
+		transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+		require.True(t, ok)
+		callData, err := transferMethod.EncodeInput(
+			genesis.DevAccounts()[1].Address, big.NewInt(1),
+		)
+		require.NoError(t, err)
+
+		rpcErr := testutil.CallExpectError(t, ts, "eth_estimateGas", []any{
+			map[string]any{
+				"from": "0x000000000000000000000000000000000000000a",
+				"to":   builtin.Energy.Address.String(),
+				"data": hexutil.Encode(callData),
+			},
+		})
+		assert.Equal(t, rpc.CodeServerError, rpcErr.Code)
 	})
 }

@@ -33,6 +33,7 @@ import (
 	rpcblocks "github.com/vechain/thor/v2/rpc/blocks"
 	rpcchain "github.com/vechain/thor/v2/rpc/chain"
 	rpcfees "github.com/vechain/thor/v2/rpc/fees"
+	rpcfilters "github.com/vechain/thor/v2/rpc/filters"
 	rpclogs "github.com/vechain/thor/v2/rpc/logs"
 	rpcsimulation "github.com/vechain/thor/v2/rpc/simulation"
 	rpctransactions "github.com/vechain/thor/v2/rpc/transactions"
@@ -116,11 +117,14 @@ func (n *node) Start() error {
 	rpclogs.New(repo, logDB, 100, 1000).Mount(rpcSrv)
 	rpcfees.New(repo, 100).Mount(rpcSrv)
 	rpcsimulation.New(repo, stater, &testchain.DefaultForkConfig, 1_000_000).Mount(rpcSrv)
+	rpcFilters := rpcfilters.New(repo, n.txPool, 100)
+	rpcFilters.Mount(rpcSrv)
 	router.PathPrefix("/rpc").Handler(rpcSrv)
 
 	n.apiServer = httptest.NewServer(router)
 	n.apiServerCloser = func() {
 		subs.Close()
+		rpcFilters.Close()
 		n.apiServer.Close()
 	}
 	return nil

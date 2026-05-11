@@ -8,6 +8,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -295,6 +296,15 @@ func EthLogOffset(receipts tx.Receipts, canonicalIdx uint64) uint64 {
 		}
 	}
 	return offset
+}
+
+// LogFilter mirrors the Ethereum eth_getLogs / eth_newFilter parameter object.
+type LogFilter struct {
+	FromBlock *string           `json:"fromBlock"`
+	ToBlock   *string           `json:"toBlock"`
+	Address   json.RawMessage   `json:"address"`   // string | []string | null
+	Topics    []json.RawMessage `json:"topics"`    // each: null | string | []string
+	BlockHash *string           `json:"blockHash"` // EIP-234: mutually exclusive with from/toBlock
 }
 
 // ParseBytes32Compact parses a 0x-prefixed hex string of variable length into a

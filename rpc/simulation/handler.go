@@ -101,6 +101,9 @@ func (h *Handler) ethEstimateGas(req rpc.Request) rpc.Response {
 		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
 	}
 
+	// Edge case: if the call uses exactly gasLimit (leftover == 0), this returns
+	// callGasLimit + intrinsic — the absolute maximum. The estimate may still be too
+	// low for the actual tx, but returning the ceiling is acceptable.
 	return rpc.OkResponse(req.ID, hexutil.Uint64(evmGasUsed+intrinsic))
 }
 

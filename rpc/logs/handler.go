@@ -39,17 +39,8 @@ func (h *Handler) Mount(s *rpc.Server) {
 	s.Register("eth_getLogs", h.ethGetLogs)
 }
 
-// LogFilter mirrors the Ethereum eth_getLogs filter parameter.
-type LogFilter struct {
-	FromBlock *string           `json:"fromBlock"`
-	ToBlock   *string           `json:"toBlock"`
-	Address   json.RawMessage   `json:"address"`   // string | []string | null
-	Topics    []json.RawMessage `json:"topics"`    // each: null | string | []string
-	BlockHash *string           `json:"blockHash"` // EIP-234: mutually exclusive with from/toBlock
-}
-
 func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
-	var params []LogFilter
+	var params []rpc.LogFilter
 	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [filterObject]")
 	}
@@ -146,14 +137,14 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		var single string
 		var multi []string
 		if err := json.Unmarshal(raw, &single); err == nil {
-			h32, err := thor.ParseBytes32(single)
+			h32, err := rpc.ParseBytes32Compact(single)
 			if err != nil {
 				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid topic")
 			}
 			h32Copy := h32
 			topicSlot[i] = &h32Copy
 		} else if err := json.Unmarshal(raw, &multi); err == nil && len(multi) > 0 {
-			h32, err := thor.ParseBytes32(multi[0])
+			h32, err := rpc.ParseBytes32Compact(multi[0])
 			if err != nil {
 				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid topic")
 			}
