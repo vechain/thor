@@ -422,7 +422,12 @@ func (rt *Runtime) PrepareClause(
 			contractAddr = (*thor.Address)(&caddr)
 		} else {
 			if txCtx.Type == tx.TypeEthDynamicFee {
-				stateDB.SetNonce(common.Address(txCtx.Origin), stateDB.GetNonce(common.Address(txCtx.Origin))+1)
+				nonce := stateDB.GetNonce(common.Address(txCtx.Origin))
+				if nonce+1 < nonce {
+					return nil, false, errors.New("nonce has max value")
+				}
+
+				stateDB.SetNonce(common.Address(txCtx.Origin), nonce+1)
 			}
 			data, leftOverGas, vmErr = evm.Call(vm.AccountRef(txCtx.Origin), common.Address(*clause.To()), clause.Data(), gas, clause.Value())
 		}
