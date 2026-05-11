@@ -116,6 +116,20 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, nil
 	}
 
+	// Eth tx requires linear nonce growth: equal → executable, greater → queued, lower → reject.
+	if o.Type() == tx.TypeEthDynamicFee {
+		accNonce, err := state.GetNonce(o.resolved.Origin)
+		if err != nil {
+			return false, err
+		}
+		if o.Nonce() < accNonce {
+			return false, errors.New("nonce too low")
+		}
+		if o.Nonce() > accNonce {
+			return false, nil
+		}
+	}
+
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 

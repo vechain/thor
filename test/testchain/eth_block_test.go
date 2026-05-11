@@ -70,7 +70,7 @@ func TestMintBlock_MixedTxFamilies(t *testing.T) {
 	// --- 2. Ethereum EthDynamicFee tx ---
 	eth1559Tx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(ethChainID).
-		Nonce(1).
+		Nonce(0).
 		MaxPriorityFeePerGas(feeForPriority).
 		MaxFeePerGas(feeAboveBase).
 		Gas(21000).
