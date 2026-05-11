@@ -175,6 +175,14 @@ func (rt *Runtime) Chain() *chain.Chain         { return rt.chain }
 func (rt *Runtime) State() *state.State         { return rt.state }
 func (rt *Runtime) Context() *xenv.BlockContext { return rt.ctx }
 
+// newStateDB returns V2 for 0x02 txs, V1 otherwise.
+func (rt *Runtime) newStateDB(txCtx *xenv.TransactionContext) statedb.StateDB {
+	if txCtx.Type == tx.TypeEthDynamicFee {
+		return statedb.NewV2(rt.state)
+	}
+	return statedb.New(rt.state)
+}
+
 // SetVMConfig config VM.
 // Returns this runtime.
 func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
@@ -182,7 +190,7 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 	return rt
 }
 
-func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
+func (rt *Runtime) newEVM(stateDB statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
 	var (
 		lastNonNativeCallGas uint64
 		baseFee              *big.Int
@@ -233,16 +241,10 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			return common.Hash(id)
 		},
 		NewContractAddress: func(_ *vm.EVM, caller common.Address, counter uint32) common.Address {
-			switch txCtx.Type {
-			case tx.TypeEthDynamicFee:
-				// Ethereum formula: keccak256(rlp([caller, nonce])). counter is unused here —
-				// nonces play the equivalent role for Ethereum txs. With nonce tracking stubbed,
-				// stateDB.GetNonce always returns 0; sequential creates from the same caller
-				// will collide on the second call until real nonce tracking is implemented.
+			if txCtx.Type == tx.TypeEthDynamicFee {
 				return crypto.CreateAddress(caller, stateDB.GetNonce(caller))
-			default:
-				return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
 			}
+			return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
 		},
 		InterceptContractCall: func(evm *vm.EVM, contract *vm.Contract, readonly bool) ([]byte, error, bool) {
 			if evm.Depth() < 2 {
@@ -390,7 +392,7 @@ func (rt *Runtime) PrepareClause(
 	txCtx *xenv.TransactionContext,
 ) (exec func() (output *Output, interrupted bool, err error), interrupt func()) {
 	var (
-		stateDB       = statedb.New(rt.state, txCtx.Type)
+		stateDB       = rt.newStateDB(txCtx)
 		evm           = rt.newEVM(stateDB, clauseIndex, txCtx)
 		data          []byte
 		leftOverGas   uint64
@@ -419,6 +421,9 @@ func (rt *Runtime) PrepareClause(
 			data, caddr, leftOverGas, vmErr = evm.Create(vm.AccountRef(txCtx.Origin), clause.Data(), gas, clause.Value())
 			contractAddr = (*thor.Address)(&caddr)
 		} else {
+			if txCtx.Type == tx.TypeEthDynamicFee {
+				stateDB.SetNonce(common.Address(txCtx.Origin), stateDB.GetNonce(common.Address(txCtx.Origin))+1)
+			}
 			data, leftOverGas, vmErr = evm.Call(vm.AccountRef(txCtx.Origin), common.Address(*clause.To()), clause.Data(), gas, clause.Value())
 		}
 
@@ -533,9 +538,12 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 				leftOverGas += refund
 
 				if output.VMErr != nil {
-					// vm exception here
-					// revert all executed clauses
-					rt.state.RevertTo(checkpoint)
+					if txCtx.Type != tx.TypeEthDynamicFee {
+						// multi-clause: undo prior clauses' state.
+						// eth tx needs to preserve the nonce increment and EVM's internal
+						// RevertToSnapshot already cleaned the failed call.
+						rt.state.RevertTo(checkpoint)
+					}
 					reverted = true
 					txOutputs = nil
 					return
@@ -566,25 +574,6 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 
 			if err := returnGas(leftOverGas); err != nil {
 				return nil, err
-			}
-
-			// EIP-2: nonce is always consumed for EthereumTx, even if the tx reverts.
-			// For CALL txs the EVM never touches the nonce, so we always increment here.
-			// For CREATE txs that succeeded the EVM already incremented the nonce via
-			// stateDB.SetNonce before the inner snapshot; that survived the tx.
-			// For CREATE txs that reverted, rt.state.RevertTo(checkpoint) undid the EVM's
-			// increment, so we must re-apply it here.
-			if trx.Type() == tx.TypeEthDynamicFee {
-				isCreate := resolvedTx.Clauses[0].IsCreatingContract()
-				if !isCreate || reverted {
-					nonce, err := rt.state.GetNonce(txCtx.Origin)
-					if err != nil {
-						return nil, err
-					}
-					if err := rt.state.SetNonce(txCtx.Origin, nonce+1); err != nil {
-						return nil, err
-					}
-				}
 			}
 
 			if !thor.IsForked(rt.ctx.Number, rt.forkConfig.GALACTICA) {
