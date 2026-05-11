@@ -69,4 +69,4 @@ require (
 
 replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655
 
-replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20260511090840-554fbb7dc9f7
+replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20260511103518-c6cd268fa5ce
