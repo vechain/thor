@@ -18,13 +18,12 @@ import (
 // Handler implements chain metadata JSON-RPC methods.
 type Handler struct {
 	repo          *chain.Repository
-	chainID       uint64
 	clientVersion string
 }
 
 // New creates a chain Handler.
-func New(repo *chain.Repository, chainID uint64, clientVersion string) *Handler {
-	return &Handler{repo: repo, chainID: chainID, clientVersion: clientVersion}
+func New(repo *chain.Repository, clientVersion string) *Handler {
+	return &Handler{repo: repo, clientVersion: clientVersion}
 }
 
 // Mount registers all chain metadata methods on the dispatcher.
@@ -43,11 +42,11 @@ func (h *Handler) Mount(s *rpc.Server) {
 }
 
 func (h *Handler) ethChainID(req rpc.Request) rpc.Response {
-	return rpc.OkResponse(req.ID, hexutil.Uint64(h.chainID))
+	return rpc.OkResponse(req.ID, hexutil.Uint64(h.repo.ChainID()))
 }
 
 func (h *Handler) netVersion(req rpc.Request) rpc.Response {
-	return rpc.OkResponse(req.ID, strconv.FormatUint(h.chainID, 10))
+	return rpc.OkResponse(req.ID, strconv.FormatUint(h.repo.ChainID(), 10))
 }
 
 func (h *Handler) web3ClientVersion(req rpc.Request) rpc.Response {

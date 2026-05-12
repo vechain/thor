@@ -37,12 +37,11 @@ func TestDispatch(t *testing.T) {
 	c, err := testchain.NewDefault()
 	require.NoError(t, err)
 
-	chainID := c.Repo().ChainID()
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1]
 
 	vcTx := testutil.BuildVcTx(t, c, sender, &recipient.Address)
-	ethTx := testutil.BuildEthTx(t, chainID, sender, 0, &recipient.Address)
+	ethTx := testutil.BuildEthTx(t, c.Repo().ChainID(), sender, 0, &recipient.Address)
 
 	require.NoError(t, c.MintBlock(vcTx, ethTx))
 	require.Equal(t, uint32(1), c.Repo().BestBlockSummary().Header.Number())
@@ -53,9 +52,9 @@ func TestDispatch(t *testing.T) {
 		MaxLifetime:     10 * time.Minute,
 	}, &testchain.DefaultForkConfig)
 	srv := rpc.NewServer()
-	rpcchain.New(c.Repo(), chainID, "test/1.0").Mount(srv)
-	blocks.New(c.Repo(), chainID).Mount(srv)
-	transactions.New(c.Repo(), chainID, pool).Mount(srv)
+	rpcchain.New(c.Repo(), "test/1.0").Mount(srv)
+	blocks.New(c.Repo()).Mount(srv)
+	transactions.New(c.Repo(), pool).Mount(srv)
 	accounts.New(c.Repo(), c.Stater()).Mount(srv)
 	logs.New(c.Repo(), c.LogDB(), 100, 1000).Mount(srv)
 	fees.New(c.Repo(), 100).Mount(srv)

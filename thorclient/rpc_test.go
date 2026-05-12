@@ -26,8 +26,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// newEthRPCFixture builds the two-block chain and assembles all ETH RPC handlers.
-func newEthRPCFixture(t *testing.T) testnode.Node {
+// setupEthTestNode builds the two-block chain and assembles all ETH RPC handlers.
+func setupEthTestNode(t *testing.T) testnode.Node {
 	t.Helper()
 
 	c, err := testchain.NewDefault()
@@ -41,7 +41,7 @@ func newEthRPCFixture(t *testing.T) testnode.Node {
 }
 
 func TestEthRPC(t *testing.T) {
-	testNode := newEthRPCFixture(t)
+	testNode := setupEthTestNode(t)
 
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1]

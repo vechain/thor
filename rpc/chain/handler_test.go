@@ -19,8 +19,7 @@ import (
 )
 
 type fixture struct {
-	chain   *testchain.Chain
-	chainID uint64
+	chain *testchain.Chain
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -30,20 +29,19 @@ func newFixture(t *testing.T) *fixture {
 
 	require.NoError(t, c.MintBlock())
 	return &fixture{
-		chain:   c,
-		chainID: c.Repo().ChainID(),
+		chain: c,
 	}
 }
 
 func TestChainHandler(t *testing.T) {
 	fx := newFixture(t)
-	ts := testutil.NewTestServer(t, chain.New(fx.chain.Repo(), fx.chainID, "test/1.0"))
+	ts := testutil.NewTestServer(t, chain.New(fx.chain.Repo(), "test/1.0"))
 
 	t.Run("eth_chainId", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_chainId", []any{})
 		var got hexutil.Uint64
 		require.NoError(t, json.Unmarshal(result, &got))
-		assert.Equal(t, fx.chainID, uint64(got))
+		assert.Equal(t, fx.chain.ChainID(), uint64(got))
 	})
 
 	t.Run("net_version", func(t *testing.T) {

@@ -86,7 +86,6 @@ func (n *node) Start() error {
 	logDB := n.chain.LogDB()
 	forkConfig := n.chain.GetForkConfig()
 	engine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
-	chainID := repo.ChainID()
 
 	accounts.New(repo, stater, 40_000_000, 5*1024*1024/2, forkConfig, engine, true).Mount(router, "/accounts")
 	events.New(repo, logDB, 1000, 10).Mount(router, "/logs/event")
@@ -108,11 +107,10 @@ func (n *node) Start() error {
 	subs := subscriptions.New(repo, []string{"*"}, 1000, n.txPool, true)
 	subs.Mount(router, "/subscriptions")
 
-	// pool := testutil.DefaultPool(t, c, &testchain.DefaultForkConfig)
 	rpcSrv := rpc.NewServer()
-	rpcchain.New(repo, chainID, "test/1.0").Mount(rpcSrv)
-	rpcblocks.New(repo, chainID).Mount(rpcSrv)
-	rpctransactions.New(repo, chainID, n.txPool).Mount(rpcSrv)
+	rpcchain.New(repo, "test/1.0").Mount(rpcSrv)
+	rpcblocks.New(repo).Mount(rpcSrv)
+	rpctransactions.New(repo, n.txPool).Mount(rpcSrv)
 	rpcaccounts.New(repo, stater).Mount(rpcSrv)
 	rpclogs.New(repo, logDB, 100, 1000).Mount(rpcSrv)
 	rpcfees.New(repo, 100).Mount(rpcSrv)

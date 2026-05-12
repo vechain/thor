@@ -18,13 +18,12 @@ import (
 
 // Handler implements block query JSON-RPC methods.
 type Handler struct {
-	repo    *chain.Repository
-	chainID uint64
+	repo *chain.Repository
 }
 
 // New creates a blocks Handler.
-func New(repo *chain.Repository, chainID uint64) *Handler {
-	return &Handler{repo: repo, chainID: chainID}
+func New(repo *chain.Repository) *Handler {
+	return &Handler{repo: repo}
 }
 
 // Mount registers all block query methods on the dispatcher.
@@ -77,7 +76,7 @@ func (h *Handler) getBlockByTag(id json.RawMessage, tag string, fullTxs bool) rp
 	if err != nil {
 		return rpc.OkResponse(id, nil)
 	}
-	blk, err := rpc.BuildEthBlock(summary.Header, h.repo, h.chainID, fullTxs)
+	blk, err := rpc.BuildEthBlock(summary.Header, h.repo, h.repo.ChainID(), fullTxs)
 	if err != nil {
 		return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
 	}
@@ -162,7 +161,7 @@ func (h *Handler) ethGetBlockReceipts(req rpc.Request) rpc.Response {
 		cumGas := rpc.CumulativeEthGasUsed(receipts, uint64(i))
 		logOff := rpc.EthLogOffset(receipts, uint64(i))
 		ethReceipts = append(ethReceipts, rpc.ToEthReceipt(
-			t, receipts[i], h.chainID,
+			t, receipts[i], h.repo.ChainID(),
 			blockHash, blockNum,
 			projIdx, cumGas, logOff, baseFee,
 		))

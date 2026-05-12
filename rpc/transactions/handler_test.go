@@ -30,7 +30,6 @@ import (
 
 type fixture struct {
 	chain     *testchain.Chain
-	chainID   uint64
 	ethTxHash string
 	vcTxHash  string
 	blockHash string
@@ -51,7 +50,6 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, err)
 	return &fixture{
 		chain:     c,
-		chainID:   chainID,
 		ethTxHash: ethTx.ID().String(),
 		vcTxHash:  vcTx.ID().String(),
 		blockHash: bestBlock.Header().ID().String(),
@@ -65,7 +63,7 @@ func TestTransactionsHandler(t *testing.T) {
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,
 	}, &testchain.DefaultForkConfig)
-	ts := testutil.NewTestServer(t, transactions.New(fx.chain.Repo(), fx.chainID, pool))
+	ts := testutil.NewTestServer(t, transactions.New(fx.chain.Repo(), pool))
 
 	// ---- eth_getTransactionByHash ----
 
@@ -178,7 +176,7 @@ func TestTransactionsHandler(t *testing.T) {
 		freshRecipient := genesis.DevAccounts()[3].Address
 
 		unsigned := tx.NewBuilder(tx.TypeEthDynamicFee).
-			ChainID(fx.chainID).
+			ChainID(fx.chain.ChainID()).
 			Nonce(0).
 			MaxPriorityFeePerGas(big.NewInt(thor.InitialBaseFee)).
 			MaxFeePerGas(big.NewInt(2 * thor.InitialBaseFee)).
@@ -228,7 +226,7 @@ func TestTransactionReceiptBloom(t *testing.T) {
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,
 	}, &testchain.DefaultForkConfig)
-	ts := testutil.NewTestServer(t, transactions.New(c.Repo(), chainID, pool))
+	ts := testutil.NewTestServer(t, transactions.New(c.Repo(), pool))
 
 	result := testutil.Call(t, ts, "eth_getTransactionReceipt", []any{ethCallTx.ID().String()})
 	var receipt map[string]json.RawMessage

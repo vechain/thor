@@ -21,14 +21,13 @@ import (
 
 // Handler implements transaction JSON-RPC methods.
 type Handler struct {
-	repo    *chain.Repository
-	chainID uint64
-	txPool  txpool.Pool
+	repo   *chain.Repository
+	txPool txpool.Pool
 }
 
 // New creates a transactions Handler.
-func New(repo *chain.Repository, chainID uint64, txPool txpool.Pool) *Handler {
-	return &Handler{repo: repo, chainID: chainID, txPool: txPool}
+func New(repo *chain.Repository, txPool txpool.Pool) *Handler {
+	return &Handler{repo: repo, txPool: txPool}
 }
 
 // Mount registers all transaction methods on the dispatcher.
@@ -86,7 +85,7 @@ func (h *Handler) ethGetTransactionByHash(req rpc.Request) rpc.Response {
 	projIdx := rpc.ProjectedEthIndex(ctx.receipts, ctx.meta.Index)
 	return rpc.OkResponse(
 		req.ID,
-		rpc.ToEthTx(ctx.transaction, h.chainID, common.Hash(ctx.header.ID()), uint64(ctx.header.Number()), projIdx, ctx.header.BaseFee()),
+		rpc.ToEthTx(ctx.transaction, h.repo.ChainID(), common.Hash(ctx.header.ID()), uint64(ctx.header.Number()), projIdx, ctx.header.BaseFee()),
 	)
 }
 
@@ -152,7 +151,7 @@ func (h *Handler) txByBlockAndEthIndex(req rpc.Request, header *block.Header, id
 			continue
 		}
 		if projIdx == ethIdx {
-			return rpc.OkResponse(req.ID, rpc.ToEthTx(t, h.chainID, blockHash, blockNum, projIdx, header.BaseFee()))
+			return rpc.OkResponse(req.ID, rpc.ToEthTx(t, h.repo.ChainID(), blockHash, blockNum, projIdx, header.BaseFee()))
 		}
 		projIdx++
 	}
@@ -183,7 +182,7 @@ func (h *Handler) ethGetTransactionReceipt(req rpc.Request) rpc.Response {
 	logOff := rpc.EthLogOffset(ctx.receipts, ctx.meta.Index)
 
 	return rpc.OkResponse(req.ID, rpc.ToEthReceipt(
-		ctx.transaction, receipt, h.chainID,
+		ctx.transaction, receipt, h.repo.ChainID(),
 		common.Hash(ctx.header.ID()), uint64(ctx.header.Number()),
 		projIdx, cumGas, logOff, ctx.header.BaseFee(),
 	))

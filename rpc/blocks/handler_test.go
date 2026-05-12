@@ -28,7 +28,6 @@ import (
 
 type fixture struct {
 	chain     *testchain.Chain
-	chainID   uint64
 	ethTxHash string
 	blockHash string
 }
@@ -38,19 +37,17 @@ func newFixture(t *testing.T) *fixture {
 	c, err := testchain.NewDefault()
 	require.NoError(t, err)
 
-	chainID := c.Repo().ChainID()
 	sender := genesis.DevAccounts()[0]
 	recipient := genesis.DevAccounts()[1]
 
 	vcTx := testutil.BuildVcTx(t, c, sender, &recipient.Address)
-	ethTx := testutil.BuildEthTx(t, chainID, sender, 0, &recipient.Address)
+	ethTx := testutil.BuildEthTx(t, c.Repo().ChainID(), sender, 0, &recipient.Address)
 	require.NoError(t, c.MintBlock(vcTx, ethTx))
 
 	bestBlock, err := c.BestBlock()
 	require.NoError(t, err)
 	return &fixture{
 		chain:     c,
-		chainID:   chainID,
 		ethTxHash: ethTx.ID().String(),
 		blockHash: bestBlock.Header().ID().String(),
 	}
@@ -58,7 +55,7 @@ func newFixture(t *testing.T) *fixture {
 
 func TestBlocksHandler(t *testing.T) {
 	fx := newFixture(t)
-	ts := testutil.NewTestServer(t, blocks.New(fx.chain.Repo(), fx.chainID))
+	ts := testutil.NewTestServer(t, blocks.New(fx.chain.Repo()))
 
 	t.Run("eth_getBlockByNumber_latest", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"latest", false})
@@ -248,7 +245,7 @@ func TestBlocksBloomAndRoots(t *testing.T) {
 	ethCallTx := testutil.BuildEthCallTx(t, chainID, sender, 0, &energyAddr, callData, 200_000)
 	require.NoError(t, c.MintBlock(ethCallTx))
 
-	ts := testutil.NewTestServer(t, blocks.New(c.Repo(), chainID))
+	ts := testutil.NewTestServer(t, blocks.New(c.Repo()))
 
 	t.Run("genesis_has_empty_trie_roots_and_zero_bloom", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_getBlockByNumber", []any{"0x0", false})
