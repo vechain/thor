@@ -21,13 +21,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// Per-account limits for EthPool (PoC hard-coded; promote to Options when
-// the split-pool wiring is productionized).
-const (
-	ethLimitPerAccountPending = 64
-	ethLimitPerAccountQueue   = 64
-)
-
 // EthPool is the nonce-aware sub-pool dedicated to EthereumTx (TypeEthTyped1559).
 // It maintains per-sender pending/queue buckets (see ethSender) and uses the
 // Ethereum wire hash as the dedup / indexing key. VeChain-native txs are
@@ -51,14 +44,14 @@ type EthPool struct {
 }
 
 // NewEth creates a new EthPool.  Shutdown must be called via Close().
-func NewEth(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConfig) *EthPool {
+func NewEth(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *EthPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &EthPool{
 		repo:         repo,
 		stater:       stater,
 		forkConfig:   forkConfig,
 		ethChainID:   thor.GetEthChainID(repo.GenesisBlock().Header().ID()),
-		pool:         newEthPoolMap(ethLimitPerAccountPending, ethLimitPerAccountQueue),
+		pool:         newEthPoolMapWithLimit(options.Limit, options.LimitPerAccount),
 		baseFeeCache: newBaseFeeCache(forkConfig),
 		ctx:          ctx,
 		cancel:       cancel,

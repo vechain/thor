@@ -127,6 +127,7 @@ func main() {
 			metricsAddrFlag,
 			adminAddrFlag,
 			enableAdminFlag,
+			txPoolLimitFlag,
 			txPoolLimitPerAccountFlag,
 			allowedTracersFlag,
 			minEffectivePriorityFeeFlag,
@@ -277,6 +278,10 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	}
 
 	txpoolOpt := defaultTxPoolOptions
+	txpoolOpt.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-limit flag")
+	}
 	txpoolOpt.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "parse txpool-limit-per-account flag")

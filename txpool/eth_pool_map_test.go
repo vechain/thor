@@ -19,7 +19,7 @@ func TestEthPoolMapAddIndexesAndDeduplicates(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[0]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 
 	replaced, err := m.add(tx0, 0)
@@ -40,7 +40,7 @@ func TestEthPoolMapReplacementUpdatesHashIndex(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[1]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 	original := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	replacement := ethTxObjectForSenderTest(t, tchain, sender, 0, 2*base, 3*base)
 
@@ -56,29 +56,125 @@ func TestEthPoolMapReplacementUpdatesHashIndex(t *testing.T) {
 	assert.Equal(t, 1, m.len())
 }
 
-func TestEthPoolMapEnforcesPendingAndQueueLimits(t *testing.T) {
+func TestEthPoolMapEnforcesTotalLimit(t *testing.T) {
+	_, tchain := newEthPoolTestPool(t)
+	senderA := genesis.DevAccounts()[0]
+	senderB := genesis.DevAccounts()[1]
+	base := int64(thor.InitialBaseFee)
+	m := newEthPoolMapWithLimit(1, 4)
+
+	original := ethTxObjectForSenderTest(t, tchain, senderA, 0, base, 2*base)
+	_, err := m.add(original, 0)
+	require.NoError(t, err)
+
+	_, err = m.add(ethTxObjectForSenderTest(t, tchain, senderB, 0, base, 2*base), 0)
+	require.ErrorContains(t, err, "pool is full")
+	assert.Equal(t, 1, m.len())
+
+	replacement := ethTxObjectForSenderTest(t, tchain, senderA, 0, 2*base, 3*base)
+	replaced, err := m.add(replacement, 0)
+	require.NoError(t, err)
+	require.NotNil(t, replaced)
+	assert.Equal(t, original.ID(), replaced.ID())
+	assert.Equal(t, replacement.ID(), m.getByHash(replacement.Hash()).ID())
+	assert.Equal(t, 1, m.len())
+}
+
+func TestEthPoolMapStressManySendersStopsAtTotalLimit(t *testing.T) {
+	const limit = 256
+
+	m := newEthPoolMapWithLimit(limit, 1)
+	for sender := range limit {
+		_, err := m.add(synthEthPoolTxObj(sender, 0), 0)
+		require.NoError(t, err)
+	}
+	_, err := m.add(synthEthPoolTxObj(limit, 0), 0)
+	require.ErrorContains(t, err, "pool is full")
+
+	m.lock.RLock()
+	assert.Equal(t, limit, len(m.allByHash))
+	assert.Equal(t, limit, len(m.senders))
+	m.lock.RUnlock()
+	assert.Equal(t, limit, m.len())
+}
+
+func TestEthPoolMapEnforcesAccountQuotaAcrossPendingAndQueue(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[2]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(1, 1)
+	m := newEthPoolMap(2)
 
 	_, err := m.add(ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base), 0)
 	require.NoError(t, err)
-
-	_, err = m.add(ethTxObjectForSenderTest(t, tchain, sender, 1, base, 2*base), 0)
-	require.ErrorContains(t, err, "pending per-account limit exceeded")
-
 	_, err = m.add(ethTxObjectForSenderTest(t, tchain, sender, 2, base, 2*base), 0)
 	require.NoError(t, err)
+
+	_, err = m.add(ethTxObjectForSenderTest(t, tchain, sender, 1, base, 2*base), 0)
+	require.ErrorContains(t, err, "account quota exceeded")
+
 	_, err = m.add(ethTxObjectForSenderTest(t, tchain, sender, 3, base, 2*base), 0)
-	require.ErrorContains(t, err, "queue per-account limit exceeded")
+	require.ErrorContains(t, err, "account quota exceeded")
+}
+
+func TestEthPoolMapAccountQuotaRejectsNewSenderWithoutSideEffects(t *testing.T) {
+	m := newEthPoolMap(0)
+
+	_, err := m.add(synthEthPoolTxObj(0, 0), 0)
+	require.ErrorContains(t, err, "account quota exceeded")
+
+	m.lock.RLock()
+	assert.Empty(t, m.senders)
+	m.lock.RUnlock()
+	assert.Equal(t, 0, m.len())
+}
+
+func TestEthPoolMapStressQuotaRejectsOverflowButAllowsReplacement(t *testing.T) {
+	_, tchain := newEthPoolTestPool(t)
+	sender := genesis.DevAccounts()[2]
+	base := int64(thor.InitialBaseFee)
+	m := newEthPoolMapWithLimit(8, 4)
+
+	original := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
+	queuedOriginal := ethTxObjectForSenderTest(t, tchain, sender, 3, base, 2*base)
+	for _, txObj := range []*TxObject{
+		original,
+		ethTxObjectForSenderTest(t, tchain, sender, 1, base, 2*base),
+		queuedOriginal,
+		ethTxObjectForSenderTest(t, tchain, sender, 4, base, 2*base),
+	} {
+		_, err := m.add(txObj, 0)
+		require.NoError(t, err)
+	}
+
+	_, err := m.add(ethTxObjectForSenderTest(t, tchain, sender, 2, base, 2*base), 0)
+	require.ErrorContains(t, err, "account quota exceeded")
+	_, err = m.add(ethTxObjectForSenderTest(t, tchain, sender, 5, base, 2*base), 0)
+	require.ErrorContains(t, err, "account quota exceeded")
+
+	replacement := ethTxObjectForSenderTest(t, tchain, sender, 0, 2*base, 3*base)
+	replaced, err := m.add(replacement, 0)
+	require.NoError(t, err)
+	require.NotNil(t, replaced)
+	assert.Equal(t, original.ID(), replaced.ID())
+	assert.Equal(t, 4, m.len())
+	assert.Nil(t, m.getByHash(original.Hash()))
+	assert.Equal(t, replacement.ID(), m.getByHash(replacement.Hash()).ID())
+
+	queuedReplacement := ethTxObjectForSenderTest(t, tchain, sender, 3, 2*base, 3*base)
+	replaced, err = m.add(queuedReplacement, 0)
+	require.NoError(t, err)
+	require.NotNil(t, replaced)
+	assert.Equal(t, queuedOriginal.ID(), replaced.ID())
+	assert.Equal(t, 4, m.len())
+	assert.Nil(t, m.getByHash(queuedOriginal.Hash()))
+	assert.Equal(t, queuedReplacement.ID(), m.getByHash(queuedReplacement.Hash()).ID())
 }
 
 func TestEthPoolMapRemoveDemotesTrailingPending(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[3]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	tx1 := ethTxObjectForSenderTest(t, tchain, sender, 1, base, 2*base)
 	tx2 := ethTxObjectForSenderTest(t, tchain, sender, 2, base, 2*base)
@@ -110,7 +206,7 @@ func TestEthPoolMapBumpStateNoncePrunesHashIndex(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[4]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	tx2 := ethTxObjectForSenderTest(t, tchain, sender, 2, base, 2*base)
 
@@ -135,7 +231,7 @@ func TestEnsureSender_CreatesNewSenderAtChainNonce(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[0]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	// add() calls ensureSender; for a never-seen address it creates an
 	// ethSender seeded at chainNonce.
@@ -153,7 +249,7 @@ func TestEnsureSender_CreatesNewSenderAtChainNonce(t *testing.T) {
 }
 
 func TestPoolNonce_UnknownSenderReturnsChainNonce(t *testing.T) {
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 	addr := thor.BytesToAddress([]byte{0x01})
 
 	// poolNonce for a never-seen address returns chainNonce without
@@ -170,7 +266,7 @@ func TestEnsureSender_ChainNonceBehindIsNoop(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[5]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	// Seed sender with nonces 0 and 1 pending.
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
@@ -200,7 +296,7 @@ func TestEnsureSender_ChainNonceEqualIsNoop(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[6]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	_, err := m.add(tx0, 0)
@@ -218,7 +314,7 @@ func TestEnsureSender_ChainNonceAheadBumpsWithoutEviction(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[2]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	// Seed sender at stateNonce 0 via add.
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
@@ -247,7 +343,7 @@ func TestEnsureSender_ChainNonceAheadEvictsPendingAndPurgesHash(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[7]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	tx1 := ethTxObjectForSenderTest(t, tchain, sender, 1, base, 2*base)
@@ -272,7 +368,7 @@ func TestEnsureSender_ChainNonceAheadEvictsAndPromotesQueue(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[8]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	// Add nonce 0 (pending) and nonce 2 (queue, gap at 1).
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
@@ -307,7 +403,7 @@ func TestEnsureSender_IdempotentOnRepeatedBump(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[9]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	_, err := m.add(tx0, 0)
@@ -335,7 +431,7 @@ func TestEnsureSender_ViaAddSeedsNewSender(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[0]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	// add() with chainNonce=5 for a new sender must seed stateNonce at 5.
 	// A tx at nonce 5 should go straight into pending.
@@ -358,7 +454,7 @@ func TestEnsureSender_ViaAddBumpsExistingSender(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[1]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	// Seed sender at stateNonce 0 with nonce 0 pending.
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
@@ -384,7 +480,7 @@ func TestGC_BumpStateNonceCleansUpEmptySender(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[3]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	_, err := m.add(tx0, 0)
@@ -419,7 +515,7 @@ func TestGC_RemoveByHashCleansUpEmptySender(t *testing.T) {
 	_, tchain := newEthPoolTestPool(t)
 	sender := genesis.DevAccounts()[4]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	tx0 := ethTxObjectForSenderTest(t, tchain, sender, 0, base, 2*base)
 	_, err := m.add(tx0, 0)
@@ -435,7 +531,7 @@ func TestGC_RemoveByHashCleansUpEmptySender(t *testing.T) {
 }
 
 func TestGC_BumpOnUnknownSenderIsNoop(t *testing.T) {
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 	addr := thor.BytesToAddress([]byte{0xAA})
 
 	// Bumping a sender that was never seen must NOT create an entry.
@@ -453,7 +549,7 @@ func TestGC_MultipleSendersAreCollectedIndependently(t *testing.T) {
 	senderA := genesis.DevAccounts()[5]
 	senderB := genesis.DevAccounts()[6]
 	base := int64(thor.InitialBaseFee)
-	m := newEthPoolMap(4, 4)
+	m := newEthPoolMap(4)
 
 	txA := ethTxObjectForSenderTest(t, tchain, senderA, 0, base, 2*base)
 	txB := ethTxObjectForSenderTest(t, tchain, senderB, 0, base, 2*base)

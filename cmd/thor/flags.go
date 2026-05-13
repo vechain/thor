@@ -274,7 +274,7 @@ var (
 		Name:    "txpool-limit-per-account",
 		Local:   true,
 		Value:   128,
-		Usage:   "set tx limit per account in pool",
+		Usage:   "set tx limit per account in each tx sub-pool",
 		Sources: envVar("TX_POOL_LIMIT_PER_ACCOUNT"),
 	}
 	allowedTracersFlag = &cli.StringFlag{
@@ -335,7 +335,7 @@ var (
 		Name:    "txpool-limit",
 		Local:   true,
 		Value:   10000,
-		Usage:   "set tx limit in pool",
+		Usage:   "set tx limit in each tx sub-pool",
 		Sources: envVar("TX_POOL_LIMIT"),
 	}
 	genesisFlag = &cli.StringFlag{

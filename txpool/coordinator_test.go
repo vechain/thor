@@ -38,7 +38,11 @@ func newEthPoolTestPool(t *testing.T) (*EthPool, *testchain.Chain) {
 	metrics.InitializePrometheusMetrics()
 	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	require.NoError(t, err)
-	return NewEth(tchain.Repo(), tchain.Stater(), tchain.GetForkConfig()), tchain
+	return NewEth(tchain.Repo(), tchain.Stater(), Options{
+		Limit:           1000,
+		LimitPerAccount: 128,
+		MaxLifetime:     0,
+	}, tchain.GetForkConfig()), tchain
 }
 
 func buildEthTxForChain(
@@ -81,6 +85,49 @@ func TestZZZTxPoolCoordinatorRoutesFamilies(t *testing.T) {
 	assert.Equal(t, ethTx.ID(), pool.Get(ethTx.ID()).ID())
 	assert.Equal(t, legacyTx.ID(), pool.GetByHash(legacyTx.Hash()).ID())
 	assert.Equal(t, ethTx.ID(), pool.GetByHash(ethTx.Hash()).ID())
+}
+
+func TestZZZTxPoolCoordinatorAppliesLimitPerSubPool(t *testing.T) {
+	metrics.InitializePrometheusMetrics()
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	require.NoError(t, err)
+	pool := New(tchain.Repo(), tchain.Stater(), Options{
+		Limit:           1,
+		LimitPerAccount: 128,
+	}, tchain.GetForkConfig())
+	defer pool.Close()
+
+	legacyTx := newTx(tx.TypeLegacy, tchain.Repo().ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	ethTx := buildEthTxForChain(t, tchain, genesis.DevAccounts()[1], 0, int64(thor.InitialBaseFee), 2*int64(thor.InitialBaseFee))
+
+	require.NoError(t, pool.Add(legacyTx))
+	require.NoError(t, pool.Add(ethTx))
+
+	assert.Equal(t, 1, pool.VeChain().Len())
+	assert.Equal(t, 1, pool.Eth().Len())
+	assert.Equal(t, 2, pool.Len())
+}
+
+func TestZZZTxPoolCoordinatorAppliesAccountQuotaPerSubPool(t *testing.T) {
+	metrics.InitializePrometheusMetrics()
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	require.NoError(t, err)
+	pool := New(tchain.Repo(), tchain.Stater(), Options{
+		Limit:           1000,
+		LimitPerAccount: 1,
+	}, tchain.GetForkConfig())
+	defer pool.Close()
+
+	sender := genesis.DevAccounts()[0]
+	legacyTx := newTx(tx.TypeLegacy, tchain.Repo().ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), sender)
+	ethTx := buildEthTxForChain(t, tchain, sender, 0, int64(thor.InitialBaseFee), 2*int64(thor.InitialBaseFee))
+
+	require.NoError(t, pool.Add(legacyTx))
+	require.NoError(t, pool.Add(ethTx))
+
+	assert.Equal(t, 1, pool.VeChain().Len())
+	assert.Equal(t, 1, pool.Eth().Len())
+	assert.Equal(t, 2, pool.Len())
 }
 
 func TestZZZTxPoolCoordinatorPreservesEthNonceOrder(t *testing.T) {

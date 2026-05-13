@@ -21,19 +21,23 @@ import (
 // snapshot) take the read lock. EthPool talks to this map exclusively;
 // higher-level invariants (head-reset, executable re-check) live in EthPool.
 type ethPoolMap struct {
-	lock                   sync.RWMutex
-	senders                map[thor.Address]*ethSender
-	allByHash              map[thor.Bytes32]*TxObject
-	limitPerAccountPending int
-	limitPerAccountQueue   int
+	lock            sync.RWMutex
+	senders         map[thor.Address]*ethSender
+	allByHash       map[thor.Bytes32]*TxObject
+	limit           int
+	limitPerAccount int
 }
 
-func newEthPoolMap(limitPerAccountPending, limitPerAccountQueue int) *ethPoolMap {
+func newEthPoolMap(limitPerAccount int) *ethPoolMap {
+	return newEthPoolMapWithLimit(int(^uint(0)>>1), limitPerAccount)
+}
+
+func newEthPoolMapWithLimit(limit, limitPerAccount int) *ethPoolMap {
 	return &ethPoolMap{
-		senders:                make(map[thor.Address]*ethSender),
-		allByHash:              make(map[thor.Bytes32]*TxObject),
-		limitPerAccountPending: limitPerAccountPending,
-		limitPerAccountQueue:   limitPerAccountQueue,
+		senders:         make(map[thor.Address]*ethSender),
+		allByHash:       make(map[thor.Bytes32]*TxObject),
+		limit:           limit,
+		limitPerAccount: limitPerAccount,
 	}
 }
 
@@ -64,24 +68,43 @@ func (m *ethPoolMap) add(txObj *TxObject, chainNonce uint64) (replaced *TxObject
 		return nil, nil
 	}
 
-	sender := m.ensureSender(origin, chainNonce)
+	sender, senderExists := m.senders[origin]
+	if senderExists && chainNonce > sender.stateNonce {
+		evicted := sender.bumpStateNonce(chainNonce)
+		for _, ev := range evicted {
+			delete(m.allByHash, ev.Hash())
+		}
+		if sender.empty() {
+			delete(m.senders, origin)
+			senderExists = false
+			sender = nil
+		}
+	}
 
 	// Enforce per-account caps *excluding* same-slot replacements (a replacement
 	// does not grow the footprint).
 	nonce := txObj.Nonce()
 	isReplacement := false
-	if nonce < sender.nextPendingNonce() {
-		_, isReplacement = sender.pending[nonce]
-	} else if nonce > sender.nextPendingNonce() {
-		_, isReplacement = sender.queue[nonce]
+	if senderExists {
+		if nonce < sender.nextPendingNonce() {
+			_, isReplacement = sender.pending[nonce]
+		} else if nonce > sender.nextPendingNonce() {
+			_, isReplacement = sender.queue[nonce]
+		}
 	}
 	if !isReplacement {
-		if nonce <= sender.nextPendingNonce() {
-			if len(sender.pending) >= m.limitPerAccountPending {
-				return nil, errors.New("pending per-account limit exceeded")
-			}
-		} else if len(sender.queue) >= m.limitPerAccountQueue {
-			return nil, errors.New("queue per-account limit exceeded")
+		if len(m.allByHash) >= m.limit {
+			return nil, errors.New("pool is full")
+		}
+		accountTxs := 0
+		if senderExists {
+			accountTxs = len(sender.pending) + len(sender.queue)
+		}
+		if accountTxs >= m.limitPerAccount {
+			return nil, errors.New("account quota exceeded")
+		}
+		if !senderExists {
+			sender = m.ensureSender(origin, chainNonce)
 		}
 	}
 

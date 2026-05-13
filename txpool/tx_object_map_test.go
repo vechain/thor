@@ -150,6 +150,45 @@ func TestLimitByDelegator(t *testing.T) {
 	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 }
 
+func TestTxObjectMapStressAccountQuotaAndCostCleanup(t *testing.T) {
+	origin := synthAddress(1)
+	delegator := synthAddress(2)
+	payer := synthAddress(3)
+	validatePayer := func(_ thor.Address, _ *big.Int) error { return nil }
+
+	first := synthPoolTxObj(origin, 0, 1)
+	first.payer = &payer
+	first.cost = big.NewInt(100)
+	first.resolved.Delegator = &delegator
+	second := synthPoolTxObj(origin, 1, 2)
+	second.payer = &payer
+	second.cost = big.NewInt(200)
+	second.resolved.Delegator = &delegator
+	overflow := synthPoolTxObj(origin, 2, 3)
+	overflow.payer = &payer
+	overflow.cost = big.NewInt(300)
+	overflow.resolved.Delegator = &delegator
+
+	m := newTxObjectMap()
+	assert.NoError(t, m.Add(first, 2, validatePayer))
+	assert.NoError(t, m.Add(second, 2, validatePayer))
+	assert.Equal(t, errors.New("account quota exceeded"), m.Add(overflow, 2, validatePayer))
+	assert.Equal(t, 2, m.Len())
+	assert.Equal(t, 2, m.quota[origin])
+	assert.Equal(t, 2, m.quota[delegator])
+	assert.Equal(t, big.NewInt(300), m.PendingCostOf(payer))
+
+	assert.True(t, m.RemoveByHash(first.Hash()))
+	assert.Equal(t, 1, m.quota[origin])
+	assert.Equal(t, 1, m.quota[delegator])
+	assert.Equal(t, big.NewInt(200), m.PendingCostOf(payer))
+
+	assert.True(t, m.RemoveByHash(second.Hash()))
+	assert.Zero(t, m.quota[origin])
+	assert.Zero(t, m.quota[delegator])
+	assert.Equal(t, big.NewInt(0), m.PendingCostOf(payer))
+}
+
 func TestPendingCost(t *testing.T) {
 	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	assert.Nil(t, err)

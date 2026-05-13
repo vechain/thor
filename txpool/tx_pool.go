@@ -91,7 +91,7 @@ func New(
 	forkConfig *thor.ForkConfig,
 ) *TxPool {
 	vechain := newVeChainPool(repo, stater, options, forkConfig)
-	eth := NewEth(repo, stater, forkConfig)
+	eth := NewEth(repo, stater, options, forkConfig)
 	c := &TxPool{
 		vechain: vechain,
 		eth:     eth,

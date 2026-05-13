@@ -67,7 +67,10 @@ func TestEthPoolRejectsBeforeInterstellar(t *testing.T) {
 	metrics.InitializePrometheusMetrics()
 	tchain, err := testchain.NewWithFork(&thor.NoFork, 180)
 	require.NoError(t, err)
-	pool := NewEth(tchain.Repo(), tchain.Stater(), tchain.GetForkConfig())
+	pool := NewEth(tchain.Repo(), tchain.Stater(), Options{
+		Limit:           1000,
+		LimitPerAccount: 128,
+	}, tchain.GetForkConfig())
 	defer pool.Close()
 
 	ethTx := buildEthTxForChain(t, tchain, genesis.DevAccounts()[0], 0, int64(thor.InitialBaseFee), 2*int64(thor.InitialBaseFee))
