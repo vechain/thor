@@ -206,7 +206,6 @@ type EthReceipt struct {
 func ToEthReceipt(
 	t *tx.Transaction,
 	receipt *tx.Receipt,
-	chainID uint64,
 	blockHash common.Hash,
 	blockNum uint64,
 	projectedIdx uint64,

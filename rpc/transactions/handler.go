@@ -182,7 +182,7 @@ func (h *Handler) ethGetTransactionReceipt(req rpc.Request) rpc.Response {
 	logOff := rpc.EthLogOffset(ctx.receipts, ctx.meta.Index)
 
 	return rpc.OkResponse(req.ID, rpc.ToEthReceipt(
-		ctx.transaction, receipt, h.repo.ChainID(),
+		ctx.transaction, receipt,
 		common.Hash(ctx.header.ID()), uint64(ctx.header.Number()),
 		projIdx, cumGas, logOff, ctx.header.BaseFee(),
 	))
@@ -202,8 +202,10 @@ func (h *Handler) ethSendRawTransaction(req rpc.Request) rpc.Response {
 	if err := parsed.UnmarshalBinary(raw); err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, err.Error())
 	}
+	// TODO is Adding to the pool enough guarantee for ethereum styled txs ?
 	if err := h.txPool.AddLocal(parsed); err != nil {
 		return rpc.ErrResponse(req.ID, rpc.CodeServerError, err.Error())
 	}
+
 	return rpc.OkResponse(req.ID, common.Hash(parsed.ID()).Hex())
 }

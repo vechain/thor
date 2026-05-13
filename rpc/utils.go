@@ -36,6 +36,7 @@ import (
 // Hash strings (66 chars, "0x" + 64 hex digits): resolved directly by hash.
 //
 // "pending", "safe", and "finalized" are treated as "latest" in Phase 1.
+// TODO decide if should this return error or not found (not as an error)
 func ResolveBlockTag(tag string, repo *chain.Repository) (*chain.BlockSummary, error) {
 	switch strings.ToLower(tag) {
 	case "", "latest", "pending", "safe", "finalized":
@@ -91,7 +92,6 @@ func StateAt(tag string, repo *chain.Repository, stater *state.Stater) (*state.S
 func BuildEthBlock(
 	header *block.Header,
 	repo *chain.Repository,
-	chainID uint64,
 	fullTxs bool,
 ) (*EthBlock, error) {
 	blk, err := repo.GetBlock(header.ID())
@@ -126,7 +126,8 @@ func BuildEthBlock(
 		}
 		ethGasUsed += receipts[i].GasUsed
 
-		rec := ToEthReceipt(t, receipts[i], chainID, blockHash, blockNum, ethProjIdx, ethGasUsed, logOffset, baseFee)
+		// TODO we might no need to call this if fullTxs=true or false
+		rec := ToEthReceipt(t, receipts[i], blockHash, blockNum, ethProjIdx, ethGasUsed, logOffset, baseFee)
 		logOffset += uint64(len(rec.Logs))
 
 		// OR this receipt's bloom into the block-level bloom.
@@ -138,7 +139,7 @@ func BuildEthBlock(
 		ethRecsForRoot = append(ethRecsForRoot, rec)
 
 		if fullTxs {
-			ethTxFull = append(ethTxFull, ToEthTx(t, chainID, blockHash, blockNum, ethProjIdx, baseFee))
+			ethTxFull = append(ethTxFull, ToEthTx(t, repo.ChainID(), blockHash, blockNum, ethProjIdx, baseFee))
 		} else {
 			ethTxHashes = append(ethTxHashes, common.Hash(t.ID()))
 		}

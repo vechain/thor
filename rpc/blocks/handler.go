@@ -76,7 +76,7 @@ func (h *Handler) getBlockByTag(id json.RawMessage, tag string, fullTxs bool) rp
 	if err != nil {
 		return rpc.OkResponse(id, nil)
 	}
-	blk, err := rpc.BuildEthBlock(summary.Header, h.repo, h.repo.ChainID(), fullTxs)
+	blk, err := rpc.BuildEthBlock(summary.Header, h.repo, fullTxs)
 	if err != nil {
 		return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
 	}
@@ -161,7 +161,7 @@ func (h *Handler) ethGetBlockReceipts(req rpc.Request) rpc.Response {
 		cumGas := rpc.CumulativeEthGasUsed(receipts, uint64(i))
 		logOff := rpc.EthLogOffset(receipts, uint64(i))
 		ethReceipts = append(ethReceipts, rpc.ToEthReceipt(
-			t, receipts[i], h.repo.ChainID(),
+			t, receipts[i],
 			blockHash, blockNum,
 			projIdx, cumGas, logOff, baseFee,
 		))

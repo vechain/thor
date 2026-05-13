@@ -222,6 +222,8 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 	}
 
 	var ethLogs []*rpc.EthLog
+	// TODO the log scanning loop iterates blocks and calls GetBlock() for each. A large block range with many blocks could block the RPC connection
+	// Is this perfomant at all ?
 	for _, ev := range events {
 		blockTxs, err := getBlockTxs(ev.BlockNumber)
 		if err != nil {

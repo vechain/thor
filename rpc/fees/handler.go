@@ -100,6 +100,8 @@ func (h *Handler) ethFeeHistory(req rpc.Request) rpc.Response {
 	gasUsedRatios := make([]float64, 0, blockCount)
 
 	for n := oldestNum; n <= newestNum; n++ {
+		// TODO need a decision here: hdr.GasUsed() includes all transaction types (VeChain Legacy + EthDynamicFee).
+		// TODO For ETH equivalence, gasUsedRatio should only count gas from TypeEth transactions.
 		hdr, err := bestChain.GetBlockHeader(uint32(n))
 		if err != nil {
 			return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
