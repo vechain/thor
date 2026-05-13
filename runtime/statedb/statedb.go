@@ -70,8 +70,9 @@ type StateDB interface {
 
 // stateDB implements evm.StateDB, only adapt to evm.
 type stateDB struct {
-	state *state.State
-	repo  *stackedmap.StackedMap
+	state        *state.State
+	repo         *stackedmap.StackedMap
+	nonceEnabled bool
 }
 
 type (
@@ -88,12 +89,10 @@ type (
 	}
 )
 
-// New creates a V1 statedb.
-func New(state *state.State) StateDB {
-	return newV1(state)
-}
-
-func newV1(state *state.State) *stateDB {
+// New creates a statedb. When enableNonce is true, Get/SetNonce read and
+// persist the on-state account nonce (required for eth tx execution);
+// otherwise GetNonce returns 0 and SetNonce is a no-op.
+func New(state *state.State, enableNonce bool) StateDB {
 	getter := func(k any) (any, bool, error) {
 		switch k.(type) {
 		case suicideFlagKey:
@@ -108,10 +107,10 @@ func newV1(state *state.State) *stateDB {
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
 
-	repo := stackedmap.New(getter)
 	return &stateDB{
-		state,
-		repo,
+		state:        state,
+		repo:         stackedmap.New(getter),
+		nonceEnabled: enableNonce,
 	}
 }
 
@@ -187,12 +186,30 @@ func (s *stateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
-// GetNonce returns 0 in V1; VeChain-native txs never observe a real nonce.
-// V2 overrides to read from state.
-func (s *stateDB) GetNonce(_ common.Address) uint64 { return 0 }
+// GetNonce reads the on-state nonce when enabled; otherwise returns 0
+// because VeChain-native txs never observe a real nonce.
+func (s *stateDB) GetNonce(addr common.Address) uint64 {
+	if !s.nonceEnabled {
+		return 0
+	}
 
-// SetNonce is a no-op in V1; only V2 writes nonces.
-func (s *stateDB) SetNonce(_ common.Address, _ uint64) {}
+	n, err := s.state.GetNonce(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+// SetNonce persists the nonce when enabled; otherwise it is a no-op.
+func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
+	if !s.nonceEnabled {
+		return
+	}
+
+	if err := s.state.SetNonce(thor.Address(addr), nonce); err != nil {
+		panic(err)
+	}
+}
 
 // GetCodeHash stub.
 func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {

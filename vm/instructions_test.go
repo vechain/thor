@@ -614,7 +614,7 @@ func TestOpTstore(t *testing.T) {
 	var (
 		db          = muxdb.NewMem()
 		state       = state.New(db, trie.Root{Hash: thor.Bytes32{}})
-		stateDB     = statedb.New(state)
+		stateDB     = statedb.New(state, false)
 		env         = NewEVM(Context{}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
 		stack       = newstack()
 		mem         = NewMemory()
@@ -746,7 +746,7 @@ func TestOpSuicide6780(t *testing.T) {
 	tests := []testcase{}
 
 	newEVMInstance := func(state *state.State) *EVM {
-		stateDB := statedb.New(state)
+		stateDB := statedb.New(state, false)
 		evm := NewEVM(Context{
 			BlockNumber: big.NewInt(1),
 			GasPrice:    big.NewInt(1),

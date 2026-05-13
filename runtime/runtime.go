@@ -175,14 +175,6 @@ func (rt *Runtime) Chain() *chain.Chain         { return rt.chain }
 func (rt *Runtime) State() *state.State         { return rt.state }
 func (rt *Runtime) Context() *xenv.BlockContext { return rt.ctx }
 
-// newStateDB returns V2 for 0x02 txs, V1 otherwise.
-func (rt *Runtime) newStateDB(txCtx *xenv.TransactionContext) statedb.StateDB {
-	if txCtx.Type == tx.TypeEthDynamicFee {
-		return statedb.NewV2(rt.state)
-	}
-	return statedb.New(rt.state)
-}
-
 // SetVMConfig config VM.
 // Returns this runtime.
 func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
@@ -392,7 +384,7 @@ func (rt *Runtime) PrepareClause(
 	txCtx *xenv.TransactionContext,
 ) (exec func() (output *Output, interrupted bool, err error), interrupt func()) {
 	var (
-		stateDB       = rt.newStateDB(txCtx)
+		stateDB       = statedb.New(rt.state, txCtx.Type == tx.TypeEthDynamicFee)
 		evm           = rt.newEVM(stateDB, clauseIndex, txCtx)
 		data          []byte
 		leftOverGas   uint64

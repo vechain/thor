@@ -203,7 +203,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 			return err
 		}
 		if t.Nonce() < accNonce {
-			return badTxError{"nonce too low"}
+			return errTxNotAdoptableForever
 		}
 		if t.Nonce() > accNonce {
 			return errTxNotAdoptableNow
