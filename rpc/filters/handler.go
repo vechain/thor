@@ -28,6 +28,20 @@ const (
 	filterTTL        = 5 * time.Minute
 	ttlCheckInterval = time.Minute
 	pendingTxBufSize = 128
+
+	// maxActiveFilters caps the total number of live filter objects across all clients.
+	// Each kindPendingTx filter holds a live txpool subscription; without this cap a
+	// single client can exhaust goroutines and channels by calling eth_newPendingTransactionFilter
+	// in a tight loop. The TTL evicts idle filters after filterTTL, but the check interval is
+	// ttlCheckInterval, so up to maxActiveFilters entries can accumulate before eviction fires.
+	//
+	// TODO: decide the broader approach for stateful filter endpoints:
+	//   (a) keep as-is with this global cap + TTL and document that sticky sessions are required
+	//       in multi-node / load-balanced deployments (filter state is node-local), or
+	//   (b) add a node-operator flag to disable these endpoints for clustered setups.
+	// Modern tooling (ethers v6, viem, wagmi) uses eth_subscribe over WebSocket instead;
+	// these filter endpoints mainly serve legacy clients (web3.js v1, older Hardhat plugins).
+	maxActiveFilters = 1000
 )
 
 type filterKind int8
@@ -159,6 +173,10 @@ func (h *Handler) ethNewFilter(req jsonrpc.Request) jsonrpc.Response {
 	}
 	id := h.newID()
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.entries) >= maxActiveFilters {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError, "too many active filters")
+	}
 	h.entries[id] = &entry{
 		kind:      kindLog,
 		lastPoll:  time.Now(),
@@ -166,19 +184,21 @@ func (h *Handler) ethNewFilter(req jsonrpc.Request) jsonrpc.Response {
 		logFilter: f,
 		criteria:  criteria,
 	}
-	h.mu.Unlock()
 	return jsonrpc.OkResponse(req.ID, id)
 }
 
 func (h *Handler) ethNewBlockFilter(req jsonrpc.Request) jsonrpc.Response {
 	id := h.newID()
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.entries) >= maxActiveFilters {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError, "too many active filters")
+	}
 	h.entries[id] = &entry{
 		kind:     kindBlock,
 		lastPoll: time.Now(),
 		reader:   h.repo.NewBlockReader(h.repo.BestBlockSummary().Header.ID()),
 	}
-	h.mu.Unlock()
 	return jsonrpc.OkResponse(req.ID, id)
 }
 
@@ -187,13 +207,17 @@ func (h *Handler) ethNewPendingTransactionFilter(req jsonrpc.Request) jsonrpc.Re
 	sub := h.txPool.SubscribeTxEvent(txCh)
 	id := h.newID()
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.entries) >= maxActiveFilters {
+		sub.Unsubscribe()
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError, "too many active filters")
+	}
 	h.entries[id] = &entry{
 		kind:     kindPendingTx,
 		lastPoll: time.Now(),
 		txCh:     txCh,
 		txSub:    sub,
 	}
-	h.mu.Unlock()
 	return jsonrpc.OkResponse(req.ID, id)
 }
 

@@ -131,6 +131,9 @@ func (c *wsConn) dispatch(msg []byte) {
 
 	if trimmed[0] == '[' {
 		// Batch request.
+		// TODO: enforce a batch size cap here (the HTTP path uses jsonrpc.maxBatchRequests=10).
+		// WS batch requests currently have no size limit — a single frame can carry thousands
+		// of requests, all dispatched synchronously in the read goroutine.
 		var raws []json.RawMessage
 		if err := json.Unmarshal(trimmed, &raws); err != nil {
 			c.send(mustMarshal(jsonrpc.ErrResponse(nil, jsonrpc.CodeParseError, "invalid JSON array: "+err.Error())))
@@ -208,6 +211,9 @@ func (c *wsConn) subscribe(req jsonrpc.Request) jsonrpc.Response {
 
 // startSub registers a subscription and runs fn in a goroutine.
 // The goroutine is tracked in subWg so serve() can wait for all of them.
+// TODO: add a per-connection subscription cap to prevent goroutine exhaustion.
+// A client can call eth_subscribe unlimited times; each call spawns a goroutine that
+// lives until the connection closes. Decide the right cap value before implementing.
 func (c *wsConn) startSub(subID string, fn func(context.Context)) {
 	ctx, cancel := context.WithCancel(c.connCtx)
 	c.subsMu.Lock()

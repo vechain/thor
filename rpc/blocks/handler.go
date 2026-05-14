@@ -127,18 +127,16 @@ func (h *Handler) ethGetBlockReceipts(req jsonrpc.Request) jsonrpc.Response {
 	baseFee := summary.Header.BaseFee()
 
 	ethReceipts := make([]*rpc.EthReceipt, 0)
+	var projIdx, cumGas, logOff uint64
 	for i, t := range blk.Transactions() {
 		if t.Type() != tx.TypeEthDynamicFee {
 			continue
 		}
-		projIdx := ethconvert.ProjectedEthIndex(receipts, uint64(i))
-		cumGas := ethconvert.CumulativeEthGasUsed(receipts, uint64(i))
-		logOff := ethconvert.EthLogOffset(receipts, uint64(i))
-		ethReceipts = append(ethReceipts, ethconvert.ToEthReceipt(
-			t, receipts[i],
-			blockHash, blockNum,
-			projIdx, cumGas, logOff, baseFee,
-		))
+		cumGas += receipts[i].GasUsed
+		rec := ethconvert.ToEthReceipt(t, receipts[i], blockHash, blockNum, projIdx, cumGas, logOff, baseFee)
+		ethReceipts = append(ethReceipts, rec)
+		logOff += uint64(len(rec.Logs))
+		projIdx++
 	}
 	return jsonrpc.OkResponse(req.ID, ethReceipts)
 }
