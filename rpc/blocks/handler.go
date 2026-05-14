@@ -13,6 +13,8 @@ import (
 
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/rpc/ethconvert"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -27,7 +29,7 @@ func New(repo *chain.Repository) *Handler {
 }
 
 // Mount registers all block query methods on the dispatcher.
-func (h *Handler) Mount(s *rpc.Server) {
+func (h *Handler) Mount(s *jsonrpc.Server) {
 	s.Register("eth_getBlockByHash", h.ethGetBlockByHash)
 	s.Register("eth_getBlockByNumber", h.ethGetBlockByNumber)
 	s.Register("eth_getBlockTransactionCountByHash", h.ethGetBlockTransactionCountByHash)
@@ -35,86 +37,62 @@ func (h *Handler) Mount(s *rpc.Server) {
 	s.Register("eth_getBlockReceipts", h.ethGetBlockReceipts)
 	s.Register("eth_getUncleCountByBlockHash", h.ethGetUncleCountByBlockHash)
 	s.Register("eth_getUncleCountByBlockNumber", h.ethGetUncleCountByBlockNumber)
-	s.Register("eth_getUncleByBlockHashAndIndex", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, nil) })
-	s.Register("eth_getUncleByBlockNumberAndIndex", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, nil) })
+	s.Register("eth_getUncleByBlockHashAndIndex", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, nil) })
+	s.Register("eth_getUncleByBlockNumberAndIndex", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, nil) })
 }
 
-func (h *Handler) ethGetBlockByHash(req rpc.Request) rpc.Response {
-	var params [2]json.RawMessage
+func (h *Handler) ethGetBlockByHash(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockQueryParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockHash, fullTransactions]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var hashStr string
-	if err := json.Unmarshal(params[0], &hashStr); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block hash")
-	}
-	var fullTxs bool
-	if err := json.Unmarshal(params[1], &fullTxs); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid fullTransactions flag")
-	}
-	return h.getBlockByTag(req.ID, hashStr, fullTxs)
+	return h.getBlockByTag(req.ID, params.Tag, params.FullTxs)
 }
 
-func (h *Handler) ethGetBlockByNumber(req rpc.Request) rpc.Response {
-	var params [2]json.RawMessage
+func (h *Handler) ethGetBlockByNumber(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockQueryParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockNumber, fullTransactions]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var tag string
-	if err := json.Unmarshal(params[0], &tag); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block number or tag")
-	}
-	var fullTxs bool
-	if err := json.Unmarshal(params[1], &fullTxs); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid fullTransactions flag")
-	}
-	return h.getBlockByTag(req.ID, tag, fullTxs)
+	return h.getBlockByTag(req.ID, params.Tag, params.FullTxs)
 }
 
-func (h *Handler) getBlockByTag(id json.RawMessage, tag string, fullTxs bool) rpc.Response {
-	summary, err := rpc.ResolveBlockTag(tag, h.repo)
+func (h *Handler) getBlockByTag(id json.RawMessage, tag string, fullTxs bool) jsonrpc.Response {
+	summary, err := ethconvert.ResolveBlockTag(tag, h.repo)
 	if err != nil {
-		return rpc.OkResponse(id, nil)
+		return jsonrpc.OkResponse(id, nil)
 	}
-	blk, err := rpc.BuildEthBlock(summary.Header, h.repo, fullTxs)
+	blk, err := ethconvert.BuildEthBlock(summary.Header, h.repo, fullTxs)
 	if err != nil {
-		return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(id, jsonrpc.CodeInternalError, err.Error())
 	}
-	return rpc.OkResponse(id, blk)
+	return jsonrpc.OkResponse(id, blk)
 }
 
-func (h *Handler) ethGetBlockTransactionCountByHash(req rpc.Request) rpc.Response {
-	var params [1]json.RawMessage
+func (h *Handler) ethGetBlockTransactionCountByHash(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockTagParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockHash]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var tag string
-	if err := json.Unmarshal(params[0], &tag); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block hash")
-	}
-	return h.txCountByTag(req.ID, tag)
+	return h.txCountByTag(req.ID, params.Tag)
 }
 
-func (h *Handler) ethGetBlockTransactionCountByNumber(req rpc.Request) rpc.Response {
-	var params [1]json.RawMessage
+func (h *Handler) ethGetBlockTransactionCountByNumber(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockTagParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockNumber]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var tag string
-	if err := json.Unmarshal(params[0], &tag); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block number or tag")
-	}
-	return h.txCountByTag(req.ID, tag)
+	return h.txCountByTag(req.ID, params.Tag)
 }
 
-func (h *Handler) txCountByTag(id json.RawMessage, tag string) rpc.Response {
-	summary, err := rpc.ResolveBlockTag(tag, h.repo)
+func (h *Handler) txCountByTag(id json.RawMessage, tag string) jsonrpc.Response {
+	summary, err := ethconvert.ResolveBlockTag(tag, h.repo)
 	if err != nil {
-		return rpc.OkResponse(id, nil)
+		return jsonrpc.OkResponse(id, nil)
 	}
 	blk, err := h.repo.GetBlock(summary.Header.ID())
 	if err != nil {
-		return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(id, jsonrpc.CodeInternalError, err.Error())
 	}
 	var count uint64
 	for _, t := range blk.Transactions() {
@@ -122,30 +100,26 @@ func (h *Handler) txCountByTag(id json.RawMessage, tag string) rpc.Response {
 			count++
 		}
 	}
-	return rpc.OkResponse(id, hexutil.Uint64(count))
+	return jsonrpc.OkResponse(id, hexutil.Uint64(count))
 }
 
-func (h *Handler) ethGetBlockReceipts(req rpc.Request) rpc.Response {
-	var params [1]json.RawMessage
+func (h *Handler) ethGetBlockReceipts(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockTagParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockTag]")
-	}
-	var tag string
-	if err := json.Unmarshal(params[0], &tag); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block tag")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
-	summary, err := rpc.ResolveBlockTag(tag, h.repo)
+	summary, err := ethconvert.ResolveBlockTag(params.Tag, h.repo)
 	if err != nil {
-		return rpc.OkResponse(req.ID, nil)
+		return jsonrpc.OkResponse(req.ID, nil)
 	}
 	blk, err := h.repo.GetBlock(summary.Header.ID())
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
 	receipts, err := h.repo.GetBlockReceipts(summary.Header.ID())
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
 
 	blockHash := common.Hash(summary.Header.ID())
@@ -157,45 +131,37 @@ func (h *Handler) ethGetBlockReceipts(req rpc.Request) rpc.Response {
 		if t.Type() != tx.TypeEthDynamicFee {
 			continue
 		}
-		projIdx := rpc.ProjectedEthIndex(receipts, uint64(i))
-		cumGas := rpc.CumulativeEthGasUsed(receipts, uint64(i))
-		logOff := rpc.EthLogOffset(receipts, uint64(i))
-		ethReceipts = append(ethReceipts, rpc.ToEthReceipt(
+		projIdx := ethconvert.ProjectedEthIndex(receipts, uint64(i))
+		cumGas := ethconvert.CumulativeEthGasUsed(receipts, uint64(i))
+		logOff := ethconvert.EthLogOffset(receipts, uint64(i))
+		ethReceipts = append(ethReceipts, ethconvert.ToEthReceipt(
 			t, receipts[i],
 			blockHash, blockNum,
 			projIdx, cumGas, logOff, baseFee,
 		))
 	}
-	return rpc.OkResponse(req.ID, ethReceipts)
+	return jsonrpc.OkResponse(req.ID, ethReceipts)
 }
 
-func (h *Handler) ethGetUncleCountByBlockHash(req rpc.Request) rpc.Response {
-	var params [1]json.RawMessage
+func (h *Handler) ethGetUncleCountByBlockHash(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockTagParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockHash]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var tag string
-	if err := json.Unmarshal(params[0], &tag); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block hash")
-	}
-	return h.uncleCountByTag(req.ID, tag)
+	return h.uncleCountByTag(req.ID, params.Tag)
 }
 
-func (h *Handler) ethGetUncleCountByBlockNumber(req rpc.Request) rpc.Response {
-	var params [1]json.RawMessage
+func (h *Handler) ethGetUncleCountByBlockNumber(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockTagParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockNumber]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var tag string
-	if err := json.Unmarshal(params[0], &tag); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block number or tag")
-	}
-	return h.uncleCountByTag(req.ID, tag)
+	return h.uncleCountByTag(req.ID, params.Tag)
 }
 
-func (h *Handler) uncleCountByTag(id json.RawMessage, tag string) rpc.Response {
-	if _, err := rpc.ResolveBlockTag(tag, h.repo); err != nil {
-		return rpc.OkResponse(id, nil)
+func (h *Handler) uncleCountByTag(id json.RawMessage, tag string) jsonrpc.Response {
+	if _, err := ethconvert.ResolveBlockTag(tag, h.repo); err != nil {
+		return jsonrpc.OkResponse(id, nil)
 	}
-	return rpc.OkResponse(id, hexutil.Uint64(0))
+	return jsonrpc.OkResponse(id, hexutil.Uint64(0))
 }

@@ -8,12 +8,16 @@ package thorclient
 import (
 	"encoding/json"
 	"math/big"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -866,5 +870,103 @@ func TestEthRPC(t *testing.T) {
 		result = testutil.Call(t, testNode.APIServer(), "eth_uninstallFilter", []any{"0x9999"})
 		require.NoError(t, json.Unmarshal(result, &ok))
 		assert.False(t, ok)
+	})
+
+	t.Run("eth_subscribe_newHeads", func(t *testing.T) {
+		u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(testNode.APIServer().URL, "http://"), Path: "/rpc"}
+		conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+		t.Cleanup(func() { conn.Close() })
+
+		// Subscribe to newHeads.
+		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "eth_subscribe", "params": []any{"newHeads"}})
+		require.NoError(t, conn.WriteMessage(websocket.TextMessage, body))
+		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, msg, err := conn.ReadMessage()
+		require.NoError(t, err)
+		var subResp struct {
+			Result string `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(msg, &subResp))
+		subID := subResp.Result
+		assert.Regexp(t, `^0x[0-9a-f]+$`, subID)
+
+		// Mint a new block and expect a notification.
+		require.NoError(t, testNode.Chain().MintBlock())
+
+		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, notifMsg, err := conn.ReadMessage()
+		require.NoError(t, err)
+
+		var notif struct {
+			Method string `json:"method"`
+			Params struct {
+				Subscription string `json:"subscription"`
+				Result       struct {
+					Number string `json:"number"`
+					Hash   string `json:"hash"`
+				} `json:"result"`
+			} `json:"params"`
+		}
+		require.NoError(t, json.Unmarshal(notifMsg, &notif))
+		assert.Equal(t, "eth_subscription", notif.Method)
+		assert.Equal(t, subID, notif.Params.Subscription)
+		assert.Regexp(t, `^0x[0-9a-f]{64}$`, notif.Params.Result.Hash)
+		assert.NotEmpty(t, notif.Params.Result.Number)
+	})
+
+	t.Run("eth_subscribe_logs", func(t *testing.T) {
+		u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(testNode.APIServer().URL, "http://"), Path: "/rpc"}
+		conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+		t.Cleanup(func() { conn.Close() })
+
+		// Subscribe to logs from the Energy contract.
+		body, _ := json.Marshal(map[string]any{
+			"jsonrpc": "2.0", "id": 1, "method": "eth_subscribe",
+			"params": []any{"logs", map[string]any{"address": energyAddr.String()}},
+		})
+		require.NoError(t, conn.WriteMessage(websocket.TextMessage, body))
+		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, msg, err := conn.ReadMessage()
+		require.NoError(t, err)
+		var subResp struct {
+			Result string `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(msg, &subResp))
+		subID := subResp.Result
+		assert.Regexp(t, `^0x[0-9a-f]+$`, subID)
+
+		// Mint a block containing an Energy.transfer call.
+		wsSender := genesis.DevAccounts()[9]
+		wsCallData, err := transferMethod.EncodeInput(recipient.Address, big.NewInt(1e9))
+		require.NoError(t, err)
+		wsCallTx := testutil.BuildEthCallTx(t, testNode.Chain().ChainID(), wsSender, 0, &energyAddr, wsCallData, 200_000)
+		require.NoError(t, testNode.Chain().MintBlock(wsCallTx))
+
+		// Expect a notification with the Transfer log.
+		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, notifMsg, err := conn.ReadMessage()
+		require.NoError(t, err)
+
+		var notif struct {
+			Method string `json:"method"`
+			Params struct {
+				Subscription string `json:"subscription"`
+				Result       struct {
+					Address string   `json:"address"`
+					Topics  []string `json:"topics"`
+					Removed bool     `json:"removed"`
+				} `json:"result"`
+			} `json:"params"`
+		}
+		require.NoError(t, json.Unmarshal(notifMsg, &notif))
+		assert.Equal(t, "eth_subscription", notif.Method)
+		assert.Equal(t, subID, notif.Params.Subscription)
+		assert.True(t, strings.EqualFold(energyAddr.String(), notif.Params.Result.Address))
+		require.NotEmpty(t, notif.Params.Result.Topics)
+		assert.False(t, notif.Params.Result.Removed)
 	})
 }

@@ -98,4 +98,12 @@ func TestAccountsHandler(t *testing.T) {
 		require.NoError(t, json.Unmarshal(result, &code))
 		assert.NotEmpty(t, code, "Energy built-in contract should have non-empty code")
 	})
+
+	t.Run("eth_getBalance_no_block_tag", func(t *testing.T) {
+		// Block tag is optional per Ethereum convention; omitting it defaults to "latest".
+		result := testutil.Call(t, ts, "eth_getBalance", []any{fx.senderAddr})
+		var bal hexutil.Big
+		require.NoError(t, json.Unmarshal(result, &bal))
+		assert.True(t, bal.ToInt().Sign() > 0, "funded dev account should have non-zero balance without explicit block tag")
+	})
 }

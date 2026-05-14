@@ -16,7 +16,7 @@ import (
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/rpc/simulation"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -117,7 +117,7 @@ func TestSimulationHandler(t *testing.T) {
 			},
 			"latest",
 		})
-		assert.Equal(t, rpc.CodeServerError, rpcErr.Code)
+		assert.Equal(t, jsonrpc.CodeServerError, rpcErr.Code)
 		assert.Equal(t, "execution reverted", rpcErr.Message)
 	})
 
@@ -137,6 +137,24 @@ func TestSimulationHandler(t *testing.T) {
 				"data": hexutil.Encode(callData),
 			},
 		})
-		assert.Equal(t, rpc.CodeServerError, rpcErr.Code)
+		assert.Equal(t, jsonrpc.CodeServerError, rpcErr.Code)
+	})
+
+	t.Run("eth_call_eip1559_gas_price_fields", func(t *testing.T) {
+		// EIP-1559 callers supply maxFeePerGas + maxPriorityFeePerGas instead of gasPrice.
+		// A plain transfer with these fields must succeed and return empty output data.
+		result := testutil.Call(t, ts, "eth_call", []any{
+			map[string]any{
+				"from":                 fx.senderAddr,
+				"to":                   fx.recipientAddr,
+				"value":                "0x1",
+				"maxFeePerGas":         "0x3B9ACA00", // 1 gwei
+				"maxPriorityFeePerGas": "0x3B9ACA00", // 1 gwei
+			},
+			"latest",
+		})
+		var data hexutil.Bytes
+		require.NoError(t, json.Unmarshal(result, &data))
+		assert.Empty(t, data)
 	})
 }

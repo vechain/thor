@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package rpc
+package ethconvert
 
 import (
 	"testing"
@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/vechain/thor/v2/rpc"
 )
 
 func TestEthLogsBloom_empty(t *testing.T) {
@@ -21,7 +23,7 @@ func TestEthLogsBloom_empty(t *testing.T) {
 	require.Len(t, bloom, 256)
 	assert.Equal(t, make([]byte, 256), []byte(bloom))
 
-	bloom2 := ethLogsBloom([]*EthLog{})
+	bloom2 := ethLogsBloom([]*rpc.EthLog{})
 	assert.Equal(t, make([]byte, 256), []byte(bloom2))
 }
 
@@ -36,7 +38,7 @@ func TestEthLogsBloom_crossCheck(t *testing.T) {
 	fromTopic := common.BytesToHash(fromAddr.Bytes())
 	toTopic := common.BytesToHash(toAddr.Bytes())
 
-	ethLog := &EthLog{
+	ethLog := &rpc.EthLog{
 		Address: contractAddr,
 		Topics:  []common.Hash{transferTopic, fromTopic, toTopic},
 		Data:    []byte{},
@@ -53,7 +55,7 @@ func TestEthLogsBloom_crossCheck(t *testing.T) {
 	b := gethBin.Bytes()
 	copy(expected[256-len(b):], b)
 
-	got := ethLogsBloom([]*EthLog{ethLog})
+	got := ethLogsBloom([]*rpc.EthLog{ethLog})
 	assert.Equal(t, expected, []byte(got), "bloom must match go-ethereum reference")
 
 	// Verify the bloom contains the expected entries via BloomLookup.
@@ -78,11 +80,11 @@ func TestEthReceiptWireBytes(t *testing.T) {
 	bloom := make([]byte, 256)
 	bloom[255] = 0x01 // one non-zero bit
 
-	rec := &EthReceipt{
+	rec := &rpc.EthReceipt{
 		Status:            1,
 		CumulativeGasUsed: 21000,
 		LogsBloom:         bloom,
-		Logs:              []*EthLog{},
+		Logs:              []*rpc.EthLog{},
 	}
 
 	b := ethReceiptWireBytes(rec)

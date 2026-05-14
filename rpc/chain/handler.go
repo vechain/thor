@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 )
 
 // Handler implements chain metadata JSON-RPC methods.
@@ -27,37 +27,40 @@ func New(repo *chain.Repository, clientVersion string) *Handler {
 }
 
 // Mount registers all chain metadata methods on the dispatcher.
-func (h *Handler) Mount(s *rpc.Server) {
+func (h *Handler) Mount(s *jsonrpc.Server) {
 	s.Register("eth_chainId", h.ethChainID)
 	s.Register("net_version", h.netVersion)
-	s.Register("net_listening", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, true) })
-	s.Register("net_peerCount", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, hexutil.Uint64(0)) }) // TODO do we want to hook this up ?
+	s.Register("net_listening", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, true) })
+	s.Register(
+		"net_peerCount",
+		func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, hexutil.Uint64(0)) },
+	) // VeChain PoA has no mining peers
 	s.Register("web3_clientVersion", h.web3ClientVersion)
 	s.Register("eth_blockNumber", h.ethBlockNumber)
 	s.Register("eth_coinbase", h.ethCoinbase)
-	s.Register("eth_syncing", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
-	s.Register("eth_accounts", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, []string{}) })
-	s.Register("eth_mining", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, false) })
-	s.Register("eth_hashrate", func(req rpc.Request) rpc.Response { return rpc.OkResponse(req.ID, "0x0") })
+	s.Register("eth_syncing", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, false) })
+	s.Register("eth_accounts", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, []string{}) })
+	s.Register("eth_mining", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, false) })
+	s.Register("eth_hashrate", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, hexutil.Uint64(0)) })
 }
 
-func (h *Handler) ethChainID(req rpc.Request) rpc.Response {
-	return rpc.OkResponse(req.ID, hexutil.Uint64(h.repo.ChainID()))
+func (h *Handler) ethChainID(req jsonrpc.Request) jsonrpc.Response {
+	return jsonrpc.OkResponse(req.ID, hexutil.Uint64(h.repo.ChainID()))
 }
 
-func (h *Handler) netVersion(req rpc.Request) rpc.Response {
-	return rpc.OkResponse(req.ID, strconv.FormatUint(h.repo.ChainID(), 10))
+func (h *Handler) netVersion(req jsonrpc.Request) jsonrpc.Response {
+	return jsonrpc.OkResponse(req.ID, strconv.FormatUint(h.repo.ChainID(), 10))
 }
 
-func (h *Handler) web3ClientVersion(req rpc.Request) rpc.Response {
-	return rpc.OkResponse(req.ID, "Thor/"+h.clientVersion)
+func (h *Handler) web3ClientVersion(req jsonrpc.Request) jsonrpc.Response {
+	return jsonrpc.OkResponse(req.ID, "Thor/"+h.clientVersion)
 }
 
-func (h *Handler) ethBlockNumber(req rpc.Request) rpc.Response {
+func (h *Handler) ethBlockNumber(req jsonrpc.Request) jsonrpc.Response {
 	num := h.repo.BestBlockSummary().Header.Number()
-	return rpc.OkResponse(req.ID, hexutil.Uint64(num))
+	return jsonrpc.OkResponse(req.ID, hexutil.Uint64(num))
 }
 
-func (h *Handler) ethCoinbase(req rpc.Request) rpc.Response {
-	return rpc.OkResponse(req.ID, common.Address{})
+func (h *Handler) ethCoinbase(req jsonrpc.Request) jsonrpc.Response {
+	return jsonrpc.OkResponse(req.ID, common.Address{})
 }

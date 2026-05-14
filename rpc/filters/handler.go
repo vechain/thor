@@ -18,7 +18,8 @@ import (
 
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/rpc"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/rpc/ethconvert"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -37,41 +38,13 @@ const (
 	kindPendingTx
 )
 
-// logCriteria is the parsed form of a log filter for fast per-event matching
-// during incremental block scanning in eth_getFilterChanges.
-// Only ETH-typed (TypeEthDynamicFee) transaction events are matched.
-type logCriteria struct {
-	addresses []thor.Address
-	topics    [5]*thor.Bytes32
-}
-
-func (c *logCriteria) matchesEvent(e *tx.Event) bool {
-	if len(c.addresses) > 0 {
-		found := false
-		for _, a := range c.addresses {
-			if a == e.Address {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-	for i, want := range c.topics {
-		if want == nil {
-			continue // wildcard
-		}
-		if i >= len(e.Topics) || e.Topics[i] != *want {
-			return false
-		}
-	}
-	return true
-}
-
 type entry struct {
 	kind     filterKind
 	lastPoll time.Time
+	// mu serialises concurrent ethGetFilterChanges calls on the same filter entry.
+	// reader and txCh are stateful (capture position/buffer) and must not be read
+	// by two goroutines at once. The TTL goroutine only holds h.mu, never e.mu.
+	mu sync.Mutex
 
 	// kindLog + kindBlock: tracks the chain cursor for incremental polling.
 	// Positioned at the best block when the filter was created; advances on each poll.
@@ -85,8 +58,8 @@ type entry struct {
 	// eth_getFilterLogs re-evaluates LogFilter.FromBlock/ToBlock against the
 	// current best chain at query time, so "latest" resolves to the current
 	// head — not the block at filter creation.
-	logFilter rpc.LogFilter
-	criteria  logCriteria
+	logFilter rpc.EthLogFilter
+	criteria  ethconvert.LogCriteria
 
 	// kindPendingTx only.
 	// Only executable ETH-typed transactions are reported; see eth_newPendingTransactionFilter.
@@ -134,7 +107,7 @@ func (h *Handler) Close() {
 }
 
 // Mount registers all filter methods on the dispatcher.
-func (h *Handler) Mount(s *rpc.Server) {
+func (h *Handler) Mount(s *jsonrpc.Server) {
 	s.Register("eth_newFilter", h.ethNewFilter)
 	s.Register("eth_newBlockFilter", h.ethNewBlockFilter)
 	s.Register("eth_newPendingTransactionFilter", h.ethNewPendingTransactionFilter)
@@ -174,15 +147,15 @@ func (h *Handler) evictExpired() {
 	}
 }
 
-func (h *Handler) ethNewFilter(req rpc.Request) rpc.Response {
-	var params []rpc.LogFilter
+func (h *Handler) ethNewFilter(req jsonrpc.Request) jsonrpc.Response {
+	var params []rpc.EthLogFilter
 	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [filterObject]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "expected [filterObject]")
 	}
 	f := params[0]
-	criteria, err := parseCriteria(f)
+	criteria, err := ethconvert.ParseLogCriteria(f)
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 	id := h.newID()
 	h.mu.Lock()
@@ -194,10 +167,10 @@ func (h *Handler) ethNewFilter(req rpc.Request) rpc.Response {
 		criteria:  criteria,
 	}
 	h.mu.Unlock()
-	return rpc.OkResponse(req.ID, id)
+	return jsonrpc.OkResponse(req.ID, id)
 }
 
-func (h *Handler) ethNewBlockFilter(req rpc.Request) rpc.Response {
+func (h *Handler) ethNewBlockFilter(req jsonrpc.Request) jsonrpc.Response {
 	id := h.newID()
 	h.mu.Lock()
 	h.entries[id] = &entry{
@@ -206,10 +179,10 @@ func (h *Handler) ethNewBlockFilter(req rpc.Request) rpc.Response {
 		reader:   h.repo.NewBlockReader(h.repo.BestBlockSummary().Header.ID()),
 	}
 	h.mu.Unlock()
-	return rpc.OkResponse(req.ID, id)
+	return jsonrpc.OkResponse(req.ID, id)
 }
 
-func (h *Handler) ethNewPendingTransactionFilter(req rpc.Request) rpc.Response {
+func (h *Handler) ethNewPendingTransactionFilter(req jsonrpc.Request) jsonrpc.Response {
 	txCh := make(chan *txpool.TxEvent, pendingTxBufSize)
 	sub := h.txPool.SubscribeTxEvent(txCh)
 	id := h.newID()
@@ -221,17 +194,17 @@ func (h *Handler) ethNewPendingTransactionFilter(req rpc.Request) rpc.Response {
 		txSub:    sub,
 	}
 	h.mu.Unlock()
-	return rpc.OkResponse(req.ID, id)
+	return jsonrpc.OkResponse(req.ID, id)
 }
 
-func (h *Handler) ethGetFilterChanges(req rpc.Request) rpc.Response {
+func (h *Handler) ethGetFilterChanges(req jsonrpc.Request) jsonrpc.Response {
 	var params [1]json.RawMessage
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [filterId]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "expected [filterId]")
 	}
 	var id string
 	if err := json.Unmarshal(params[0], &id); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid filter id")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid filter id")
 	}
 
 	h.mu.Lock()
@@ -242,7 +215,7 @@ func (h *Handler) ethGetFilterChanges(req rpc.Request) rpc.Response {
 	h.mu.Unlock()
 
 	if !ok {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "filter not found")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "filter not found")
 	}
 
 	switch e.kind {
@@ -255,13 +228,15 @@ func (h *Handler) ethGetFilterChanges(req rpc.Request) rpc.Response {
 	}
 }
 
-func (h *Handler) changesBlock(id json.RawMessage, e *entry) rpc.Response {
+func (h *Handler) changesBlock(id json.RawMessage, e *entry) jsonrpc.Response {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	// BlockReader.Read() advances by one block per call — loop until caught up.
 	hashes := make([]common.Hash, 0)
 	for {
 		blocks, err := e.reader.Read()
 		if err != nil {
-			return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
+			return jsonrpc.ErrResponse(id, jsonrpc.CodeInternalError, err.Error())
 		}
 		if len(blocks) == 0 {
 			break
@@ -273,16 +248,18 @@ func (h *Handler) changesBlock(id json.RawMessage, e *entry) rpc.Response {
 			hashes = append(hashes, common.Hash(blk.Header().ID()))
 		}
 	}
-	return rpc.OkResponse(id, hashes)
+	return jsonrpc.OkResponse(id, hashes)
 }
 
-func (h *Handler) changesLog(id json.RawMessage, e *entry) rpc.Response {
+func (h *Handler) changesLog(id json.RawMessage, e *entry) jsonrpc.Response {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	// BlockReader.Read() advances by one block per call — loop until caught up.
 	ethLogs := make([]*rpc.EthLog, 0)
 	for {
 		blocks, err := e.reader.Read()
 		if err != nil {
-			return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
+			return jsonrpc.ErrResponse(id, jsonrpc.CodeInternalError, err.Error())
 		}
 		if len(blocks) == 0 {
 			break
@@ -293,17 +270,19 @@ func (h *Handler) changesLog(id json.RawMessage, e *entry) rpc.Response {
 			}
 			receipts, err := h.repo.GetBlockReceipts(blk.Header().ID())
 			if err != nil {
-				return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
+				return jsonrpc.ErrResponse(id, jsonrpc.CodeInternalError, err.Error())
 			}
-			logs := collectMatchingLogs(&e.criteria, blk.Transactions(), receipts,
-				common.Hash(blk.Header().ID()), uint64(blk.Header().Number()))
+			logs := ethconvert.CollectMatchingLogs(&e.criteria, blk.Transactions(), receipts,
+				common.Hash(blk.Header().ID()), uint64(blk.Header().Number()), false)
 			ethLogs = append(ethLogs, logs...)
 		}
 	}
-	return rpc.OkResponse(id, ethLogs)
+	return jsonrpc.OkResponse(id, ethLogs)
 }
 
-func (h *Handler) changesPendingTx(id json.RawMessage, e *entry) rpc.Response {
+func (h *Handler) changesPendingTx(id json.RawMessage, e *entry) jsonrpc.Response {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	var hashes []common.Hash
 drain:
 	for {
@@ -319,17 +298,17 @@ drain:
 	if hashes == nil {
 		hashes = []common.Hash{}
 	}
-	return rpc.OkResponse(id, hashes)
+	return jsonrpc.OkResponse(id, hashes)
 }
 
-func (h *Handler) ethGetFilterLogs(req rpc.Request) rpc.Response {
+func (h *Handler) ethGetFilterLogs(req jsonrpc.Request) jsonrpc.Response {
 	var params [1]json.RawMessage
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [filterId]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "expected [filterId]")
 	}
 	var id string
 	if err := json.Unmarshal(params[0], &id); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid filter id")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid filter id")
 	}
 
 	h.mu.Lock()
@@ -340,10 +319,10 @@ func (h *Handler) ethGetFilterLogs(req rpc.Request) rpc.Response {
 	h.mu.Unlock()
 
 	if !ok {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "filter not found")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "filter not found")
 	}
 	if e.kind != kindLog {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "eth_getFilterLogs is only valid for log filters")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "eth_getFilterLogs is only valid for log filters")
 	}
 	return h.queryFilterLogs(req.ID, e)
 }
@@ -356,7 +335,7 @@ func (h *Handler) ethGetFilterLogs(req rpc.Request) rpc.Response {
 //
 // Scanning is receipt-based rather than using the logDB index, so it is bounded by the
 // backtrace limit. For large historical range queries, prefer eth_getLogs instead.
-func (h *Handler) queryFilterLogs(id json.RawMessage, e *entry) rpc.Response {
+func (h *Handler) queryFilterLogs(id json.RawMessage, e *entry) jsonrpc.Response {
 	f := e.logFilter
 	bestNum := h.repo.BestBlockSummary().Header.Number()
 	bestChain := h.repo.NewBestChain()
@@ -366,16 +345,16 @@ func (h *Handler) queryFilterLogs(id json.RawMessage, e *entry) rpc.Response {
 	toNum := bestNum
 
 	if f.FromBlock != nil && *f.FromBlock != "" {
-		summary, err := rpc.ResolveBlockTag(*f.FromBlock, h.repo)
+		summary, err := ethconvert.ResolveBlockTag(*f.FromBlock, h.repo)
 		if err != nil {
-			return rpc.ErrResponse(id, rpc.CodeInvalidParams, "invalid fromBlock")
+			return jsonrpc.ErrResponse(id, jsonrpc.CodeInvalidParams, "invalid fromBlock")
 		}
 		fromNum = summary.Header.Number()
 	}
 	if f.ToBlock != nil && *f.ToBlock != "" {
-		summary, err := rpc.ResolveBlockTag(*f.ToBlock, h.repo)
+		summary, err := ethconvert.ResolveBlockTag(*f.ToBlock, h.repo)
 		if err != nil {
-			return rpc.ErrResponse(id, rpc.CodeInvalidParams, "invalid toBlock")
+			return jsonrpc.ErrResponse(id, jsonrpc.CodeInvalidParams, "invalid toBlock")
 		}
 		toNum = summary.Header.Number()
 	}
@@ -383,10 +362,10 @@ func (h *Handler) queryFilterLogs(id json.RawMessage, e *entry) rpc.Response {
 		toNum = bestNum
 	}
 	if fromNum > toNum {
-		return rpc.ErrResponse(id, rpc.CodeInvalidParams, "invalid block range")
+		return jsonrpc.ErrResponse(id, jsonrpc.CodeInvalidParams, "invalid block range")
 	}
 	if toNum-fromNum > h.backtrace {
-		return rpc.ErrResponse(id, rpc.CodeServerError,
+		return jsonrpc.ErrResponse(id, jsonrpc.CodeServerError,
 			fmt.Sprintf("block range exceeds backtrace limit of %d", h.backtrace))
 	}
 
@@ -394,30 +373,30 @@ func (h *Handler) queryFilterLogs(id json.RawMessage, e *entry) rpc.Response {
 	for num := uint64(fromNum); num <= uint64(toNum); num++ {
 		blk, err := bestChain.GetBlock(uint32(num))
 		if err != nil {
-			return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
+			return jsonrpc.ErrResponse(id, jsonrpc.CodeInternalError, err.Error())
 		}
 		receipts, err := h.repo.GetBlockReceipts(blk.Header().ID())
 		if err != nil {
-			return rpc.ErrResponse(id, rpc.CodeInternalError, err.Error())
+			return jsonrpc.ErrResponse(id, jsonrpc.CodeInternalError, err.Error())
 		}
-		logs := collectMatchingLogs(&e.criteria, blk.Transactions(), receipts,
-			common.Hash(blk.Header().ID()), uint64(blk.Header().Number()))
+		logs := ethconvert.CollectMatchingLogs(&e.criteria, blk.Transactions(), receipts,
+			common.Hash(blk.Header().ID()), uint64(blk.Header().Number()), false)
 		ethLogs = append(ethLogs, logs...)
 	}
 	if ethLogs == nil {
 		ethLogs = []*rpc.EthLog{}
 	}
-	return rpc.OkResponse(id, ethLogs)
+	return jsonrpc.OkResponse(id, ethLogs)
 }
 
-func (h *Handler) ethUninstallFilter(req rpc.Request) rpc.Response {
+func (h *Handler) ethUninstallFilter(req jsonrpc.Request) jsonrpc.Response {
 	var params [1]json.RawMessage
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [filterId]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "expected [filterId]")
 	}
 	var id string
 	if err := json.Unmarshal(params[0], &id); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid filter id")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid filter id")
 	}
 
 	h.mu.Lock()
@@ -430,100 +409,5 @@ func (h *Handler) ethUninstallFilter(req rpc.Request) rpc.Response {
 	if ok && e.kind == kindPendingTx {
 		e.txSub.Unsubscribe()
 	}
-	return rpc.OkResponse(req.ID, ok)
-}
-
-// collectMatchingLogs scans ETH-typed transactions in a single block and returns EthLog
-// entries matching the criteria. Projected transactionIndex and logIndex are relative to
-// ETH-typed transactions only, consistent with eth_getTransactionByHash etc.
-func collectMatchingLogs(criteria *logCriteria, txs tx.Transactions, receipts tx.Receipts, blockHash common.Hash, blockNum uint64) []*rpc.EthLog {
-	var logs []*rpc.EthLog
-	var projEthIdx uint64 // running ETH tx index within the block
-	var projLogIdx uint64 // running ETH log index within the block (all ETH events, not just matching)
-
-	for i, t := range txs {
-		if t.Type() != tx.TypeEthDynamicFee {
-			continue
-		}
-		receipt := receipts[i]
-		if len(receipt.Outputs) > 0 {
-			for j, event := range receipt.Outputs[0].Events {
-				if criteria.matchesEvent(event) {
-					topics := make([]common.Hash, len(event.Topics))
-					for k, tp := range event.Topics {
-						topics[k] = common.Hash(tp)
-					}
-					logs = append(logs, &rpc.EthLog{
-						Address:     common.Address(event.Address),
-						Topics:      topics,
-						Data:        event.Data,
-						BlockNumber: hexutil.Uint64(blockNum),
-						TxHash:      common.Hash(t.ID()),
-						TxIndex:     hexutil.Uint64(projEthIdx),
-						BlockHash:   blockHash,
-						LogIndex:    hexutil.Uint64(projLogIdx + uint64(j)),
-						Removed:     false,
-					})
-				}
-			}
-			projLogIdx += uint64(len(receipt.Outputs[0].Events))
-		}
-		projEthIdx++
-	}
-	return logs
-}
-
-// parseCriteria parses the address and topic fields from a LogFilter into a logCriteria.
-// OR semantics within a single topic position are not fully supported — only the first
-// alternative is used (e.g., [["A","B"], "C"] treats position 0 as matching only "A").
-func parseCriteria(f rpc.LogFilter) (logCriteria, error) {
-	var c logCriteria
-
-	if len(f.Address) > 0 && string(f.Address) != "null" {
-		var single string
-		var multi []string
-		if err := json.Unmarshal(f.Address, &single); err == nil {
-			addr, err := thor.ParseAddress(single)
-			if err != nil {
-				return c, fmt.Errorf("invalid address: %w", err)
-			}
-			c.addresses = append(c.addresses, addr)
-		} else if err := json.Unmarshal(f.Address, &multi); err == nil {
-			for _, s := range multi {
-				addr, err := thor.ParseAddress(s)
-				if err != nil {
-					return c, fmt.Errorf("invalid address: %w", err)
-				}
-				c.addresses = append(c.addresses, addr)
-			}
-		}
-	}
-
-	topics := f.Topics
-	if len(topics) > len(c.topics) {
-		topics = topics[:len(c.topics)]
-	}
-	for i, raw := range topics {
-		if raw == nil || string(raw) == "null" {
-			continue
-		}
-		var single string
-		var multi []string
-		if err := json.Unmarshal(raw, &single); err == nil {
-			h32, err := rpc.ParseBytes32Compact(single)
-			if err != nil {
-				return c, fmt.Errorf("invalid topic: %w", err)
-			}
-			h32Copy := h32
-			c.topics[i] = &h32Copy
-		} else if err := json.Unmarshal(raw, &multi); err == nil && len(multi) > 0 {
-			h32, err := rpc.ParseBytes32Compact(multi[0])
-			if err != nil {
-				return c, fmt.Errorf("invalid topic: %w", err)
-			}
-			h32Copy := h32
-			c.topics[i] = &h32Copy
-		}
-	}
-	return c, nil
+	return jsonrpc.OkResponse(req.ID, ok)
 }

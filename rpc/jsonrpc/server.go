@@ -3,7 +3,10 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package rpc
+// Package jsonrpc provides the JSON-RPC 2.0 server and protocol types used by
+// the Ethereum-compatible RPC layer. It mirrors the role gorilla/mux plays in
+// the REST API: it is the dispatch layer, not a domain-logic package.
+package jsonrpc
 
 import (
 	"bytes"
@@ -77,7 +80,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) dispatch(req Request) Response {
+// Dispatch routes a parsed JSON-RPC request to its registered handler.
+// It is exported so that the WebSocket handler can proxy non-subscribe
+// methods (eth_call, eth_blockNumber, etc.) over a WS connection.
+func (s *Server) Dispatch(req Request) Response {
 	h, ok := s.methods[req.Method]
 	if !ok {
 		return ErrResponse(req.ID, CodeMethodNotFound, fmt.Sprintf("method %q not found", req.Method))
@@ -91,7 +97,7 @@ func (s *Server) handleSingle(w http.ResponseWriter, body []byte) {
 		writeJSON(w, ErrResponse(nil, CodeParseError, "invalid JSON: "+err.Error()))
 		return
 	}
-	writeJSON(w, s.dispatch(req))
+	writeJSON(w, s.Dispatch(req))
 }
 
 func (s *Server) handleBatch(w http.ResponseWriter, body []byte) {
@@ -116,7 +122,7 @@ func (s *Server) handleBatch(w http.ResponseWriter, body []byte) {
 			responses[i] = ErrResponse(nil, CodeParseError, "invalid request in batch: "+err.Error())
 			continue
 		}
-		responses[i] = s.dispatch(req)
+		responses[i] = s.Dispatch(req)
 	}
 	writeJSON(w, responses)
 }

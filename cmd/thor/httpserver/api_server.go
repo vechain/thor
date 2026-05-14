@@ -34,7 +34,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
@@ -47,6 +47,7 @@ import (
 	rpclogs "github.com/vechain/thor/v2/rpc/logs"
 	rpcsimulation "github.com/vechain/thor/v2/rpc/simulation"
 	rpctransactions "github.com/vechain/thor/v2/rpc/transactions"
+	rpcws "github.com/vechain/thor/v2/rpc/ws"
 )
 
 var logger = log.WithContext("pkg", "api")
@@ -142,18 +143,22 @@ func StartAPIServer(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
-	// Ethereum JSON-RPC at /rpc — body limit enforced internally by rpc.Server (2 MB via MaxBytesReader)
-	rpcSrv := rpc.NewServer()
+	// Ethereum JSON-RPC at /rpc — body limit enforced internally by jsonrpc.Server (2 MB via MaxBytesReader)
+	rpcSrv := jsonrpc.NewServer()
 	rpcchain.New(repo, config.ClientVersion).Mount(rpcSrv)
 	rpcblocks.New(repo).Mount(rpcSrv)
 	rpctransactions.New(repo, txPool).Mount(rpcSrv)
 	rpcaccounts.New(repo, stater).Mount(rpcSrv)
 	rpclogs.New(repo, logDB, config.BacktraceLimit, config.LogsLimit).Mount(rpcSrv)
-	rpcfees.New(repo, config.BacktraceLimit).Mount(rpcSrv)
+	rpcfees.New(repo, config.BacktraceLimit, forkConfig).Mount(rpcSrv)
 	rpcsimulation.New(repo, stater, forkConfig, config.CallGasLimit).Mount(rpcSrv)
 	rpcFilters := rpcfilters.New(repo, txPool, config.BacktraceLimit)
 	rpcFilters.Mount(rpcSrv)
-	router.PathPrefix("/rpc").Handler(rpcSrv)
+
+	// Wrap rpcSrv with the WebSocket handler: plain HTTP POST goes to rpcSrv,
+	// WebSocket upgrade requests gain eth_subscribe / eth_unsubscribe.
+	rpcWs := rpcws.New(repo, txPool, config.BacktraceLimit, origins, rpcSrv)
+	router.PathPrefix("/rpc").Handler(rpcWs)
 
 	if config.PprofOn {
 		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -164,7 +169,7 @@ func StartAPIServer(
 	}
 
 	// middlewares
-	// /rpc owns its body limit inside rpc.Server; skip the REST 200 KB cap for that path.
+	// /rpc owns its body limit inside jsonrpc.Server; skip the REST 200 KB cap for that path.
 	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit, "/rpc"))
 	if config.Timeout > 0 {
 		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
@@ -196,6 +201,7 @@ func StartAPIServer(
 		srv.Close()
 		subs.Close()
 		rpcFilters.Close()
+		rpcWs.Close()
 		goes.Wait()
 	}, nil
 }

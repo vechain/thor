@@ -9,12 +9,12 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/rpc"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/rpc/ethconvert"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -31,7 +31,7 @@ func New(repo *chain.Repository, txPool txpool.Pool) *Handler {
 }
 
 // Mount registers all transaction methods on the dispatcher.
-func (h *Handler) Mount(s *rpc.Server) {
+func (h *Handler) Mount(s *jsonrpc.Server) {
 	s.Register("eth_getTransactionByHash", h.ethGetTransactionByHash)
 	s.Register("eth_getTransactionByBlockHashAndIndex", h.ethGetTransactionByBlockHashAndIndex)
 	s.Register("eth_getTransactionByBlockNumberAndIndex", h.ethGetTransactionByBlockNumberAndIndex)
@@ -48,7 +48,7 @@ type ethTxContext struct {
 
 // fetchEthTxContext looks up an ETH-typed tx by hash and loads its block header and receipts.
 // Returns nil, nil when the tx does not exist or is not an ETH-typed transaction.
-func (h *Handler) fetchEthTxContext(bestChain *chain.Chain, id thor.Bytes32) (*ethTxContext, error) {
+func (h *Handler) fetchEthTxContext(bestChain *chain.Chain, id [32]byte) (*ethTxContext, error) {
 	t, meta, err := bestChain.GetTransaction(id)
 	if err != nil || t.Type() != tx.TypeEthDynamicFee {
 		return nil, nil
@@ -64,82 +64,56 @@ func (h *Handler) fetchEthTxContext(bestChain *chain.Chain, id thor.Bytes32) (*e
 	return &ethTxContext{transaction: t, meta: meta, header: header, receipts: receipts}, nil
 }
 
-func (h *Handler) ethGetTransactionByHash(req rpc.Request) rpc.Response {
-	var params []string
-	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [txHash]")
-	}
-	id, err := thor.ParseBytes32(params[0])
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid tx hash")
+func (h *Handler) ethGetTransactionByHash(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.TxHashParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
-	ctx, err := h.fetchEthTxContext(h.repo.NewBestChain(), id)
+	ctx, err := h.fetchEthTxContext(h.repo.NewBestChain(), params.Hash)
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
 	if ctx == nil {
-		return rpc.OkResponse(req.ID, nil)
+		return jsonrpc.OkResponse(req.ID, nil)
 	}
 
-	projIdx := rpc.ProjectedEthIndex(ctx.receipts, ctx.meta.Index)
-	return rpc.OkResponse(
-		req.ID,
-		rpc.ToEthTx(ctx.transaction, h.repo.ChainID(), common.Hash(ctx.header.ID()), uint64(ctx.header.Number()), projIdx, ctx.header.BaseFee()),
-	)
+	projIdx := ethconvert.ProjectedEthIndex(ctx.receipts, ctx.meta.Index)
+	return jsonrpc.OkResponse(req.ID, ethconvert.ToEthTx(
+		ctx.transaction, h.repo.ChainID(),
+		common.Hash(ctx.header.ID()), uint64(ctx.header.Number()),
+		projIdx, ctx.header.BaseFee(),
+	))
 }
 
-func (h *Handler) ethGetTransactionByBlockHashAndIndex(req rpc.Request) rpc.Response {
-	var params [2]json.RawMessage
+func (h *Handler) ethGetTransactionByBlockHashAndIndex(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockTagAndIndexParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockHash, index]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var hashStr string
-	if err := json.Unmarshal(params[0], &hashStr); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block hash")
-	}
-	var idxStr string
-	if err := json.Unmarshal(params[1], &idxStr); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid index")
-	}
-
-	summary, err := rpc.ResolveBlockTag(hashStr, h.repo)
+	summary, err := ethconvert.ResolveBlockTag(params.Tag, h.repo)
 	if err != nil {
-		return rpc.OkResponse(req.ID, nil)
+		return jsonrpc.OkResponse(req.ID, nil)
 	}
-	return h.txByBlockAndEthIndex(req, summary.Header, idxStr)
+	return h.txByBlockAndEthIndex(req, summary.Header, params.Index)
 }
 
-func (h *Handler) ethGetTransactionByBlockNumberAndIndex(req rpc.Request) rpc.Response {
-	var params [2]json.RawMessage
+func (h *Handler) ethGetTransactionByBlockNumberAndIndex(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.BlockTagAndIndexParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [blockNumber, index]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	var tag string
-	if err := json.Unmarshal(params[0], &tag); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block number or tag")
-	}
-	var idxStr string
-	if err := json.Unmarshal(params[1], &idxStr); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid index")
-	}
-
-	summary, err := rpc.ResolveBlockTag(tag, h.repo)
+	summary, err := ethconvert.ResolveBlockTag(params.Tag, h.repo)
 	if err != nil {
-		return rpc.OkResponse(req.ID, nil)
+		return jsonrpc.OkResponse(req.ID, nil)
 	}
-	return h.txByBlockAndEthIndex(req, summary.Header, idxStr)
+	return h.txByBlockAndEthIndex(req, summary.Header, params.Index)
 }
 
-func (h *Handler) txByBlockAndEthIndex(req rpc.Request, header *block.Header, idxStr string) rpc.Response {
-	ethIdx, err := hexutil.DecodeUint64(idxStr)
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid index")
-	}
-
+func (h *Handler) txByBlockAndEthIndex(req jsonrpc.Request, header *block.Header, ethIdx uint64) jsonrpc.Response {
 	blk, err := h.repo.GetBlock(header.ID())
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
 
 	blockHash := common.Hash(header.ID())
@@ -151,61 +125,54 @@ func (h *Handler) txByBlockAndEthIndex(req rpc.Request, header *block.Header, id
 			continue
 		}
 		if projIdx == ethIdx {
-			return rpc.OkResponse(req.ID, rpc.ToEthTx(t, h.repo.ChainID(), blockHash, blockNum, projIdx, header.BaseFee()))
+			return jsonrpc.OkResponse(req.ID, ethconvert.ToEthTx(t, h.repo.ChainID(), blockHash, blockNum, projIdx, header.BaseFee()))
 		}
 		projIdx++
 	}
-	return rpc.OkResponse(req.ID, nil)
+	return jsonrpc.OkResponse(req.ID, nil)
 }
 
-func (h *Handler) ethGetTransactionReceipt(req rpc.Request) rpc.Response {
-	var params []string
-	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [txHash]")
-	}
-	id, err := thor.ParseBytes32(params[0])
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid tx hash")
+func (h *Handler) ethGetTransactionReceipt(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.TxHashParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
-	ctx, err := h.fetchEthTxContext(h.repo.NewBestChain(), id)
+	ctx, err := h.fetchEthTxContext(h.repo.NewBestChain(), params.Hash)
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
 	if ctx == nil {
-		return rpc.OkResponse(req.ID, nil)
+		return jsonrpc.OkResponse(req.ID, nil)
 	}
 
 	receipt := ctx.receipts[ctx.meta.Index]
-	projIdx := rpc.ProjectedEthIndex(ctx.receipts, ctx.meta.Index)
-	cumGas := rpc.CumulativeEthGasUsed(ctx.receipts, ctx.meta.Index)
-	logOff := rpc.EthLogOffset(ctx.receipts, ctx.meta.Index)
+	projIdx := ethconvert.ProjectedEthIndex(ctx.receipts, ctx.meta.Index)
+	cumGas := ethconvert.CumulativeEthGasUsed(ctx.receipts, ctx.meta.Index)
+	logOff := ethconvert.EthLogOffset(ctx.receipts, ctx.meta.Index)
 
-	return rpc.OkResponse(req.ID, rpc.ToEthReceipt(
+	return jsonrpc.OkResponse(req.ID, ethconvert.ToEthReceipt(
 		ctx.transaction, receipt,
 		common.Hash(ctx.header.ID()), uint64(ctx.header.Number()),
 		projIdx, cumGas, logOff, ctx.header.BaseFee(),
 	))
 }
 
-func (h *Handler) ethSendRawTransaction(req rpc.Request) rpc.Response {
-	var params []string
-	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [rawTx]")
-	}
-	raw, err := hexutil.Decode(params[0])
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid hex encoding")
+func (h *Handler) ethSendRawTransaction(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.RawTxParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
 	parsed := new(tx.Transaction)
-	if err := parsed.UnmarshalBinary(raw); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, err.Error())
+	if err := parsed.UnmarshalBinary(params.Raw); err != nil {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	// TODO is Adding to the pool enough guarantee for ethereum styled txs ?
+	if parsed.Type() != tx.TypeEthDynamicFee {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "only EIP-1559 (type 2) transactions are accepted")
+	}
 	if err := h.txPool.AddLocal(parsed); err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeServerError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError, err.Error())
 	}
-
-	return rpc.OkResponse(req.ID, common.Hash(parsed.ID()).Hex())
+	return jsonrpc.OkResponse(req.ID, common.Hash(parsed.ID()).Hex())
 }

@@ -17,8 +17,8 @@ import (
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/rpc"
 	"github.com/vechain/thor/v2/rpc/filters"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/rpc/testutil"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/txpool"
@@ -106,7 +106,7 @@ func TestFiltersHandler(t *testing.T) {
 		rpcErr := testutil.CallExpectError(t, ts, "eth_newFilter", []any{
 			map[string]any{"address": "not-a-valid-address"},
 		})
-		assert.Equal(t, rpc.CodeInvalidParams, rpcErr.Code)
+		assert.Equal(t, jsonrpc.CodeInvalidParams, rpcErr.Code)
 	})
 
 	t.Run("eth_getFilterLogs", func(t *testing.T) {
@@ -129,7 +129,7 @@ func TestFiltersHandler(t *testing.T) {
 		require.NoError(t, json.Unmarshal(idResult, &filterID))
 
 		rpcErr := testutil.CallExpectError(t, ts, "eth_getFilterLogs", []any{filterID})
-		assert.Equal(t, rpc.CodeInvalidParams, rpcErr.Code)
+		assert.Equal(t, jsonrpc.CodeInvalidParams, rpcErr.Code)
 	})
 
 	t.Run("pending_tx_filter", func(t *testing.T) {
@@ -179,12 +179,12 @@ func TestFiltersHandler(t *testing.T) {
 
 	t.Run("eth_getFilterChanges_unknown", func(t *testing.T) {
 		rpcErr := testutil.CallExpectError(t, ts, "eth_getFilterChanges", []any{"0x9999"})
-		assert.Equal(t, rpc.CodeInvalidParams, rpcErr.Code)
+		assert.Equal(t, jsonrpc.CodeInvalidParams, rpcErr.Code)
 	})
 
 	t.Run("eth_getFilterLogs_unknown", func(t *testing.T) {
 		rpcErr := testutil.CallExpectError(t, ts, "eth_getFilterLogs", []any{"0x9999"})
-		assert.Equal(t, rpc.CodeInvalidParams, rpcErr.Code)
+		assert.Equal(t, jsonrpc.CodeInvalidParams, rpcErr.Code)
 	})
 }
 
@@ -381,7 +381,7 @@ func TestFiltersHandlerGetFilterLogsBacktraceLimit(t *testing.T) {
 	require.NoError(t, json.Unmarshal(idResult, &filterID))
 
 	rpcErr := testutil.CallExpectError(t, ts, "eth_getFilterLogs", []any{filterID})
-	assert.Equal(t, rpc.CodeServerError, rpcErr.Code)
+	assert.Equal(t, jsonrpc.CodeServerError, rpcErr.Code)
 }
 
 // TestFiltersHandlerVcTxExcluded verifies that events from TypeLegacy VeChain
@@ -519,5 +519,66 @@ func TestFiltersHandlerCompactTopicFilter(t *testing.T) {
 		var logs []any
 		require.NoError(t, json.Unmarshal(result, &logs))
 		assert.Len(t, logs, 1)
+	})
+}
+
+// TestFiltersHandlerORTopicFilter verifies that an array at a topic position is treated as
+// OR: topics: [["A","B"]] matches logs whose topic0 equals A OR B.
+func TestFiltersHandlerORTopicFilter(t *testing.T) {
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := c.Repo().ChainID()
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+
+	transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+	require.True(t, ok)
+	callData, err := transferMethod.EncodeInput(recipient.Address, big.NewInt(1e9))
+	require.NoError(t, err)
+	energyAddr := builtin.Energy.Address
+
+	transferEvent, ok := builtin.Energy.ABI.EventByName("Transfer")
+	require.True(t, ok)
+	transferTopic := common.Hash(transferEvent.ID()).Hex()
+	noMatchTopic := "0x0000000000000000000000000000000000000000000000000000000000000001"
+
+	h := filters.New(c.Repo(), newTestPool(t, c), 100)
+	t.Cleanup(h.Close)
+	ts := testutil.NewTestServer(t, h)
+
+	t.Run("OR_includes_matching_topic", func(t *testing.T) {
+		// [transferTopic, noMatchTopic] at position 0 — should match the Transfer event.
+		idResult := testutil.Call(t, ts, "eth_newFilter", []any{map[string]any{
+			"topics": []any{[]any{transferTopic, noMatchTopic}},
+		}})
+		var filterID string
+		require.NoError(t, json.Unmarshal(idResult, &filterID))
+
+		ethCallTx := testutil.BuildEthCallTx(t, chainID, sender, 0, &energyAddr, callData, 200_000)
+		require.NoError(t, c.MintBlock(ethCallTx))
+
+		result := testutil.Call(t, ts, "eth_getFilterChanges", []any{filterID})
+		var logs []any
+		require.NoError(t, json.Unmarshal(result, &logs))
+		assert.Len(t, logs, 1, "OR filter including transferTopic should return the event")
+	})
+
+	t.Run("OR_no_matching_topic", func(t *testing.T) {
+		// Two non-matching topics OR-ed at position 0 — should return nothing.
+		idResult := testutil.Call(t, ts, "eth_newFilter", []any{map[string]any{
+			"topics": []any{[]any{noMatchTopic, "0x0000000000000000000000000000000000000000000000000000000000000002"}},
+		}})
+		var filterID string
+		require.NoError(t, json.Unmarshal(idResult, &filterID))
+
+		// Mint a block with the Transfer event; the filter should not match it.
+		ethCallTx := testutil.BuildEthCallTx(t, chainID, genesis.DevAccounts()[2], 0, &energyAddr, callData, 200_000)
+		require.NoError(t, c.MintBlock(ethCallTx))
+
+		result := testutil.Call(t, ts, "eth_getFilterChanges", []any{filterID})
+		var logs []any
+		require.NoError(t, json.Unmarshal(result, &logs))
+		assert.Empty(t, logs, "OR filter with no matching topics should return empty")
 	})
 }

@@ -17,6 +17,8 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/rpc/ethconvert"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -35,14 +37,14 @@ func New(repo *chain.Repository, logDB *logdb.LogDB, backtrace uint32, logsLimit
 }
 
 // Mount registers all log methods on the dispatcher.
-func (h *Handler) Mount(s *rpc.Server) {
+func (h *Handler) Mount(s *jsonrpc.Server) {
 	s.Register("eth_getLogs", h.ethGetLogs)
 }
 
-func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
-	var params []rpc.LogFilter
+func (h *Handler) ethGetLogs(req jsonrpc.Request) jsonrpc.Response {
+	var params []rpc.EthLogFilter
 	if err := json.Unmarshal(req.Params, &params); err != nil || len(params) < 1 {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "expected [filterObject]")
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "expected [filterObject]")
 	}
 	f := params[0]
 
@@ -56,11 +58,11 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 	if f.BlockHash != nil {
 		// EIP-234: blockHash is mutually exclusive with fromBlock/toBlock.
 		if (f.FromBlock != nil && *f.FromBlock != "") || (f.ToBlock != nil && *f.ToBlock != "") {
-			return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "can't specify fromBlock/toBlock with blockHash")
+			return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "can't specify fromBlock/toBlock with blockHash")
 		}
-		summary, err := rpc.ResolveBlockTag(*f.BlockHash, h.repo)
+		summary, err := ethconvert.ResolveBlockTag(*f.BlockHash, h.repo)
 		if err != nil {
-			return rpc.ErrResponse(req.ID, rpc.CodeServerError, "unknown block")
+			return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError, "unknown block")
 		}
 		fromNum = summary.Header.Number()
 		toNum = summary.Header.Number()
@@ -70,16 +72,16 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		toNum = bestNum
 
 		if f.FromBlock != nil && *f.FromBlock != "" {
-			summary, err := rpc.ResolveBlockTag(*f.FromBlock, h.repo)
+			summary, err := ethconvert.ResolveBlockTag(*f.FromBlock, h.repo)
 			if err != nil {
-				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid fromBlock")
+				return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid fromBlock")
 			}
 			fromNum = summary.Header.Number()
 		}
 		if f.ToBlock != nil && *f.ToBlock != "" {
-			summary, err := rpc.ResolveBlockTag(*f.ToBlock, h.repo)
+			summary, err := ethconvert.ResolveBlockTag(*f.ToBlock, h.repo)
 			if err != nil {
-				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid toBlock")
+				return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid toBlock")
 			}
 			toNum = summary.Header.Number()
 		}
@@ -88,10 +90,10 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 			toNum = bestNum
 		}
 		if fromNum > toNum {
-			return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid block range params")
+			return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid block range params")
 		}
 		if toNum-fromNum > h.backtrace {
-			return rpc.ErrResponse(req.ID, rpc.CodeServerError, fmt.Sprintf("block range exceeds backtrace limit of %d", h.backtrace))
+			return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError, fmt.Sprintf("block range exceeds backtrace limit of %d", h.backtrace))
 		}
 	}
 
@@ -103,7 +105,7 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		if err := json.Unmarshal(f.Address, &single); err == nil {
 			addr, err := thor.ParseAddress(single)
 			if err != nil {
-				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid address in filter")
+				return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid address in filter")
 			}
 			a := addr
 			addresses = append(addresses, &a)
@@ -111,7 +113,7 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 			for _, s := range multi {
 				addr, err := thor.ParseAddress(s)
 				if err != nil {
-					return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid address in filter")
+					return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid address in filter")
 				}
 				a := addr
 				addresses = append(addresses, &a)
@@ -120,15 +122,12 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 	}
 
 	// Parse topic filters — up to 5 positions (topic0…topic4), each null | hex | []hex.
-	// Adjacent positions are ANDed: topics: ["A", "B"] means topic0==A AND topic1==B.
-	// OR semantics within one position (topics: [["A","C"], "B"]) are not yet fully
-	// supported — only the first alternative is used.
-	// TODO: full OR-within-position support requires expanding into a cross-product of
-	// EventCriteria (one per combination of per-position alternatives).
-	var topicSlot [5]*thor.Bytes32
+	// Adjacent positions are ANDed; alternatives within one position are ORed.
+	// topicAlts[i] holds all accepted values for position i; empty means wildcard.
+	var topicAlts [5][]thor.Bytes32
 	topics := f.Topics
-	if len(topics) > len(topicSlot) {
-		topics = topics[:len(topicSlot)]
+	if len(topics) > len(topicAlts) {
+		topics = topics[:len(topicAlts)]
 	}
 	for i, raw := range topics {
 		if raw == nil || string(raw) == "null" {
@@ -139,37 +138,26 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 		if err := json.Unmarshal(raw, &single); err == nil {
 			h32, err := rpc.ParseBytes32Compact(single)
 			if err != nil {
-				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid topic")
+				return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid topic")
 			}
-			h32Copy := h32
-			topicSlot[i] = &h32Copy
+			topicAlts[i] = []thor.Bytes32{h32}
 		} else if err := json.Unmarshal(raw, &multi); err == nil && len(multi) > 0 {
-			h32, err := rpc.ParseBytes32Compact(multi[0])
-			if err != nil {
-				return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, "invalid topic")
+			alts := make([]thor.Bytes32, 0, len(multi))
+			for _, s := range multi {
+				h32, err := rpc.ParseBytes32Compact(s)
+				if err != nil {
+					return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "invalid topic")
+				}
+				alts = append(alts, h32)
 			}
-			h32Copy := h32
-			topicSlot[i] = &h32Copy
+			topicAlts[i] = alts
 		}
 	}
 
-	// Build criteria set: one EventCriteria per address with all topic positions ANDed.
-	var criteriaSet []*logdb.EventCriteria
-	buildCriteria := func(addr *thor.Address) {
-		criteriaSet = append(criteriaSet, &logdb.EventCriteria{
-			Address: addr,
-			Topics:  topicSlot,
-		})
-	}
-
-	if len(addresses) == 0 {
-		buildCriteria(nil)
-	} else {
-		for _, addr := range addresses {
-			a := addr
-			buildCriteria(a)
-		}
-	}
+	// Build criteria set via cross-product of addresses × topic alternatives.
+	// Criteria count grows as the product of per-position alternative counts and
+	// address count; typical usage is small and no hard cap is enforced.
+	criteriaSet := buildCriteriaSet(addresses, topicAlts)
 
 	// Fetch one extra result to detect truncation: if the logdb returns more than
 	// logsLimit rows, return an error instead of a silently incomplete result.
@@ -189,10 +177,10 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 
 	events, err := h.logDB.FilterEvents(context.Background(), filter)
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
 	if uint64(len(events)) > h.logsLimit {
-		return rpc.ErrResponse(req.ID, rpc.CodeServerError,
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError,
 			fmt.Sprintf("query returned more than %d results, use a smaller block range or a more specific filter", h.logsLimit))
 	}
 
@@ -222,12 +210,12 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 	}
 
 	var ethLogs []*rpc.EthLog
-	// TODO the log scanning loop iterates blocks and calls GetBlock() for each. A large block range with many blocks could block the RPC connection
-	// Is this perfomant at all ?
+	// blockTxsByNum caches block transactions per block number so GetBlock is called
+	// at most once per unique block in the result set, not once per event.
 	for _, ev := range events {
 		blockTxs, err := getBlockTxs(ev.BlockNumber)
 		if err != nil {
-			return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+			return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 		}
 
 		// Bounds-check and ID-verify before using the canonical index.
@@ -276,5 +264,43 @@ func (h *Handler) ethGetLogs(req rpc.Request) rpc.Response {
 	if ethLogs == nil {
 		ethLogs = []*rpc.EthLog{}
 	}
-	return rpc.OkResponse(req.ID, ethLogs)
+	return jsonrpc.OkResponse(req.ID, ethLogs)
+}
+
+// buildCriteriaSet returns the EventCriteria cross-product for the given addresses
+// and per-slot topic alternatives. Positions with no alternatives are wildcards (Topics[i] == nil).
+func buildCriteriaSet(addresses []*thor.Address, topicAlts [5][]thor.Bytes32) []*logdb.EventCriteria {
+	type topicCombo [5]*thor.Bytes32
+	combos := []topicCombo{{}}
+	for i, alts := range topicAlts {
+		if len(alts) == 0 {
+			continue
+		}
+		expanded := make([]topicCombo, 0, len(combos)*len(alts))
+		for _, c := range combos {
+			for _, alt := range alts {
+				newCombo := c
+				altCopy := alt
+				newCombo[i] = &altCopy
+				expanded = append(expanded, newCombo)
+			}
+		}
+		combos = expanded
+	}
+	var criteria []*logdb.EventCriteria
+	if len(addresses) == 0 {
+		for _, c := range combos {
+			topics := c
+			criteria = append(criteria, &logdb.EventCriteria{Topics: topics})
+		}
+	} else {
+		for _, addr := range addresses {
+			for _, c := range combos {
+				addrCopy := *addr
+				topics := c
+				criteria = append(criteria, &logdb.EventCriteria{Address: &addrCopy, Topics: topics})
+			}
+		}
+	}
+	return criteria
 }

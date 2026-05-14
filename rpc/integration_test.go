@@ -20,11 +20,11 @@ import (
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/txpool"
 
-	"github.com/vechain/thor/v2/rpc"
 	"github.com/vechain/thor/v2/rpc/accounts"
 	"github.com/vechain/thor/v2/rpc/blocks"
 	rpcchain "github.com/vechain/thor/v2/rpc/chain"
 	"github.com/vechain/thor/v2/rpc/fees"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/rpc/logs"
 	"github.com/vechain/thor/v2/rpc/simulation"
 	"github.com/vechain/thor/v2/rpc/testutil"
@@ -51,13 +51,13 @@ func TestDispatch(t *testing.T) {
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,
 	}, &testchain.DefaultForkConfig)
-	srv := rpc.NewServer()
+	srv := jsonrpc.NewServer()
 	rpcchain.New(c.Repo(), "test/1.0").Mount(srv)
 	blocks.New(c.Repo()).Mount(srv)
 	transactions.New(c.Repo(), pool).Mount(srv)
 	accounts.New(c.Repo(), c.Stater()).Mount(srv)
 	logs.New(c.Repo(), c.LogDB(), 100, 1000).Mount(srv)
-	fees.New(c.Repo(), 100).Mount(srv)
+	fees.New(c.Repo(), 100, &testchain.DefaultForkConfig).Mount(srv)
 	simulation.New(c.Repo(), c.Stater(), &testchain.DefaultForkConfig, 1_000_000).Mount(srv)
 
 	ts := httptest.NewServer(srv)
@@ -65,7 +65,7 @@ func TestDispatch(t *testing.T) {
 
 	t.Run("unknown_method", func(t *testing.T) {
 		rpcErr := testutil.CallExpectError(t, ts, "eth_nonExistentMethod", []any{})
-		assert.Equal(t, rpc.CodeMethodNotFound, rpcErr.Code)
+		assert.Equal(t, jsonrpc.CodeMethodNotFound, rpcErr.Code)
 	})
 
 	t.Run("batch", func(t *testing.T) {
@@ -78,9 +78,9 @@ func TestDispatch(t *testing.T) {
 		defer resp.Body.Close()
 
 		var responses []struct {
-			ID     json.RawMessage `json:"id"`
-			Result json.RawMessage `json:"result"`
-			Error  *rpc.RPCError   `json:"error"`
+			ID     json.RawMessage   `json:"id"`
+			Result json.RawMessage   `json:"result"`
+			Error  *jsonrpc.RPCError `json:"error"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&responses))
 		assert.Len(t, responses, 2)
@@ -106,11 +106,11 @@ func TestDispatch(t *testing.T) {
 		defer resp.Body.Close()
 
 		var rpcResp struct {
-			Error *rpc.RPCError `json:"error"`
+			Error *jsonrpc.RPCError `json:"error"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rpcResp))
 		require.NotNil(t, rpcResp.Error)
-		assert.Equal(t, rpc.CodeInvalidParams, rpcResp.Error.Code)
+		assert.Equal(t, jsonrpc.CodeInvalidParams, rpcResp.Error.Code)
 	})
 
 	t.Run("invalid_json", func(t *testing.T) {
@@ -119,11 +119,11 @@ func TestDispatch(t *testing.T) {
 		defer resp.Body.Close()
 
 		var rpcResp struct {
-			Error *rpc.RPCError `json:"error"`
+			Error *jsonrpc.RPCError `json:"error"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rpcResp))
 		require.NotNil(t, rpcResp.Error)
-		assert.Equal(t, rpc.CodeParseError, rpcResp.Error.Code)
+		assert.Equal(t, jsonrpc.CodeParseError, rpcResp.Error.Code)
 	})
 
 	t.Run("body_too_large", func(t *testing.T) {
@@ -137,11 +137,11 @@ func TestDispatch(t *testing.T) {
 		defer resp.Body.Close()
 
 		var rpcResp struct {
-			Error *rpc.RPCError `json:"error"`
+			Error *jsonrpc.RPCError `json:"error"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rpcResp))
 		require.NotNil(t, rpcResp.Error)
-		assert.Equal(t, rpc.CodeInvalidRequest, rpcResp.Error.Code)
+		assert.Equal(t, jsonrpc.CodeInvalidRequest, rpcResp.Error.Code)
 	})
 
 	t.Run("wrong_http_method", func(t *testing.T) {

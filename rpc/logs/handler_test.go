@@ -471,3 +471,58 @@ func TestLogsHandlerReversedRange(t *testing.T) {
 	})
 	assert.Equal(t, -32602, rpcErr.Code, "fromBlock > toBlock should return InvalidParams (-32602)")
 }
+
+// TestLogsHandlerORTopicFilter verifies that an array at a topic position is treated as
+// OR: topics: [["A","B"]] matches logs whose topic0 equals A OR B.
+func TestLogsHandlerORTopicFilter(t *testing.T) {
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	chainID := c.Repo().ChainID()
+	sender := genesis.DevAccounts()[0]
+	recipient := genesis.DevAccounts()[1]
+
+	transferMethod, ok := builtin.Energy.ABI.MethodByName("transfer")
+	require.True(t, ok)
+	callData, err := transferMethod.EncodeInput(recipient.Address, big.NewInt(1e9))
+	require.NoError(t, err)
+	energyAddr := builtin.Energy.Address
+
+	ethCallTx := testutil.BuildEthCallTx(t, chainID, sender, 0, &energyAddr, callData, 200_000)
+	require.NoError(t, c.MintBlock(ethCallTx))
+
+	ts := testutil.NewTestServer(t, logs.New(c.Repo(), c.LogDB(), 100, 1000))
+
+	transferEvent, ok := builtin.Energy.ABI.EventByName("Transfer")
+	require.True(t, ok)
+	transferTopic := common.Hash(transferEvent.ID()).Hex()
+	noMatchTopic := "0x0000000000000000000000000000000000000000000000000000000000000001"
+
+	t.Run("OR_includes_matching_topic", func(t *testing.T) {
+		// [transferTopic, noMatchTopic] at position 0 — should match the Transfer event.
+		result := testutil.Call(t, ts, "eth_getLogs", []any{
+			map[string]any{
+				"fromBlock": "0x0",
+				"toBlock":   "latest",
+				"topics":    []any{[]any{transferTopic, noMatchTopic}},
+			},
+		})
+		var got []any
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Len(t, got, 1, "OR filter including transferTopic should return the event")
+	})
+
+	t.Run("OR_no_matching_topic", func(t *testing.T) {
+		// Two non-matching topics OR-ed at position 0 — should return nothing.
+		result := testutil.Call(t, ts, "eth_getLogs", []any{
+			map[string]any{
+				"fromBlock": "0x0",
+				"toBlock":   "latest",
+				"topics":    []any{[]any{noMatchTopic, "0x0000000000000000000000000000000000000000000000000000000000000002"}},
+			},
+		})
+		var got []any
+		require.NoError(t, json.Unmarshal(result, &got))
+		assert.Empty(t, got, "OR filter with no matching topics should return empty")
+	})
+}

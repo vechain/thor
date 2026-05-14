@@ -7,14 +7,14 @@ package simulation
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/rpc/ethconvert"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -36,55 +36,50 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConf
 }
 
 // Mount registers all simulation methods on the dispatcher.
-func (h *Handler) Mount(s *rpc.Server) {
+func (h *Handler) Mount(s *jsonrpc.Server) {
 	s.Register("eth_call", h.ethCall)
 	s.Register("eth_estimateGas", h.ethEstimateGas)
 }
 
-// CallArgs mirrors the Ethereum eth_call / eth_estimateGas parameter object.
-type CallArgs struct {
-	From     *common.Address `json:"from"`
-	To       *common.Address `json:"to"`
-	Gas      *hexutil.Uint64 `json:"gas"`
-	GasPrice *hexutil.Big    `json:"gasPrice"`
-	Value    *hexutil.Big    `json:"value"`
-	Data     hexutil.Bytes   `json:"data"`
-}
-
-func (h *Handler) ethCall(req rpc.Request) rpc.Response {
-	args, tag, err := parseCallArgs(req.Params)
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, err.Error())
+func (h *Handler) ethCall(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.CallParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
-	out, _, execErr := h.simulate(args, tag, h.callGasLimit)
+	out, _, execErr := h.simulate(params.Args, params.Tag, h.callGasLimit)
 	if execErr != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, execErr.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, execErr.Error())
 	}
 	if out.VMErr != nil {
-		return rpc.ErrResponseWithData(req.ID, rpc.CodeServerError, "execution reverted", hexutil.Encode(out.Data))
+		return jsonrpc.ErrResponseWithData(req.ID, jsonrpc.CodeServerError, "execution reverted", hexutil.Encode(out.Data))
 	}
-	return rpc.OkResponse(req.ID, hexutil.Bytes(out.Data))
+	return jsonrpc.OkResponse(req.ID, hexutil.Bytes(out.Data))
 }
 
-func (h *Handler) ethEstimateGas(req rpc.Request) rpc.Response {
-	args, tag, err := parseCallArgs(req.Params)
-	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInvalidParams, err.Error())
+func (h *Handler) ethEstimateGas(req jsonrpc.Request) jsonrpc.Response {
+	var params rpc.CallParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
 	limit := h.callGasLimit
-	if args.Gas != nil && uint64(*args.Gas) < limit {
-		limit = uint64(*args.Gas)
+	if params.Args.Gas != nil && uint64(*params.Args.Gas) < limit {
+		limit = uint64(*params.Args.Gas)
 	}
 
-	// Run with full gas limit to determine if the call succeeds at all.
-	out, _, execErr := h.simulate(args, tag, limit)
+	// Single-pass estimate: run at the full gas limit to check for revert, then return
+	// gasUsed + intrinsic. This over-estimates for contracts whose behaviour changes based
+	// on available gas (e.g. EIP-1283 stipend checks). A binary search (hi=limit, lo=gasUsed)
+	// would find the true minimum, but adds latency and is not required for correctness —
+	// wallets and SDKs typically add a 20–25% buffer on top of estimates anyway.
+	// TODO: implement binary search if gas-sensitive contracts become common on VeChain.
+	out, _, execErr := h.simulate(params.Args, params.Tag, limit)
 	if execErr != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, execErr.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, execErr.Error())
 	}
 	if out.VMErr != nil {
-		return rpc.ErrResponseWithData(req.ID, rpc.CodeServerError, "execution reverted", hexutil.Encode(out.Data))
+		return jsonrpc.ErrResponseWithData(req.ID, jsonrpc.CodeServerError, "execution reverted", hexutil.Encode(out.Data))
 	}
 
 	evmGasUsed := limit - out.LeftOverGas
@@ -92,23 +87,23 @@ func (h *Handler) ethEstimateGas(req rpc.Request) rpc.Response {
 	// PrepareClause does not charge intrinsic gas (tx base + per-clause overhead).
 	// Add it explicitly so the estimate matches what the network will deduct.
 	var to *thor.Address
-	if args.To != nil {
-		addr := thor.Address(*args.To)
+	if params.Args.To != nil {
+		addr := thor.Address(*params.Args.To)
 		to = &addr
 	}
-	intrinsic, err := tx.IntrinsicGas(tx.NewClause(to).WithData(args.Data))
+	intrinsic, err := tx.IntrinsicGas(tx.NewClause(to).WithData(params.Args.Data))
 	if err != nil {
-		return rpc.ErrResponse(req.ID, rpc.CodeInternalError, err.Error())
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
 
 	// Edge case: if the call uses exactly gasLimit (leftover == 0), this returns
 	// callGasLimit + intrinsic — the absolute maximum. The estimate may still be too
 	// low for the actual tx, but returning the ceiling is acceptable.
-	return rpc.OkResponse(req.ID, hexutil.Uint64(evmGasUsed+intrinsic))
+	return jsonrpc.OkResponse(req.ID, hexutil.Uint64(evmGasUsed+intrinsic))
 }
 
-func (h *Handler) simulate(args CallArgs, tag string, gasLimit uint64) (*runtime.Output, *state.State, error) {
-	summary, err := rpc.ResolveBlockTag(tag, h.repo)
+func (h *Handler) simulate(args rpc.CallArgs, tag string, gasLimit uint64) (*runtime.Output, *state.State, error) {
+	summary, err := ethconvert.ResolveBlockTag(tag, h.repo)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -137,7 +132,17 @@ func (h *Handler) simulate(args CallArgs, tag string, gasLimit uint64) (*runtime
 		origin = thor.Address(*args.From)
 	}
 	var gasPrice *big.Int
-	if args.GasPrice != nil {
+	if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+		maxFee := new(big.Int)
+		if args.MaxFeePerGas != nil {
+			maxFee = (*big.Int)(args.MaxFeePerGas)
+		}
+		maxPriority := new(big.Int)
+		if args.MaxPriorityFeePerGas != nil {
+			maxPriority = (*big.Int)(args.MaxPriorityFeePerGas)
+		}
+		gasPrice = ethconvert.CalcEffectiveGasPrice(maxFee, maxPriority, header.BaseFee())
+	} else if args.GasPrice != nil {
 		gasPrice = (*big.Int)(args.GasPrice)
 	} else {
 		gasPrice = new(big.Int)
@@ -166,22 +171,4 @@ func (h *Handler) simulate(args CallArgs, tag string, gasLimit uint64) (*runtime
 	exec, _ := rt.PrepareClause(clause, 0, gasLimit, txCtx)
 	out, _, err := exec()
 	return out, st, err
-}
-
-func parseCallArgs(raw json.RawMessage) (CallArgs, string, error) {
-	var params []json.RawMessage
-	if err := json.Unmarshal(raw, &params); err != nil || len(params) < 1 {
-		return CallArgs{}, "", fmt.Errorf("expected [callArgs, blockTag?]")
-	}
-	var args CallArgs
-	if err := json.Unmarshal(params[0], &args); err != nil {
-		return CallArgs{}, "", fmt.Errorf("invalid call arguments: %w", err)
-	}
-	tag := "latest"
-	if len(params) >= 2 {
-		if err := json.Unmarshal(params[1], &tag); err != nil {
-			return CallArgs{}, "", fmt.Errorf("invalid block tag")
-		}
-	}
-	return args, tag, nil
 }

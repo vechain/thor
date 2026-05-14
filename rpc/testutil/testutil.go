@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/rpc"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -93,7 +93,7 @@ func BuildVcTx(t *testing.T, c *testchain.Chain, sender genesis.DevAccount, to *
 
 // Mounter is satisfied by any sub-package handler that exposes Mount.
 type Mounter interface {
-	Mount(s *rpc.Server)
+	Mount(s *jsonrpc.Server)
 }
 
 // NewTestServer creates an httptest.Server with only m's methods registered.
@@ -101,7 +101,7 @@ type Mounter interface {
 // is mounted, so an accidental call to another namespace fails with method-not-found.
 func NewTestServer(t *testing.T, m Mounter) *httptest.Server {
 	t.Helper()
-	srv := rpc.NewServer()
+	srv := jsonrpc.NewServer()
 	m.Mount(srv)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
@@ -125,8 +125,8 @@ func Call(t *testing.T, ts *httptest.Server, method string, params any) json.Raw
 	defer resp.Body.Close()
 
 	var rpcResp struct {
-		Result json.RawMessage `json:"result"`
-		Error  *rpc.RPCError   `json:"error"`
+		Result json.RawMessage   `json:"result"`
+		Error  *jsonrpc.RPCError `json:"error"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&rpcResp))
 	if rpcResp.Error != nil {
@@ -137,7 +137,7 @@ func Call(t *testing.T, ts *httptest.Server, method string, params any) json.Raw
 
 // CallExpectError posts a JSON-RPC 2.0 request and returns the RPC error.
 // The test fails if no error is returned.
-func CallExpectError(t *testing.T, ts *httptest.Server, method string, params any) *rpc.RPCError {
+func CallExpectError(t *testing.T, ts *httptest.Server, method string, params any) *jsonrpc.RPCError {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
@@ -152,8 +152,8 @@ func CallExpectError(t *testing.T, ts *httptest.Server, method string, params an
 	defer resp.Body.Close()
 
 	var rpcResp struct {
-		Result json.RawMessage `json:"result"`
-		Error  *rpc.RPCError   `json:"error"`
+		Result json.RawMessage   `json:"result"`
+		Error  *jsonrpc.RPCError `json:"error"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&rpcResp))
 	require.NotNil(t, rpcResp.Error, "expected RPC error for method %s but got result: %s", method, rpcResp.Result)
