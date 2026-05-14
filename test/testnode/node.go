@@ -118,7 +118,7 @@ func (n *node) Start() error {
 	rpcsimulation.New(repo, stater, &testchain.DefaultForkConfig, 1_000_000).Mount(rpcSrv)
 	rpcFilters := rpcfilters.New(repo, n.txPool, 100)
 	rpcFilters.Mount(rpcSrv)
-	rpcWs := rpcws.New(repo, n.txPool, 100, []string{"*"}, rpcSrv)
+	rpcWs := rpcws.New(repo, n.txPool, []string{"*"}, rpcSrv)
 	router.PathPrefix("/rpc").Handler(rpcWs)
 
 	n.apiServer = httptest.NewServer(router)

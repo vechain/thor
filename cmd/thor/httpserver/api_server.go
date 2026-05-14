@@ -157,7 +157,7 @@ func StartAPIServer(
 
 	// Wrap rpcSrv with the WebSocket handler: plain HTTP POST goes to rpcSrv,
 	// WebSocket upgrade requests gain eth_subscribe / eth_unsubscribe.
-	rpcWs := rpcws.New(repo, txPool, config.BacktraceLimit, origins, rpcSrv)
+	rpcWs := rpcws.New(repo, txPool, origins, rpcSrv)
 	router.PathPrefix("/rpc").Handler(rpcWs)
 
 	if config.PprofOn {

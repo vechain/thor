@@ -56,7 +56,7 @@ func newFixture(t *testing.T) *fixture {
 	rpcchain.New(c.Repo(), "test/1.0").Mount(rpcSrv)
 	rpcblocks.New(c.Repo()).Mount(rpcSrv)
 
-	h := rpcws.New(c.Repo(), pool, 100, []string{"*"}, rpcSrv)
+	h := rpcws.New(c.Repo(), pool, []string{"*"}, rpcSrv)
 	t.Cleanup(h.Close)
 
 	srv := httptest.NewServer(h)

@@ -143,15 +143,18 @@ func TestFiltersHandler(t *testing.T) {
 		require.NoError(t, json.Unmarshal(result, &hashes))
 		assert.Empty(t, hashes)
 
-		// Add an ETH tx to the pool. SubscribeTxEvent fires synchronously before
-		// AddLocal returns, so the hash is immediately available for polling.
+		// The pool dispatches the subscription event asynchronously (p.goes.Go),
+		// so poll until the hash arrives rather than reading once immediately.
 		ethTx := testutil.BuildEthTx(t, fx.chainID, sender, 10, &recipient.Address)
 		require.NoError(t, fx.pool.AddLocal(ethTx))
 
-		result = testutil.Call(t, ts, "eth_getFilterChanges", []any{filterID})
-		require.NoError(t, json.Unmarshal(result, &hashes))
-		require.Len(t, hashes, 1)
-		assert.Equal(t, common.Hash(ethTx.ID()), hashes[0])
+		var gotHashes []common.Hash
+		require.Eventually(t, func() bool {
+			result = testutil.Call(t, ts, "eth_getFilterChanges", []any{filterID})
+			return json.Unmarshal(result, &gotHashes) == nil && len(gotHashes) > 0
+		}, 3*time.Second, 10*time.Millisecond)
+		require.Len(t, gotHashes, 1)
+		assert.Equal(t, common.Hash(ethTx.ID()), gotHashes[0])
 
 		// Drained — second poll is empty.
 		result = testutil.Call(t, ts, "eth_getFilterChanges", []any{filterID})

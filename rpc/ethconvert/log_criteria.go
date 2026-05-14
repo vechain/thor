@@ -8,6 +8,7 @@ package ethconvert
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -27,17 +28,8 @@ type LogCriteria struct {
 }
 
 func (c *LogCriteria) matchesEvent(e *tx.Event) bool {
-	if len(c.Addresses) > 0 {
-		found := false
-		for _, a := range c.Addresses {
-			if a == e.Address {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if len(c.Addresses) > 0 && !slices.Contains(c.Addresses, e.Address) {
+		return false
 	}
 	for i, alts := range c.Topics {
 		if len(alts) == 0 {
@@ -46,14 +38,7 @@ func (c *LogCriteria) matchesEvent(e *tx.Event) bool {
 		if i >= len(e.Topics) {
 			return false
 		}
-		matched := false
-		for _, want := range alts {
-			if e.Topics[i] == want {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+		if !slices.Contains(alts, e.Topics[i]) {
 			return false
 		}
 	}

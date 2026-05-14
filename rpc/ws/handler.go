@@ -33,11 +33,10 @@ const (
 // connections gain eth_subscribe / eth_unsubscribe in addition to all registered
 // methods.
 type Handler struct {
-	repo      *chain.Repository
-	txPool    txpool.Pool
-	backtrace uint32
-	rpcSrv    *jsonrpc.Server
-	upgrader  *websocket.Upgrader
+	repo     *chain.Repository
+	txPool   txpool.Pool
+	rpcSrv   *jsonrpc.Server
+	upgrader *websocket.Upgrader
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -46,13 +45,12 @@ type Handler struct {
 
 // New creates a Handler. allowedOrigins controls the WebSocket CORS check;
 // pass the same slice used for the REST API.
-func New(repo *chain.Repository, txPool txpool.Pool, backtrace uint32, allowedOrigins []string, rpcSrv *jsonrpc.Server) *Handler {
+func New(repo *chain.Repository, txPool txpool.Pool, allowedOrigins []string, rpcSrv *jsonrpc.Server) *Handler {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Handler{
-		repo:      repo,
-		txPool:    txPool,
-		backtrace: backtrace,
-		rpcSrv:    rpcSrv,
+		repo:   repo,
+		txPool: txPool,
+		rpcSrv: rpcSrv,
 		upgrader: &websocket.Upgrader{
 			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
@@ -97,10 +95,8 @@ func (h *Handler) serveWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
+	h.wg.Go(func() {
 		c := newWSConn(conn, h.ctx, h.repo, h.txPool, h.rpcSrv)
 		c.serve()
-	}()
+	})
 }

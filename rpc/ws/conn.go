@@ -100,11 +100,9 @@ func (c *wsConn) serve() {
 	}()
 
 	var writeWg sync.WaitGroup
-	writeWg.Add(1)
-	go func() {
-		defer writeWg.Done()
+	writeWg.Go(func() {
 		c.writeLoop()
-	}()
+	})
 
 	c.readLoop()   // blocks until conn.Close() or read error
 	c.connCancel() // stop write loop and all subscription goroutines
@@ -216,9 +214,7 @@ func (c *wsConn) startSub(subID string, fn func(context.Context)) {
 	c.subs[subID] = cancel
 	c.subsMu.Unlock()
 
-	c.subWg.Add(1)
-	go func() {
-		defer c.subWg.Done()
+	c.subWg.Go(func() {
 		defer func() {
 			c.subsMu.Lock()
 			delete(c.subs, subID)
@@ -226,7 +222,7 @@ func (c *wsConn) startSub(subID string, fn func(context.Context)) {
 			cancel()
 		}()
 		fn(ctx)
-	}()
+	})
 }
 
 // unsubscribe handles eth_unsubscribe: cancels the subscription goroutine.
