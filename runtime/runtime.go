@@ -182,7 +182,7 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 	return rt
 }
 
-func (rt *Runtime) newEVM(stateDB statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
+func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
 	var (
 		lastNonNativeCallGas uint64
 		baseFee              *big.Int
