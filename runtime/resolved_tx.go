@@ -252,6 +252,7 @@ func (r *ResolvedTransaction) ToContext(
 		return nil, err
 	}
 	return &xenv.TransactionContext{
+		Type:        r.tx.Type(),
 		ID:          r.tx.ID(),
 		Origin:      r.Origin,
 		GasPayer:    gasPayer,
@@ -260,6 +261,5 @@ func (r *ResolvedTransaction) ToContext(
 		BlockRef:    r.tx.BlockRef(),
 		Expiration:  r.tx.Expiration(),
 		ClauseCount: uint32(len(r.Clauses)),
-		Type:        r.tx.Type(),
 	}, nil
 }

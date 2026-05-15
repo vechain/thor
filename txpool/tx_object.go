@@ -170,6 +170,20 @@ func (o *TxObject) Evaluate(
 		return false, nil, nil
 	}
 
+	// Eth tx requires linear nonce growth: equal → executable, greater → queued, lower → reject.
+	if o.Type() == tx.TypeEthDynamicFee {
+		accNonce, err := state.GetNonce(o.resolved.Origin)
+		if err != nil {
+			return false, nil, err
+		}
+		if o.Nonce() < accNonce {
+			return false, nil, errors.New("nonce too low")
+		}
+		if o.Nonce() > accNonce {
+			return false, nil, nil
+		}
+	}
+
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 

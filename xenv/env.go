@@ -34,6 +34,7 @@ type BlockContext struct {
 
 // TransactionContext transaction context.
 type TransactionContext struct {
+	Type        tx.Type
 	ID          thor.Bytes32
 	Origin      thor.Address
 	GasPayer    thor.Address
@@ -42,7 +43,6 @@ type TransactionContext struct {
 	BlockRef    tx.BlockRef
 	Expiration  uint32
 	ClauseCount uint32
-	Type        tx.Type
 }
 
 // Environment an env to execute native method.

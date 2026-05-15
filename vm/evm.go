@@ -458,6 +458,9 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
+	if nonce+1 < nonce {
+		return nil, common.Address{}, gas, ErrNonceUintOverflow
+	}
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 
 	// Increase counter, same behavior as Create()

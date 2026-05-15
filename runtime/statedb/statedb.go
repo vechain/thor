@@ -21,11 +21,12 @@ import (
 
 var codeSizeCache, _ = lru.New(32 * 1024)
 
-// StateDB implements evm.StateDB, only adapt to evm.
+// StateDB adapts thor's state to vm.StateDB and adds thor-specific helpers
+// (GetLogs, AddTransfer).
 type StateDB struct {
-	state  *state.State
-	repo   *stackedmap.StackedMap
-	txType tx.Type
+	state        *state.State
+	repo         *stackedmap.StackedMap
+	nonceEnabled bool
 }
 
 type (
@@ -42,8 +43,10 @@ type (
 	}
 )
 
-// New create a statedb object.
-func New(state *state.State, txType tx.Type) *StateDB {
+// New creates a statedb. When enableNonce is true, Get/SetNonce read and
+// persist the on-state account nonce (required for eth tx execution);
+// otherwise GetNonce returns 0 and SetNonce is a no-op.
+func New(state *state.State, enableNonce bool) *StateDB {
 	getter := func(k any) (any, bool, error) {
 		switch k.(type) {
 		case suicideFlagKey:
@@ -58,11 +61,10 @@ func New(state *state.State, txType tx.Type) *StateDB {
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
 
-	repo := stackedmap.New(getter)
 	return &StateDB{
-		state:  state,
-		repo:   repo,
-		txType: txType,
+		state:        state,
+		repo:         stackedmap.New(getter),
+		nonceEnabled: enableNonce,
 	}
 }
 
@@ -138,12 +140,13 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
-// GetNonce returns the Ethereum nonce for the given address.
-// Returns 0 for VeChain-native transactions (nonce is not used).
+// GetNonce reads the on-state nonce when enabled; otherwise returns 0
+// because VeChain-native txs never observe a real nonce.
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
-	if s.txType != tx.TypeEthDynamicFee {
+	if !s.nonceEnabled {
 		return 0
 	}
+
 	n, err := s.state.GetNonce(thor.Address(addr))
 	if err != nil {
 		panic(err)
@@ -151,12 +154,12 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 	return n
 }
 
-// SetNonce sets the Ethereum nonce for the given address.
-// No-op for VeChain-native transactions.
+// SetNonce persists the nonce when enabled; otherwise it is a no-op.
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	if s.txType != tx.TypeEthDynamicFee {
+	if !s.nonceEnabled {
 		return
 	}
+
 	if err := s.state.SetNonce(thor.Address(addr), nonce); err != nil {
 		panic(err)
 	}
