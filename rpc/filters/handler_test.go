@@ -145,7 +145,9 @@ func TestFiltersHandler(t *testing.T) {
 
 		// The pool dispatches the subscription event asynchronously (p.goes.Go),
 		// so poll until the hash arrives rather than reading once immediately.
-		ethTx := testutil.BuildEthTx(t, fx.chainID, sender, 10, &recipient.Address)
+		// Use DevAccounts()[2] (nonce=0) so this subtest is independent of prior ones.
+		pendingSender := genesis.DevAccounts()[2]
+		ethTx := testutil.BuildEthTx(t, fx.chainID, pendingSender, 0, &recipient.Address)
 		require.NoError(t, fx.pool.AddLocal(ethTx))
 
 		var gotHashes []common.Hash

@@ -2103,3 +2103,104 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 		assert.Greater(t, tx.MaxPriorityFeePerGas().Int64(), int64(5*multiplier))
 	}
 }
+
+func TestEthDynFee_AdmitAndExecutables(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
+	defer pool.Close()
+
+	addr := devAccounts[1].Address
+	trx := tx.NewBuilder(tx.TypeEthDynamicFee).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxPriorityFeePerGas(big.NewInt(0)).
+		ChainID(pool.repo.ChainID()).
+		Nonce(1).
+		To(&addr).Value(big.NewInt(1)).
+		Build()
+	trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
+
+	err := pool.Add(trx)
+	assert.Nil(t, err, "eth-tx with matching ChainID must be admitted")
+
+	found := false
+	for _, t := range pool.Dump() {
+		if t.ID() == trx.ID() {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "eth-tx must appear in pool.Dump()")
+}
+
+func TestEthDynFee_NonceLinearGrowth(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
+	defer pool.Close()
+
+	to := devAccounts[1].Address
+	signer := devAccounts[5]
+
+	build := func(nonce uint64) *tx.Transaction {
+		trx := tx.NewBuilder(tx.TypeEthDynamicFee).
+			Gas(21000).
+			MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+			MaxPriorityFeePerGas(big.NewInt(0)).
+			ChainID(pool.repo.ChainID()).
+			Nonce(nonce).
+			To(&to).Value(big.NewInt(1)).
+			Build()
+		return tx.MustSign(trx, signer.PrivateKey)
+	}
+
+	// state.nonce(signer) starts at 0.
+	exec := build(0)
+	queued := build(5)
+
+	assert.NoError(t, pool.Add(exec), "nonce==state.nonce must admit")
+	assert.NoError(t, pool.Add(queued), "nonce>state.nonce must admit (non-executable)")
+
+	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	assert.Nil(t, err)
+
+	execIDs := map[thor.Bytes32]bool{}
+	for _, e := range executables {
+		execIDs[e.ID()] = true
+	}
+	assert.True(t, execIDs[exec.ID()], "nonce==state.nonce must be in executables")
+	assert.False(t, execIDs[queued.ID()], "nonce>state.nonce must not be in executables")
+
+	// After wash, both txs are still in pool.all (queued tx parked, not dropped).
+	assert.NotNil(t, pool.all.GetByID(queued.ID()), "queued tx must remain in pool")
+}
+
+func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
+	// Use a pool with capacity for 2 txs so both can be admitted.
+	// Then shrink the limit to 1 before calling wash to force eviction.
+	pool := newPool(2, 10, &thor.SoloFork)
+	defer pool.Close()
+
+	addr := devAccounts[1].Address
+
+	// Use distinct signers so each tx is at the signer's current state nonce (0)
+	// and stays executable — strict nonce growth would otherwise queue them.
+	for i, signer := range []genesis.DevAccount{devAccounts[3], devAccounts[4]} {
+		trx := tx.NewBuilder(tx.TypeEthDynamicFee).
+			Gas(21000).
+			MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+			MaxPriorityFeePerGas(big.NewInt(0)).
+			ChainID(pool.repo.ChainID()).
+			Nonce(0).
+			To(&addr).Value(big.NewInt(1)).
+			Build()
+		trx = tx.MustSign(trx, signer.PrivateKey)
+		if err := pool.Add(trx); err != nil {
+			t.Fatalf("admit signer %d: %v", i, err)
+		}
+	}
+
+	// Shrink the limit so wash must evict exactly one tx.
+	pool.options.Limit = 1
+
+	_, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, pool.all.Len(), "exactly one eth-tx remains after eviction")
+}
