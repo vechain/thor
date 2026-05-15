@@ -275,6 +275,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	txTypeString := "Legacy"
 	if newTx.Type() == tx.TypeDynamicFee {
 		txTypeString = "DynamicFee"
+	} else if newTx.Type() == tx.TypeEthDynamicFee {
+		txTypeString = "EthDynamicFee"
 	}
 	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
 
@@ -454,6 +456,8 @@ func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 			txTypeString = "Legacy"
 		} else if removedTransaction.Type() == tx.TypeDynamicFee {
 			txTypeString = "DynamicFee"
+		} else if removedTransaction.Type() == tx.TypeEthDynamicFee {
+			txTypeString = "EthDynamicFee"
 		}
 		metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "type": txTypeString})
 		logger.Debug("tx removed", "id", txID)

@@ -1,0 +1,134 @@
+// Copyright (c) 2026 The VeChainThor developers
+//
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+// Package jsonrpc provides the JSON-RPC 2.0 server and protocol types used by
+// the Ethereum-compatible RPC layer. It mirrors the role gorilla/mux plays in
+// the REST API: it is the dispatch layer, not a domain-logic package.
+package jsonrpc
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+)
+
+const maxRequestBodySize = 2 * 1024 * 1024 // 2 MB
+
+// TODO: revisit this limit — 10 is conservative; raise once the performance
+// profile of synchronous batch processing is better understood.
+const maxBatchRequests = 10
+
+// Server is an HTTP handler that implements the Ethereum JSON-RPC protocol.
+// It acts as both the method registry (via Register) and the HTTP handler,
+// mirroring the role mux.Router plays in the REST API.
+type Server struct {
+	methods map[string]func(Request) Response
+}
+
+// NewServer creates a new Server.
+func NewServer() *Server {
+	return &Server{methods: make(map[string]func(Request) Response)}
+}
+
+// Register adds a handler for the given JSON-RPC method name.
+// Panics if the method name is already registered — catches wiring mistakes at startup.
+func (s *Server) Register(method string, handler func(Request) Response) {
+	if _, exists := s.methods[method]; exists {
+		panic("rpc: duplicate method registration: " + method)
+	}
+	s.methods[method] = handler
+}
+
+// ServeHTTP implements http.Handler.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		// CORS preflight handled by the handlers CORS middleware applied externally.
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "only POST requests are accepted", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			writeJSON(w, ErrResponse(nil, CodeInvalidRequest, "request body too large"))
+		} else {
+			writeJSON(w, ErrResponse(nil, CodeParseError, "failed to read request body"))
+		}
+		return
+	}
+
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		writeJSON(w, ErrResponse(nil, CodeParseError, "empty request body"))
+		return
+	}
+
+	if trimmed[0] == '[' {
+		s.handleBatch(w, trimmed)
+	} else {
+		s.handleSingle(w, trimmed)
+	}
+}
+
+// Dispatch routes a parsed JSON-RPC request to its registered handler.
+// It is exported so that the WebSocket handler can proxy non-subscribe
+// methods (eth_call, eth_blockNumber, etc.) over a WS connection.
+func (s *Server) Dispatch(req Request) Response {
+	h, ok := s.methods[req.Method]
+	if !ok {
+		return ErrResponse(req.ID, CodeMethodNotFound, fmt.Sprintf("method %q not found", req.Method))
+	}
+	return h(req)
+}
+
+func (s *Server) handleSingle(w http.ResponseWriter, body []byte) {
+	var req Request
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeJSON(w, ErrResponse(nil, CodeParseError, "invalid JSON: "+err.Error()))
+		return
+	}
+	writeJSON(w, s.Dispatch(req))
+}
+
+func (s *Server) handleBatch(w http.ResponseWriter, body []byte) {
+	var raws []json.RawMessage
+	if err := json.Unmarshal(body, &raws); err != nil {
+		writeJSON(w, ErrResponse(nil, CodeParseError, "invalid JSON array: "+err.Error()))
+		return
+	}
+	if len(raws) == 0 {
+		writeJSON(w, ErrResponse(nil, CodeInvalidParams, "empty batch"))
+		return
+	}
+	if len(raws) > maxBatchRequests {
+		writeJSON(w, ErrResponse(nil, CodeInvalidParams, fmt.Sprintf("batch size %d exceeds maximum of %d", len(raws), maxBatchRequests)))
+		return
+	}
+
+	responses := make([]Response, len(raws))
+	for i, raw := range raws {
+		var req Request
+		if err := json.Unmarshal(raw, &req); err != nil {
+			responses[i] = ErrResponse(nil, CodeParseError, "invalid request in batch: "+err.Error())
+			continue
+		}
+		responses[i] = s.Dispatch(req)
+	}
+	writeJSON(w, responses)
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(v)
+}
