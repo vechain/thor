@@ -173,6 +173,26 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) error {
 	return nil
 }
 
+// GetNonce returns the post-Interstellar 0x02 sequential nonce for the address.
+func (s *State) GetNonce(addr thor.Address) (uint64, error) {
+	acc, err := s.getAccount(addr)
+	if err != nil {
+		return 0, &Error{err}
+	}
+	return acc.Nonce, nil
+}
+
+// SetNonce sets the sequential nonce for the address.
+func (s *State) SetNonce(addr thor.Address, nonce uint64) error {
+	cpy, err := s.getAccountCopy(addr)
+	if err != nil {
+		return &Error{err}
+	}
+	cpy.Nonce = nonce
+	s.updateAccount(addr, &cpy)
+	return nil
+}
+
 // GetEnergy get energy for the given address at block number specified.
 func (s *State) GetEnergy(addr thor.Address, blockTime uint64, stopTime uint64) (*big.Int, error) {
 	acc, err := s.getAccount(addr)
@@ -214,34 +234,6 @@ func (s *State) SetMaster(addr thor.Address, master thor.Address) error {
 		cpy.Master = nil
 	} else {
 		cpy.Master = master[:]
-	}
-	s.updateAccount(addr, &cpy)
-	return nil
-}
-
-// GetNonce returns the Ethereum nonce for the given address.
-// Returns 0 for addresses that have never sent an EthereumTx.
-func (s *State) GetNonce(addr thor.Address) (uint64, error) {
-	acc, err := s.getAccount(addr)
-	if err != nil {
-		return 0, &Error{err}
-	}
-	if len(acc.Nonce) > 0 {
-		return acc.Nonce[0], nil
-	}
-	return 0, nil
-}
-
-// SetNonce sets the Ethereum nonce for the given address.
-func (s *State) SetNonce(addr thor.Address, nonce uint64) error {
-	cpy, err := s.getAccountCopy(addr)
-	if err != nil {
-		return &Error{err}
-	}
-	if nonce == 0 {
-		cpy.Nonce = nil
-	} else {
-		cpy.Nonce = []uint64{nonce}
 	}
 	s.updateAccount(addr, &cpy)
 	return nil

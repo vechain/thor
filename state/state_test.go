@@ -11,8 +11,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
@@ -30,10 +31,14 @@ func TestStateReadWrite(t *testing.T) {
 	assert.Equal(t, M([]byte(nil), nil), M(state.GetCode(addr)))
 	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetCodeHash(addr)))
 	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetStorage(addr, storageKey)))
+	assert.Equal(t, M(uint64(0), nil), M(state.GetNonce(addr)))
 
 	// make account not empty
 	state.SetBalance(addr, big.NewInt(1))
 	assert.Equal(t, M(big.NewInt(1), nil), M(state.GetBalance(addr)))
+
+	state.SetNonce(addr, 7)
+	assert.Equal(t, M(uint64(7), nil), M(state.GetNonce(addr)))
 
 	state.SetMaster(addr, thor.BytesToAddress([]byte("master")))
 	assert.Equal(t, M(thor.BytesToAddress([]byte("master")), nil), M(state.GetMaster(addr)))
@@ -55,6 +60,7 @@ func TestStateReadWrite(t *testing.T) {
 	assert.Equal(t, M(thor.Address{}, nil), M(state.GetMaster(addr)))
 	assert.Equal(t, M([]byte(nil), nil), M(state.GetCode(addr)))
 	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetCodeHash(addr)))
+	assert.Equal(t, M(uint64(0), nil), M(state.GetNonce(addr)))
 }
 
 func TestStateRevert(t *testing.T) {
@@ -389,14 +395,14 @@ func TestNonce(t *testing.T) {
 		assert.Equal(t, uint64(42), n)
 	})
 
-	t.Run("zero is stored as nil in account", func(t *testing.T) {
+	t.Run("zero is stored as zero in account", func(t *testing.T) {
 		st := New(muxdb.NewMem(), trie.Root{})
 		_ = st.SetNonce(addr, 5)
 		_ = st.SetNonce(addr, 0)
 		acc, err := st.getAccountCopy(addr)
 		assert.NoError(t, err)
-		// nonce=0 must encode as nil so zero-nonce accounts are indistinguishable
-		// from pre-INTERSTELLAR accounts and IsEmpty() remains correct.
-		assert.Nil(t, acc.Nonce)
+		// rlp:"optional" elides zero-value trailing fields → on-trie encoding
+		// matches pre-INTERSTELLAR accounts; IsEmpty() remains correct.
+		assert.Equal(t, uint64(0), acc.Nonce)
 	})
 }
