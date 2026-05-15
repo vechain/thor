@@ -1,4 +1,4 @@
-// Copyright (c) 2025 The VeChainThor developers
+// Copyright (c) 2026 The VeChainThor developers
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
@@ -77,9 +77,6 @@ func TestHistory_ValidRead(t *testing.T) {
 // valid range. SERVE_WINDOW is hard-coded to 8191 in history.sol, so the
 // chain must be deep enough to expose both sides of the boundary.
 func TestHistory_WindowBoundary(t *testing.T) {
-	if testing.Short() {
-		t.Skip("requires minting >8191 blocks; skipped in -short mode")
-	}
 	chain := newChain(t, nil)
 	for range 8193 {
 		require.NoError(t, chain.MintBlock())

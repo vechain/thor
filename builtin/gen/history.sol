@@ -1,4 +1,8 @@
-// SPDX-License-Identifier: LGPL-3.0
+// Copyright (c) 2026 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 pragma solidity 0.8.20;
 
 /// @title History serves historical block hashes via the EIP-2935 calling convention.
