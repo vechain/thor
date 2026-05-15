@@ -161,6 +161,13 @@ func New(
 		}
 	}
 
+	// EIP-2935 HISTORY_STORAGE facade. The contract reads historical block
+	if forkConfig.INTERSTELLAR == ctx.Number {
+		if err := state.SetCode(builtin.History.Address, builtin.History.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	}
+
 	rt := Runtime{
 		chain:       chain,
 		state:       state,

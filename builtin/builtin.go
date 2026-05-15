@@ -36,6 +36,14 @@ var (
 	Staker  = &stakerContract{mustLoadContract("Staker")}
 	Measure = mustLoadContract("Measure")
 
+	// History is the EIP-2935 historical-block-hash facade. Its address is
+	// fixed by the EIP (not derived from the contract name) so dApps that
+	// already speak the EIP-2935 calling convention work unchanged on Thor.
+	History = &historyContract{mustLoadContractAt(
+		"History",
+		thor.MustParseAddress("0x0000F90827F1C53a10cb7A02335B175320002935"),
+	)}
+
 	// return gas map maintains the builtin contracts that can be made native call cheaper
 	// only the 0.4.24 compiled contracts are allowed to return gas, as the newer compiler
 	// versions have dynamic cost and pattern that is not predictable, any further added new
@@ -60,7 +68,8 @@ type (
 		V2 *contract
 		V3 *contract
 	}
-	stakerContract struct{ *contract }
+	stakerContract  struct{ *contract }
+	historyContract struct{ *contract }
 )
 
 func (p *paramsContract) Native(state *state.State) *params.Params {

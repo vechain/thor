@@ -20,6 +20,13 @@ type contract struct {
 }
 
 func mustLoadContract(name string) *contract {
+	return mustLoadContractAt(name, thor.BytesToAddress([]byte(name)))
+}
+
+// mustLoadContractAt loads a builtin contract whose deployed address is fixed
+// (i.e. not derived from its name). Used for contracts that follow an
+// externally specified address such as EIP-2935 HISTORY_STORAGE.
+func mustLoadContractAt(name string, address thor.Address) *contract {
 	asset := "compiled/" + name + ".abi"
 	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
@@ -29,7 +36,7 @@ func mustLoadContract(name string) *contract {
 
 	return &contract{
 		name,
-		thor.BytesToAddress([]byte(name)),
+		address,
 		abi,
 	}
 }
