@@ -20,14 +20,19 @@ import (
 // callHistory invokes the EIP-2935 facade with raw 32-byte calldata
 // (the EIP-2935 convention has no function selector).
 func callHistory(chain *testchain.Chain, num uint32) ([]byte, error) {
-	out, _, err := callHistoryWithGas(chain, num)
-	return out, err
-}
-
-func callHistoryWithGas(chain *testchain.Chain, num uint32) ([]byte, uint64, error) {
 	var data [32]byte
 	binary.BigEndian.PutUint32(data[28:], num)
-	return callHistoryRawWithGas(chain, data[:])
+
+	addr := builtin.History.Address
+	clause := tx.NewClause(&addr).WithData(data[:])
+	trx := new(tx.Builder).
+		ChainTag(chain.Repo().ChainTag()).
+		Expiration(50).
+		Gas(200000).
+		Clause(clause).
+		Build()
+	out, _, err := chain.ClauseCall(genesis.DevAccounts()[0], trx, 0)
+	return out, err
 }
 
 // callHistoryRaw invokes the History contract with the given raw calldata
