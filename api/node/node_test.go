@@ -6,7 +6,9 @@ package node
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,9 +28,10 @@ import (
 )
 
 var (
-	ts      *httptest.Server
-	tclient *thorclient.Client
-	pool    *txpool.TxPool
+	ts             *httptest.Server
+	tclient        *thorclient.Client
+	pool           *txpool.TxPool
+	txpoolEnabled  *atomic.Bool
 )
 
 func TestNode(t *testing.T) {
@@ -44,6 +47,7 @@ func TestNode(t *testing.T) {
 	t.Run("getTransactionsWithOrigin", testGetTransactionsWithOrigin)
 	t.Run("getTransactionsWithBadExpanded", testGetTransactionsWithBadExpanded)
 	t.Run("getTransactionsWithBadOrigin", testGetTransactionsWithBadOrigin)
+	t.Run("txpoolDisabledReturns503", testTxpoolDisabled)
 }
 
 func initCommServer(t *testing.T) {
@@ -80,8 +84,11 @@ func initCommServer(t *testing.T) {
 		}, &thor.NoFork),
 	)
 
+	txpoolEnabled = &atomic.Bool{}
+	txpoolEnabled.Store(true)
+
 	router := mux.NewRouter()
-	New(communicator, pool, true).Mount(router, "/node")
+	New(communicator, pool, txpoolEnabled).Mount(router, "/node")
 
 	ts = httptest.NewServer(router)
 }
@@ -127,4 +134,15 @@ func testGetTransactionsWithBadExpanded(t *testing.T) {
 
 func testGetTransactionsWithBadOrigin(t *testing.T) {
 	httpGetAndCheckResponseStatus(t, "/node/txpool?origin=0xinvalid", 400)
+}
+
+func testTxpoolDisabled(t *testing.T) {
+	txpoolEnabled.Store(false)
+	defer txpoolEnabled.Store(true)
+
+	for _, path := range []string{"/node/txpool", "/node/txpool/status"} {
+		_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet(path)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusServiceUnavailable, statusCode, "path=%s", path)
+	}
 }

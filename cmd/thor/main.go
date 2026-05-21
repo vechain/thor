@@ -292,6 +292,8 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	adminURL := ""
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
@@ -322,7 +324,7 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, false),
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, false),
 	)
 	if err != nil {
 		return err
@@ -449,6 +451,8 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	adminURL := ""
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
@@ -518,7 +522,7 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, true),
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, true),
 	)
 	if err != nil {
 		return err

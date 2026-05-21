@@ -61,7 +61,7 @@ type APIConfig struct {
 	AllowedTracers             []string
 	SoloMode                   bool
 	EnableDeprecated           bool
-	EnableTxPool               bool
+	EnableTxPool               *atomic.Bool
 	APIBacktraceLimit          int
 	PriorityIncreasePercentage int
 	Timeout                    int
