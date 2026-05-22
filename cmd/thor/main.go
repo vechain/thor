@@ -295,8 +295,14 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	enableTxPool := &atomic.Bool{}
 	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
 	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
 	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
@@ -305,6 +311,7 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 			p2pCommunicator.Communicator(),
 			apiLogsGate,
 			txpoolGate,
+			pprofGate,
 			master,
 		)
 		if err != nil {
@@ -457,8 +464,14 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	enableTxPool := &atomic.Bool{}
 	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
 	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
 	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
@@ -467,6 +480,7 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 			nil,
 			apiLogsGate,
 			txpoolGate,
+			pprofGate,
 			nil,
 		)
 		if err != nil {

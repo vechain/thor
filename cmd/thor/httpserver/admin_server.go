@@ -29,6 +29,7 @@ func StartAdminServer(
 	p2p *comm.Communicator,
 	apiLogsGate *featuregate.Gate,
 	txpoolAPIGate *featuregate.Gate,
+	pprofGate *featuregate.Gate,
 	master *node.Master,
 ) (string, func(), error) {
 	listener, err := net.Listen("tcp", addr)
@@ -36,7 +37,7 @@ func StartAdminServer(
 		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
 	}
 
-	adminHandler := admin.NewHTTPHandler(logLevel, health.New(repo, p2p), apiLogsGate, txpoolAPIGate, master)
+	adminHandler := admin.NewHTTPHandler(logLevel, health.New(repo, p2p), apiLogsGate, txpoolAPIGate, pprofGate, master)
 
 	srv := &http.Server{Handler: adminHandler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes sync.WaitGroup
