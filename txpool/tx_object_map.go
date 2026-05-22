@@ -180,9 +180,11 @@ func (m *txObjectMap) ToTxs() tx.Transactions {
 	return txs
 }
 
-func (m *txObjectMap) Fill(txObjs []*TxObject) {
+func (m *txObjectMap) Fill(txObjs []*TxObject) []*TxObject {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	inserted := make([]*TxObject, 0, len(txObjs))
 	for _, txObj := range txObjs {
 		if _, found := m.mapByHash[txObj.Hash()]; found {
 			continue
@@ -194,8 +196,10 @@ func (m *txObjectMap) Fill(txObjs []*TxObject) {
 		}
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj
+		inserted = append(inserted, txObj)
 		// skip cost check and accumulation
 	}
+	return inserted
 }
 
 func (m *txObjectMap) Len() int {

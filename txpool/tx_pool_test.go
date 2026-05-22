@@ -115,6 +115,87 @@ func newHTTPServer() *httptest.Server {
 	return server
 }
 
+func gatherMetricFamily(t *testing.T, name string) *dto.MetricFamily {
+	t.Helper()
+
+	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
+	metricFamilies, err := gatherers.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range metricFamilies {
+		if mf.GetName() == name {
+			return mf
+		}
+	}
+	return nil
+}
+
+func gaugeValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
+	for _, m := range mf.GetMetric() {
+		matched := true
+		for key, want := range labels {
+			found := false
+			for _, label := range m.GetLabel() {
+				if label.GetName() == key {
+					found = true
+					if label.GetValue() != want {
+						matched = false
+					}
+					break
+				}
+			}
+			if !found {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return m.GetGauge().GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+func counterValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
+	if mf == nil {
+		return 0, false
+	}
+	for _, m := range mf.GetMetric() {
+		matched := true
+		for key, want := range labels {
+			found := false
+			for _, label := range m.GetLabel() {
+				if label.GetName() == key {
+					found = true
+					if label.GetValue() != want {
+						matched = false
+					}
+					break
+				}
+			}
+			if !found {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return m.GetCounter().GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+func hasLabelValue(mf *dto.MetricFamily, name string, value string) bool {
+	for _, m := range mf.GetMetric() {
+		for _, label := range m.GetLabel() {
+			if label.GetName() == name && label.GetValue() == value {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestTxPoolMetrics(t *testing.T) {
 	metrics.InitializePrometheusMetrics()
 
@@ -133,24 +214,8 @@ func TestTxPoolMetrics(t *testing.T) {
 	err = pool.Add(tx3)
 	assert.Equal(t, "tx rejected: expired", err.Error())
 
-	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
-	metricFamilies, err := gatherers.Gather()
-	require.NoError(t, err)
-
-	var txPoolMetric *dto.MetricFamily
-	var badTxMetric *dto.MetricFamily
-	for _, mf := range metricFamilies {
-		println("metric", mf.GetName())
-		if mf.GetName() == "thor_metrics_txpool_current_tx_count" {
-			txPoolMetric = mf
-			continue
-		}
-		if mf.GetName() == "thor_metrics_bad_tx_count" {
-			badTxMetric = mf
-			continue
-		}
-	}
-
+	txPoolMetric := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	badTxMetric := gatherMetricFamily(t, "thor_metrics_bad_tx_count")
 	require.NotNil(t, txPoolMetric, "txpool_current_tx_count metric should exist")
 	require.NotNil(t, badTxMetric, "bad_tx_count metric should exist")
 
@@ -159,25 +224,13 @@ func TestTxPoolMetrics(t *testing.T) {
 	badTxMetrics := badTxMetric.GetMetric()
 	require.Greater(t, len(badTxMetrics), 0, "should have at least one metric entry")
 
-	foundLegacy := false
-	for _, m := range metrics {
-		labels := m.GetLabel()
-		source := ""
-		txType := ""
-		for _, label := range labels {
-			if label.GetName() == "source" {
-				source = label.GetValue()
-			}
-			if label.GetName() == "type" {
-				txType = label.GetValue()
-			}
-		}
-
-		if source == "remote" && txType == "Legacy" {
-			foundLegacy = true
-			assert.Equal(t, float64(1), m.GetGauge().GetValue())
-		}
-	}
+	value, foundLegacy := gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+		"status": "executable",
+	})
+	require.True(t, foundLegacy, "should have metric entry for executable remote Legacy transaction")
+	assert.Equal(t, float64(1), value)
 
 	foundBad := false
 	for _, m := range badTxMetrics {
@@ -195,8 +248,64 @@ func TestTxPoolMetrics(t *testing.T) {
 		}
 	}
 
-	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
 	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "washed"))
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "n/a"))
+
+	removed := pool.Remove(tx1.Hash(), tx1.ID())
+	require.True(t, removed)
+
+	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+		"status": "executable",
+	})
+	require.True(t, foundLegacy, "removed tx metric entry should still exist after zeroing")
+	assert.Equal(t, float64(0), value)
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "n/a"))
+
+	tx4 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
+	require.NoError(t, pool.Add(tx4))
+	washCounterMetric := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	beforeWashCount, _ := counterValueByLabels(washCounterMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+	})
+	pool.options.MaxLifetime = 0
+	_, washedLegacy, washedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	require.NoError(t, err)
+	require.Equal(t, 1, washedLegacy+washedDynamicFee)
+
+	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+		"status": "executable",
+	})
+	require.True(t, foundLegacy, "washed tx metric entry should still exist after zeroing")
+	assert.Equal(t, float64(0), value)
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "washed"))
+
+	washCounterMetric = gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	afterWashCount, foundWashed := counterValueByLabels(washCounterMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+	})
+	require.True(t, foundWashed, "should have washed tx counter for remote Legacy transaction")
+	assert.Equal(t, beforeWashCount+1, afterWashCount)
+
+	tx5 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
+	pool.Fill(tx.Transactions{tx5})
+
+	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "fill",
+		"type":   "Legacy",
+		"status": "non_executable",
+	})
+	require.True(t, foundLegacy, "should have metric entry for filled Legacy transaction")
+	assert.Equal(t, float64(1), value)
 }
 
 func TestNewCloseWithServer(t *testing.T) {
