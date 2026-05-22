@@ -20,12 +20,21 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+type txSource string
+
+const (
+	txSourceLocal  txSource = "local"
+	txSourceRemote txSource = "remote"
+	txSourceFill   txSource = "fill"
+)
+
 type TxObject struct {
 	*tx.Transaction
 	resolved *runtime.ResolvedTransaction
 
 	timeAdded      int64
 	localSubmitted bool          // tx is submitted locally on this node, or synced remotely from p2p.
+	source         txSource      // source used for txpool current-count metrics.
 	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
@@ -37,6 +46,14 @@ type TxObject struct {
 }
 
 func ResolveTx(tx *tx.Transaction, localSubmitted bool) (*TxObject, error) {
+	source := txSourceRemote
+	if localSubmitted {
+		source = txSourceLocal
+	}
+	return resolveTxWithSource(tx, localSubmitted, source)
+}
+
+func resolveTxWithSource(tx *tx.Transaction, localSubmitted bool, source txSource) (*TxObject, error) {
 	resolved, err := runtime.ResolveTransaction(tx)
 	if err != nil {
 		return nil, err
@@ -47,6 +64,7 @@ func ResolveTx(tx *tx.Transaction, localSubmitted bool) (*TxObject, error) {
 		resolved:       resolved,
 		timeAdded:      time.Now().UnixNano(),
 		localSubmitted: localSubmitted,
+		source:         source,
 	}, nil
 }
 
