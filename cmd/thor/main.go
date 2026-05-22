@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v3"
 
+	"github.com/vechain/thor/v2/api/admin"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
@@ -294,13 +295,16 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	enableTxPool := &atomic.Bool{}
 	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
 			p2pCommunicator.Communicator(),
-			logAPIRequests,
+			apiLogsGate,
+			txpoolGate,
 			master,
 		)
 		if err != nil {
@@ -453,13 +457,16 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
 	enableTxPool := &atomic.Bool{}
 	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
 			nil,
-			logAPIRequests,
+			apiLogsGate,
+			txpoolGate,
 			nil,
 		)
 		if err != nil {
