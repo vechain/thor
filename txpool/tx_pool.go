@@ -138,12 +138,12 @@ func (p *TxPool) housekeeping() {
 				atomic.StoreUint32(&p.addedAfterWash, 0)
 
 				startTime := mclock.Now()
-				executables, removedLegacy, removedDynamicFee, err := p.wash(headSummary, headBlockChanged)
+				executables, removed, err := p.wash(headSummary, headBlockChanged)
 				elapsed := mclock.Now() - startTime
 
 				ctx := []any{
 					"len", poolLen,
-					"removed", removedLegacy + removedDynamicFee,
+					"removed", removed,
 					"elapsed", common.PrettyDuration(elapsed),
 				}
 				if err != nil {
@@ -360,7 +360,7 @@ func (p *TxPool) addWhenSynced(
 		return err
 	}
 
-	txObj.executable = executable
+	txObj.executable.Store(executable)
 	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 		// check payer's balance
 		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
@@ -475,46 +475,40 @@ func (p *TxPool) Dump() tx.Transactions {
 }
 
 // wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
-// this method should only be called in housekeeping go routine
+// this method should only be called in housekeeping go routine.
+//
+// removed counts every tx evicted by this wash regardless of tx type. The
+// per-source/per-type breakdown lives on the txpool_washed_tx_count counter,
+// which is the source of truth for dashboards/alerts.
 func (p *TxPool) wash(
 	headSummary *chain.BlockSummary,
 	headBlockChanged bool,
 ) (
 	executables tx.Transactions,
-	removedLegacy int,
-	removedDynamicFee int,
+	removed int,
 	err error,
 ) {
 	all := p.all.ToTxObjects()
 	var toRemove []*TxObject
 	defer func() {
+		evict := func(txObj *TxObject) {
+			if p.all.RemoveByHash(txObj.Hash()) {
+				addTxPoolMetric(txObj, -1)
+				countWashedTx(txObj)
+				removed++
+			}
+		}
 		if err != nil {
 			// in case of error, simply cut pool size to limit
 			for i, txObj := range all {
 				if len(all)-i <= p.options.Limit {
 					break
 				}
-				if p.all.RemoveByHash(txObj.Hash()) {
-					addTxPoolMetric(txObj, -1)
-					countWashedTx(txObj)
-					if txObj.Type() == tx.TypeLegacy {
-						removedLegacy++
-					} else if txObj.Type() == tx.TypeDynamicFee {
-						removedDynamicFee++
-					}
-				}
+				evict(txObj)
 			}
 		} else {
 			for _, txObj := range toRemove {
-				if p.all.RemoveByHash(txObj.Hash()) {
-					addTxPoolMetric(txObj, -1)
-					countWashedTx(txObj)
-					if txObj.Type() == tx.TypeLegacy {
-						removedLegacy++
-					} else if txObj.Type() == tx.TypeDynamicFee {
-						removedDynamicFee++
-					}
-				}
+				evict(txObj)
 			}
 		}
 	}()
@@ -535,7 +529,7 @@ func (p *TxPool) wash(
 
 	legacyTxBaseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
-		return executables, removedLegacy, removedDynamicFee, err
+		return executables, removed, err
 	}
 	needPriorityGasPriceUpdate := func() bool {
 		if !headBlockChanged {
@@ -647,7 +641,7 @@ func (p *TxPool) wash(
 
 	for _, obj := range executableObjs {
 		// the tx was not executable previously: validate payer energy before promoting
-		if !obj.executable {
+		if !obj.executable.Load() {
 			payer := *obj.Payer()
 			needs := new(big.Int).Add(p.all.PendingCostOf(payer), obj.Cost())
 			energy, err := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
@@ -658,7 +652,7 @@ func (p *TxPool) wash(
 			}
 			// removes the non-executable tx from the pool
 			addTxPoolMetric(obj, -1)
-			obj.executable = true
+			obj.executable.Store(true)
 			// re-counts the same tx as executable
 			addTxPoolMetric(obj, 1)
 			p.all.UpdatePendingCost(obj)
@@ -676,7 +670,7 @@ func (p *TxPool) wash(
 			p.txFeed.Send(&TxEvent{tx, &executable})
 		}
 	})
-	return executables, 0, 0, nil
+	return executables, 0, nil
 }
 
 // Len returns the length of the `all` field
@@ -720,12 +714,8 @@ func txMetricType(trx *tx.Transaction) string {
 	}
 }
 
-func txMetricSource(txObj *TxObject) string {
-	return string(txObj.source)
-}
-
-func txMetricStatus(txObj *TxObject) string {
-	if txObj.executable {
+func txMetricStatus(executable bool) string {
+	if executable {
 		return "executable"
 	}
 	return "non_executable"
@@ -733,15 +723,15 @@ func txMetricStatus(txObj *TxObject) string {
 
 func addTxPoolMetric(txObj *TxObject, delta int64) {
 	metricTxPoolGauge().AddWithLabel(delta, map[string]string{
-		"source": txMetricSource(txObj),
+		"source": string(txObj.source),
 		"type":   txMetricType(txObj.Transaction),
-		"status": txMetricStatus(txObj),
+		"status": txMetricStatus(txObj.executable.Load()),
 	})
 }
 
 func countWashedTx(txObj *TxObject) {
 	metricTxPoolWashedCounter().AddWithLabel(1, map[string]string{
-		"source": txMetricSource(txObj),
+		"source": string(txObj.source),
 		"type":   txMetricType(txObj.Transaction),
 	})
 }
