@@ -28,10 +28,10 @@ import (
 )
 
 var (
-	ts             *httptest.Server
-	tclient        *thorclient.Client
-	pool           *txpool.TxPool
-	txpoolEnabled  *atomic.Bool
+	ts            *httptest.Server
+	tclient       *thorclient.Client
+	pool          *txpool.TxPool
+	txpoolEnabled *atomic.Bool
 )
 
 func TestNode(t *testing.T) {
