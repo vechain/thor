@@ -8,6 +8,7 @@ package txpool
 import (
 	"math/big"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -20,12 +21,21 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+type txSource string
+
+const (
+	txSourceLocal  txSource = "local"
+	txSourceRemote txSource = "remote"
+	txSourceFill   txSource = "fill"
+)
+
 type TxObject struct {
 	*tx.Transaction
 	resolved *runtime.ResolvedTransaction
 
 	timeAdded      int64
 	localSubmitted bool          // tx is submitted locally on this node, or synced remotely from p2p.
+	source         txSource      // source used for txpool current-count metrics.
 	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
@@ -33,10 +43,20 @@ type TxObject struct {
 	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip
 	priorityGasPrice *big.Int
 
-	executable bool // don't touch this value, will be updated by the pool
+	// executable is updated by the pool. Accessed concurrently from wash, Remove and
+	// metric helpers
+	executable atomic.Bool
 }
 
 func ResolveTx(tx *tx.Transaction, localSubmitted bool) (*TxObject, error) {
+	source := txSourceRemote
+	if localSubmitted {
+		source = txSourceLocal
+	}
+	return resolveTxWithSource(tx, localSubmitted, source)
+}
+
+func resolveTxWithSource(tx *tx.Transaction, localSubmitted bool, source txSource) (*TxObject, error) {
 	resolved, err := runtime.ResolveTransaction(tx)
 	if err != nil {
 		return nil, err
@@ -47,6 +67,7 @@ func ResolveTx(tx *tx.Transaction, localSubmitted bool) (*TxObject, error) {
 		resolved:       resolved,
 		timeAdded:      time.Now().UnixNano(),
 		localSubmitted: localSubmitted,
+		source:         source,
 	}, nil
 }
 
@@ -126,7 +147,7 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	}
 
 	// non executable -> executable, update payer, cost and priority gas price
-	if !o.executable {
+	if !o.executable.Load() {
 		o.payer = &payer
 		o.cost = prepaid
 

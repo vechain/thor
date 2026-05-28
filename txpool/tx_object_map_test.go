@@ -175,17 +175,20 @@ func TestPendingCost(t *testing.T) {
 	state := stater.NewState(best.Root())
 
 	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, forkConfig, baseFee)
+	exec1, err := txObj1.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
-	assert.True(t, txObj1.executable)
+	txObj1.executable.Store(exec1)
+	assert.True(t, txObj1.executable.Load())
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, forkConfig, baseFee)
+	exec2, err := txObj2.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
-	assert.True(t, txObj2.executable)
+	txObj2.executable.Store(exec2)
+	assert.True(t, txObj2.executable.Load())
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, forkConfig, baseFee)
+	exec3, err := txObj3.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
-	assert.True(t, txObj3.executable)
+	txObj3.executable.Store(exec3)
+	assert.True(t, txObj3.executable.Load())
 
 	// Creating a new txObjectMap
 	m := newTxObjectMap()
