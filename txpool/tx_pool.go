@@ -150,7 +150,11 @@ func (p *TxPool) housekeeping() {
 					ctx = append(ctx, "err", err)
 				} else {
 					p.executables.Store(executables)
+					// Post-wash snapshot: report alongside the executables gauge
+					// from the same wash, so both reflect the consistent state
+					// that wash observed (not affected by concurrent Adds).
 					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
+					metricTxPoolAllGauge().Set(int64(poolLen - removedLegacy - removedDynamicFee))
 				}
 
 				if removedLegacy > 0 {
@@ -320,18 +324,6 @@ func (p *TxPool) checkTxPriority(txObj *TxObject, executable bool) bool {
 	return txObj.priorityGasPrice.Cmp(thresholdTxObj.priorityGasPrice) > 0
 }
 
-// validateNonExecutableLimit validates that adding a non-executable transaction won't exceed pool limits.
-func (p *TxPool) validateNonExecutableLimit(executable bool) error {
-	// Check non-executable pool limit (20% of total)
-	if !executable {
-		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
-			return txRejectedError{"non executable pool is full"}
-		}
-	}
-
-	return nil
-}
-
 // addWhenSynced handles transaction addition when the chain is synced.
 func (p *TxPool) addWhenSynced(
 	newTx *tx.Transaction,
@@ -367,8 +359,11 @@ func (p *TxPool) addWhenSynced(
 		return txRejectedError{"tx is not executable"}
 	}
 
-	if err := p.validateNonExecutableLimit(executable); err != nil {
-		return err
+	// Check non-executable pool limit (20% of total)
+	if !executable {
+		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
+			return txRejectedError{"non executable pool is full"}
+		}
 	}
 
 	txObj.executable = executable

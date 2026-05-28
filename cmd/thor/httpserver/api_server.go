@@ -8,7 +8,6 @@ package httpserver
 import (
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -52,7 +51,6 @@ type APIConfig struct {
 	BacktraceLimit             uint32
 	CallGasLimit               uint64
 	BatchDataMaxSize           uint64
-	PprofOn                    bool
 	SkipLogs                   bool
 	AllowCustomTracer          bool
 	EnableReqLogger            *atomic.Bool
@@ -61,7 +59,7 @@ type APIConfig struct {
 	AllowedTracers             []string
 	SoloMode                   bool
 	EnableDeprecated           bool
-	EnableTxPool               bool
+	EnableTxPool               *atomic.Bool
 	APIBacktraceLimit          int
 	PriorityIncreasePercentage int
 	Timeout                    int
@@ -130,14 +128,6 @@ func StartAPIServer(
 	}).Mount(router, "/fees")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
-
-	if config.PprofOn {
-		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
-	}
 
 	// middlewares
 	// body limit and timeout

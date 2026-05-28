@@ -257,13 +257,12 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	return customGen, &forkConfig, nil
 }
 
-func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool) httpserver.APIConfig {
+func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, enableTxPool *atomic.Bool, soloMode bool) httpserver.APIConfig {
 	return httpserver.APIConfig{
 		AllowedOrigins:             ctx.String(apiCorsFlag.Name),
 		BacktraceLimit:             uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
 		CallGasLimit:               ctx.Uint64(apiCallGasLimitFlag.Name),
 		BatchDataMaxSize:           ctx.Uint64(apiBatchDataMaxSizeFlag.Name),
-		PprofOn:                    ctx.Bool(pprofFlag.Name),
 		SkipLogs:                   ctx.Bool(skipLogsFlag.Name),
 		APIBacktraceLimit:          int(ctx.Uint64(apiBacktraceLimitFlag.Name)),
 		PriorityIncreasePercentage: int(ctx.Uint64(apiPriorityFeesPercentageFlag.Name)),
@@ -274,7 +273,7 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool)
 		AllowedTracers:             parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 		EnableDeprecated:           ctx.Bool(apiEnableDeprecatedFlag.Name),
 		SoloMode:                   soloMode,
-		EnableTxPool:               ctx.Bool(apiTxpoolFlag.Name),
+		EnableTxPool:               enableTxPool,
 		Timeout:                    int(ctx.Uint64(apiTimeoutFlag.Name)),
 		SlowQueriesThreshold:       int(ctx.Uint64(apiSlowQueriesThresholdFlag.Name)),
 		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),

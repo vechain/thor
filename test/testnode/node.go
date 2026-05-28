@@ -8,6 +8,7 @@ package testnode
 import (
 	"errors"
 	"net/http/httptest"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 
@@ -87,7 +88,9 @@ func (n *node) Start() error {
 		[]string{"all"},
 		true,
 	).Mount(router, "/debug")
-	node2.New(&solo.Communicator{}, n.txPool, true).Mount(router, "/node")
+	enableTxpool := &atomic.Bool{}
+	enableTxpool.Store(true)
+	node2.New(&solo.Communicator{}, n.txPool, enableTxpool).Mount(router, "/node")
 	fees.New(repo, engine, forkConfig, stater, fees.Config{
 		APIBacktraceLimit:          1000,
 		PriorityIncreasePercentage: 5,
