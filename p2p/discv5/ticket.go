@@ -760,7 +760,7 @@ func globalRandRead(b []byte) {
 	val := 0
 	for n := range b {
 		if pos == 0 {
-			val = rand.Int()
+			val = rand.Int() //#nosec G404
 			pos = 7
 		}
 		b[n] = byte(val)
