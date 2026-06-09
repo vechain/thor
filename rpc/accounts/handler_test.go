@@ -24,6 +24,7 @@ import (
 type fixture struct {
 	chain      *testchain.Chain
 	senderAddr string
+	bestHash   string
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -38,9 +39,13 @@ func newFixture(t *testing.T) *fixture {
 	ethTx := testutil.BuildEthTx(t, chainID, sender, 0, &recipient.Address)
 	require.NoError(t, c.MintBlock(ethTx))
 
+	bestBlock, err := c.BestBlock()
+	require.NoError(t, err)
+
 	return &fixture{
 		chain:      c,
 		senderAddr: sender.Address.String(),
+		bestHash:   bestBlock.Header().ID().String(),
 	}
 }
 
@@ -105,5 +110,77 @@ func TestAccountsHandler(t *testing.T) {
 		var bal hexutil.Big
 		require.NoError(t, json.Unmarshal(result, &bal))
 		assert.True(t, bal.ToInt().Sign() > 0, "funded dev account should have non-zero balance without explicit block tag")
+	})
+
+	t.Run("eth_getBalance_blockNumberOrHash_object_with_number", func(t *testing.T) {
+		// Object form: {"blockNumber": "latest"}.
+		result := testutil.Call(t, ts, "eth_getBalance", []any{
+			fx.senderAddr,
+			map[string]any{"blockNumber": "latest"},
+		})
+		var bal hexutil.Big
+		require.NoError(t, json.Unmarshal(result, &bal))
+		assert.True(t, bal.ToInt().Sign() > 0)
+	})
+
+	t.Run("eth_getBalance_blockNumberOrHash_object_with_hash", func(t *testing.T) {
+		// Object form: {"blockHash": "<best hash>"} resolves to the best block's state.
+		result := testutil.Call(t, ts, "eth_getBalance", []any{
+			fx.senderAddr,
+			map[string]any{"blockHash": fx.bestHash},
+		})
+		var bal hexutil.Big
+		require.NoError(t, json.Unmarshal(result, &bal))
+		assert.True(t, bal.ToInt().Sign() > 0)
+	})
+
+	t.Run("eth_getBalance_blockNumberOrHash_canonical_ok", func(t *testing.T) {
+		// requireCanonical=true with the canonical best hash must succeed.
+		result := testutil.Call(t, ts, "eth_getBalance", []any{
+			fx.senderAddr,
+			map[string]any{"blockHash": fx.bestHash, "requireCanonical": true},
+		})
+		var bal hexutil.Big
+		require.NoError(t, json.Unmarshal(result, &bal))
+		assert.True(t, bal.ToInt().Sign() > 0)
+	})
+
+	t.Run("eth_getBalance_blockNumberOrHash_both_fields_error", func(t *testing.T) {
+		// Setting both blockNumber and blockHash is an error per Ethereum spec.
+		rpcErr := testutil.CallExpectError(t, ts, "eth_getBalance", []any{
+			fx.senderAddr,
+			map[string]any{"blockNumber": "latest", "blockHash": fx.bestHash},
+		})
+		assert.Contains(t, rpcErr.Message, "cannot specify both")
+	})
+
+	t.Run("eth_getStorageAt_blockNumberOrHash_hash", func(t *testing.T) {
+		// Object form with blockHash works for eth_getStorageAt.
+		result := testutil.Call(t, ts, "eth_getStorageAt", []any{
+			fx.senderAddr,
+			"0x0",
+			map[string]any{"blockHash": fx.bestHash},
+		})
+		var slot common.Hash
+		require.NoError(t, json.Unmarshal(result, &slot))
+		assert.Equal(t, common.Hash{}, slot)
+	})
+
+	t.Run("eth_getCode_blockNumberOrHash_string_hash", func(t *testing.T) {
+		// Plain string form with a 66-char hash is parsed as a hash.
+		result := testutil.Call(t, ts, "eth_getCode", []any{fx.senderAddr, fx.bestHash})
+		var code hexutil.Bytes
+		require.NoError(t, json.Unmarshal(result, &code))
+		assert.Empty(t, code)
+	})
+
+	t.Run("eth_getTransactionCount_blockNumberOrHash_object", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getTransactionCount", []any{
+			fx.senderAddr,
+			map[string]any{"blockHash": fx.bestHash},
+		})
+		var nonce hexutil.Uint64
+		require.NoError(t, json.Unmarshal(result, &nonce))
+		assert.Equal(t, uint64(1), uint64(nonce))
 	})
 }

@@ -42,7 +42,7 @@ func (h *Handler) ethGetBalance(req jsonrpc.Request) jsonrpc.Response {
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	st, err := ethconvert.StateAt(params.Tag, h.repo, h.stater)
+	st, err := ethconvert.StateAtBlockNumberOrHash(params.Block, h.repo, h.stater)
 	if err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
@@ -58,7 +58,7 @@ func (h *Handler) ethGetCode(req jsonrpc.Request) jsonrpc.Response {
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	st, err := ethconvert.StateAt(params.Tag, h.repo, h.stater)
+	st, err := ethconvert.StateAtBlockNumberOrHash(params.Block, h.repo, h.stater)
 	if err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
@@ -74,7 +74,7 @@ func (h *Handler) ethGetStorageAt(req jsonrpc.Request) jsonrpc.Response {
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
-	st, err := ethconvert.StateAt(params.Tag, h.repo, h.stater)
+	st, err := ethconvert.StateAtBlockNumberOrHash(params.Block, h.repo, h.stater)
 	if err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}
@@ -91,7 +91,7 @@ func (h *Handler) ethGetTransactionCount(req jsonrpc.Request) jsonrpc.Response {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 	// TODO "pending" returns the confirmed nonce; pool scanning is not implemented.
-	st, err := ethconvert.StateAt(params.Tag, h.repo, h.stater)
+	st, err := ethconvert.StateAtBlockNumberOrHash(params.Block, h.repo, h.stater)
 	if err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 	}

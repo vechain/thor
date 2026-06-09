@@ -47,7 +47,7 @@ func (h *Handler) ethCall(req jsonrpc.Request) jsonrpc.Response {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
-	out, _, execErr := h.simulate(params.Args, params.Tag, h.callGasLimit)
+	out, _, execErr := h.simulate(params.Args, params.Block, h.callGasLimit)
 	if execErr != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, execErr.Error())
 	}
@@ -74,7 +74,7 @@ func (h *Handler) ethEstimateGas(req jsonrpc.Request) jsonrpc.Response {
 	// would find the true minimum, but adds latency and is not required for correctness —
 	// wallets and SDKs typically add a 20–25% buffer on top of estimates anyway.
 	// TODO: implement binary search if gas-sensitive contracts become common on VeChain.
-	out, _, execErr := h.simulate(params.Args, params.Tag, limit)
+	out, _, execErr := h.simulate(params.Args, params.Block, limit)
 	if execErr != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, execErr.Error())
 	}
@@ -102,8 +102,8 @@ func (h *Handler) ethEstimateGas(req jsonrpc.Request) jsonrpc.Response {
 	return jsonrpc.OkResponse(req.ID, hexutil.Uint64(evmGasUsed+intrinsic))
 }
 
-func (h *Handler) simulate(args rpc.CallArgs, tag string, gasLimit uint64) (*runtime.Output, *state.State, error) {
-	summary, err := ethconvert.ResolveBlockTag(tag, h.repo)
+func (h *Handler) simulate(args rpc.CallArgs, block rpc.BlockNumberOrHash, gasLimit uint64) (*runtime.Output, *state.State, error) {
+	summary, err := ethconvert.ResolveBlockNumberOrHash(block, h.repo)
 	if err != nil {
 		return nil, nil, err
 	}
