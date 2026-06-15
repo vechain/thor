@@ -26,24 +26,25 @@ type CallArgs struct {
 }
 
 // CallParams holds the arguments for eth_call and eth_estimateGas.
-// Tag is optional and defaults to "latest" when omitted.
+// Block is optional and defaults to "latest" when omitted or null; it accepts
+// the same forms as Ethereum's BlockNumberOrHash.
 type CallParams struct {
-	Args CallArgs
-	Tag  string
+	Args  CallArgs
+	Block BlockNumberOrHash
 }
 
 func (p *CallParams) UnmarshalJSON(data []byte) error {
 	var raws []json.RawMessage
 	if err := json.Unmarshal(data, &raws); err != nil || len(raws) < 1 {
-		return fmt.Errorf("expected [callArgs, blockTag?]")
+		return fmt.Errorf("expected [callArgs, blockNrOrHash?]")
 	}
 	if err := json.Unmarshal(raws[0], &p.Args); err != nil {
 		return fmt.Errorf("invalid call arguments: %w", err)
 	}
-	p.Tag = "latest"
-	if len(raws) >= 2 {
-		if err := json.Unmarshal(raws[1], &p.Tag); err != nil {
-			return fmt.Errorf("invalid block tag")
+	p.Block = LatestBlockNumberOrHash()
+	if len(raws) >= 2 && string(raws[1]) != "null" {
+		if err := json.Unmarshal(raws[1], &p.Block); err != nil {
+			return fmt.Errorf("invalid block parameter: %w", err)
 		}
 	}
 	return nil

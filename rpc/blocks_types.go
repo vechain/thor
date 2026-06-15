@@ -46,3 +46,21 @@ func (p *BlockTagParams) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+
+// BlockReceiptsParams holds the single BlockNumberOrHash argument accepted by
+// eth_getBlockReceipts. The block parameter accepts the same forms as
+// Ethereum's BlockNumberOrHash (string tag, hex number, hash, or object).
+type BlockReceiptsParams struct {
+	Block BlockNumberOrHash
+}
+
+func (p *BlockReceiptsParams) UnmarshalJSON(data []byte) error {
+	var raw [1]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("expected [blockNrOrHash]")
+	}
+	if err := json.Unmarshal(raw[0], &p.Block); err != nil {
+		return fmt.Errorf("invalid block parameter: %w", err)
+	}
+	return nil
+}

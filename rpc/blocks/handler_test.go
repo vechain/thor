@@ -196,6 +196,27 @@ func TestBlocksHandler(t *testing.T) {
 		assert.Empty(t, receipts)
 	})
 
+	t.Run("eth_getBlockReceipts_blockNumberOrHash_object_number", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockReceipts", []any{
+			map[string]any{"blockNumber": "latest"},
+		})
+		var receipts []map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &receipts))
+		require.Len(t, receipts, 1)
+	})
+
+	t.Run("eth_getBlockReceipts_blockNumberOrHash_object_hash", func(t *testing.T) {
+		result := testutil.Call(t, ts, "eth_getBlockReceipts", []any{
+			map[string]any{"blockHash": fx.blockHash, "requireCanonical": true},
+		})
+		var receipts []map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(result, &receipts))
+		require.Len(t, receipts, 1)
+		var txHash string
+		require.NoError(t, json.Unmarshal(receipts[0]["transactionHash"], &txHash))
+		assert.Equal(t, fx.ethTxHash, txHash)
+	})
+
 	t.Run("eth_getUncleCountByBlockNumber", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_getUncleCountByBlockNumber", []any{"latest"})
 		var got hexutil.Uint64

@@ -92,6 +92,46 @@ func StateAt(tag string, repo *chain.Repository, stater *state.Stater) (*state.S
 	return stater.NewState(summary.Root()), nil
 }
 
+// ResolveBlockNumberOrHash maps an rpc.BlockNumberOrHash to a block summary in the
+// canonical chain. The object form supports requireCanonical: when set with a hash
+// that resolves to a non-canonical block, the call returns an error.
+//
+// A zero-value BlockNumberOrHash (both fields nil) is treated as the "latest" tag.
+func ResolveBlockNumberOrHash(bnh rpc.BlockNumberOrHash, repo *chain.Repository) (*chain.BlockSummary, error) {
+	if bnh.BlockHash != nil {
+		var id thor.Bytes32
+		copy(id[:], bnh.BlockHash[:])
+		summary, err := repo.GetBlockSummary(id)
+		if err != nil {
+			return nil, fmt.Errorf("block not found: %w", err)
+		}
+		if bnh.RequireCanonical {
+			ok, err := repo.NewBestChain().HasBlock(id)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, fmt.Errorf("hash is not currently canonical")
+			}
+		}
+		return summary, nil
+	}
+	tag := "latest"
+	if bnh.BlockNumber != nil {
+		tag = *bnh.BlockNumber
+	}
+	return ResolveBlockTag(tag, repo)
+}
+
+// StateAtBlockNumberOrHash opens the state at the block identified by bnh.
+func StateAtBlockNumberOrHash(bnh rpc.BlockNumberOrHash, repo *chain.Repository, stater *state.Stater) (*state.State, error) {
+	summary, err := ResolveBlockNumberOrHash(bnh, repo)
+	if err != nil {
+		return nil, err
+	}
+	return stater.NewState(summary.Root()), nil
+}
+
 // BuildEthBlock constructs an rpc.EthBlock from a VeChain block header.
 // Only TypeEthDynamicFee transactions are included in the transactions field.
 func BuildEthBlock(

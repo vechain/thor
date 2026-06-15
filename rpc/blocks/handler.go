@@ -104,12 +104,12 @@ func (h *Handler) txCountByTag(id json.RawMessage, tag string) jsonrpc.Response 
 }
 
 func (h *Handler) ethGetBlockReceipts(req jsonrpc.Request) jsonrpc.Response {
-	var params rpc.BlockTagParams
+	var params rpc.BlockReceiptsParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
-	summary, err := ethconvert.ResolveBlockTag(params.Tag, h.repo)
+	summary, err := ethconvert.ResolveBlockNumberOrHash(params.Block, h.repo)
 	if err != nil {
 		return jsonrpc.OkResponse(req.ID, nil)
 	}

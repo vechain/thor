@@ -140,6 +140,54 @@ func TestSimulationHandler(t *testing.T) {
 		assert.Equal(t, jsonrpc.CodeServerError, rpcErr.Code)
 	})
 
+	t.Run("eth_call_blockNumberOrHash_object", func(t *testing.T) {
+		// Object form for the block parameter: {"blockNumber": "latest"}.
+		result := testutil.Call(t, ts, "eth_call", []any{
+			map[string]any{
+				"from":  fx.senderAddr,
+				"to":    fx.recipientAddr,
+				"value": "0x1",
+			},
+			map[string]any{"blockNumber": "latest"},
+		})
+		var data hexutil.Bytes
+		require.NoError(t, json.Unmarshal(result, &data))
+		assert.Empty(t, data)
+	})
+
+	t.Run("eth_call_blockNumberOrHash_hash", func(t *testing.T) {
+		// Object form with a blockHash that resolves to genesis.
+		bestSummary := fx.chain.Repo().BestBlockSummary()
+		bestHash := bestSummary.Header.ID().String()
+		result := testutil.Call(t, ts, "eth_call", []any{
+			map[string]any{
+				"from":  fx.senderAddr,
+				"to":    fx.recipientAddr,
+				"value": "0x1",
+			},
+			map[string]any{"blockHash": bestHash, "requireCanonical": true},
+		})
+		var data hexutil.Bytes
+		require.NoError(t, json.Unmarshal(result, &data))
+		assert.Empty(t, data)
+	})
+
+	t.Run("eth_estimateGas_blockNumberOrHash_object", func(t *testing.T) {
+		bestSummary := fx.chain.Repo().BestBlockSummary()
+		bestHash := bestSummary.Header.ID().String()
+		result := testutil.Call(t, ts, "eth_estimateGas", []any{
+			map[string]any{
+				"from":  fx.senderAddr,
+				"to":    fx.recipientAddr,
+				"value": "0x1",
+			},
+			map[string]any{"blockHash": bestHash},
+		})
+		var gasEst hexutil.Uint64
+		require.NoError(t, json.Unmarshal(result, &gasEst))
+		assert.Equal(t, uint64(21000), uint64(gasEst))
+	})
+
 	t.Run("eth_call_eip1559_gas_price_fields", func(t *testing.T) {
 		// EIP-1559 callers supply maxFeePerGas + maxPriorityFeePerGas instead of gasPrice.
 		// A plain transfer with these fields must succeed and return empty output data.
