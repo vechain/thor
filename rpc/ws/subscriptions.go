@@ -149,10 +149,7 @@ func runSyncing(ctx context.Context, c *wsConn, subID string, startBlock uint32)
 // outrun its peers does not report a backwards "highest".
 func buildSyncingProgress(c *wsConn, startBlock uint32) syncingProgress {
 	current := c.repo.BestBlockSummary().Header.Number()
-	highest := c.syncer.HighestPeerBlock()
-	if current > highest {
-		highest = current
-	}
+	highest := max(current, c.syncer.HighestPeerBlock())
 	return syncingProgress{
 		Syncing: true,
 		Status: syncingStatus{

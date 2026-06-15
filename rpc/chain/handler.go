@@ -90,10 +90,7 @@ func (h *Handler) ethSyncing(req jsonrpc.Request) jsonrpc.Response {
 	default:
 	}
 	current := h.repo.BestBlockSummary().Header.Number()
-	highest := h.syncer.HighestPeerBlock()
-	if current > highest {
-		highest = current
-	}
+	highest := max(current, h.syncer.HighestPeerBlock())
 	return jsonrpc.OkResponse(req.ID, syncingStatus{
 		StartingBlock: hexutil.Uint64(h.startingBlock),
 		CurrentBlock:  hexutil.Uint64(current),

@@ -132,8 +132,9 @@ func TestEvents_WithOptionsNoLimit(t *testing.T) {
 	assert.Equal(t, 4, len(tLogs))
 }
 
+//go:fix inline
 func ptr(v uint64) *uint64 {
-	return &v
+	return new(v)
 }
 
 func TestOption(t *testing.T) {
