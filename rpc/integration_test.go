@@ -31,6 +31,17 @@ import (
 	"github.com/vechain/thor/v2/rpc/transactions"
 )
 
+// alwaysSyncedStub satisfies rpcchain.Syncer for tests that do not exercise the
+// eth_syncing branch — Synced() is already closed, HighestPeerBlock() returns 0.
+type alwaysSyncedStub struct{}
+
+func (alwaysSyncedStub) Synced() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+func (alwaysSyncedStub) HighestPeerBlock() uint32 { return 0 }
+
 // TestDispatch covers server- and dispatcher-level behaviour that is independent
 // of any individual method namespace. Per-method tests live in each sub-package.
 func TestDispatch(t *testing.T) {
@@ -52,7 +63,7 @@ func TestDispatch(t *testing.T) {
 		MaxLifetime:     10 * time.Minute,
 	}, &testchain.DefaultForkConfig)
 	srv := jsonrpc.NewServer()
-	rpcchain.New(c.Repo(), "test/1.0").Mount(srv)
+	rpcchain.New(c.Repo(), "test/1.0", alwaysSyncedStub{}).Mount(srv)
 	blocks.New(c.Repo()).Mount(srv)
 	transactions.New(c.Repo(), pool).Mount(srv)
 	accounts.New(c.Repo(), c.Stater()).Mount(srv)

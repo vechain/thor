@@ -40,6 +40,17 @@ import (
 	rpcws "github.com/vechain/thor/v2/rpc/ws"
 )
 
+// soloSyncer satisfies rpcws.Syncer for the in-process test node: there are no
+// peers and the node is considered synced from the moment it starts.
+type soloSyncer struct{}
+
+func (soloSyncer) Synced() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+func (soloSyncer) HighestPeerBlock() uint32 { return 0 }
+
 // Node represents a complete test node with chain, API server, and transaction pool capabilities
 type Node interface {
 	// Chain returns the underlying chain interface
@@ -108,8 +119,9 @@ func (n *node) Start() error {
 	subs := subscriptions.New(repo, []string{"*"}, 1000, n.txPool, true)
 	subs.Mount(router, "/subscriptions")
 
+	syncer := soloSyncer{}
 	rpcSrv := jsonrpc.NewServer()
-	rpcchain.New(repo, "test/1.0").Mount(rpcSrv)
+	rpcchain.New(repo, "test/1.0", syncer).Mount(rpcSrv)
 	rpcblocks.New(repo).Mount(rpcSrv)
 	rpctransactions.New(repo, n.txPool).Mount(rpcSrv)
 	rpcaccounts.New(repo, stater).Mount(rpcSrv)
@@ -118,7 +130,7 @@ func (n *node) Start() error {
 	rpcsimulation.New(repo, stater, &testchain.DefaultForkConfig, 1_000_000).Mount(rpcSrv)
 	rpcFilters := rpcfilters.New(repo, n.txPool, 100)
 	rpcFilters.Mount(rpcSrv)
-	rpcWs := rpcws.New(repo, n.txPool, []string{"*"}, rpcSrv)
+	rpcWs := rpcws.New(repo, n.txPool, []string{"*"}, rpcSrv, syncer)
 	router.PathPrefix("/rpc").Handler(rpcWs)
 
 	n.apiServer = httptest.NewServer(router)

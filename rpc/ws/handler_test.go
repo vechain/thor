@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,14 +34,39 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
+// fakeSyncer is a test double for rpcws.Syncer. Synced() returns a channel that
+// the test can close via markSynced(); HighestPeerBlock() is settable.
+type fakeSyncer struct {
+	syncedCh chan struct{}
+	highest  atomic.Uint32
+}
+
+func newFakeSyncer() *fakeSyncer { return &fakeSyncer{syncedCh: make(chan struct{})} }
+
+func (f *fakeSyncer) Synced() <-chan struct{}  { return f.syncedCh }
+func (f *fakeSyncer) HighestPeerBlock() uint32 { return f.highest.Load() }
+func (f *fakeSyncer) markSynced() {
+	select {
+	case <-f.syncedCh:
+	default:
+		close(f.syncedCh)
+	}
+}
+func (f *fakeSyncer) setHighest(n uint32) { f.highest.Store(n) }
+
 type fixture struct {
 	chain   *testchain.Chain
 	pool    *txpool.TxPool
 	srv     *httptest.Server
 	handler *rpcws.Handler
+	syncer  *fakeSyncer
 }
 
 func newFixture(t *testing.T) *fixture {
+	return newFixtureWithSyncer(t, newFakeSyncer())
+}
+
+func newFixtureWithSyncer(t *testing.T, syncer *fakeSyncer) *fixture {
 	t.Helper()
 	c, err := testchain.NewDefault()
 	require.NoError(t, err)
@@ -53,16 +79,16 @@ func newFixture(t *testing.T) *fixture {
 	t.Cleanup(pool.Close)
 
 	rpcSrv := jsonrpc.NewServer()
-	rpcchain.New(c.Repo(), "test/1.0").Mount(rpcSrv)
+	rpcchain.New(c.Repo(), "test/1.0", syncer).Mount(rpcSrv)
 	rpcblocks.New(c.Repo()).Mount(rpcSrv)
 
-	h := rpcws.New(c.Repo(), pool, []string{"*"}, rpcSrv)
+	h := rpcws.New(c.Repo(), pool, []string{"*"}, rpcSrv, syncer)
 	t.Cleanup(h.Close)
 
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 
-	return &fixture{chain: c, pool: pool, srv: srv, handler: h}
+	return &fixture{chain: c, pool: pool, srv: srv, handler: h, syncer: syncer}
 }
 
 // wsURL converts the test server's http:// URL to ws://.
@@ -336,7 +362,7 @@ func TestUnsupportedSubscriptionType(t *testing.T) {
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "eth_subscribe",
-		"params":  []any{"syncing"},
+		"params":  []any{"newBlocks"}, // not a recognised subscription type
 	})
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, body))
 
@@ -350,6 +376,95 @@ func TestUnsupportedSubscriptionType(t *testing.T) {
 	require.NoError(t, json.Unmarshal(msg, &resp))
 	require.NotNil(t, resp.Error)
 	assert.Equal(t, jsonrpc.CodeInvalidParams, resp.Error.Code)
+}
+
+// TestSyncingSubscriptionAlreadySynced verifies that subscribing to "syncing"
+// on a node that has already finished synchronising returns a single `false`
+// notification and emits nothing further. Mirrors go-ethereum behaviour:
+// when DownloaderAPI sees a new subscriber after sync is done, it pushes one
+// `false` and goes quiet.
+func TestSyncingSubscriptionAlreadySynced(t *testing.T) {
+	syncer := newFakeSyncer()
+	syncer.markSynced()
+	fx := newFixtureWithSyncer(t, syncer)
+
+	conn := dial(t, fx.srv)
+
+	subResult := rpcCall(t, conn, 1, "eth_subscribe", []any{"syncing"})
+	var subID string
+	require.NoError(t, json.Unmarshal(subResult, &subID))
+
+	gotSubID, result := readNotification(t, conn, 3*time.Second)
+	assert.Equal(t, subID, gotSubID)
+
+	// When the node is synced, the notification result is the JSON literal `false`.
+	var done bool
+	require.NoError(t, json.Unmarshal(result, &done))
+	assert.False(t, done)
+
+	// No further notifications expected.
+	conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	_, _, err := conn.ReadMessage()
+	assert.Error(t, err, "expected read timeout — no further syncing notifications after the initial false")
+}
+
+// TestSyncingSubscriptionInProgress verifies that subscribing while the node
+// is still syncing (Synced() not yet closed) immediately receives a progress
+// notification with the three core fields, and that highestBlock is the max
+// of the local head and the highest peer-advertised block.
+func TestSyncingSubscriptionInProgress(t *testing.T) {
+	syncer := newFakeSyncer()
+	syncer.setHighest(1234) // pretend a peer is at block 1234
+	fx := newFixtureWithSyncer(t, syncer)
+
+	conn := dial(t, fx.srv)
+
+	subResult := rpcCall(t, conn, 1, "eth_subscribe", []any{"syncing"})
+	var subID string
+	require.NoError(t, json.Unmarshal(subResult, &subID))
+
+	gotSubID, result := readNotification(t, conn, 3*time.Second)
+	assert.Equal(t, subID, gotSubID)
+
+	var progress struct {
+		Syncing bool `json:"syncing"`
+		Status  struct {
+			StartingBlock string `json:"startingBlock"`
+			CurrentBlock  string `json:"currentBlock"`
+			HighestBlock  string `json:"highestBlock"`
+		} `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(result, &progress))
+	assert.True(t, progress.Syncing)
+	assert.Equal(t, "0x0", progress.Status.StartingBlock) // genesis-only chain
+	assert.Equal(t, "0x0", progress.Status.CurrentBlock)
+	assert.Equal(t, "0x4d2", progress.Status.HighestBlock) // 1234 hex
+}
+
+// TestSyncingSubscriptionCompletion verifies that when sync completes during
+// an active subscription, the client receives a final `false` notification.
+func TestSyncingSubscriptionCompletion(t *testing.T) {
+	syncer := newFakeSyncer()
+	syncer.setHighest(10)
+	fx := newFixtureWithSyncer(t, syncer)
+
+	conn := dial(t, fx.srv)
+
+	subResult := rpcCall(t, conn, 1, "eth_subscribe", []any{"syncing"})
+	var subID string
+	require.NoError(t, json.Unmarshal(subResult, &subID))
+
+	// Drain the initial in-progress notification.
+	_, _ = readNotification(t, conn, 3*time.Second)
+
+	// Sync completes server-side.
+	syncer.markSynced()
+
+	gotSubID, result := readNotification(t, conn, 3*time.Second)
+	assert.Equal(t, subID, gotSubID)
+	var done bool
+	require.NoError(t, json.Unmarshal(result, &done))
+	assert.False(t, done)
 }
 
 // TestWSURL is a quick smoke test confirming the wsURL helper produces the right scheme.

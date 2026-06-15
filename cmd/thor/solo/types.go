@@ -9,10 +9,25 @@ import (
 	"github.com/vechain/thor/v2/comm"
 )
 
+// soloSyncedCh is a pre-closed channel returned by Communicator.Synced.
+// Solo mode is by definition already synced — there is no peer network to
+// catch up with.
+var soloSyncedCh = func() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}()
+
 // Communicator in solo is a fake one just for api handler.
 type Communicator struct{}
 
 // PeersStats returns nil solo doesn't join p2p network.
 func (comm *Communicator) PeersStats() []*comm.PeerStats {
 	return nil
+}
+
+// Synced returns a pre-closed channel: solo mode has no peers to sync with,
+// so the node is always considered synced.
+func (comm *Communicator) Synced() <-chan struct{} {
+	return soloSyncedCh
 }

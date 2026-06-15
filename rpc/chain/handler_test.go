@@ -7,6 +7,7 @@ package chain_test
 
 import (
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -18,8 +19,28 @@ import (
 	"github.com/vechain/thor/v2/test/testchain"
 )
 
+// fakeSyncer satisfies chain.Syncer. Default state is "not synced".
+type fakeSyncer struct {
+	syncedCh chan struct{}
+	highest  atomic.Uint32
+}
+
+func newFakeSyncer() *fakeSyncer { return &fakeSyncer{syncedCh: make(chan struct{})} }
+
+func (f *fakeSyncer) Synced() <-chan struct{}  { return f.syncedCh }
+func (f *fakeSyncer) HighestPeerBlock() uint32 { return f.highest.Load() }
+func (f *fakeSyncer) markSynced() {
+	select {
+	case <-f.syncedCh:
+	default:
+		close(f.syncedCh)
+	}
+}
+func (f *fakeSyncer) setHighest(n uint32) { f.highest.Store(n) }
+
 type fixture struct {
-	chain *testchain.Chain
+	chain  *testchain.Chain
+	syncer *fakeSyncer
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -28,14 +49,17 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, err)
 
 	require.NoError(t, c.MintBlock())
+	syncer := newFakeSyncer()
+	syncer.markSynced() // default to synced so legacy assertions stay valid
 	return &fixture{
-		chain: c,
+		chain:  c,
+		syncer: syncer,
 	}
 }
 
 func TestChainHandler(t *testing.T) {
 	fx := newFixture(t)
-	ts := testutil.NewTestServer(t, chain.New(fx.chain.Repo(), "test/1.0"))
+	ts := testutil.NewTestServer(t, chain.New(fx.chain.Repo(), "test/1.0", fx.syncer))
 
 	t.Run("eth_chainId", func(t *testing.T) {
 		result := testutil.Call(t, ts, "eth_chainId", []any{})
@@ -114,4 +138,32 @@ func TestChainHandler(t *testing.T) {
 		require.NoError(t, json.Unmarshal(result, &got))
 		assert.Equal(t, "0x0000000000000000000000000000000000000000", got)
 	})
+}
+
+// TestEthSyncingInProgress verifies that eth_syncing returns a sync-progress
+// object (not `false`) while the node has not finished initial synchronisation.
+// Mirrors go-ethereum's PublicEthereumAPI.Syncing return shape: the inner
+// SyncProgress fields, not the {syncing, status} envelope used by the WS
+// subscription.
+func TestEthSyncingInProgress(t *testing.T) {
+	c, err := testchain.NewDefault()
+	require.NoError(t, err)
+	require.NoError(t, c.MintBlock())
+
+	syncer := newFakeSyncer() // not marked synced
+	syncer.setHighest(4242)   // a peer claims block 4242
+
+	ts := testutil.NewTestServer(t, chain.New(c.Repo(), "test/1.0", syncer))
+
+	result := testutil.Call(t, ts, "eth_syncing", []any{})
+
+	var got struct {
+		StartingBlock string `json:"startingBlock"`
+		CurrentBlock  string `json:"currentBlock"`
+		HighestBlock  string `json:"highestBlock"`
+	}
+	require.NoError(t, json.Unmarshal(result, &got))
+	assert.Equal(t, "0x1", got.StartingBlock) // chain minted 1 block before handler creation
+	assert.Equal(t, "0x1", got.CurrentBlock)
+	assert.Equal(t, "0x1092", got.HighestBlock) // 4242 in hex
 }

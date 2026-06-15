@@ -10,13 +10,28 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/rpc/ethconvert"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
-const pendingTxBufSize = 128
+const (
+	pendingTxBufSize = 128
+	syncingHeartbeat = 30 * time.Second
+)
+
+type syncingStatus struct {
+	StartingBlock hexutil.Uint64 `json:"startingBlock"`
+	CurrentBlock  hexutil.Uint64 `json:"currentBlock"`
+	HighestBlock  hexutil.Uint64 `json:"highestBlock"`
+}
+
+type syncingProgress struct {
+	Syncing bool          `json:"syncing"`
+	Status  syncingStatus `json:"status"`
+}
 
 // runNewHeads pushes an EthBlock notification (fullTxs=false) for every new
 // canonical block while ctx is alive. Obsolete (reorg) blocks are skipped
@@ -88,6 +103,63 @@ func runLogs(ctx context.Context, c *wsConn, subID string, criteria ethconvert.L
 				}
 			}
 		}
+	}
+}
+
+// runSyncing pushes the current sync state for every heartbeat tick (or
+// immediately if already done). Mirrors go-ethereum's eth_subscribe("syncing")
+// stream: while syncing, emit {syncing:true, status:{startingBlock, currentBlock,
+// highestBlock}}; when sync finishes, emit a single `false` and go idle.
+//
+// startBlock is captured by the caller at subscribe time so reorgs or block
+// production during the subscription don't move the floor.
+func runSyncing(ctx context.Context, c *wsConn, subID string, startBlock uint32) {
+	syncedCh := c.syncer.Synced()
+
+	select {
+	case <-syncedCh:
+		// Already done by the time the subscription was created.
+		c.notify(subID, false)
+		<-ctx.Done()
+		return
+	default:
+	}
+
+	// Not synced yet — push current state immediately, then heartbeat.
+	c.notify(subID, buildSyncingProgress(c, startBlock))
+
+	ticker := time.NewTicker(syncingHeartbeat)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-syncedCh:
+			c.notify(subID, false)
+			<-ctx.Done()
+			return
+		case <-ticker.C:
+			c.notify(subID, buildSyncingProgress(c, startBlock))
+		}
+	}
+}
+
+// buildSyncingProgress samples the current local head and the highest peer-
+// advertised block. HighestBlock is the max of the two so a node that has
+// outrun its peers does not report a backwards "highest".
+func buildSyncingProgress(c *wsConn, startBlock uint32) syncingProgress {
+	current := c.repo.BestBlockSummary().Header.Number()
+	highest := c.syncer.HighestPeerBlock()
+	if current > highest {
+		highest = current
+	}
+	return syncingProgress{
+		Syncing: true,
+		Status: syncingStatus{
+			StartingBlock: hexutil.Uint64(startBlock),
+			CurrentBlock:  hexutil.Uint64(current),
+			HighestBlock:  hexutil.Uint64(highest),
+		},
 	}
 }
 

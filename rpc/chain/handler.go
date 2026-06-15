@@ -15,15 +15,33 @@ import (
 	"github.com/vechain/thor/v2/rpc/jsonrpc"
 )
 
+type Syncer interface {
+	Synced() <-chan struct{}
+	HighestPeerBlock() uint32
+}
+
+type syncingStatus struct {
+	StartingBlock hexutil.Uint64 `json:"startingBlock"`
+	CurrentBlock  hexutil.Uint64 `json:"currentBlock"`
+	HighestBlock  hexutil.Uint64 `json:"highestBlock"`
+}
+
 // Handler implements chain metadata JSON-RPC methods.
 type Handler struct {
 	repo          *chain.Repository
 	clientVersion string
+	syncer        Syncer
+	startingBlock uint32
 }
 
 // New creates a chain Handler.
-func New(repo *chain.Repository, clientVersion string) *Handler {
-	return &Handler{repo: repo, clientVersion: clientVersion}
+func New(repo *chain.Repository, clientVersion string, syncer Syncer) *Handler {
+	return &Handler{
+		repo:          repo,
+		clientVersion: clientVersion,
+		syncer:        syncer,
+		startingBlock: repo.BestBlockSummary().Header.Number(),
+	}
 }
 
 // Mount registers all chain metadata methods on the dispatcher.
@@ -38,7 +56,7 @@ func (h *Handler) Mount(s *jsonrpc.Server) {
 	s.Register("web3_clientVersion", h.web3ClientVersion)
 	s.Register("eth_blockNumber", h.ethBlockNumber)
 	s.Register("eth_coinbase", h.ethCoinbase)
-	s.Register("eth_syncing", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, false) })
+	s.Register("eth_syncing", h.ethSyncing)
 	s.Register("eth_accounts", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, []string{}) })
 	s.Register("eth_mining", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, false) })
 	s.Register("eth_hashrate", func(req jsonrpc.Request) jsonrpc.Response { return jsonrpc.OkResponse(req.ID, hexutil.Uint64(0)) })
@@ -63,4 +81,22 @@ func (h *Handler) ethBlockNumber(req jsonrpc.Request) jsonrpc.Response {
 
 func (h *Handler) ethCoinbase(req jsonrpc.Request) jsonrpc.Response {
 	return jsonrpc.OkResponse(req.ID, common.Address{})
+}
+
+func (h *Handler) ethSyncing(req jsonrpc.Request) jsonrpc.Response {
+	select {
+	case <-h.syncer.Synced():
+		return jsonrpc.OkResponse(req.ID, false)
+	default:
+	}
+	current := h.repo.BestBlockSummary().Header.Number()
+	highest := h.syncer.HighestPeerBlock()
+	if current > highest {
+		highest = current
+	}
+	return jsonrpc.OkResponse(req.ID, syncingStatus{
+		StartingBlock: hexutil.Uint64(h.startingBlock),
+		CurrentBlock:  hexutil.Uint64(current),
+		HighestBlock:  hexutil.Uint64(highest),
+	})
 }

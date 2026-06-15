@@ -50,6 +50,7 @@ type wsConn struct {
 	repo   *chain.Repository
 	txPool txpool.Pool
 	rpcSrv *jsonrpc.Server
+	syncer Syncer
 
 	subsMu  sync.Mutex
 	subs    map[string]context.CancelFunc // subID → cancel for that sub's goroutine
@@ -57,7 +58,7 @@ type wsConn struct {
 	subWg   sync.WaitGroup
 }
 
-func newWSConn(conn *websocket.Conn, parentCtx context.Context, repo *chain.Repository, txPool txpool.Pool, rpcSrv *jsonrpc.Server) *wsConn {
+func newWSConn(conn *websocket.Conn, parentCtx context.Context, repo *chain.Repository, txPool txpool.Pool, rpcSrv *jsonrpc.Server, syncer Syncer) *wsConn {
 	ctx, cancel := context.WithCancel(parentCtx)
 	return &wsConn{
 		conn:       conn,
@@ -67,6 +68,7 @@ func newWSConn(conn *websocket.Conn, parentCtx context.Context, repo *chain.Repo
 		repo:       repo,
 		txPool:     txPool,
 		rpcSrv:     rpcSrv,
+		syncer:     syncer,
 		subs:       make(map[string]context.CancelFunc),
 	}
 }
@@ -201,6 +203,14 @@ func (c *wsConn) subscribe(req jsonrpc.Request) jsonrpc.Response {
 	case "newPendingTransactions":
 		c.startSub(subID, func(ctx context.Context) {
 			runNewPendingTransactions(ctx, c, subID)
+		})
+	case "syncing":
+		if c.syncer == nil {
+			return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, "syncing subscription not available")
+		}
+		startBlock := c.repo.BestBlockSummary().Header.Number()
+		c.startSub(subID, func(ctx context.Context) {
+			runSyncing(ctx, c, subID, startBlock)
 		})
 	default:
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, fmt.Sprintf("unsupported subscription type %q", subType))

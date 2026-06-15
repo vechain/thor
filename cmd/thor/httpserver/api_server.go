@@ -31,6 +31,7 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
@@ -51,6 +52,20 @@ import (
 )
 
 var logger = log.WithContext("pkg", "api")
+
+type networkSyncer struct{ nw api.Network }
+
+func (n networkSyncer) Synced() <-chan struct{} { return n.nw.Synced() }
+
+func (n networkSyncer) HighestPeerBlock() uint32 {
+	var max uint32
+	for _, p := range n.nw.PeersStats() {
+		if num := block.Number(p.BestBlockID); num > max {
+			max = num
+		}
+	}
+	return max
+}
 
 const (
 	defaultFeeCacheSize     = 1024
@@ -144,8 +159,9 @@ func StartAPIServer(
 	subs.Mount(router, "/subscriptions")
 
 	// Ethereum JSON-RPC at /rpc — body limit enforced internally by jsonrpc.Server (2 MB via MaxBytesReader)
+	syncer := networkSyncer{nw}
 	rpcSrv := jsonrpc.NewServer()
-	rpcchain.New(repo, config.ClientVersion).Mount(rpcSrv)
+	rpcchain.New(repo, config.ClientVersion, syncer).Mount(rpcSrv)
 	rpcblocks.New(repo).Mount(rpcSrv)
 	rpctransactions.New(repo, txPool).Mount(rpcSrv)
 	rpcaccounts.New(repo, stater).Mount(rpcSrv)
@@ -157,7 +173,7 @@ func StartAPIServer(
 
 	// Wrap rpcSrv with the WebSocket handler: plain HTTP POST goes to rpcSrv,
 	// WebSocket upgrade requests gain eth_subscribe / eth_unsubscribe.
-	rpcWs := rpcws.New(repo, txPool, origins, rpcSrv)
+	rpcWs := rpcws.New(repo, txPool, origins, rpcSrv, syncer)
 	router.PathPrefix("/rpc").Handler(rpcWs)
 
 	if config.PprofOn {

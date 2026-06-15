@@ -28,6 +28,12 @@ const (
 	writeBufSize = 256 // per-connection notification buffer; full buffer triggers disconnect
 )
 
+type Syncer interface {
+	Synced() <-chan struct{}
+
+	HighestPeerBlock() uint32
+}
+
 // Handler is an http.Handler that serves JSON-RPC over both HTTP and WebSocket
 // at the same endpoint. HTTP POST requests are forwarded to rpcSrv; WebSocket
 // connections gain eth_subscribe / eth_unsubscribe in addition to all registered
@@ -36,6 +42,7 @@ type Handler struct {
 	repo     *chain.Repository
 	txPool   txpool.Pool
 	rpcSrv   *jsonrpc.Server
+	syncer   Syncer
 	upgrader *websocket.Upgrader
 
 	ctx    context.Context
@@ -44,13 +51,16 @@ type Handler struct {
 }
 
 // New creates a Handler. allowedOrigins controls the WebSocket CORS check;
-// pass the same slice used for the REST API.
-func New(repo *chain.Repository, txPool txpool.Pool, allowedOrigins []string, rpcSrv *jsonrpc.Server) *Handler {
+// pass the same slice used for the REST API. syncer powers the "syncing"
+// subscription type; pass nil only in contexts where that subscription must
+// be rejected.
+func New(repo *chain.Repository, txPool txpool.Pool, allowedOrigins []string, rpcSrv *jsonrpc.Server, syncer Syncer) *Handler {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Handler{
 		repo:   repo,
 		txPool: txPool,
 		rpcSrv: rpcSrv,
+		syncer: syncer,
 		upgrader: &websocket.Upgrader{
 			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
@@ -96,7 +106,7 @@ func (h *Handler) serveWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.wg.Go(func() {
-		c := newWSConn(conn, h.ctx, h.repo, h.txPool, h.rpcSrv)
+		c := newWSConn(conn, h.ctx, h.repo, h.txPool, h.rpcSrv, h.syncer)
 		c.serve()
 	})
 }
