@@ -132,16 +132,6 @@ func (n *Node) executeAndCommitBlock(newBlock *block.Block, stats *blockStats, c
 		return err
 	}
 
-	// let bft engine decide the best block after fork FINALITY
-	if newBlock.Header().Number() >= n.forkConfig.FINALITY && ctx.prevBest.Number() >= n.forkConfig.FINALITY {
-		ctx.becomeBest, err = n.bft.Select(newBlock.Header())
-		if err != nil {
-			return errors.Wrap(err, "bft select")
-		}
-	} else {
-		ctx.becomeBest = newBlock.Header().BetterThan(ctx.prevBest)
-	}
-
 	if err := n.commitBlock(ctx); err != nil {
 		return err
 	}
@@ -156,17 +146,29 @@ func (n *Node) executeAndCommitBlock(newBlock *block.Block, stats *blockStats, c
 func (n *Node) commitBlock(ctx *blockExecContext) error {
 	execElapsed := mclock.Now() - ctx.startTime
 
+	// Commit state before bft.Select so it can read the new block's post-housekeep
+	// state via stater (needed when the block is an epoch checkpoint).
+	if _, err := ctx.stage.Commit(); err != nil {
+		return errors.Wrap(err, "commit state")
+	}
+
+	// let bft engine decide the best block after fork FINALITY
+	if ctx.newBlock.Header().Number() >= n.forkConfig.FINALITY && ctx.prevBest.Number() >= n.forkConfig.FINALITY {
+		becomeBest, err := n.bft.Select(ctx.newBlock.Header(), ctx.conflicts)
+		if err != nil {
+			return errors.Wrap(err, "bft select")
+		}
+		ctx.becomeBest = becomeBest
+	} else {
+		ctx.becomeBest = ctx.newBlock.Header().BetterThan(ctx.prevBest)
+	}
+
 	logEnabled := ctx.becomeBest && !n.options.SkipLogs && !n.logDBFailed
 	// write logs
 	if logEnabled {
 		if err := n.writeLogs(ctx.newBlock, ctx.receipts, ctx.prevBest.ID()); err != nil {
 			return errors.Wrap(err, "write logs")
 		}
-	}
-
-	// commit the states
-	if _, err := ctx.stage.Commit(); err != nil {
-		return errors.Wrap(err, "commit state")
 	}
 
 	// sync the log-writing task
@@ -184,7 +186,7 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 
 	// commit block in bft engine
 	if ctx.newBlock.Header().Number() >= n.forkConfig.FINALITY {
-		if err := n.bft.CommitBlock(ctx.newBlock.Header(), ctx.packing); err != nil {
+		if err := n.bft.CommitBlock(ctx.newBlock.Header(), ctx.conflicts, ctx.packing); err != nil {
 			return errors.Wrap(err, "bft commits")
 		}
 	}

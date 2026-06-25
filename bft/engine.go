@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -24,14 +25,19 @@ import (
 
 const dataStoreName = "bft.engine"
 
-var finalizedKey = []byte("finalized")
+var (
+	finalizedKey = []byte("finalized")
+	logger       = log.WithContext("pkg", "bft")
+)
 
 type Committer interface {
 	Finalized() thor.Bytes32
 	Justified() (thor.Bytes32, error)
 	Accepts(parentID thor.Bytes32) (bool, error)
-	Select(header *block.Header) (bool, error)
-	CommitBlock(header *block.Header, isPacking bool) error
+	// Select chooses between the given block and the current best; header +
+	// conflicts address the block's post-housekeep state before it is persisted.
+	Select(header *block.Header, conflicts uint32) (bool, error)
+	CommitBlock(header *block.Header, conflicts uint32, isPacking bool) error
 	ShouldVote(parentID thor.Bytes32) (bool, error)
 }
 
@@ -150,13 +156,15 @@ func (engine *Engine) Accepts(parentID thor.Bytes32) (bool, error) {
 }
 
 // Select selects between the new block and the current best, return true if new one is better.
-func (engine *Engine) Select(header *block.Header) (bool, error) {
-	newSt, err := engine.computeState(header)
+// header + conflicts address the new block's post-housekeep state before it is persisted.
+func (engine *Engine) Select(header *block.Header, conflicts uint32) (bool, error) {
+	newSum := &chain.BlockSummary{Header: header, Conflicts: conflicts}
+	newSt, err := engine.computeState(newSum)
 	if err != nil {
 		return false, err
 	}
 
-	best := engine.repo.BestBlockSummary().Header
+	best := engine.repo.BestBlockSummary()
 	bestSt, err := engine.computeState(best)
 	if err != nil {
 		return false, err
@@ -166,14 +174,19 @@ func (engine *Engine) Select(header *block.Header) (bool, error) {
 		return newSt.Quality > bestSt.Quality, nil
 	}
 
-	return header.BetterThan(best), nil
+	return header.BetterThan(best.Header), nil
 }
 
 // CommitBlock commits bft state to storage.
-func (engine *Engine) CommitBlock(header *block.Header, isPacking bool) error {
+func (engine *Engine) CommitBlock(header *block.Header, conflicts uint32, isPacking bool) error {
+	// The block is already persisted by this point (CommitBlock runs after
+	// repo.AddBlock); header + conflicts address its post-housekeep state the
+	// same way Select does, without a repo lookup.
+	sum := &chain.BlockSummary{Header: header, Conflicts: conflicts}
+
 	// save quality and finalized at the end of each round
 	if getStorePoint(header.Number()) == header.Number() {
-		state, err := engine.computeState(header)
+		state, err := engine.computeState(sum)
 		if err != nil {
 			return err
 		}
@@ -199,7 +212,7 @@ func (engine *Engine) CommitBlock(header *block.Header, isPacking bool) error {
 
 	// mark voted if packing
 	if isPacking {
-		state, err := engine.computeState(header)
+		state, err := engine.computeState(sum)
 		if err != nil {
 			return err
 		}
@@ -233,7 +246,7 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	st, err := engine.computeState(sum.Header)
+	st, err := engine.computeState(sum)
 	if err != nil {
 		return false, err
 	}
@@ -290,8 +303,11 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-// computeState computes the bft state regarding the given block header to the closest checkpoint.
-func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
+// computeState computes the bft state for sum back to the closest checkpoint.
+// sum may describe a not-yet-persisted block (during bft.Select); Header + Conflicts
+// still address its post-housekeep state.
+func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
+	header := sum.Header
 	if cached, ok := engine.caches.state.Get(header.ID()); ok {
 		return cached.(*bftState), nil
 	}
@@ -311,7 +327,7 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	} else {
 		// create a new vote set if cache missed or new block is checkpoint
 		var err error
-		js, err = engine.newJustifier(header.ParentID())
+		js, err = engine.newJustifier(sum)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create vote set")
 		}
@@ -498,11 +514,11 @@ func (e *mockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-func (e *mockedEngine) Select(header *block.Header) (bool, error) {
+func (e *mockedEngine) Select(_ *block.Header, _ uint32) (bool, error) {
 	return true, nil
 }
 
-func (e *mockedEngine) CommitBlock(header *block.Header, isPacking bool) error {
+func (e *mockedEngine) CommitBlock(_ *block.Header, _ uint32, _ bool) error {
 	return nil
 }
 
@@ -606,13 +622,13 @@ func (e *soloMockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 
 // Select always returns true in solo mode since there's no fork choice rule
 // needed - the single node always extends its own chain.
-func (e *soloMockedEngine) Select(header *block.Header) (bool, error) {
+func (e *soloMockedEngine) Select(_ *block.Header, _ uint32) (bool, error) {
 	return true, nil
 }
 
 // CommitBlock is a no-op in solo mode since there's no BFT voting or
 // commitment protocol needed.
-func (e *soloMockedEngine) CommitBlock(header *block.Header, isPacking bool) error {
+func (e *soloMockedEngine) CommitBlock(_ *block.Header, _ uint32, _ bool) error {
 	return nil
 }
 
