@@ -941,6 +941,47 @@ func (test *TestBFT) adoptStakerTx(flow *packer.Flow, privateKey *ecdsa.PrivateK
 	return nil
 }
 
+// TestResyncWithAdvancedFinalized: node restarts with finalized ahead of the first
+// PoS storePoint. Resync's early iterations must not feed findCheckpointByQuality a
+// headID before finalized, or the uint32 range underflows and the lookup fails.
+func TestResyncWithAdvancedFinalized(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
+	if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
+		t.Fatal(err)
+	}
+
+	// fastForward advanced finalized past firstPosBlock's storePoint — required for
+	// this regression to bite.
+	firstPosStorePoint := getStorePoint(forkCfg.HAYABUSA + thor.HayabusaTP())
+	finalizedBefore := testBFT.engine.Finalized()
+	assert.Greater(t, block.Number(finalizedBefore), firstPosStorePoint,
+		"test setup precondition: finalized must be past firstPosBlock storePoint")
+
+	// Reset the resync version so Resync() actually runs on this engine.
+	if err := testBFT.engine.data.Delete(resyncVersionKey); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := testBFT.engine.Resync(nil); err != nil {
+		t.Fatalf("Resync returned error: %v", err)
+	}
+
+	// Resync only advances finalized forward, so it must not have regressed.
+	finalizedAfter := testBFT.engine.Finalized()
+	assert.GreaterOrEqual(t, block.Number(finalizedAfter), block.Number(finalizedBefore))
+}
+
 // TestPosThresholdReadsPostHousekeepState pins that newJustifier reads totalWeight
 // from the checkpoint (post-housekeep), not checkpoint-1 — the inverse of the pre-fix
 // off-sync where threshold used W_old while votes summed W_old + W_new.
@@ -1111,4 +1152,37 @@ func TestComputeStateCheckpointPlusOneBuildVsReuseEquivalence(t *testing.T) {
 	assert.Equal(t, *stateReal, *stateManual,
 		"computeState(checkpoint+1) diverges from manual reproduction; "+
 			"vote / threshold / quality semantics changed")
+}
+
+// TestFindCheckpointByQualityRejectsHeadBeforeFinalized pins that
+// findCheckpointByQuality rejects a (headID, finalized) pair with headID before
+// finalized, instead of underflowing the uint32 range. Resync's caller-side epoch
+// guard prevents this in normal flow, so this micro-test calls the function directly.
+func TestFindCheckpointByQualityRejectsHeadBeforeFinalized(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = testBFT.fastForward(thor.EpochLength() * 2); err != nil {
+		t.Fatal(err)
+	}
+
+	finalizedID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength())
+	if err != nil {
+		t.Fatal(err)
+	}
+	headID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength() - 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = testBFT.engine.findCheckpointByQuality(1, finalizedID, headID)
+	assert.Error(t, err, "headID precedes finalized must be rejected")
+	assert.Contains(t, err.Error(), "headID precedes finalized")
 }

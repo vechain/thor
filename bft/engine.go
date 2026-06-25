@@ -91,6 +91,118 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig *thor.For
 	return &engine, nil
 }
 
+// Resync recomputes and persists BFT quality for every storePoint from the first
+// post-HAYABUSA+HayabusaTP epoch to head, correcting values left out of sync by the
+// pre-housekeep threshold. Idempotent via currentResyncVersion.
+//
+// onProgress, if non-nil, is called with (0, total) before the first storePoint and
+// (done, total) after each; the final call has done == total.
+func (engine *Engine) Resync(onProgress func(done, total uint32)) error {
+	version, err := loadResyncVersion(engine.data)
+	if err != nil {
+		return errors.Wrap(err, "load resync version")
+	}
+	if version >= currentResyncVersion {
+		return nil
+	}
+
+	logger.Info("running bft resync", "version", currentResyncVersion)
+
+	// Drop all caches so stale entries can't leak into recomputation. Quality cache
+	// included: relying on in-order write-back is fragile and a cold cache is cheap.
+	engine.caches.state.Purge()
+	engine.caches.quality.Purge()
+	engine.caches.justifier = cache.NewPrioCache(16)
+
+	head := engine.repo.BestBlockSummary()
+	headNum := head.Header.Number()
+
+	// PoS vote weights apply after HAYABUSA+HayabusaTP(); start at that block's
+	// storePoint. Covering one pre-PoS epoch is harmless — quality is unchanged.
+	firstPosBlock := engine.forkConfig.HAYABUSA + thor.HayabusaTP()
+	if firstPosBlock > headNum {
+		if err := saveResyncVersion(engine.data, currentResyncVersion); err != nil {
+			return errors.Wrap(err, "save resync version")
+		}
+		return nil
+	}
+
+	start := getStorePoint(firstPosBlock)
+	total := (headNum-start)/thor.EpochLength() + 1
+
+	chain := engine.repo.NewChain(head.Header.ID())
+
+	if onProgress != nil {
+		onProgress(0, total)
+	}
+
+	var done, mismatches uint32
+	for sp := start; sp <= headNum; sp += thor.EpochLength() {
+		storeID, err := chain.GetBlockID(sp)
+		if err != nil {
+			return errors.Wrapf(err, "get block id at storePoint %d", sp)
+		}
+
+		sum, err := engine.repo.GetBlockSummary(storeID)
+		if err != nil {
+			return errors.Wrapf(err, "get block summary at storePoint %d", sp)
+		}
+
+		engine.caches.state.Remove(storeID)
+
+		prevQuality, prevErr := loadQuality(engine.data, storeID)
+		hasPrev := prevErr == nil
+		if prevErr != nil && !engine.data.IsNotFound(prevErr) {
+			return errors.Wrapf(prevErr, "load prev quality at storePoint %d", sp)
+		}
+
+		st, err := engine.computeState(sum)
+		if err != nil {
+			return errors.Wrapf(err, "compute state at storePoint %d", sp)
+		}
+
+		if hasPrev && prevQuality != st.Quality {
+			mismatches++
+			logger.Warn("bft resync: quality mismatch",
+				"storePoint", sp, "id", storeID, "stored", prevQuality, "recomputed", st.Quality)
+		}
+
+		if err := saveQuality(engine.data, storeID, st.Quality); err != nil {
+			return errors.Wrapf(err, "save quality at storePoint %d", sp)
+		}
+		engine.caches.quality.Add(storeID, st.Quality)
+
+		// Advance finalized forward only. Skip when storeID is in finalized's epoch
+		// or earlier: findCheckpointByQuality would underflow or miss the target
+		// (already absorbed by the current finalized).
+		if st.Committed && st.Quality > 1 && getCheckPoint(block.Number(storeID)) > block.Number(engine.Finalized()) {
+			id, err := engine.findCheckpointByQuality(st.Quality-1, engine.Finalized(), storeID)
+			if err != nil {
+				return errors.Wrapf(err, "find checkpoint by quality at storePoint %d", sp)
+			}
+			if block.Number(id) > block.Number(engine.Finalized()) {
+				if err := engine.data.Put(finalizedKey, id[:]); err != nil {
+					return err
+				}
+				engine.finalized.Store(id)
+			}
+		}
+
+		done++
+		if onProgress != nil {
+			onProgress(done, total)
+		}
+		logger.Debug("bft resync: storePoint processed", "num", sp, "quality", st.Quality)
+	}
+
+	if err := saveResyncVersion(engine.data, currentResyncVersion); err != nil {
+		return errors.Wrap(err, "save resync version")
+	}
+
+	logger.Info("bft resync done", "version", currentResyncVersion, "total", total, "mismatches", mismatches)
+	return nil
+}
+
 // Finalized returns the finalized checkpoint.
 func (engine *Engine) Finalized() thor.Bytes32 {
 	return engine.finalized.Load().(thor.Bytes32)
@@ -396,6 +508,11 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 			return
 		}
 	}()
+
+	// Guard uint32 underflow below: callers must search forward from finalized.
+	if block.Number(headID) < block.Number(finalized) {
+		return thor.Bytes32{}, errors.New("headID precedes finalized")
+	}
 
 	searchStart := block.Number(finalized)
 	if searchStart == 0 {
