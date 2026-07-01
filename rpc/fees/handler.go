@@ -7,7 +7,9 @@ package fees
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -61,9 +63,8 @@ func (h *Handler) ethFeeHistory(req jsonrpc.Request) jsonrpc.Response {
 		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
-	// Reward percentiles are not yet supported.
-	if len(params.RewardPercentiles) > 0 {
-		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeServerError, "reward percentiles are not yet supported")
+	if err := validateRewardPercentiles(params.RewardPercentiles); err != nil {
+		return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInvalidParams, err.Error())
 	}
 
 	if params.BlockCount == 0 {
@@ -88,6 +89,10 @@ func (h *Handler) ethFeeHistory(req jsonrpc.Request) jsonrpc.Response {
 
 	baseFees := make([]*hexutil.Big, 0, params.BlockCount+1)
 	gasUsedRatios := make([]float64, 0, params.BlockCount)
+	var rewards [][]*hexutil.Big
+	if len(params.RewardPercentiles) > 0 {
+		rewards = make([][]*hexutil.Big, 0, params.BlockCount)
+	}
 
 	for n := oldestNum; n <= newestNum; n++ {
 		hdr, err := bestChain.GetBlockHeader(uint32(n))
@@ -101,16 +106,25 @@ func (h *Handler) ethFeeHistory(req jsonrpc.Request) jsonrpc.Response {
 			baseFees = append(baseFees, (*hexutil.Big)(new(big.Int).Set(bf)))
 		}
 
-		// gasUsedRatio counts only TypeEthDynamicFee gas so Ethereum tooling sees
-		// ETH-typed block utilisation, not VeChain legacy tx activity.
+		// gasUsedRatio and reward percentiles count only TypeEthDynamicFee gas so
+		// Ethereum tooling sees ETH-typed block utilisation and priority fees, not
+		// VeChain legacy tx activity.
 		receipts, err := h.repo.GetBlockReceipts(hdr.ID())
 		if err != nil {
 			return jsonrpc.ErrResponse(req.ID, jsonrpc.CodeInternalError, err.Error())
 		}
 		var ethGasUsed uint64
+		var rewardItems []rewardItem
 		for _, r := range receipts {
-			if r.Type == tx.TypeEthDynamicFee {
-				ethGasUsed += r.GasUsed
+			if r.Type != tx.TypeEthDynamicFee {
+				continue
+			}
+			ethGasUsed += r.GasUsed
+			if rewards != nil && r.GasUsed > 0 {
+				rewardItems = append(rewardItems, rewardItem{
+					reward:  new(big.Int).Div(r.Reward, new(big.Int).SetUint64(r.GasUsed)),
+					gasUsed: r.GasUsed,
+				})
 			}
 		}
 		ratio := 0.0
@@ -118,6 +132,10 @@ func (h *Handler) ethFeeHistory(req jsonrpc.Request) jsonrpc.Response {
 			ratio = float64(ethGasUsed) / float64(hdr.GasLimit())
 		}
 		gasUsedRatios = append(gasUsedRatios, ratio)
+
+		if rewards != nil {
+			rewards = append(rewards, calcRewardPercentiles(rewardItems, ethGasUsed, params.RewardPercentiles))
+		}
 	}
 
 	// Compute the true next-block baseFee using the consensus formula.
@@ -131,5 +149,62 @@ func (h *Handler) ethFeeHistory(req jsonrpc.Request) jsonrpc.Response {
 		OldestBlock:   hexutil.Uint64(oldestNum),
 		BaseFeePerGas: baseFees,
 		GasUsedRatio:  gasUsedRatios,
+		Reward:        rewards,
 	})
+}
+
+// maxRewardPercentiles caps the number of reward percentiles per request.
+const maxRewardPercentiles = 100
+
+// rewardItem is a single ETH-typed tx's effective priority fee per gas and its gas used.
+type rewardItem struct {
+	reward  *big.Int
+	gasUsed uint64
+}
+
+// validateRewardPercentiles enforces that percentiles are within [0, 100], in
+// ascending order, and no more than maxRewardPercentiles entries.
+func validateRewardPercentiles(percentiles []float64) error {
+	if len(percentiles) > maxRewardPercentiles {
+		return fmt.Errorf("there can be at most %d reward percentiles", maxRewardPercentiles)
+	}
+	for i, p := range percentiles {
+		if p < 0 || p > 100 {
+			return fmt.Errorf("reward percentile %f is invalid, must be between 0 and 100", p)
+		}
+		if i > 0 && p < percentiles[i-1] {
+			return fmt.Errorf("reward percentiles must be in ascending order, but %f is less than %f", p, percentiles[i-1])
+		}
+	}
+	return nil
+}
+
+// calcRewardPercentiles returns, for each requested percentile, the effective
+// priority fee per gas of the ETH-typed tx at that cumulative-gas threshold.
+// items must already be filtered to ETH-typed txs; totalGasUsed is their summed
+// gas. Blocks with no ETH-typed txs yield a zero for every percentile.
+func calcRewardPercentiles(items []rewardItem, totalGasUsed uint64, percentiles []float64) []*hexutil.Big {
+	rewards := make([]*hexutil.Big, len(percentiles))
+	if len(items) == 0 {
+		for i := range rewards {
+			rewards[i] = (*hexutil.Big)(new(big.Int))
+		}
+		return rewards
+	}
+
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].reward.Cmp(items[j].reward) < 0
+	})
+
+	txIndex := 0
+	cumulativeGasUsed := items[0].gasUsed
+	for i, p := range percentiles {
+		thresholdGasUsed := uint64(float64(totalGasUsed) * p / 100)
+		for cumulativeGasUsed < thresholdGasUsed && txIndex < len(items)-1 {
+			txIndex++
+			cumulativeGasUsed += items[txIndex].gasUsed
+		}
+		rewards[i] = (*hexutil.Big)(new(big.Int).Set(items[txIndex].reward))
+	}
+	return rewards
 }

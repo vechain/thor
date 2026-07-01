@@ -51,8 +51,10 @@ func (p *FeeHistoryParams) UnmarshalJSON(data []byte) error {
 }
 
 // FeeHistoryResult is the response type for eth_feeHistory.
+// Reward is omitted when no reward percentiles were requested.
 type FeeHistoryResult struct {
-	OldestBlock   hexutil.Uint64 `json:"oldestBlock"`
-	BaseFeePerGas []*hexutil.Big `json:"baseFeePerGas"`
-	GasUsedRatio  []float64      `json:"gasUsedRatio"`
+	OldestBlock   hexutil.Uint64   `json:"oldestBlock"`
+	BaseFeePerGas []*hexutil.Big   `json:"baseFeePerGas"`
+	GasUsedRatio  []float64        `json:"gasUsedRatio"`
+	Reward        [][]*hexutil.Big `json:"reward,omitempty"`
 }
