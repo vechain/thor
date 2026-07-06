@@ -8,6 +8,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 // bftState is the summary of a bft round for a given head.
@@ -28,6 +29,11 @@ type justifier struct {
 	checkpoint      uint32
 	thresholdVotes  uint64
 	thresholdWeight uint64
+
+	// PoS vote weights are read from weightRoot — the checkpoint's post-housekeep
+	// state, the same snapshot thresholdWeight comes from.
+	posActive  bool
+	weightRoot trie.Root
 
 	votes           map[thor.Address]vote
 	comVotes        uint64
@@ -100,7 +106,10 @@ func (engine *Engine) newJustifier(sum *chain.BlockSummary) (*justifier, error) 
 		if err != nil {
 			return nil, err
 		}
-		return newJustifier(parentQuality, checkpoint, 0, totalWeight*2/3), nil
+		js := newJustifier(parentQuality, checkpoint, 0, totalWeight*2/3)
+		js.posActive = true
+		js.weightRoot = thresholdSum.Root()
+		return js, nil
 	}
 
 	// PoA threshold: max block proposers is housekeep-independent, read from qualitySum.

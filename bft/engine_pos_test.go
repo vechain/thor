@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -1185,4 +1186,270 @@ func TestFindCheckpointByQualityRejectsHeadBeforeFinalized(t *testing.T) {
 	_, err = testBFT.engine.findCheckpointByQuality(1, finalizedID, headID)
 	assert.Error(t, err, "headID precedes finalized must be rejected")
 	assert.Contains(t, err.Error(), "headID precedes finalized")
+}
+
+// packStakerTxBlock packs, commits and registers one block signed by p carrying a
+// single staker-contract tx.
+func packStakerTxBlock(t *testing.T, test *TestBFT, p genesis.DevAccount, method string, value *big.Int, args ...any) {
+	t.Helper()
+
+	parent := test.repo.BestBlockSummary()
+	pk := packer.New(test.repo, test.stater, p.Address, &thor.Address{}, test.fc, 0)
+	flow, _, err := pk.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval(), parent.Header.GasLimit())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := test.adoptStakerTx(flow, p.PrivateKey, method, value, args...); err != nil {
+		t.Fatal(err)
+	}
+	conflicts, err := test.repo.ScanConflicts(parent.Header.Number() + 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, stg, receipts, err := flow.Pack(p.PrivateKey, conflicts, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	require.Len(t, receipts, 1)
+	require.False(t, receipts[0].Reverted, "staker tx %s reverted", method)
+	if _, err := stg.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := test.repo.AddBlock(b, receipts, conflicts, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := test.engine.CommitBlock(b.Header(), conflicts, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCheckpointBlockOwnVoteUsesPostHousekeepWeight pins that when the checkpoint
+// block's own signer's weight changes at that block's Housekeep, its vote is weighed
+// by the post-housekeep weight — the same basis as thresholdWeight — not the stale
+// weight from the checkpoint's parent state. The decrease case is the dangerous
+// direction: phantom weight inflates comWeight against a threshold that no longer
+// includes it.
+func TestCheckpointBlockOwnVoteUsesPostHousekeepWeight(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+
+	// The harness fastForward forces EpochLength=1 per block (addBlock's
+	// quickTransition), so validators activate at startBlock and every block is a
+	// potential renewal point, gated only by IsPeriodEnd.
+	startBlock := forkCfg.HAYABUSA + hayabusaTP + 2
+	checkpoint := thor.EpochLength()
+
+	// Renewal points are StartBlock + k*period. Halving the distance to the
+	// checkpoint yields one intermediate renewal point; a change parked after it can
+	// only be applied at the checkpoint itself.
+	period := (checkpoint - startBlock) / 2
+	require.Equal(t, startBlock+2*period, checkpoint, "period must align renewals to the checkpoint")
+	intermediateRenewal := startBlock + period
+
+	cases := []struct {
+		name         string
+		expectedPre  uint64 // P's weight at checkpoint-1 (pre-housekeep)
+		expectedPost uint64 // P's weight at checkpoint (post-housekeep)
+		prepare      func(t *testing.T, test *TestBFT, p genesis.DevAccount)
+	}{
+		{
+			name:         "increase locked at checkpoint housekeep",
+			expectedPre:  validatorStake,
+			expectedPost: validatorStake * 2,
+			prepare: func(t *testing.T, test *TestBFT, p genesis.DevAccount) {
+				// Increase sent past the intermediate renewal locks at the checkpoint.
+				best := test.repo.BestBlockSummary().Header.Number()
+				require.NoError(t, test.fastForward(intermediateRenewal+1-best))
+				packStakerTxBlock(t, test, p, "increaseStake", toWei(validatorStake), p.Address)
+			},
+		},
+		{
+			name:         "decrease (PendingUnlockVET) applied at checkpoint housekeep",
+			expectedPre:  validatorStake * 2,
+			expectedPost: validatorStake,
+			prepare: func(t *testing.T, test *TestBFT, p genesis.DevAccount) {
+				// Lock an increase at the intermediate renewal first (stake must stay
+				// above the minimum), then park a decrease for the checkpoint renewal.
+				packStakerTxBlock(t, test, p, "increaseStake", toWei(validatorStake), p.Address)
+				best := test.repo.BestBlockSummary().Header.Number()
+				require.NoError(t, test.fastForward(intermediateRenewal+1-best))
+				packStakerTxBlock(t, test, p, "decreaseStake", big.NewInt(0), p.Address, toWei(validatorStake))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			origMinStakingPeriod := minStakingPeriod
+			origLow := thor.LowStakingPeriod()
+			minStakingPeriod = period
+			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP, LowStakingPeriod: period})
+			defer func() {
+				minStakingPeriod = origMinStakingPeriod
+				thor.SetConfig(thor.Config{LowStakingPeriod: origLow})
+			}()
+
+			testBFT, err := newTestBftPos(forkCfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// fastForward's round-robin makes devAccounts[0] sign block `checkpoint`.
+			p := devAccounts[0]
+			require.Zero(t, checkpoint%uint32(len(devAccounts)-1))
+
+			require.NoError(t, testBFT.fastForward(startBlock-testBFT.repo.BestBlockSummary().Header.Number()))
+
+			val, err := builtin.Staker.Native(testBFT.stater.NewState(testBFT.repo.BestBlockSummary().Root())).GetValidation(p.Address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.NotNil(t, val)
+			require.Equal(t, startBlock, val.StartBlock, "harness assumption: validator StartBlock")
+			require.Equal(t, period, val.Period, "harness assumption: validator Period")
+
+			tc.prepare(t, testBFT, p)
+
+			require.NoError(t, testBFT.fastForward(checkpoint-testBFT.repo.BestBlockSummary().Header.Number()))
+
+			bestChain := testBFT.repo.NewBestChain()
+			checkpointSum, err := bestChain.GetBlockSummary(checkpoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			signer, err := checkpointSum.Header.Signer()
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, p.Address, signer, "harness assumption: P signs the checkpoint block")
+
+			preSum, err := bestChain.GetBlockSummary(checkpoint - 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			preVal, err := builtin.Staker.Native(testBFT.stater.NewState(preSum.Root())).GetValidation(p.Address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, tc.expectedPre, preVal.Weight, "pre-housekeep weight")
+
+			postVal, err := builtin.Staker.Native(testBFT.stater.NewState(checkpointSum.Root())).GetValidation(p.Address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, tc.expectedPost, postVal.Weight, "post-housekeep weight")
+
+			// Fresh justifier for the checkpoint block (as bft.Select builds it).
+			testBFT.engine.caches.state.Purge()
+			testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+			if _, err := testBFT.engine.computeState(checkpointSum); err != nil {
+				t.Fatal(err)
+			}
+			entry := testBFT.engine.caches.justifier.Remove(checkpointSum.Header.ID())
+			if entry == nil {
+				t.Fatal("expected checkpoint justifier in cache")
+			}
+			js := entry.Value.(*justifier)
+
+			assert.Equal(t, tc.expectedPost, js.votes[p.Address].weight,
+				"checkpoint block's own vote must use post-housekeep weight, matching thresholdWeight's basis")
+			// P is the round's only COM voter so far: comWeight is exactly its weight.
+			assert.Equal(t, tc.expectedPost, js.comWeight, "comWeight must reflect the post-housekeep weight")
+
+			totalWeight, err := testBFT.engine.getTotalWeight(checkpointSum)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, totalWeight*2/3, js.thresholdWeight, "threshold must come from the same checkpoint state")
+
+			// Rebuilding the round from its storePoint (as Resync does) must weigh
+			// P's checkpoint vote identically.
+			storePoint := checkpoint + thor.EpochLength() - 1
+			require.NoError(t, testBFT.fastForward(storePoint-testBFT.repo.BestBlockSummary().Header.Number()))
+			spSum, err := testBFT.repo.NewBestChain().GetBlockSummary(storePoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testBFT.engine.caches.state.Purge()
+			testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+			if _, err := testBFT.engine.computeState(spSum); err != nil {
+				t.Fatal(err)
+			}
+			entry = testBFT.engine.caches.justifier.Remove(spSum.Header.ID())
+			if entry == nil {
+				t.Fatal("expected storePoint justifier in cache")
+			}
+			js = entry.Value.(*justifier)
+			assert.Equal(t, tc.expectedPost, js.votes[p.Address].weight,
+				"rebuilding from the storePoint must use the same post-housekeep weight")
+		})
+	}
+}
+
+// TestComputeStateSignerAbsentFromCommitteeWeighsZero pins that a signer with no
+// validation entry in the round's weight state weighs zero instead of erroring —
+// the PoS-transition round's checkpoint block is PoA-scheduled, so its signer may
+// not be registered in the checkpoint state.
+func TestComputeStateSignerAbsentFromCommitteeWeighsZero(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
+	if err = testBFT.fastForward(thor.EpochLength() + 1 - numBlksNeededForPos); err != nil {
+		t.Fatal(err)
+	}
+
+	bestChain := testBFT.repo.NewBestChain()
+	checkpointSum, err := bestChain.GetBlockSummary(thor.EpochLength())
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetSum, err := bestChain.GetBlockSummary(thor.EpochLength() + 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	genesisSum, err := testBFT.repo.GetBlockSummary(testBFT.repo.GenesisBlock().Header().ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Weight state = genesis: no validator registered, every signer is absent.
+	js := newJustifier(0, thor.EpochLength(), 0, 1000)
+	js.posActive = true
+	js.weightRoot = genesisSum.Root()
+
+	testBFT.engine.caches.state.Purge()
+	testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+	testBFT.engine.caches.justifier.Set(checkpointSum.Header.ID(), js, float64(thor.EpochLength()))
+
+	st, err := testBFT.engine.computeState(targetSum)
+	require.NoError(t, err, "absent signer must weigh zero, not error")
+
+	signer, err := targetSum.Header.Signer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := testBFT.engine.caches.justifier.Remove(targetSum.Header.ID())
+	if entry == nil {
+		t.Fatal("expected justifier in cache")
+	}
+	reused := entry.Value.(*justifier)
+	require.Same(t, js, reused, "test setup: injected justifier must be the one reused")
+
+	v, ok := reused.votes[signer]
+	require.True(t, ok, "signer's vote must still be recorded")
+	assert.Zero(t, v.weight, "absent signer's weight must be zero")
+	assert.Zero(t, reused.justifiedWeight)
+	assert.Zero(t, reused.comWeight)
+	assert.False(t, st.Justified)
+	assert.False(t, st.Committed)
 }

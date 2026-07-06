@@ -446,50 +446,40 @@ func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
 		end = js.checkpoint
 	}
 
+	// Weights only change at Housekeep, so weighing every vote against the
+	// checkpoint's post-housekeep state matches each block's parent state — except
+	// the checkpoint block itself, whose parent state holds stale weights.
+	var weightState *state.State
+	if js.posActive {
+		weightState = engine.stater.NewState(js.weightRoot)
+	}
+
 	h := header
 	for h.Number() >= engine.forkConfig.FINALITY {
 		signer, _ := h.Signer()
 
-		var parentBlockSummary *chain.BlockSummary
-		var err error
-
-		if h.Number() > engine.forkConfig.HAYABUSA+thor.HayabusaTP() {
-			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
+		var weight uint64
+		if js.posActive {
+			validator, err := builtin.Staker.Native(weightState).GetValidation(signer)
 			if err != nil {
 				return nil, err
 			}
-			state := engine.stater.NewState(parentBlockSummary.Root())
-			staker := builtin.Staker.Native(state)
-
-			var weight uint64
-			if posActive, _ := staker.IsPoSActive(); posActive {
-				// PoS is active, get validator weight
-				validator, err := staker.GetValidation(signer)
-				if err != nil {
-					return nil, err
-				}
-				if validator == nil {
-					return nil, errors.New("validator not found")
-				}
+			// nil: signer outside the committee, e.g. the PoA-scheduled signer of
+			// the PoS-transition checkpoint block — weighs zero.
+			if validator != nil {
 				weight = validator.Weight
 			}
-			// If PoS is not active or error occurred, weight remains 0
-			js.AddBlock(signer, h.COM(), weight)
-		} else {
-			js.AddBlock(signer, h.COM(), 0)
 		}
+		js.AddBlock(signer, h.COM(), weight)
 
 		if h.Number() <= end {
 			break
 		}
 
-		if parentBlockSummary == nil {
-			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
-			if err != nil {
-				return nil, err
-			}
+		parentBlockSummary, err := engine.repo.GetBlockSummary(h.ParentID())
+		if err != nil {
+			return nil, err
 		}
-
 		h = parentBlockSummary.Header
 	}
 
