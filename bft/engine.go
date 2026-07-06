@@ -453,6 +453,10 @@ func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
 	if js.posActive {
 		weightState = engine.stater.NewState(js.weightRoot)
 	}
+	// The PoS-transition checkpoint block is PoA-scheduled, so its signer may not be
+	// registered in the post-transition committee; it is the only block allowed to
+	// weigh a missing validator as zero.
+	transitionBlock := engine.forkConfig.HAYABUSA + thor.HayabusaTP()
 
 	h := header
 	for h.Number() >= engine.forkConfig.FINALITY {
@@ -464,9 +468,15 @@ func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
 			if err != nil {
 				return nil, err
 			}
-			// nil: signer outside the committee, e.g. the PoA-scheduled signer of
-			// the PoS-transition checkpoint block — weighs zero.
-			if validator != nil {
+
+			if validator == nil {
+				// A round's proposers are validated against its checkpoint committee,
+				// so a signer absent from it is an invariant violation — except the
+				// transition block, which is PoA-scheduled and weighs zero.
+				if h.Number() != transitionBlock {
+					return nil, errors.Errorf("signer %s absent from committee at block %d", signer, h.Number())
+				}
+			} else {
 				weight = validator.Weight
 			}
 		}
