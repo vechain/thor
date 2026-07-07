@@ -1388,73 +1388,11 @@ func TestCheckpointBlockOwnVoteUsesPostHousekeepWeight(t *testing.T) {
 	}
 }
 
-// TestComputeStateTransitionCheckpointSignerWeighsZero pins the sole exception to
-// the committee-membership invariant: the PoS-transition checkpoint block
-// (HAYABUSA+HayabusaTP) is PoA-scheduled, so its signer may not be registered in
-// the post-transition committee and must weigh zero rather than error.
-func TestComputeStateTransitionCheckpointSignerWeighsZero(t *testing.T) {
-	forkCfg := &thor.ForkConfig{
-		HAYABUSA: 1,
-	}
-	hayabusaTP := uint32(1)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
-
-	testBFT, err := newTestBftPos(forkCfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	transitionBlock := forkCfg.HAYABUSA + thor.HayabusaTP()
-	require.False(t, isCheckPoint(transitionBlock),
-		"test relies on the transition block not being a checkpoint so the injected justifier is reused")
-
-	bestChain := testBFT.repo.NewBestChain()
-	transitionSum, err := bestChain.GetBlockSummary(transitionBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	genesisSum, err := testBFT.repo.GetBlockSummary(testBFT.repo.GenesisBlock().Header().ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Weight state = genesis: no validator registered, the transition block's signer
-	// is absent from it — the case the transition-block exception exists for.
-	js := newJustifier(0, getCheckPoint(transitionBlock), 0, 1000)
-	js.posActive = true
-	js.weightRoot = genesisSum.Root()
-
-	testBFT.engine.caches.state.Purge()
-	testBFT.engine.caches.justifier = cache.NewPrioCache(16)
-	testBFT.engine.caches.justifier.Set(transitionSum.Header.ParentID(), js, float64(transitionBlock))
-
-	st, err := testBFT.engine.computeState(transitionSum)
-	require.NoError(t, err, "transition checkpoint block must tolerate an absent signer")
-
-	signer, err := transitionSum.Header.Signer()
-	if err != nil {
-		t.Fatal(err)
-	}
-	entry := testBFT.engine.caches.justifier.Remove(transitionSum.Header.ID())
-	if entry == nil {
-		t.Fatal("expected justifier in cache")
-	}
-	reused := entry.Value.(*justifier)
-	require.Same(t, js, reused, "test setup: injected justifier must be the one reused")
-
-	v, ok := reused.votes[signer]
-	require.True(t, ok, "signer's vote must still be recorded")
-	assert.Zero(t, v.weight, "transition block signer's weight must be zero")
-	assert.Zero(t, reused.justifiedWeight)
-	assert.Zero(t, reused.comWeight)
-	assert.False(t, st.Justified)
-	assert.False(t, st.Committed)
-}
-
-// TestComputeStateSignerAbsentFromCommitteeErrors pins that, off the transition
-// checkpoint, a signer with no validation entry in the round's weight state is an
-// invariant violation and errors — a round's proposers are validated against its
-// checkpoint committee, so an absent signer means corrupted state, not a zero vote.
+// TestComputeStateSignerAbsentFromCommitteeErrors pins that a signer with no
+// validation entry in the round's weight state is an invariant violation and errors
+// — scheduling and proposer validation both run after SyncPOS, so every signer of a
+// PoS round is drawn from its post-housekeep committee; an absent signer means
+// corrupted state, not a zero vote.
 func TestComputeStateSignerAbsentFromCommitteeErrors(t *testing.T) {
 	forkCfg := &thor.ForkConfig{
 		HAYABUSA: 1,
@@ -1476,13 +1414,10 @@ func TestComputeStateSignerAbsentFromCommitteeErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A non-transition block: an absent signer here is not tolerated.
 	targetSum, err := bestChain.GetBlockSummary(thor.EpochLength() + 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.NotEqual(t, forkCfg.HAYABUSA+thor.HayabusaTP(), targetSum.Header.Number(),
-		"target must not be the transition checkpoint block")
 	genesisSum, err := testBFT.repo.GetBlockSummary(testBFT.repo.GenesisBlock().Header().ID())
 	if err != nil {
 		t.Fatal(err)
@@ -1498,6 +1433,6 @@ func TestComputeStateSignerAbsentFromCommitteeErrors(t *testing.T) {
 	testBFT.engine.caches.justifier.Set(checkpointSum.Header.ID(), js, float64(thor.EpochLength()))
 
 	_, err = testBFT.engine.computeState(targetSum)
-	require.Error(t, err, "absent signer off the transition block must error")
+	require.Error(t, err, "absent signer must error")
 	assert.Contains(t, err.Error(), "absent from committee")
 }
