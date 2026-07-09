@@ -8,7 +8,6 @@ package txpool
 import (
 	"math/big"
 	"slices"
-	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -43,9 +42,7 @@ type TxObject struct {
 	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip
 	priorityGasPrice *big.Int
 
-	// executable is updated by the pool. Accessed concurrently from wash, Remove and
-	// metric helpers
-	executable atomic.Bool
+	executable bool // don't touch this value, will be updated by the pool
 }
 
 func ResolveTx(tx *tx.Transaction, localSubmitted bool) (*TxObject, error) {
@@ -147,7 +144,7 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	}
 
 	// non executable -> executable, update payer, cost and priority gas price
-	if !o.executable.Load() {
+	if !o.executable {
 		o.payer = &payer
 		o.cost = prepaid
 

@@ -177,18 +177,18 @@ func TestPendingCost(t *testing.T) {
 	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
 	exec1, err := txObj1.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
-	txObj1.executable.Store(exec1)
-	assert.True(t, txObj1.executable.Load())
+	txObj1.executable = exec1
+	assert.True(t, txObj1.executable)
 
 	exec2, err := txObj2.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
-	txObj2.executable.Store(exec2)
-	assert.True(t, txObj2.executable.Load())
+	txObj2.executable = exec2
+	assert.True(t, txObj2.executable)
 
 	exec3, err := txObj3.Executable(chain, state, best.Header, forkConfig, baseFee)
 	assert.Nil(t, err)
-	txObj3.executable.Store(exec3)
-	assert.True(t, txObj3.executable.Load())
+	txObj3.executable = exec3
+	assert.True(t, txObj3.executable)
 
 	// Creating a new txObjectMap
 	m := newTxObjectMap()

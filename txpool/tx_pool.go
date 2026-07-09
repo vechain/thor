@@ -355,7 +355,7 @@ func (p *TxPool) addWhenSynced(
 		}
 	}
 
-	txObj.executable.Store(executable)
+	txObj.executable = executable
 	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 		// check payer's balance
 		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
@@ -636,7 +636,7 @@ func (p *TxPool) wash(
 
 	for _, obj := range executableObjs {
 		// the tx was not executable previously: validate payer energy before promoting
-		if !obj.executable.Load() {
+		if !obj.executable {
 			payer := *obj.Payer()
 			needs := new(big.Int).Add(p.all.PendingCostOf(payer), obj.Cost())
 			energy, err := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
@@ -647,7 +647,7 @@ func (p *TxPool) wash(
 			}
 			// removes the non-executable tx from the pool
 			addTxPoolMetric(obj, -1)
-			obj.executable.Store(true)
+			obj.executable = true
 			// re-counts the same tx as executable
 			addTxPoolMetric(obj, 1)
 			p.all.UpdatePendingCost(obj)
@@ -720,7 +720,7 @@ func addTxPoolMetric(txObj *TxObject, delta int64) {
 	metricTxPoolGauge().AddWithLabel(delta, map[string]string{
 		"source": string(txObj.source),
 		"type":   txMetricType(txObj.Transaction),
-		"status": txMetricStatus(txObj.executable.Load()),
+		"status": txMetricStatus(txObj.executable),
 	})
 }
 
