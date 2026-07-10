@@ -201,6 +201,14 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			}
 		}
 
+		// A window that falls between two consecutive blocks yields fromBlock > toBlock.
+		// logdb drops the upper bound on an inverted range and returns every event from
+		// fromBlock onward (results outside the requested window), so collapse it to
+		// emptyRange instead.
+		if fromHeader.Number() > toHeader.Number() {
+			return &emptyRange, nil
+		}
+
 		return &logdb.Range{
 			From: fromHeader.Number(),
 			To:   toHeader.Number(),
