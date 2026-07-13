@@ -138,12 +138,12 @@ func (p *TxPool) housekeeping() {
 				atomic.StoreUint32(&p.addedAfterWash, 0)
 
 				startTime := mclock.Now()
-				executables, removedLegacy, removedDynamicFee, err := p.wash(headSummary, headBlockChanged)
+				executables, removed, err := p.wash(headSummary, headBlockChanged)
 				elapsed := mclock.Now() - startTime
 
 				ctx := []any{
 					"len", poolLen,
-					"removed", removedLegacy + removedDynamicFee,
+					"removed", removed,
 					"elapsed", common.PrettyDuration(elapsed),
 				}
 				if err != nil {
@@ -154,15 +154,9 @@ func (p *TxPool) housekeeping() {
 					// from the same wash, so both reflect the consistent state
 					// that wash observed (not affected by concurrent Adds).
 					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
-					metricTxPoolAllGauge().Set(int64(poolLen - removedLegacy - removedDynamicFee))
+					metricTxPoolAllGauge().Set(int64(poolLen - removed))
 				}
 
-				if removedLegacy > 0 {
-					metricTxPoolGauge().AddWithLabel(0-int64(removedLegacy), map[string]string{"source": "washed", "type": "Legacy"})
-				}
-				if removedDynamicFee > 0 {
-					metricTxPoolGauge().AddWithLabel(0-int64(removedDynamicFee), map[string]string{"source": "washed", "type": "DynamicFee"})
-				}
 				logger.Trace("wash done", ctx...)
 			}
 		}
@@ -235,13 +229,13 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 }
 
 func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) (err error) {
-	source := "local"
-	if !localSubmitted {
-		source = "remote"
+	source := txSourceRemote
+	if localSubmitted {
+		source = txSourceLocal
 	}
 	defer func() {
 		if err != nil {
-			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": source})
+			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": string(source)})
 		}
 	}()
 
@@ -258,14 +252,14 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return nil
 	}
 
-	txObj, err := ResolveTx(newTx, localSubmitted)
+	txObj, err := resolveTxWithSource(newTx, source)
 	if err != nil {
 		return badTxError{err.Error()}
 	}
 
 	headSummary := p.repo.BestBlockSummary()
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-		err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable, localSubmitted)
+		err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable)
 	} else {
 		err = p.addWhenNotSynced(newTx, txObj)
 	}
@@ -274,12 +268,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	}
 
 	atomic.AddUint32(&p.addedAfterWash, 1)
-
-	txTypeString := "Legacy"
-	if newTx.Type() == tx.TypeDynamicFee {
-		txTypeString = "DynamicFee"
-	}
-	metricTxPoolGauge().AddWithLabel(1, map[string]string{"source": source, "type": txTypeString})
+	addTxPoolMetric(txObj, 1)
 
 	return nil
 }
@@ -330,7 +319,6 @@ func (p *TxPool) addWhenSynced(
 	txObj *TxObject,
 	headSummary *chain.BlockSummary,
 	rejectNonExecutable bool,
-	localSubmitted bool,
 ) error {
 	state := p.stater.NewState(headSummary.Root())
 	executable, err := txObj.Executable(
@@ -345,7 +333,7 @@ func (p *TxPool) addWhenSynced(
 	}
 
 	// Check pool limits and priority for remote transactions
-	if !localSubmitted {
+	if !txObj.localSubmitted() {
 		if p.all.Len() >= p.options.Limit*15/10 {
 			return txRejectedError{"pool is full"}
 		} else if p.all.Len() >= p.options.Limit*12/10 {
@@ -443,13 +431,7 @@ func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 		return false
 	}
 	if p.all.RemoveByHash(txHash) {
-		txTypeString := "Unknown"
-		if removedTransaction.Type() == tx.TypeLegacy {
-			txTypeString = "Legacy"
-		} else if removedTransaction.Type() == tx.TypeDynamicFee {
-			txTypeString = "DynamicFee"
-		}
-		metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "type": txTypeString})
+		addTxPoolMetric(removedTransaction, -1)
 		logger.Debug("tx removed", "id", txID)
 		return true
 	}
@@ -472,11 +454,13 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 			continue
 		}
 		// here we ignore errors
-		if txObj, err := ResolveTx(tx, false); err == nil {
+		if txObj, err := resolveTxWithSource(tx, txSourceFill); err == nil {
 			txObjs = append(txObjs, txObj)
 		}
 	}
-	p.all.Fill(txObjs)
+	for _, txObj := range p.all.Fill(txObjs) {
+		addTxPoolMetric(txObj, 1)
+	}
 }
 
 // Dump dumps all txs in the pool.
@@ -485,40 +469,40 @@ func (p *TxPool) Dump() tx.Transactions {
 }
 
 // wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
-// this method should only be called in housekeeping go routine
+// this method should only be called in housekeeping go routine.
+//
+// removed counts every tx evicted by this wash regardless of tx type. The
+// per-source/per-type breakdown lives on the txpool_washed_tx_count counter,
+// which is the source of truth for dashboards/alerts.
 func (p *TxPool) wash(
 	headSummary *chain.BlockSummary,
 	headBlockChanged bool,
 ) (
 	executables tx.Transactions,
-	removedLegacy int,
-	removedDynamicFee int,
+	removed int,
 	err error,
 ) {
 	all := p.all.ToTxObjects()
 	var toRemove []*TxObject
 	defer func() {
+		evict := func(txObj *TxObject) {
+			if p.all.RemoveByHash(txObj.Hash()) {
+				addTxPoolMetric(txObj, -1)
+				countWashedTx(txObj)
+				removed++
+			}
+		}
 		if err != nil {
 			// in case of error, simply cut pool size to limit
 			for i, txObj := range all {
 				if len(all)-i <= p.options.Limit {
 					break
 				}
-				if txObj.Type() == tx.TypeLegacy {
-					removedLegacy++
-				} else if txObj.Type() == tx.TypeDynamicFee {
-					removedDynamicFee++
-				}
-				p.all.RemoveByHash(txObj.Hash())
+				evict(txObj)
 			}
 		} else {
 			for _, txObj := range toRemove {
-				p.all.RemoveByHash(txObj.Hash())
-				if txObj.Type() == tx.TypeLegacy {
-					removedLegacy++
-				} else if txObj.Type() == tx.TypeDynamicFee {
-					removedDynamicFee++
-				}
+				evict(txObj)
 			}
 		}
 	}()
@@ -539,7 +523,7 @@ func (p *TxPool) wash(
 
 	legacyTxBaseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
-		return executables, removedLegacy, removedDynamicFee, err
+		return executables, removed, err
 	}
 	needPriorityGasPriceUpdate := func() bool {
 		if !headBlockChanged {
@@ -573,7 +557,7 @@ func (p *TxPool) wash(
 		}
 
 		// out of lifetime
-		if !txObj.localSubmitted && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
+		if !txObj.localSubmitted() && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
@@ -599,13 +583,13 @@ func (p *TxPool) wash(
 		}
 
 		if executable {
-			if txObj.localSubmitted {
+			if txObj.localSubmitted() {
 				localExecutableObjs = append(localExecutableObjs, txObj)
 			} else {
 				executableObjs = append(executableObjs, txObj)
 			}
 		} else {
-			if !txObj.localSubmitted {
+			if !txObj.localSubmitted() {
 				nonExecutableObjs = append(nonExecutableObjs, txObj)
 			}
 		}
@@ -660,10 +644,14 @@ func (p *TxPool) wash(
 				logger.Trace("tx washed out", "id", obj.ID(), "err", "insufficient energy for overall pending cost")
 				continue
 			}
+			// removes the non-executable tx from the pool
+			addTxPoolMetric(obj, -1)
 			obj.executable = true
+			// re-counts the same tx as executable
+			addTxPoolMetric(obj, 1)
 			p.all.UpdatePendingCost(obj)
 			toBroadcast = append(toBroadcast, obj.Transaction)
-		} else if obj.localSubmitted {
+		} else if obj.localSubmitted() {
 			// broadcast local submitted even it's already executable
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
@@ -676,7 +664,7 @@ func (p *TxPool) wash(
 			p.txFeed.Send(&TxEvent{tx, &executable})
 		}
 	})
-	return executables, 0, 0, nil
+	return executables, 0, nil
 }
 
 // Len returns the length of the `all` field
@@ -707,4 +695,37 @@ func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
 	return timeDiff < thor.BlockInterval()*6
+}
+
+func txMetricType(trx *tx.Transaction) string {
+	switch trx.Type() {
+	case tx.TypeLegacy:
+		return "Legacy"
+	case tx.TypeDynamicFee:
+		return "DynamicFee"
+	default:
+		return "Unknown"
+	}
+}
+
+func txMetricStatus(executable bool) string {
+	if executable {
+		return "executable"
+	}
+	return "non_executable"
+}
+
+func addTxPoolMetric(txObj *TxObject, delta int64) {
+	metricTxPoolGauge().AddWithLabel(delta, map[string]string{
+		"source": string(txObj.source),
+		"type":   txMetricType(txObj.Transaction),
+		"status": txMetricStatus(txObj.executable),
+	})
+}
+
+func countWashedTx(txObj *TxObject) {
+	metricTxPoolWashedCounter().AddWithLabel(1, map[string]string{
+		"source": string(txObj.source),
+		"type":   txMetricType(txObj.Transaction),
+	})
 }
