@@ -455,7 +455,7 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 			continue
 		}
 		// here we ignore errors
-		if txObj, err := resolveTxWithSource(tx, false, txSourceFill); err == nil {
+		if txObj, err := resolveTxWithSource(tx, txSourceFill); err == nil {
 			txObjs = append(txObjs, txObj)
 		}
 	}
@@ -558,7 +558,7 @@ func (p *TxPool) wash(
 		}
 
 		// out of lifetime
-		if !txObj.localSubmitted && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
+		if !txObj.localSubmitted() && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
@@ -584,13 +584,13 @@ func (p *TxPool) wash(
 		}
 
 		if executable {
-			if txObj.localSubmitted {
+			if txObj.localSubmitted() {
 				localExecutableObjs = append(localExecutableObjs, txObj)
 			} else {
 				executableObjs = append(executableObjs, txObj)
 			}
 		} else {
-			if !txObj.localSubmitted {
+			if !txObj.localSubmitted() {
 				nonExecutableObjs = append(nonExecutableObjs, txObj)
 			}
 		}
@@ -652,7 +652,7 @@ func (p *TxPool) wash(
 			addTxPoolMetric(obj, 1)
 			p.all.UpdatePendingCost(obj)
 			toBroadcast = append(toBroadcast, obj.Transaction)
-		} else if obj.localSubmitted {
+		} else if obj.localSubmitted() {
 			// broadcast local submitted even it's already executable
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}

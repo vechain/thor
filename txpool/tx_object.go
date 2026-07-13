@@ -32,11 +32,10 @@ type TxObject struct {
 	*tx.Transaction
 	resolved *runtime.ResolvedTransaction
 
-	timeAdded      int64
-	localSubmitted bool          // tx is submitted locally on this node, or synced remotely from p2p.
-	source         txSource      // source used for txpool current-count metrics.
-	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
-	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
+	timeAdded int64
+	source    txSource      // where the tx came from: local, remote or fill.
+	payer     *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
+	cost      *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
 	// basic unit of tip price for the validator, before GALACTICA it's the overallGasPrice(provedWork included) and validator
 	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip
@@ -50,22 +49,25 @@ func ResolveTx(tx *tx.Transaction, localSubmitted bool) (*TxObject, error) {
 	if localSubmitted {
 		source = txSourceLocal
 	}
-	return resolveTxWithSource(tx, localSubmitted, source)
+	return resolveTxWithSource(tx, source)
 }
 
-func resolveTxWithSource(tx *tx.Transaction, localSubmitted bool, source txSource) (*TxObject, error) {
+func resolveTxWithSource(tx *tx.Transaction, source txSource) (*TxObject, error) {
 	resolved, err := runtime.ResolveTransaction(tx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &TxObject{
-		Transaction:    tx,
-		resolved:       resolved,
-		timeAdded:      time.Now().UnixNano(),
-		localSubmitted: localSubmitted,
-		source:         source,
+		Transaction: tx,
+		resolved:    resolved,
+		timeAdded:   time.Now().UnixNano(),
+		source:      source,
 	}, nil
+}
+
+func (o *TxObject) localSubmitted() bool {
+	return o.source == txSourceLocal
 }
 
 func (o *TxObject) Origin() thor.Address {
