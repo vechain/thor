@@ -65,7 +65,7 @@ func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
-		if reflectValue.Type() != reflect.TypeOf([]byte{}) {
+		if reflectValue.Type() != reflect.TypeFor[[]byte]() {
 			return []byte{}, errors.New("bytes type is neither slice nor array")
 		}
 		return packBytesSlice(reflectValue.Bytes(), reflectValue.Len()), nil

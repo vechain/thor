@@ -67,7 +67,7 @@ func TestOption(t *testing.T) {
 	filter := api.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
-		Options:     &api.Options{Limit: ptr(6)},
+		Options:     &api.Options{Limit: new(uint64(6))},
 		Order:       logdb.DESC,
 	}
 
@@ -76,7 +76,7 @@ func TestOption(t *testing.T) {
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
-	filter.Options.Limit = ptr(5)
+	filter.Options.Limit = new(uint64(5))
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
@@ -131,7 +131,7 @@ func TestOptionalData(t *testing.T) {
 			filter := api.TransferFilter{
 				CriteriaSet: make([]*logdb.TransferCriteria, 0),
 				Range:       nil,
-				Options:     &api.Options{Limit: ptr(5), IncludeIndexes: tc.includeIndexes},
+				Options:     &api.Options{Limit: new(uint64(5)), IncludeIndexes: tc.includeIndexes},
 				Order:       logdb.DESC,
 			}
 
@@ -194,7 +194,7 @@ func testTransferBadRequest(t *testing.T) {
 	emptyFilter := api.TransferFilter{
 		CriteriaSet: criteriaSet,
 		Range:       nil,
-		Options:     &api.Options{Limit: ptr(6)},
+		Options:     &api.Options{Limit: new(uint64(6))},
 		Order:       logdb.DESC,
 	}
 
@@ -296,8 +296,4 @@ func newReceipt() *tx.Receipt {
 			},
 		},
 	}
-}
-
-func ptr(v uint64) *uint64 {
-	return &v
 }
