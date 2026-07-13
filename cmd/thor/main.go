@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v3"
 
+	"github.com/vechain/thor/v2/api/admin"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
@@ -292,13 +293,25 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	adminURL := ""
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
 			p2pCommunicator.Communicator(),
-			logAPIRequests,
+			apiLogsGate,
+			txpoolGate,
+			pprofGate,
 			master,
 		)
 		if err != nil {
@@ -322,7 +335,7 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, false),
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, false),
 	)
 	if err != nil {
 		return err
@@ -449,13 +462,25 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	adminURL := ""
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
 			nil,
-			logAPIRequests,
+			apiLogsGate,
+			txpoolGate,
+			pprofGate,
 			nil,
 		)
 		if err != nil {
@@ -518,7 +543,7 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, true),
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, true),
 	)
 	if err != nil {
 		return err
