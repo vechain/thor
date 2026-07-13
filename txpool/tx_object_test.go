@@ -123,7 +123,7 @@ func TestExecutableWithError(t *testing.T) {
 		// pass custom headID
 		chain := repo.NewChain(thor.Bytes32{0})
 
-		exe, err := txObj.Executable(chain, st, b1.Header(), fc, baseFee)
+		exe, _, err := txObj.Evaluate(chain, st, b1.Header(), fc, baseFee, false)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -133,27 +133,33 @@ func TestExecutableWithError(t *testing.T) {
 	}
 }
 
+func newTestTxObj(priorityGasPrice *big.Int, timeAdded int64, payer *thor.Address) *TxObject {
+	o := &TxObject{timeAdded: timeAdded}
+	o.setPricing(&txPricing{priorityGasPrice: priorityGasPrice, payer: payer})
+	return o
+}
+
 func TestSort(t *testing.T) {
 	addr1 := thor.BytesToAddress([]byte("addr1"))
 	addr2 := thor.BytesToAddress([]byte("addr2"))
 	objs := []*TxObject{
-		{priorityGasPrice: big.NewInt(0)},
-		{priorityGasPrice: big.NewInt(10), timeAdded: 20, payer: &addr1},
-		{priorityGasPrice: big.NewInt(10), timeAdded: 3, payer: &addr2},
-		{priorityGasPrice: big.NewInt(20)},
-		{priorityGasPrice: big.NewInt(30)},
+		newTestTxObj(big.NewInt(0), 0, nil),
+		newTestTxObj(big.NewInt(10), 20, &addr1),
+		newTestTxObj(big.NewInt(10), 3, &addr2),
+		newTestTxObj(big.NewInt(20), 0, nil),
+		newTestTxObj(big.NewInt(30), 0, nil),
 	}
 	sortTxObjsByPriorityGasPriceDesc(objs)
 
-	assert.Equal(t, big.NewInt(30), objs[0].priorityGasPrice)
-	assert.Equal(t, big.NewInt(20), objs[1].priorityGasPrice)
-	assert.Equal(t, big.NewInt(10), objs[2].priorityGasPrice)
+	assert.Equal(t, big.NewInt(30), objs[0].priorityGasPrice())
+	assert.Equal(t, big.NewInt(20), objs[1].priorityGasPrice())
+	assert.Equal(t, big.NewInt(10), objs[2].priorityGasPrice())
 	assert.Equal(t, int64(20), objs[2].timeAdded)
-	assert.Equal(t, &addr1, objs[2].payer)
-	assert.Equal(t, big.NewInt(10), objs[3].priorityGasPrice)
+	assert.Equal(t, &addr1, objs[2].Payer())
+	assert.Equal(t, big.NewInt(10), objs[3].priorityGasPrice())
 	assert.Equal(t, int64(3), objs[3].timeAdded)
-	assert.Equal(t, &addr2, objs[3].payer)
-	assert.Equal(t, big.NewInt(0), objs[4].priorityGasPrice)
+	assert.Equal(t, &addr2, objs[3].Payer())
+	assert.Equal(t, big.NewInt(0), objs[4].priorityGasPrice())
 }
 
 func TestResolve(t *testing.T) {
@@ -208,7 +214,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := ResolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig(), baseFee)
+		exe, _, err := txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), tchain.GetForkConfig(), baseFee, false)
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
@@ -236,7 +242,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, err := txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
+	exe, _, err := txObj1.Evaluate(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, false)
 	assert.False(t, exe)
 	assert.Equal(t, tx.ErrTxTypeNotSupported, err)
 
@@ -244,7 +250,7 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	txObj2, err := ResolveTx(legacyTx, false)
 	assert.Nil(t, err)
 
-	exe, err = txObj2.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
+	exe, _, err = txObj2.Evaluate(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, false)
 	assert.True(t, exe)
 	assert.Nil(t, err)
 
@@ -254,8 +260,39 @@ func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	// recalculate the base fee since new block is added
 	baseFee = galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
 	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, err = txObj1.Executable(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee)
+	_, _, err = txObj1.Evaluate(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
+}
+
+func TestEvaluateAndPricingSnapshot(t *testing.T) {
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	assert.Nil(t, err)
+	tchain.MintBlock()
+	repo, stater, forkConfig := tchain.Repo(), tchain.Stater(), tchain.GetForkConfig()
+
+	trx := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	txObj, err := ResolveTx(trx, false)
+	assert.Nil(t, err)
+
+	best := repo.BestBlockSummary()
+	state := stater.NewState(best.Root())
+	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
+
+	executable, pricing, err := txObj.Evaluate(repo.NewBestChain(), state, best.Header, forkConfig, baseFee, false)
+	assert.Nil(t, err)
+	assert.True(t, executable)
+	assert.NotNil(t, pricing)
+
+	// Evaluate 未发布,访问器仍为 nil
+	assert.Nil(t, txObj.Cost())
+	assert.Nil(t, txObj.Payer())
+	assert.Nil(t, txObj.priorityGasPrice())
+
+	// 发布后访问器读到快照
+	txObj.setPricing(pricing)
+	assert.Equal(t, pricing.cost, txObj.Cost())
+	assert.Equal(t, pricing.payer, txObj.Payer())
+	assert.Equal(t, pricing.priorityGasPrice, txObj.priorityGasPrice())
 }
 
 func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
@@ -274,12 +311,13 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	assert.Nil(t, err)
 
 	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, err := txObj1.Executable(
+	exe, _, err := txObj1.Evaluate(
 		repo.NewBestChain(),
 		st,
 		repo.BestBlockSummary().Header,
 		forkConfig,
 		galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig),
+		false,
 	)
 	assert.False(t, exe)
 	assert.ErrorContains(t, err, "unsupported features")
@@ -288,12 +326,13 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	tchain.MintBlock()
 
 	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, err = txObj1.Executable(
+	_, _, err = txObj1.Evaluate(
 		repo.NewBestChain(),
 		st,
 		repo.BestBlockSummary().Header,
 		forkConfig,
 		galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig),
+		false,
 	)
 	assert.Nil(t, err)
 }

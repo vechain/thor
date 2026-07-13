@@ -293,8 +293,8 @@ func (p *TxPool) isBlocked(newTx *tx.Transaction) bool {
 // checkTxPriority checks if the new tx has higher priority than the bottom 10% of existing executable txs.
 // Since executables are sorted descending by price, the threshold at 90th percentile represents
 // the boundary where 90% have higher priority and 10% have lower priority.
-func (p *TxPool) checkTxPriority(txObj *TxObject, executable bool) bool {
-	if !executable {
+func (p *TxPool) checkTxPriority(executable bool, candidatePGP *big.Int) bool {
+	if !executable || candidatePGP == nil {
 		return false
 	}
 
@@ -309,8 +309,11 @@ func (p *TxPool) checkTxPriority(txObj *TxObject, executable bool) bool {
 	if thresholdTxObj == nil {
 		return false
 	}
-
-	return txObj.priorityGasPrice.Cmp(thresholdTxObj.priorityGasPrice) > 0
+	thresholdPGP := thresholdTxObj.priorityGasPrice()
+	if thresholdPGP == nil {
+		return false
+	}
+	return candidatePGP.Cmp(thresholdPGP) > 0
 }
 
 // addWhenSynced handles transaction addition when the chain is synced.
@@ -321,15 +324,17 @@ func (p *TxPool) addWhenSynced(
 	rejectNonExecutable bool,
 ) error {
 	state := p.stater.NewState(headSummary.Root())
-	executable, err := txObj.Executable(
-		p.repo.NewChain(headSummary.Header.ID()),
-		state,
-		headSummary.Header,
-		p.forkConfig,
-		p.baseFeeCache.Get(headSummary.Header),
+	executable, pricing, err := txObj.Evaluate(
+		p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header,
+		p.forkConfig, p.baseFeeCache.Get(headSummary.Header), false,
 	)
 	if err != nil {
 		return txRejectedError{err.Error()}
+	}
+
+	var candidatePGP *big.Int
+	if pricing != nil {
+		candidatePGP = pricing.priorityGasPrice
 	}
 
 	// Check pool limits and priority for remote transactions
@@ -337,7 +342,7 @@ func (p *TxPool) addWhenSynced(
 		if p.all.Len() >= p.options.Limit*15/10 {
 			return txRejectedError{"pool is full"}
 		} else if p.all.Len() >= p.options.Limit*12/10 {
-			if !p.checkTxPriority(txObj, executable) {
+			if !p.checkTxPriority(executable, candidatePGP) {
 				return txRejectedError{"pool is full"}
 			}
 		}
@@ -354,8 +359,7 @@ func (p *TxPool) addWhenSynced(
 		}
 	}
 
-	txObj.executable = executable
-	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
+	if err := p.all.Add(txObj, executable, pricing, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 		// check payer's balance
 		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
 		if err != nil {
@@ -388,7 +392,7 @@ func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error 
 	}
 
 	// skip pending cost check when chain is not synced
-	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
+	if err := p.all.Add(txObj, false, nil, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
 		return txRejectedError{err.Error()}
 	}
 
@@ -563,11 +567,14 @@ func (p *TxPool) wash(
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, newState(), headSummary.Header, p.forkConfig, baseFee)
+		executable, pricing, err := txObj.Evaluate(chain, newState(), headSummary.Header, p.forkConfig, baseFee, txObj.executable)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 			continue
+		}
+		if pricing != nil {
+			txObj.setPricing(pricing) // lock-free publish
 		}
 
 		// Only recalculate the priority gas price when the base fee might be changed
@@ -579,7 +586,13 @@ func (p *TxPool) wash(
 				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 				continue
 			}
-			txObj.priorityGasPrice = txObj.EffectivePriorityFeePerGas(baseFee, legacyTxBaseGasPrice, provedWork)
+			cur := txObj.pricing.Load()
+			pgp := txObj.EffectivePriorityFeePerGas(baseFee, legacyTxBaseGasPrice, provedWork)
+			if cur != nil {
+				txObj.setPricing(&txPricing{payer: cur.payer, cost: cur.cost, priorityGasPrice: pgp})
+			} else {
+				txObj.setPricing(&txPricing{priorityGasPrice: pgp})
+			}
 		}
 
 		if executable {
@@ -644,12 +657,15 @@ func (p *TxPool) wash(
 				logger.Trace("tx washed out", "id", obj.ID(), "err", "insufficient energy for overall pending cost")
 				continue
 			}
-			// removes the non-executable tx from the pool
-			addTxPoolMetric(obj, -1)
-			obj.executable = true
-			// re-counts the same tx as executable
-			addTxPoolMetric(obj, 1)
-			p.all.UpdatePendingCost(obj)
+			// the tx moves from non-executable to executable. Reflect the transition in
+			// the gauges around promote, which sets executable and accounts the pending
+			// cost atomically under the map lock (promote-if-present: a tx removed
+			// concurrently is skipped, leaving its removal to account its own -1).
+			addTxPoolMetric(obj, -1) // remove from the non-executable gauge
+			if !p.all.promote(obj) {
+				continue
+			}
+			addTxPoolMetric(obj, 1) // re-count as executable
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		} else if obj.localSubmitted() {
 			// broadcast local submitted even it's already executable
