@@ -48,7 +48,7 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 	// tx it successfully adds is also removed by the same goroutine, so by
 	// the time all workers join, every worker-added tx has had a matching
 	// Remove call (whether or not wash got to it first).
-	for w := 0; w < numAddRemoveWorkers; w++ {
+	for w := range numAddRemoveWorkers {
 		wg.Add(1)
 		go func(workerIdx int) {
 			defer wg.Done()
@@ -70,10 +70,8 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 
 	// Wash workers: repeatedly evaluate/evict/promote against the churning
 	// pool, exercising the lock-free pricing snapshot publish/read path.
-	for w := 0; w < numWashWorkers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numWashWorkers {
+		wg.Go(func() {
 			for {
 				select {
 				case <-stop:
@@ -82,7 +80,7 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 				}
 				_, _, _, _ = pool.wash(best, true)
 			}
-		}()
+		})
 	}
 
 	time.Sleep(500 * time.Millisecond)

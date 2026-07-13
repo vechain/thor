@@ -85,7 +85,7 @@ func mineLegacyTxWithWork(
 	evalWork := builder.Build().EvaluateWork(from.Address)
 
 	const maxAttempts = 20_000_000
-	for nonce := uint64(0); nonce < maxAttempts; nonce++ {
+	for nonce := range uint64(maxAttempts) {
 		if evalWork(nonce).Cmp(minWork) >= 0 {
 			return tx.MustSign(builder.Nonce(nonce).Build(), from.PrivateKey)
 		}

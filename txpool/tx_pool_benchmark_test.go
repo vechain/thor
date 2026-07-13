@@ -26,7 +26,7 @@ func newBenchPool() *TxPool {
 // Signing is ECDSA and expensive, so it must happen outside the timed region.
 func genBenchTxs(pool *TxPool, n, workerIdx int) []*tx.Transaction {
 	txs := make([]*tx.Transaction, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		from := devAccounts[(workerIdx+i)%len(devAccounts)]
 		txs[i] = newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), from)
 	}
@@ -38,7 +38,7 @@ func benchAddRemove(b *testing.B, workers, perWorker int, withWash bool) {
 	defer pool.Close()
 
 	sets := make([][]*tx.Transaction, workers)
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		sets[w] = genBenchTxs(pool, perWorker, w)
 	}
 
@@ -62,11 +62,11 @@ func benchAddRemove(b *testing.B, workers, perWorker int, withWash bool) {
 
 	var wg sync.WaitGroup
 	per := b.N / workers
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		wg.Add(1)
 		go func(set []*tx.Transaction) {
 			defer wg.Done()
-			for i := 0; i < per; i++ {
+			for i := range per {
 				trx := set[i%len(set)]
 				_ = pool.Add(trx)                 // publishes pricing snapshot (atomic Store) + bookkeeping (map lock)
 				pool.Remove(trx.Hash(), trx.ID()) // reads Cost()/Payer() (atomic Load) + bookkeeping (map lock)
