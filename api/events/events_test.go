@@ -86,7 +86,7 @@ func TestOptionalIndexes(t *testing.T) {
 			filter := api.EventFilter{
 				CriteriaSet: make([]*api.EventCriteria, 0),
 				Range:       nil,
-				Options:     &api.Options{Limit: ptr(6), IncludeIndexes: tc.includeIndexes},
+				Options:     &api.Options{Limit: new(uint64(6)), IncludeIndexes: tc.includeIndexes},
 				Order:       logdb.DESC,
 			}
 
@@ -132,10 +132,6 @@ func TestEvents_WithOptionsNoLimit(t *testing.T) {
 	assert.Equal(t, 4, len(tLogs))
 }
 
-func ptr(v uint64) *uint64 {
-	return &v
-}
-
 func TestOption(t *testing.T) {
 	thorChain := initEventServer(t, 5)
 	defer ts.Close()
@@ -145,7 +141,7 @@ func TestOption(t *testing.T) {
 	filter := api.EventFilter{
 		CriteriaSet: make([]*api.EventCriteria, 0),
 		Range:       nil,
-		Options:     &api.Options{Limit: ptr(6)},
+		Options:     &api.Options{Limit: new(uint64(6))},
 		Order:       logdb.DESC,
 	}
 
@@ -154,7 +150,7 @@ func TestOption(t *testing.T) {
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
-	filter.Options.Limit = ptr(5)
+	filter.Options.Limit = new(uint64(5))
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
