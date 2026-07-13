@@ -154,7 +154,7 @@ func (p *TxPool) housekeeping() {
 					// from the same wash, so both reflect the consistent state
 					// that wash observed (not affected by concurrent Adds).
 					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
-					metricTxPoolAllGauge().Set(int64(poolLen - removedLegacy - removedDynamicFee))
+					metricTxPoolAllGauge().Set(int64(poolLen - removed))
 				}
 
 				logger.Trace("wash done", ctx...)
