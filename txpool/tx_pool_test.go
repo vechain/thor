@@ -272,7 +272,8 @@ func TestTxPoolMetrics(t *testing.T) {
 		"source": "remote",
 		"type":   "Legacy",
 	})
-	pool.options.MaxLifetime = 0
+	tx4Obj := pool.all.mapByID[tx4.ID()]
+	tx4Obj.timeAdded -= int64(pool.options.MaxLifetime) * 2
 	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	require.NoError(t, err)
 	require.Equal(t, 1, washed)
