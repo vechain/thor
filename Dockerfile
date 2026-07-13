@@ -1,4 +1,4 @@
-# Build thor in a stock Go builder container
+# Build thor in a Go builder container
 FROM golang:1.26.1-alpine AS builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers git
