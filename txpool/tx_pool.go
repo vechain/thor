@@ -229,13 +229,13 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 }
 
 func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) (err error) {
-	source := "local"
-	if !localSubmitted {
-		source = "remote"
+	source := txSourceRemote
+	if localSubmitted {
+		source = txSourceLocal
 	}
 	defer func() {
 		if err != nil {
-			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": source})
+			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": string(source)})
 		}
 	}()
 
@@ -252,14 +252,14 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return nil
 	}
 
-	txObj, err := ResolveTx(newTx, localSubmitted)
+	txObj, err := resolveTxWithSource(newTx, source)
 	if err != nil {
 		return badTxError{err.Error()}
 	}
 
 	headSummary := p.repo.BestBlockSummary()
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-		err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable, localSubmitted)
+		err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable)
 	} else {
 		err = p.addWhenNotSynced(newTx, txObj)
 	}
@@ -319,7 +319,6 @@ func (p *TxPool) addWhenSynced(
 	txObj *TxObject,
 	headSummary *chain.BlockSummary,
 	rejectNonExecutable bool,
-	localSubmitted bool,
 ) error {
 	state := p.stater.NewState(headSummary.Root())
 	executable, err := txObj.Executable(
@@ -334,7 +333,7 @@ func (p *TxPool) addWhenSynced(
 	}
 
 	// Check pool limits and priority for remote transactions
-	if !localSubmitted {
+	if !txObj.localSubmitted() {
 		if p.all.Len() >= p.options.Limit*15/10 {
 			return txRejectedError{"pool is full"}
 		} else if p.all.Len() >= p.options.Limit*12/10 {
