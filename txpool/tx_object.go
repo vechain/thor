@@ -36,6 +36,12 @@ type txPricing struct {
 	// basic unit of tip price for the validator, before GALACTICA it's the overallGasPrice(provedWork included) and validator
 	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip
 	priorityGasPrice *big.Int
+
+	// base-fee-independent ceilings, cached so priorityGasPrice can be refreshed by pure
+	// arithmetic on a base-fee change (no ProvedWork / chain lookup). legacy: both equal
+	// OverallGasPrice(with provedWork); dynamic-fee: MaxFeePerGas / MaxPriorityFeePerGas.
+	feeCeiling      *big.Int
+	priorityCeiling *big.Int
 }
 
 type TxObject struct {
@@ -188,11 +194,56 @@ func (o *TxObject) Evaluate(
 		baseFee = big.NewInt(0)
 	}
 
+	var feeCeiling, priorityCeiling *big.Int
+	if o.Type() == tx.TypeLegacy {
+		ogp := o.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+		feeCeiling, priorityCeiling = ogp, ogp
+	} else {
+		feeCeiling, priorityCeiling = o.MaxFeePerGas(), o.MaxPriorityFeePerGas()
+	}
+	// pgp = min(feeCeiling - baseFee, priorityCeiling), equivalent to EffectivePriorityFeePerGas
+	pgp := new(big.Int).Sub(feeCeiling, baseFee)
+	if pgp.Cmp(priorityCeiling) > 0 {
+		pgp.Set(priorityCeiling)
+	}
 	return true, &txPricing{
 		payer:            &payer,
 		cost:             prepaid,
-		priorityGasPrice: o.EffectivePriorityFeePerGas(baseFee, legacyTxBaseGasPrice, provedWork),
+		priorityGasPrice: pgp,
+		feeCeiling:       feeCeiling,
+		priorityCeiling:  priorityCeiling,
 	}, nil
+}
+
+// refreshPriorityGasPrice recomputes priorityGasPrice for a base-fee change using the
+// cached base-fee-independent ceilings — no ProvedWork / chain lookup. For legacy txs,
+// once the proved work has expired (head advanced past refNum+MaxTxWorkDelay), the ceiling
+// drops to the no-work overall gas price, which is derived arithmetically (provedWork = 0).
+func (o *TxObject) refreshPriorityGasPrice(baseFee, legacyTxBaseGasPrice *big.Int, nextBlockNum uint32) {
+	cur := o.pricing.Load()
+	if cur == nil {
+		return
+	}
+	feeCeiling, priorityCeiling := cur.feeCeiling, cur.priorityCeiling
+	if feeCeiling == nil || priorityCeiling == nil {
+		return
+	}
+	// legacy proved-work expiry is a block-number event, independent of baseFee.
+	if o.Type() == tx.TypeLegacy && nextBlockNum-o.BlockRef().Number() > thor.MaxTxWorkDelay {
+		noWork := o.OverallGasPrice(legacyTxBaseGasPrice, new(big.Int)) // provedWork = 0, no chain access
+		feeCeiling, priorityCeiling = noWork, noWork
+	}
+	pgp := new(big.Int).Sub(feeCeiling, baseFee)
+	if pgp.Cmp(priorityCeiling) > 0 {
+		pgp.Set(priorityCeiling)
+	}
+	o.setPricing(&txPricing{
+		payer:            cur.payer,
+		cost:             cur.cost,
+		priorityGasPrice: pgp,
+		feeCeiling:       cur.feeCeiling, // keep the work-included ceilings cached
+		priorityCeiling:  cur.priorityCeiling,
+	})
 }
 
 func sortTxObjsByPriorityGasPriceDesc(txObjs []*TxObject) {

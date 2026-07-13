@@ -579,20 +579,7 @@ func (p *TxPool) wash(
 
 		// Only recalculate the priority gas price when the base fee might be changed
 		if needPriorityGasPriceUpdate {
-			nextBlockNum := headSummary.Header.Number() + 1
-			provedWork, err := txObj.ProvedWork(nextBlockNum, chain.GetBlockID)
-			if err != nil {
-				toRemove = append(toRemove, txObj)
-				logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
-				continue
-			}
-			cur := txObj.pricing.Load()
-			pgp := txObj.EffectivePriorityFeePerGas(baseFee, legacyTxBaseGasPrice, provedWork)
-			if cur != nil {
-				txObj.setPricing(&txPricing{payer: cur.payer, cost: cur.cost, priorityGasPrice: pgp})
-			} else {
-				txObj.setPricing(&txPricing{priorityGasPrice: pgp})
-			}
+			txObj.refreshPriorityGasPrice(baseFee, legacyTxBaseGasPrice, headSummary.Header.Number()+1)
 		}
 
 		if executable {

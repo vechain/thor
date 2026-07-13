@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
@@ -63,6 +64,34 @@ func newDelegatedTx(
 		from.PrivateKey,
 		delegator.PrivateKey,
 	)
+}
+
+// mineLegacyTxWithWork builds and signs a legacy tx whose UnprovedWork() is at least
+// minWork. UnprovedWork() = MaxBig256/hash(txFields, nonce) is unpredictable from the
+// fields alone, so this brute-forces the nonce until the threshold is met. hashWithoutNonce
+// (and therefore the search) does not depend on the nonce field, so a single unsigned
+// builder can be reused across candidate nonces.
+func mineLegacyTxWithWork(
+	t *testing.T,
+	chainTag byte,
+	blockRef tx.BlockRef,
+	expiration uint32,
+	from genesis.DevAccount,
+	minWork *big.Int,
+) *tx.Transaction {
+	t.Helper()
+
+	builder := txBuilder(tx.TypeLegacy, chainTag, nil, 21000, blockRef, expiration, nil, tx.Features(0))
+	evalWork := builder.Build().EvaluateWork(from.Address)
+
+	const maxAttempts = 20_000_000
+	for nonce := uint64(0); nonce < maxAttempts; nonce++ {
+		if evalWork(nonce).Cmp(minWork) >= 0 {
+			return tx.MustSign(builder.Nonce(nonce).Build(), from.PrivateKey)
+		}
+	}
+	t.Fatalf("failed to mine a legacy tx nonce with work >= %v within %d attempts", minWork, maxAttempts)
+	return nil
 }
 
 func txBuilder(
@@ -283,12 +312,12 @@ func TestEvaluateAndPricingSnapshot(t *testing.T) {
 	assert.True(t, executable)
 	assert.NotNil(t, pricing)
 
-	// Evaluate 未发布,访问器仍为 nil
+	// Evaluate did not publish, so accessors still return nil
 	assert.Nil(t, txObj.Cost())
 	assert.Nil(t, txObj.Payer())
 	assert.Nil(t, txObj.priorityGasPrice())
 
-	// 发布后访问器读到快照
+	// after publishing, accessors read the snapshot
 	txObj.setPricing(pricing)
 	assert.Equal(t, pricing.cost, txObj.Cost())
 	assert.Equal(t, pricing.payer, txObj.Payer())
@@ -335,4 +364,83 @@ func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 		false,
 	)
 	assert.Nil(t, err)
+}
+
+func TestBaseFeeRefreshMatchesCanonical(t *testing.T) {
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	assert.Nil(t, err)
+	tchain.MintBlock()
+	repo, stater, forkConfig := tchain.Repo(), tchain.Stater(), tchain.GetForkConfig()
+	best := repo.BestBlockSummary()
+	state := stater.NewState(best.Root())
+	chain := repo.NewBestChain()
+
+	// legacyTxBaseGasPrice must match the value Evaluate bakes into the cached legacy
+	// ceiling (the on-chain governance param), otherwise the oracle would be fed a
+	// different lbgp than the cache and legacy comparisons would be meaningless.
+	lbgp, err := builtin.Params.Native(state).Get(thor.KeyLegacyTxBaseGasPrice)
+	assert.Nil(t, err)
+	nextBlockNum := best.Header.Number() + 1
+
+	for _, txType := range []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee} {
+		// For legacy txs, use a block ref that prefix-matches a real on-chain block
+		// (the best block itself) so ProvedWork returns a nonzero UnprovedWork() within
+		// the work window, exercising the work-included ceiling rather than always
+		// comparing no-work to no-work (see tx.TestProvedWork for the ProvedWork
+		// prefix-match semantics this relies on).
+		var trx *tx.Transaction
+		if txType == tx.TypeLegacy {
+			blockRef := tx.NewBlockRefFromID(best.Header.ID())
+			// A raw nonzero UnprovedWork() is not enough: workToGas() divides by
+			// workPerGas(=1000) and floors, so a "nonzero" work below that threshold
+			// still yields wgas=0 and collapses back to the no-work ceiling. Mine a
+			// nonce with comfortably large work so the work-included branch of
+			// OverallGasPrice actually kicks in.
+			trx = mineLegacyTxWithWork(t, repo.ChainTag(), blockRef, 100, genesis.DevAccounts()[0], big.NewInt(50000))
+		} else {
+			trx = newTx(txType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+		}
+		txObj, err := ResolveTx(trx, false)
+		assert.Nil(t, err)
+
+		baseFee0 := galactica.CalcBaseFee(best.Header, forkConfig)
+		_, pricing, err := txObj.Evaluate(chain, state, best.Header, forkConfig, baseFee0, false)
+		assert.Nil(t, err)
+		assert.NotNil(t, pricing)
+		txObj.setPricing(pricing)
+
+		provedWork, err := txObj.ProvedWork(nextBlockNum, chain.GetBlockID)
+		assert.Nil(t, err)
+		if txType == tx.TypeLegacy {
+			assert.Equal(t, 1, provedWork.Sign(), "legacy provedWork must be nonzero to exercise the work-included ceiling")
+		}
+
+		// At multiple baseFees, the refresh result must equal the canonical
+		// EffectivePriorityFeePerGas computed with the (possibly nonzero) provedWork.
+		for _, bf := range []*big.Int{big.NewInt(0), big.NewInt(1), new(big.Int).Set(baseFee0), new(big.Int).Mul(baseFee0, big.NewInt(3))} {
+			txObj.refreshPriorityGasPrice(bf, lbgp, nextBlockNum)
+			want := txObj.EffectivePriorityFeePerGas(bf, lbgp, provedWork)
+			assert.Equal(t, 0, want.Cmp(txObj.priorityGasPrice()), "type=%v baseFee=%v", txType, bf)
+		}
+
+		// Capture the non-expired (work-included, for legacy) ceiling at baseFee0.
+		txObj.refreshPriorityGasPrice(baseFee0, lbgp, nextBlockNum)
+		nonExpiredPGP := new(big.Int).Set(txObj.priorityGasPrice())
+		wantNonExpired := txObj.EffectivePriorityFeePerGas(baseFee0, lbgp, provedWork)
+		assert.Equal(t, 0, wantNonExpired.Cmp(nonExpiredPGP), "type=%v non-expired", txType)
+
+		// Once the proved work expires (head advances past refNum+MaxTxWorkDelay), the
+		// legacy ceiling must drop to the no-work overall gas price.
+		expiredBlockNum := txObj.BlockRef().Number() + thor.MaxTxWorkDelay + 1
+		txObj.refreshPriorityGasPrice(baseFee0, lbgp, expiredBlockNum)
+		expiredPGP := txObj.priorityGasPrice()
+		wantExpired := txObj.EffectivePriorityFeePerGas(baseFee0, lbgp, new(big.Int)) // provedWork=0
+		assert.Equal(t, 0, wantExpired.Cmp(expiredPGP), "type=%v expired", txType)
+
+		if txType == tx.TypeLegacy {
+			// The work-included and no-work ceilings must actually differ, proving the
+			// work->no-work transition (not no-work->no-work) is what's being observed.
+			assert.NotEqual(t, 0, nonExpiredPGP.Cmp(expiredPGP), "type=%v non-expired and expired legacy pgp must differ", txType)
+		}
+	}
 }

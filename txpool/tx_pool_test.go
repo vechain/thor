@@ -1478,7 +1478,13 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 	// Test 1: Wash with headBlockChanged=false should not recompute priorityGasPrice
 	wrongPriorityGasPrice := new(big.Int).Mul(initialPriorityGasPrice, big.NewInt(999))
 	cur := txObj.pricing.Load()
-	txObj.setPricing(&txPricing{payer: cur.payer, cost: cur.cost, priorityGasPrice: wrongPriorityGasPrice})
+	txObj.setPricing(&txPricing{
+		payer:            cur.payer,
+		cost:             cur.cost,
+		priorityGasPrice: wrongPriorityGasPrice,
+		feeCeiling:       cur.feeCeiling,
+		priorityCeiling:  cur.priorityCeiling,
+	})
 
 	_, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
