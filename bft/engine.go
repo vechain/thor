@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -24,14 +25,19 @@ import (
 
 const dataStoreName = "bft.engine"
 
-var finalizedKey = []byte("finalized")
+var (
+	finalizedKey = []byte("finalized")
+	logger       = log.WithContext("pkg", "bft")
+)
 
 type Committer interface {
 	Finalized() thor.Bytes32
 	Justified() (thor.Bytes32, error)
 	Accepts(parentID thor.Bytes32) (bool, error)
-	Select(header *block.Header) (bool, error)
-	CommitBlock(header *block.Header, isPacking bool) error
+	// Select chooses between the given block and the current best; header +
+	// conflicts address the block's post-housekeep state before it is persisted.
+	Select(header *block.Header, conflicts uint32) (bool, error)
+	CommitBlock(header *block.Header, conflicts uint32, isPacking bool) error
 	ShouldVote(parentID thor.Bytes32) (bool, error)
 }
 
@@ -83,6 +89,118 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig *thor.For
 	}
 
 	return &engine, nil
+}
+
+// Resync recomputes and persists BFT quality for every storePoint from the first
+// post-HAYABUSA+HayabusaTP epoch to head, correcting values left out of sync by the
+// pre-housekeep threshold. Idempotent via currentResyncVersion.
+//
+// onProgress, if non-nil, is called with (0, total) before the first storePoint and
+// (done, total) after each; the final call has done == total.
+func (engine *Engine) Resync(onProgress func(done, total uint32)) error {
+	version, err := loadResyncVersion(engine.data)
+	if err != nil {
+		return errors.Wrap(err, "load resync version")
+	}
+	if version >= currentResyncVersion {
+		return nil
+	}
+
+	logger.Info("running bft resync", "version", currentResyncVersion)
+
+	// Drop all caches so stale entries can't leak into recomputation. Quality cache
+	// included: relying on in-order write-back is fragile and a cold cache is cheap.
+	engine.caches.state.Purge()
+	engine.caches.quality.Purge()
+	engine.caches.justifier = cache.NewPrioCache(16)
+
+	head := engine.repo.BestBlockSummary()
+	headNum := head.Header.Number()
+
+	// PoS vote weights apply after HAYABUSA+HayabusaTP(); start at that block's
+	// storePoint. Covering one pre-PoS epoch is harmless — quality is unchanged.
+	firstPosBlock := engine.forkConfig.HAYABUSA + thor.HayabusaTP()
+	if firstPosBlock > headNum {
+		if err := saveResyncVersion(engine.data, currentResyncVersion); err != nil {
+			return errors.Wrap(err, "save resync version")
+		}
+		return nil
+	}
+
+	start := getStorePoint(firstPosBlock)
+	total := (headNum-start)/thor.EpochLength() + 1
+
+	chain := engine.repo.NewChain(head.Header.ID())
+
+	if onProgress != nil {
+		onProgress(0, total)
+	}
+
+	var done, mismatches uint32
+	for sp := start; sp <= headNum; sp += thor.EpochLength() {
+		storeID, err := chain.GetBlockID(sp)
+		if err != nil {
+			return errors.Wrapf(err, "get block id at storePoint %d", sp)
+		}
+
+		sum, err := engine.repo.GetBlockSummary(storeID)
+		if err != nil {
+			return errors.Wrapf(err, "get block summary at storePoint %d", sp)
+		}
+
+		engine.caches.state.Remove(storeID)
+
+		prevQuality, prevErr := loadQuality(engine.data, storeID)
+		hasPrev := prevErr == nil
+		if prevErr != nil && !engine.data.IsNotFound(prevErr) {
+			return errors.Wrapf(prevErr, "load prev quality at storePoint %d", sp)
+		}
+
+		st, err := engine.computeState(sum)
+		if err != nil {
+			return errors.Wrapf(err, "compute state at storePoint %d", sp)
+		}
+
+		if hasPrev && prevQuality != st.Quality {
+			mismatches++
+			logger.Warn("bft resync: quality mismatch",
+				"storePoint", sp, "id", storeID, "stored", prevQuality, "recomputed", st.Quality)
+		}
+
+		if err := saveQuality(engine.data, storeID, st.Quality); err != nil {
+			return errors.Wrapf(err, "save quality at storePoint %d", sp)
+		}
+		engine.caches.quality.Add(storeID, st.Quality)
+
+		// Advance finalized forward only. Skip when storeID is in finalized's epoch
+		// or earlier: findCheckpointByQuality would underflow or miss the target
+		// (already absorbed by the current finalized).
+		if st.Committed && st.Quality > 1 && getCheckPoint(block.Number(storeID)) > block.Number(engine.Finalized()) {
+			id, err := engine.findCheckpointByQuality(st.Quality-1, engine.Finalized(), storeID)
+			if err != nil {
+				return errors.Wrapf(err, "find checkpoint by quality at storePoint %d", sp)
+			}
+			if block.Number(id) > block.Number(engine.Finalized()) {
+				if err := engine.data.Put(finalizedKey, id[:]); err != nil {
+					return err
+				}
+				engine.finalized.Store(id)
+			}
+		}
+
+		done++
+		if onProgress != nil {
+			onProgress(done, total)
+		}
+		logger.Debug("bft resync: storePoint processed", "num", sp, "quality", st.Quality)
+	}
+
+	if err := saveResyncVersion(engine.data, currentResyncVersion); err != nil {
+		return errors.Wrap(err, "save resync version")
+	}
+
+	logger.Info("bft resync done", "version", currentResyncVersion, "total", total, "mismatches", mismatches)
+	return nil
 }
 
 // Finalized returns the finalized checkpoint.
@@ -150,13 +268,15 @@ func (engine *Engine) Accepts(parentID thor.Bytes32) (bool, error) {
 }
 
 // Select selects between the new block and the current best, return true if new one is better.
-func (engine *Engine) Select(header *block.Header) (bool, error) {
-	newSt, err := engine.computeState(header)
+// header + conflicts address the new block's post-housekeep state before it is persisted.
+func (engine *Engine) Select(header *block.Header, conflicts uint32) (bool, error) {
+	newSum := &chain.BlockSummary{Header: header, Conflicts: conflicts}
+	newSt, err := engine.computeState(newSum)
 	if err != nil {
 		return false, err
 	}
 
-	best := engine.repo.BestBlockSummary().Header
+	best := engine.repo.BestBlockSummary()
 	bestSt, err := engine.computeState(best)
 	if err != nil {
 		return false, err
@@ -166,14 +286,19 @@ func (engine *Engine) Select(header *block.Header) (bool, error) {
 		return newSt.Quality > bestSt.Quality, nil
 	}
 
-	return header.BetterThan(best), nil
+	return header.BetterThan(best.Header), nil
 }
 
 // CommitBlock commits bft state to storage.
-func (engine *Engine) CommitBlock(header *block.Header, isPacking bool) error {
+func (engine *Engine) CommitBlock(header *block.Header, conflicts uint32, isPacking bool) error {
+	// The block is already persisted by this point (CommitBlock runs after
+	// repo.AddBlock); header + conflicts address its post-housekeep state the
+	// same way Select does, without a repo lookup.
+	sum := &chain.BlockSummary{Header: header, Conflicts: conflicts}
+
 	// save quality and finalized at the end of each round
 	if getStorePoint(header.Number()) == header.Number() {
-		state, err := engine.computeState(header)
+		state, err := engine.computeState(sum)
 		if err != nil {
 			return err
 		}
@@ -199,7 +324,7 @@ func (engine *Engine) CommitBlock(header *block.Header, isPacking bool) error {
 
 	// mark voted if packing
 	if isPacking {
-		state, err := engine.computeState(header)
+		state, err := engine.computeState(sum)
 		if err != nil {
 			return err
 		}
@@ -233,7 +358,7 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	st, err := engine.computeState(sum.Header)
+	st, err := engine.computeState(sum)
 	if err != nil {
 		return false, err
 	}
@@ -290,8 +415,11 @@ func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-// computeState computes the bft state regarding the given block header to the closest checkpoint.
-func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
+// computeState computes the bft state for sum back to the closest checkpoint.
+// sum may describe a not-yet-persisted block (during bft.Select); Header + Conflicts
+// still address its post-housekeep state.
+func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
+	header := sum.Header
 	if cached, ok := engine.caches.state.Get(header.ID()); ok {
 		return cached.(*bftState), nil
 	}
@@ -311,57 +439,47 @@ func (engine *Engine) computeState(header *block.Header) (*bftState, error) {
 	} else {
 		// create a new vote set if cache missed or new block is checkpoint
 		var err error
-		js, err = engine.newJustifier(header.ParentID())
+		js, err = engine.newJustifier(sum)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create vote set")
 		}
 		end = js.checkpoint
 	}
 
+	// Weights only change at Housekeep, so weighing every vote against the
+	// checkpoint's post-housekeep state matches each block's parent state — except
+	// the checkpoint block itself, whose parent state holds stale weights.
+	var weightState *state.State
+	if js.posActive {
+		weightState = engine.stater.NewState(js.weightRoot)
+	}
+
 	h := header
 	for h.Number() >= engine.forkConfig.FINALITY {
 		signer, _ := h.Signer()
 
-		var parentBlockSummary *chain.BlockSummary
-		var err error
-
-		if h.Number() > engine.forkConfig.HAYABUSA+thor.HayabusaTP() {
-			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
+		var weight uint64
+		if js.posActive {
+			validator, err := builtin.Staker.Native(weightState).GetValidation(signer)
 			if err != nil {
 				return nil, err
 			}
-			state := engine.stater.NewState(parentBlockSummary.Root())
-			staker := builtin.Staker.Native(state)
 
-			var weight uint64
-			if posActive, _ := staker.IsPoSActive(); posActive {
-				// PoS is active, get validator weight
-				validator, err := staker.GetValidation(signer)
-				if err != nil {
-					return nil, err
-				}
-				if validator == nil {
-					return nil, errors.New("validator not found")
-				}
-				weight = validator.Weight
+			if validator == nil {
+				return nil, errors.Errorf("signer %s absent from committee at block %d", signer, h.Number())
 			}
-			// If PoS is not active or error occurred, weight remains 0
-			js.AddBlock(signer, h.COM(), weight)
-		} else {
-			js.AddBlock(signer, h.COM(), 0)
+			weight = validator.Weight
 		}
+		js.AddBlock(signer, h.COM(), weight)
 
 		if h.Number() <= end {
 			break
 		}
 
-		if parentBlockSummary == nil {
-			parentBlockSummary, err = engine.repo.GetBlockSummary(h.ParentID())
-			if err != nil {
-				return nil, err
-			}
+		parentBlockSummary, err := engine.repo.GetBlockSummary(h.ParentID())
+		if err != nil {
+			return nil, err
 		}
-
 		h = parentBlockSummary.Header
 	}
 
@@ -380,6 +498,11 @@ func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID t
 			return
 		}
 	}()
+
+	// Guard uint32 underflow below: callers must search forward from finalized.
+	if block.Number(headID) < block.Number(finalized) {
+		return thor.Bytes32{}, errors.New("headID precedes finalized")
+	}
 
 	searchStart := block.Number(finalized)
 	if searchStart == 0 {
@@ -498,11 +621,11 @@ func (e *mockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-func (e *mockedEngine) Select(header *block.Header) (bool, error) {
+func (e *mockedEngine) Select(_ *block.Header, _ uint32) (bool, error) {
 	return true, nil
 }
 
-func (e *mockedEngine) CommitBlock(header *block.Header, isPacking bool) error {
+func (e *mockedEngine) CommitBlock(_ *block.Header, _ uint32, _ bool) error {
 	return nil
 }
 
@@ -606,13 +729,13 @@ func (e *soloMockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 
 // Select always returns true in solo mode since there's no fork choice rule
 // needed - the single node always extends its own chain.
-func (e *soloMockedEngine) Select(header *block.Header) (bool, error) {
+func (e *soloMockedEngine) Select(_ *block.Header, _ uint32) (bool, error) {
 	return true, nil
 }
 
 // CommitBlock is a no-op in solo mode since there's no BFT voting or
 // commitment protocol needed.
-func (e *soloMockedEngine) CommitBlock(header *block.Header, isPacking bool) error {
+func (e *soloMockedEngine) CommitBlock(_ *block.Header, _ uint32, _ bool) error {
 	return nil
 }
 
