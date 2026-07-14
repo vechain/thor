@@ -28,7 +28,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const defaultLogLimit uint64 = 1000
+const (
+	defaultLogLimit  uint64 = 1000
+	defaultLogOffset uint64 = 100
+)
 
 var (
 	ts      *httptest.Server
@@ -37,7 +40,7 @@ var (
 
 func TestEmptyTransfers(t *testing.T) {
 	db := createDb(t)
-	initTransferServer(t, db, defaultLogLimit)
+	initTransferServer(t, db, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 
 	tclient = thorclient.New(ts.URL)
@@ -47,7 +50,7 @@ func TestEmptyTransfers(t *testing.T) {
 
 func TestTransfers(t *testing.T) {
 	db := createDb(t)
-	initTransferServer(t, db, defaultLogLimit)
+	initTransferServer(t, db, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 
 	tclient = thorclient.New(ts.URL)
@@ -59,7 +62,7 @@ func TestTransfers(t *testing.T) {
 
 func TestOption(t *testing.T) {
 	db := createDb(t)
-	initTransferServer(t, db, 5)
+	initTransferServer(t, db, 5, 100)
 	defer ts.Close()
 	insertBlocks(t, db, 5)
 
@@ -100,11 +103,28 @@ func TestOption(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
+
+	filter = api.TransferFilter{
+		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		Range:       nil,
+		Options:     &api.Options{Offset: defaultLogOffset, Limit: new(uint64(0))},
+		Order:       logdb.DESC,
+	}
+
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode)
+
+	filter.Options.Offset = defaultLogOffset * 2
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, statusCode)
+	assert.Equal(t, "options.offset exceeds the maximum allowed value of 100", strings.Trim(string(res), "\n"))
 }
 
 func TestOptionalData(t *testing.T) {
 	db := createDb(t)
-	initTransferServer(t, db, defaultLogLimit)
+	initTransferServer(t, db, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 	insertBlocks(t, db, 5)
 	tclient = thorclient.New(ts.URL)
@@ -155,7 +175,7 @@ func TestOptionalData(t *testing.T) {
 
 func TestNullCriteriaSet(t *testing.T) {
 	db := createDb(t)
-	initTransferServer(t, db, defaultLogLimit)
+	initTransferServer(t, db, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 	tclient = thorclient.New(ts.URL)
 
@@ -265,12 +285,12 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 	}
 }
 
-func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
+func initTransferServer(t *testing.T, logDb *logdb.LogDB, limit uint64, offset uint64) {
 	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), logDb, limit, 10).Mount(router, "/logs/transfer")
+	New(thorChain.Repo(), logDb, limit, offset, 10).Mount(router, "/logs/transfer")
 
 	ts = httptest.NewServer(router)
 }

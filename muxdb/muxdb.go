@@ -20,6 +20,7 @@ import (
 
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb/engine"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -65,7 +66,8 @@ type MuxDB struct {
 	engine      engine.Engine
 	trieBackend *backend
 
-	done chan struct{}
+	// metricsUnregister releases the collector registered by EnableMetrics; nil if unset.
+	metricsUnregister func()
 }
 
 // Open opens or creates DB at the given path.
@@ -120,7 +122,6 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			DedupedPtnFactor: cfg.DedupedPtnFactor,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
-		done: make(chan struct{}),
 	}, nil
 }
 
@@ -139,13 +140,14 @@ func NewMem() *MuxDB {
 			DedupedPtnFactor: 1,
 			CachedNodeTTL:    32,
 		},
-		done: make(chan struct{}),
 	}
 }
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
-	close(db.done)
+	if db.metricsUnregister != nil {
+		db.metricsUnregister()
+	}
 	return db.engine.Close()
 }
 
@@ -174,32 +176,27 @@ func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
 }
 
+// EnableMetrics registers a pull collector exporting LevelDB compaction stats,
+// sampled on scrape at most once per metricsSampleInterval. No-op unless Prometheus
+// is initialized; call once per MuxDB.
 func (db *MuxDB) EnableMetrics() {
-	go func() {
-		ticker := time.NewTicker(metricsSampleInterval)
-		defer ticker.Stop()
-
-		var (
-			stats leveldb.DBStats
-			err   error
-		)
-		for {
-			select {
-			case <-ticker.C:
-				// we only have one engine implementation for now, put the type assertion just for safety
-				lvl, ok := db.engine.(*engine.LevelEngine)
-				if ok {
-					err = lvl.Stats(&stats)
-					if err != nil {
-						logger.Warn("Failed to get LevelDB stats: %v", err)
-					}
-					registerCompactionMetrics(&stats)
-				}
-			case <-db.done:
-				return
+	db.metricsUnregister = metrics.RegisterPullCollector(
+		"",
+		metricsSampleInterval,
+		func() []metrics.Sample {
+			// only one engine implementation exists; assert defensively
+			lvl, ok := db.engine.(*engine.LevelEngine)
+			if !ok {
+				return nil
 			}
-		}
-	}()
+			var stats leveldb.DBStats
+			if err := lvl.Stats(&stats); err != nil {
+				logger.Warn("Failed to get LevelDB stats", "err", err)
+				return nil
+			}
+			return compactionSamples(&stats)
+		},
+	)
 }
 
 type config struct {

@@ -267,7 +267,7 @@ func createTempDB() (*LogDB, error) {
 		return nil, fmt.Errorf("failed to close temp file: %w", err)
 	}
 
-	db, err := New(tmpFile.Name(), true)
+	db, err := New(tmpFile.Name(), true, 64)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load logdb: %w", err)
 	}
@@ -280,5 +280,5 @@ func loadDBFromDisk(b *testing.B) (*LogDB, error) {
 		b.Fatal("Please provide a dbPath")
 	}
 
-	return New(dbPath, true)
+	return New(dbPath, true, 64)
 }

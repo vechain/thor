@@ -65,6 +65,7 @@ type APIConfig struct {
 	Timeout                    int
 	SlowQueriesThreshold       int
 	Log5XXErrors               bool
+	MaxLogsOffset              uint64
 }
 
 func StartAPIServer(
@@ -109,8 +110,8 @@ func StartAPIServer(
 
 	accounts.New(repo, stater, config.CallGasLimit, config.BatchDataMaxSize, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
 	if !config.SkipLogs {
-		events.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/event")
-		transfers.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
+		events.New(repo, logDB, config.LogsLimit, config.MaxLogsOffset, defaultMaxCriteriaCount).Mount(router, "/logs/event")
+		transfers.New(repo, logDB, config.LogsLimit, config.MaxLogsOffset, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).Mount(router, "/blocks")
 	transactions.New(repo, txPool).Mount(router, "/transactions")

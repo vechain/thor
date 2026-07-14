@@ -277,6 +277,7 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, enableTxPool *
 		Timeout:                    int(ctx.Uint64(apiTimeoutFlag.Name)),
 		SlowQueriesThreshold:       int(ctx.Uint64(apiSlowQueriesThresholdFlag.Name)),
 		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),
+		MaxLogsOffset:              ctx.Uint64(apiLogsMaxOffsetFlag.Name),
 	}
 }
 
@@ -387,9 +388,10 @@ func suggestFDCache() int {
 	return n
 }
 
-func openLogDB(dir string, createAdditionalIndexes bool) (*logdb.LogDB, error) {
+func openLogDB(dir string, createAdditionalIndexes bool, maxReadConns uint64) (*logdb.LogDB, error) {
 	path := filepath.Join(dir, "logs-v2.db")
-	db, err := logdb.New(path, createAdditionalIndexes)
+
+	db, err := logdb.New(path, createAdditionalIndexes, maxReadConns)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open log database [%v]", path)
 	}

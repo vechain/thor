@@ -108,6 +108,7 @@ func main() {
 			apiEnableDeprecatedFlag,
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
+			apiLogsMaxOffsetFlag,
 			apiPriorityFeesPercentageFlag,
 			apiSlowQueriesThresholdFlag,
 			apiLog5xxErrorsFlag,
@@ -121,6 +122,7 @@ func main() {
 			allowedPeersFlag,
 			skipLogsFlag,
 			logDbAdditionalIndexesFlag,
+			logDbMaxReadConnsFlag,
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
@@ -142,6 +144,7 @@ func main() {
 					dataDirFlag,
 					cacheFlag,
 					logDbAdditionalIndexesFlag,
+					logDbMaxReadConnsFlag,
 					apiTxpoolFlag,
 					apiAddrFlag,
 					apiCorsFlag,
@@ -154,6 +157,7 @@ func main() {
 					apiSlowQueriesThresholdFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
+					apiLogsMaxOffsetFlag,
 					apiPriorityFeesPercentageFlag,
 					apiLog5xxErrorsFlag,
 					onDemandFlag,
@@ -252,9 +256,14 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
 	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
-	logDB, err := openLogDB(instanceDir, logDbAdditionalIndexes)
+	logDbMaxReadConns := ctx.Uint64(logDbMaxReadConnsFlag.Name)
+
+	logDB, err := openLogDB(instanceDir, logDbAdditionalIndexes, logDbMaxReadConns)
 	if err != nil {
 		return err
+	}
+	if enableMetrics {
+		logDB.EnableMetrics()
 	}
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
@@ -432,6 +441,8 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	var instanceDir string
 
 	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
+	logDbMaxReadConns := ctx.Uint64(logDbMaxReadConnsFlag.Name)
+
 	if ctx.Bool(persistFlag.Name) {
 		if instanceDir, err = makeInstanceDir(ctx.String(dataDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name)); err != nil {
 			return err
@@ -444,8 +455,11 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-		if logDB, err = openLogDB(instanceDir, logDbAdditionalIndexes); err != nil {
+		if logDB, err = openLogDB(instanceDir, logDbAdditionalIndexes, logDbMaxReadConns); err != nil {
 			return err
+		}
+		if enableMetrics {
+			logDB.EnableMetrics()
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
 	} else {
@@ -698,7 +712,7 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	}
 	defer func() { log.Info("closing database..."); mainDB.Close() }()
 
-	logDB, err := openLogDB(instanceDir, true)
+	logDB, err := openLogDB(instanceDir, true, ctx.Uint64(logDbMaxReadConnsFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "open log database")
 	}
