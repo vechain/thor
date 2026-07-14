@@ -52,7 +52,7 @@ func benchAddRemove(b *testing.B, workers, perWorker int, withWash bool) {
 		go func() {
 			defer close(washDone)
 			for !stopWash.Load() {
-				_, _, _, _ = pool.wash(best, true)
+				_, _, _ = pool.wash(best, true)
 			}
 		}()
 	}

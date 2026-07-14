@@ -662,7 +662,7 @@ func TestWashPromoteDrainsPendingCost(t *testing.T) {
 	}
 
 	// Trigger wash to promote (executable) and account pending cost under the map lock.
-	_, _, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
+	_, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.Nil(t, err)
 
 	// Remove every object one by one; removal must drain the accounting exactly.

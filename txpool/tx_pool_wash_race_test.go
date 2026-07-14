@@ -78,7 +78,7 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 					return
 				default:
 				}
-				_, _, _, _ = pool.wash(best, true)
+				_, _, _ = pool.wash(best, true)
 			}
 		})
 	}
