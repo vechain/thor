@@ -108,7 +108,6 @@ var (
 	apiLogsMaxOffsetFlag = &cli.Uint64Flag{
 		Name:    "api-logs-max-offset",
 		Local:   true,
-		Hidden:  true,
 		Value:   100_000,
 		Usage:   "limit the maximum offset for /logs API",
 		Sources: envVar("API_LOGS_MAX_OFFSET"),
