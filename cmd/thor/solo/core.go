@@ -164,5 +164,6 @@ func (c *Core) IsExecutable(trx *tx.Transaction) (bool, error) {
 		return false, errors.WithMessage(err, "resolve transaction")
 	}
 
-	return txObject.Executable(chain, state, best.Header, c.forkConfig, baseFee)
+	executable, _, err := txObject.Evaluate(chain, state, best.Header, c.forkConfig, baseFee, false)
+	return executable, err
 }
