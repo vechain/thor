@@ -454,13 +454,21 @@ func batchCall(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
 
-	// Request body has an invalid blockRef
+	// Request body has a blockRef of invalid length
 	badBlockRef := &api.BatchCallData{
 		BlockRef: "0x00",
 	}
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", badBlockRef)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusInternalServerError, statusCode, "invalid blockRef")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid length blockRef")
+
+	// Request body has a malformed (non-hex) blockRef
+	malformedBlockRef := &api.BatchCallData{
+		BlockRef: "not-hex",
+	}
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", malformedBlockRef)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "malformed blockRef")
 
 	// Request body has an invalid malformed revision
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost(fmt.Sprintf("/accounts/*?revision=%s", "0xZZZ"), badBody)
