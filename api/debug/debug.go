@@ -439,6 +439,9 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 		}
 		block, err = d.repo.GetBlock(blockID)
 		if err != nil {
+			if d.repo.IsNotFound(err) {
+				return nil, thor.Bytes32{}, 0, restutil.BadRequest(errors.WithMessage(err, "target[0]"))
+			}
 			return nil, thor.Bytes32{}, 0, err
 		}
 		if len(parts[1]) == 64 || len(parts[1]) == 66 {
@@ -513,15 +516,10 @@ func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.Transacti
 	}
 
 	if len(opt.BlockRef) > 0 {
-		blockRef, err := hexutil.Decode(opt.BlockRef)
+		blkRef, err := restutil.ParseBlockRef(opt.BlockRef)
 		if err != nil {
-			return nil, 0, nil, errors.WithMessage(err, "blockRef")
+			return nil, 0, nil, err
 		}
-		if len(blockRef) != 8 {
-			return nil, 0, nil, errors.New("blockRef: invalid length")
-		}
-		var blkRef tx.BlockRef
-		copy(blkRef[:], blockRef[:])
 		txCtx.BlockRef = blkRef
 	}
 

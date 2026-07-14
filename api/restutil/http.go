@@ -10,10 +10,12 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 var logger = log.WithContext("pkg", "http-utils")
@@ -112,6 +114,20 @@ func ParseJSON(r io.Reader, v any) error {
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(v)
+}
+
+// ParseBlockRef parses a hex-encoded, 8-byte block reference from a request.
+func ParseBlockRef(blockRef string) (tx.BlockRef, error) {
+	var blkRef tx.BlockRef
+	decoded, err := hexutil.Decode(blockRef)
+	if err != nil {
+		return blkRef, BadRequest(errors.WithMessage(err, "blockRef"))
+	}
+	if len(decoded) != len(blkRef) {
+		return blkRef, BadRequest(errors.New("blockRef: invalid length"))
+	}
+	copy(blkRef[:], decoded)
+	return blkRef, nil
 }
 
 // WriteJSON response an object in JSON encoding.
