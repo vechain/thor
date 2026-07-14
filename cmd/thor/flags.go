@@ -140,6 +140,7 @@ var (
 	logDbMaxReadConnsFlag = &cli.Uint64Flag{
 		Name:    "logdb-max-read-conns",
 		Local:   true,
+		Hidden:  true,
 		Value:   64,
 		Usage:   "maximum number of read connections for the log database",
 		Sources: envVar("LOGDB_MAX_READ_CONNS"),
