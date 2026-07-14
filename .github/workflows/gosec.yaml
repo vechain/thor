@@ -18,14 +18,15 @@ jobs:
     steps:
       - name: Checkout Source
         uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-          cache: false
       - name: Run Gosec
         id: gosec-run
         continue-on-error: true
         uses: securego/gosec@master # zizmor: ignore[unpinned-uses]
+        env:
+          # gosec runs in its own container with a bundled Go and
+          # GOTOOLCHAIN=local; allow it to fetch the toolchain go.mod
+          # requires, otherwise it loads 0 packages and scans nothing.
+          GOTOOLCHAIN: auto
         with:
           args: '-exclude=G104,G115,G304,G406,G507 -exclude-dir=builtin/gen ./...'
 
