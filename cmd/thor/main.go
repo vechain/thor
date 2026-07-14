@@ -334,6 +334,13 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
 	}
+	// Skip resync when the pruner is enabled: it needs full historical state (pruned
+	// nodes lack it); leftover stale quality is safe — BFT only reads forward from finalized.
+	if ctx.Bool(disablePrunerFlag.Name) {
+		if err := resyncBFT(bftEngine); err != nil {
+			return errors.Wrap(err, "resync bft")
+		}
+	}
 
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
@@ -733,6 +740,13 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, thor.Address{})
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
+	}
+	// Skip resync when the pruner is enabled: it needs full historical state (pruned
+	// nodes lack it); leftover stale quality is safe — BFT only reads forward from finalized.
+	if ctx.Bool(disablePrunerFlag.Name) {
+		if err := resyncBFT(bftEngine); err != nil {
+			return errors.Wrap(err, "resync bft")
+		}
 	}
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
