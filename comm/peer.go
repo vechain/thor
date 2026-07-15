@@ -180,7 +180,7 @@ func (ps *PeerSet) Slice() Peers {
 	defer ps.lock.Unlock()
 
 	ret := make(Peers, len(ps.m))
-	perm := rand.Perm(len(ps.m))
+	perm := rand.Perm(len(ps.m)) //#nosec G404 -- non-crypto shuffle for peer ordering
 	i := 0
 	for _, s := range ps.m {
 		// randomly
