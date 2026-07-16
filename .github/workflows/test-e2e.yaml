@@ -8,14 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: thor-pipeline-image-${{ github.sha }}
           path: /tmp
       - name: Load image
         run: docker load --input /tmp/thor-pipeline.tar
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set e2e repo reference
         id: set-ref
         env:
@@ -60,7 +60,7 @@ jobs:
           yarn install
           yarn docker:up
           yarn test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: success() || failure()
         with:
           name: e2e-test-results-${{ github.sha }}
@@ -84,7 +84,7 @@ jobs:
     outputs:
       enabled: ${{ steps.check.outputs.enabled }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: thor/fork_config.go
           sparse-checkout-cone-mode: false

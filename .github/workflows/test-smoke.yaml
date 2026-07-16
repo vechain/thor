@@ -13,7 +13,7 @@ jobs:
       THOR_IMAGE: thor-pipeline:${{ github.sha }}
     steps:
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: thor-pipeline-image-${{ github.sha }}
           path: /tmp
@@ -59,7 +59,7 @@ jobs:
           token: ${{ secrets.DRAUPNIR_TOKEN }}
           ref: ${{ steps.set-ref.outputs.ref }}
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.26.x'
       - name: Start Thor Node

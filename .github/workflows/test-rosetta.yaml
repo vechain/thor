@@ -77,7 +77,7 @@ jobs:
           path: thor-source
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: thor-source/go.mod
           cache-dependency-path: thor-source/go.sum
