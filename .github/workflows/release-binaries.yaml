@@ -51,7 +51,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version-file: go.mod
 
       - name: Build Binary
         shell: bash
@@ -105,7 +105,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: 1.26
+          go-version-file: go.mod
 
       - name: Build Binary
         shell: pwsh

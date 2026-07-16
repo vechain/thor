@@ -61,7 +61,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version-file: go.mod
       - name: Start Thor Node
         run: |
           docker run -d --name thor-node \
