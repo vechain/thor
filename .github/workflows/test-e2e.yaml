@@ -51,9 +51,9 @@ jobs:
           repository: vechain/thor-e2e-tests
           ref: ${{ steps.set-ref.outputs.ref }}
       - name: Setup Node JS
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20.x'
+          node-version: '24'
       - name: Run E2E Tests
         run: |
           export THOR_IMAGE=thor-pipeline:${{ github.sha }}
