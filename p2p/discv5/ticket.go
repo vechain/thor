@@ -549,7 +549,7 @@ func (s *ticketStore) addTicket(localTime mclock.AbsTime, pingHash []byte, ticke
 
 	if _, ok := s.tickets[topic]; ok {
 		wait := ticket.regTime[topicIdx] - localTime
-		rnd := rand.ExpFloat64()
+		rnd := rand.ExpFloat64() // #nosec G404
 		rnd = min(rnd, 10)
 		if float64(wait) < float64(keepTicketConst)+float64(keepTicketExp)*rnd {
 			// use the ticket to register this topic
