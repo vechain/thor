@@ -28,6 +28,7 @@ type TxObject struct {
 	localSubmitted bool          // tx is submitted locally on this node, or synced remotely from p2p.
 	payer          *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost           *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
+	costReserved   bool          // true once Cost was reserved on the shared PendingCostTracker
 
 	// basic unit of tip price for the validator, before GALACTICA it's the overallGasPrice(provedWork included) and validator
 	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip

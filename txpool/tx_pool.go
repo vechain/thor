@@ -76,6 +76,7 @@ type VeChainPool struct {
 	blocklist    blocklist
 	forkConfig   *thor.ForkConfig
 	baseFeeCache *baseFeeCache
+	costs        *PendingCostTracker
 
 	executables    atomic.Value
 	all            *txObjectMap
@@ -88,15 +89,30 @@ type VeChainPool struct {
 	goes   sync.WaitGroup
 }
 
-// New create a new VeChainPool instance.
-// Shutdown is required to be called at end.
+// New create a new VeChainPool instance with its own pending-cost tracker.
+// Shutdown is required to be called at end. Prefer NewCoordinator when both
+// family pools must share one ledger.
 func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *VeChainPool {
+	return newVeChainPool(repo, stater, options, forkConfig, NewPendingCostTracker())
+}
+
+// newVeChainPool creates a VeChainPool. costs is required (dependency injection);
+// the coordinator passes a shared tracker so EthPool and VeChainPool reserve
+// against the same per-payer VTHO budget.
+func newVeChainPool(
+	repo *chain.Repository,
+	stater *state.Stater,
+	options Options,
+	forkConfig *thor.ForkConfig,
+	costs *PendingCostTracker,
+) *VeChainPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &VeChainPool{
 		options:      options,
 		repo:         repo,
 		stater:       stater,
-		all:          newTxObjectMap(),
+		all:          newTxObjectMap(costs),
+		costs:        costs,
 		ctx:          ctx,
 		cancel:       cancel,
 		forkConfig:   forkConfig,
@@ -682,15 +698,23 @@ func (p *VeChainPool) wash(
 		// the tx was not executable previously: validate payer energy before promoting
 		if !obj.executable {
 			payer := *obj.Payer()
-			needs := new(big.Int).Add(p.all.PendingCostOf(payer), obj.Cost())
-			energy, err := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
-			if err != nil || energy.Cmp(needs) < 0 {
+			err := p.costs.Reserve(payer, obj.Cost(), func(needs *big.Int) error {
+				energy, err := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+				if err != nil {
+					return err
+				}
+				if energy.Cmp(needs) < 0 {
+					return errors.New("insufficient energy for overall pending cost")
+				}
+				return nil
+			})
+			if err != nil {
 				toRemove = append(toRemove, obj)
 				logger.Trace("tx washed out", "id", obj.ID(), "err", "insufficient energy for overall pending cost")
 				continue
 			}
+			obj.costReserved = true
 			obj.executable = true
-			p.all.UpdatePendingCost(obj)
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		} else if obj.localSubmitted {
 			// broadcast local submitted even it's already executable

@@ -33,7 +33,7 @@ func TestGetByID(t *testing.T) {
 	txObj3, _ := ResolveTx(tx3, false)
 
 	// Creating a new txObjectMap and adding transactions
-	m := newTxObjectMap()
+	m := newTxObjectMap(NewPendingCostTracker())
 	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Nil(t, m.Add(txObj2, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Nil(t, m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
@@ -68,7 +68,7 @@ func TestFill(t *testing.T) {
 	txObj3, _ := ResolveTx(tx3, false)
 
 	// Creating a new txObjectMap
-	m := newTxObjectMap()
+	m := newTxObjectMap(NewPendingCostTracker())
 
 	// Filling the map with transactions
 	m.Fill([]*TxObject{txObj1, txObj2, txObj1, txObj3})
@@ -104,7 +104,7 @@ func TestTxObjMap(t *testing.T) {
 	txObj2, _ := ResolveTx(tx2, false)
 	txObj3, _ := ResolveTx(tx3, false)
 
-	m := newTxObjectMap()
+	m := newTxObjectMap(NewPendingCostTracker())
 	assert.Zero(t, m.Len())
 
 	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
@@ -140,11 +140,11 @@ func TestLimitByDelegator(t *testing.T) {
 	txObj2, _ := ResolveTx(tx2, false)
 	txObj3, _ := ResolveTx(tx3, false)
 
-	m := newTxObjectMap()
+	m := newTxObjectMap(NewPendingCostTracker())
 	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Nil(t, m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 
-	m = newTxObjectMap()
+	m = newTxObjectMap(NewPendingCostTracker())
 	assert.Nil(t, m.Add(txObj2, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Equal(t, errors.New("delegator quota exceeded"), m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
@@ -188,23 +188,23 @@ func TestPendingCost(t *testing.T) {
 	assert.True(t, txObj3.executable)
 
 	// Creating a new txObjectMap
-	m := newTxObjectMap()
+	m := newTxObjectMap(NewPendingCostTracker())
 
 	m.Add(txObj1, 10, func(_ thor.Address, _ *big.Int) error { return nil })
 	m.Add(txObj2, 10, func(_ thor.Address, _ *big.Int) error { return nil })
 	m.Add(txObj3, 10, func(_ thor.Address, _ *big.Int) error { return nil })
 
-	assert.Equal(t, txObj1.Cost(), m.cost[genesis.DevAccounts()[0].Address])
+	assert.Equal(t, txObj1.Cost(), m.costs.Pending(genesis.DevAccounts()[0].Address))
 	// No cost for txObj2's origin, should be counted on the delegator
-	assert.Nil(t, m.cost[genesis.DevAccounts()[1].Address])
-	assert.Equal(t, new(big.Int).Add(txObj2.Cost(), txObj3.Cost()), m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, 0, m.costs.Pending(genesis.DevAccounts()[1].Address).Sign())
+	assert.Equal(t, new(big.Int).Add(txObj2.Cost(), txObj3.Cost()), m.costs.Pending(genesis.DevAccounts()[2].Address))
 
 	m.RemoveByHash(txObj1.Hash())
-	assert.Nil(t, m.cost[genesis.DevAccounts()[0].Address])
+	assert.Equal(t, 0, m.costs.Pending(genesis.DevAccounts()[0].Address).Sign())
 	m.RemoveByHash(txObj2.Hash())
-	assert.Equal(t, txObj3.Cost(), m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, txObj3.Cost(), m.costs.Pending(genesis.DevAccounts()[2].Address))
 	m.RemoveByHash(txObj2.Hash())
-	assert.Equal(t, txObj3.Cost(), m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, txObj3.Cost(), m.costs.Pending(genesis.DevAccounts()[2].Address))
 	m.RemoveByHash(txObj3.Hash())
-	assert.Nil(t, m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, 0, m.costs.Pending(genesis.DevAccounts()[2].Address).Sign())
 }

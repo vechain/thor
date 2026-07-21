@@ -23,11 +23,16 @@ var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 // EthPool maintains unprocessed Ethereum-family transactions.
 // This is a scaffold: admission, nonce promotion, wash, and housekeeping
 // will be implemented in follow-up changes.
+//
+// When admission lands, place/promote/drop/wash paths must Reserve/Release on
+// costs (the shared PendingCostTracker) exactly like VeChainPool — never call
+// into VeChainPool directly.
 type EthPool struct {
 	options    Options
 	repo       *chain.Repository
 	stater     *state.Stater
 	forkConfig *thor.ForkConfig
+	costs      *PendingCostTracker
 
 	all *ethPoolMap
 
@@ -40,14 +45,28 @@ type EthPool struct {
 
 var _ Pool = (*EthPool)(nil)
 
-// NewEth creates a new EthPool stub. Close must be called at shutdown.
+// NewEth creates a new EthPool stub with its own pending-cost tracker.
+// Close must be called at shutdown. Prefer NewCoordinator when both family
+// pools must share one ledger.
 func NewEth(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *EthPool {
+	return newEthPool(repo, stater, options, forkConfig, NewPendingCostTracker())
+}
+
+// newEthPool creates an EthPool. costs is required (dependency injection).
+func newEthPool(
+	repo *chain.Repository,
+	stater *state.Stater,
+	options Options,
+	forkConfig *thor.ForkConfig,
+	costs *PendingCostTracker,
+) *EthPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &EthPool{
 		options:    options,
 		repo:       repo,
 		stater:     stater,
 		forkConfig: forkConfig,
+		costs:      costs,
 		all:        newEthPoolMap(),
 		ctx:        ctx,
 		cancel:     cancel,

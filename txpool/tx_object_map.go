@@ -14,21 +14,22 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// txObjectMap to maintain mapping of tx hash to tx object, account quota and pending cost.
+// txObjectMap to maintain mapping of tx hash to tx object and account quota.
+// Pending VTHO cost is tracked in the shared PendingCostTracker.
 type txObjectMap struct {
 	lock      sync.RWMutex
 	mapByHash map[thor.Bytes32]*TxObject
 	mapByID   map[thor.Bytes32]*TxObject
 	quota     map[thor.Address]int
-	cost      map[thor.Address]*big.Int
+	costs     *PendingCostTracker
 }
 
-func newTxObjectMap() *txObjectMap {
+func newTxObjectMap(costs *PendingCostTracker) *txObjectMap {
 	return &txObjectMap{
 		mapByHash: make(map[thor.Bytes32]*TxObject),
 		mapByID:   make(map[thor.Bytes32]*TxObject),
 		quota:     make(map[thor.Address]int),
-		cost:      make(map[thor.Address]*big.Int),
+		costs:     costs,
 	}
 }
 
@@ -61,33 +62,19 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer fu
 		}
 	}
 
-	var (
-		cost  *big.Int
-		payer thor.Address
-	)
-
 	if txObj.Cost() != nil {
-		payer = *txObj.Payer()
-		pending := m.cost[payer]
-
-		if pending == nil {
-			cost = new(big.Int).Set(txObj.Cost())
-		} else {
-			cost = new(big.Int).Add(pending, txObj.Cost())
-		}
-
-		if err := validatePayer(payer, cost); err != nil {
+		payer := *txObj.Payer()
+		if err := m.costs.Reserve(payer, txObj.Cost(), func(needs *big.Int) error {
+			return validatePayer(payer, needs)
+		}); err != nil {
 			return err
 		}
+		txObj.costReserved = true
 	}
 
 	m.quota[txObj.Origin()]++
 	if delegator != nil {
 		m.quota[*delegator]++
-	}
-
-	if cost != nil {
-		m.cost[payer] = cost
 	}
 
 	m.mapByHash[hash] = txObj
@@ -126,15 +113,11 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 			}
 		}
 
-		// update the pending cost of payers
-		if payer := txObj.Payer(); payer != nil {
-			if pending := m.cost[*payer]; pending != nil {
-				if pending.Cmp(txObj.Cost()) <= 0 {
-					delete(m.cost, *payer)
-				} else {
-					m.cost[*payer] = new(big.Int).Sub(pending, txObj.Cost())
-				}
+		if txObj.costReserved {
+			if payer := txObj.Payer(); payer != nil {
+				m.costs.Release(*payer, txObj.Cost())
 			}
+			txObj.costReserved = false
 		}
 
 		delete(m.mapByHash, txHash)
@@ -142,26 +125,6 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 		return true
 	}
 	return false
-}
-
-func (m *txObjectMap) PendingCostOf(payer thor.Address) *big.Int {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	if cost := m.cost[payer]; cost != nil {
-		return new(big.Int).Set(cost)
-	}
-	return new(big.Int)
-}
-
-func (m *txObjectMap) UpdatePendingCost(txObj *TxObject) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	if pending := m.cost[*txObj.Payer()]; pending != nil {
-		m.cost[*txObj.Payer()] = new(big.Int).Add(pending, txObj.Cost())
-	} else {
-		m.cost[*txObj.Payer()] = new(big.Int).Set(txObj.Cost())
-	}
 }
 
 func (m *txObjectMap) ToTxObjects() []*TxObject {
