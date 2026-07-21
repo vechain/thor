@@ -46,7 +46,7 @@ const (
 
 var devAccounts = genesis.DevAccounts()
 
-func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *TxPool {
+func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *VeChainPool {
 	tchain, _ := testchain.NewWithFork(forkConfig, 180)
 	return New(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           limit,
@@ -62,7 +62,7 @@ func newPoolWithParams(
 	BlocklistFetchURL string,
 	timestamp uint64,
 	forks *thor.ForkConfig,
-) *TxPool {
+) *VeChainPool {
 	return newPoolWithMaxLifetime(limit, limitPerAccount, BlocklistCacheFilePath, BlocklistFetchURL, timestamp, time.Hour, forks)
 }
 
@@ -74,7 +74,7 @@ func newPoolWithMaxLifetime(
 	timestamp uint64,
 	maxLifetime time.Duration,
 	forks *thor.ForkConfig,
-) *TxPool {
+) *VeChainPool {
 	db := muxdb.NewMem()
 	gene := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -219,7 +219,7 @@ func TestNewCloseWithServer(t *testing.T) {
 	time.Sleep(1 * time.Second)
 }
 
-func FillPoolWithLegacyTxs(pool *TxPool, t *testing.T) {
+func FillPoolWithLegacyTxs(pool *VeChainPool, t *testing.T) {
 	// Create a slice of transactions to be added to the pool.
 	txs := make(tx.Transactions, 0, 15)
 	for range 12 {
@@ -234,7 +234,7 @@ func FillPoolWithLegacyTxs(pool *TxPool, t *testing.T) {
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 }
 
-func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
+func FillPoolWithDynFeeTxs(pool *VeChainPool, t *testing.T) {
 	// Advance one block to activate galactica and accept dynamic fee transactions
 	addOneBlock(t, pool)
 
@@ -253,7 +253,7 @@ func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
 
-func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
+func FillPoolWithMixedTxs(pool *VeChainPool, t *testing.T) {
 	// Advance one block to activate galactica and accept dynamic fee transactions
 	addOneBlock(t, pool)
 
@@ -274,7 +274,7 @@ func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
 
-func addOneBlock(t *testing.T, pool *TxPool) {
+func addOneBlock(t *testing.T, pool *VeChainPool) {
 	var sig [65]byte
 	rand.Read(sig[:])
 

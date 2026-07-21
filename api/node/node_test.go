@@ -28,7 +28,7 @@ import (
 var (
 	ts      *httptest.Server
 	tclient *thorclient.Client
-	pool    *txpool.TxPool
+	pool    *txpool.VeChainPool
 )
 
 func TestNode(t *testing.T) {

@@ -252,6 +252,13 @@ func (t *Transaction) Type() uint8 {
 	return t.body.txType()
 }
 
+// IsEthereumTx reports whether the transaction belongs to the Ethereum family
+// (currently TypeEthDynamicFee / EIP-1559). Used by the txpool coordinator to
+// route between VeChainPool and EthPool.
+func (t *Transaction) IsEthereumTx() bool {
+	return t.Type() == TypeEthDynamicFee
+}
+
 // ChainTag returns chain tag.
 func (t *Transaction) ChainTag() byte {
 	return t.body.chainTag()

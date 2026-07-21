@@ -53,6 +53,7 @@ type TxEvent struct {
 // Pool defines the interface for the transaction pool
 type Pool interface {
 	Get(txID thor.Bytes32) *tx.Transaction
+	GetByHash(hash thor.Bytes32) *tx.Transaction
 	Add(newTx *tx.Transaction) error
 	AddLocal(tx *tx.Transaction) error
 	StrictlyAdd(newTx *tx.Transaction) error
@@ -62,11 +63,12 @@ type Pool interface {
 	SubscribeTxEvent(chan *TxEvent) event.Subscription
 	Executables() tx.Transactions
 	Fill(txs tx.Transactions)
+	PoolNonce(addr thor.Address) uint64
 	Close()
 }
 
-// TxPool maintains unprocessed transactions.
-type TxPool struct {
+// VeChainPool maintains unprocessed VeChain-family transactions.
+type VeChainPool struct {
 	options      Options
 	repo         *chain.Repository
 	stater       *state.Stater
@@ -85,11 +87,11 @@ type TxPool struct {
 	goes   sync.WaitGroup
 }
 
-// New create a new TxPool instance.
+// New create a new VeChainPool instance.
 // Shutdown is required to be called at end.
-func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPool {
+func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *VeChainPool {
 	ctx, cancel := context.WithCancel(context.Background())
-	pool := &TxPool{
+	pool := &VeChainPool{
 		options:      options,
 		repo:         repo,
 		stater:       stater,
@@ -105,7 +107,7 @@ func New(repo *chain.Repository, stater *state.Stater, options Options, forkConf
 	return pool
 }
 
-func (p *TxPool) housekeeping() {
+func (p *VeChainPool) housekeeping() {
 	logger.Debug("enter housekeeping")
 	defer logger.Debug("leave housekeeping")
 
@@ -166,7 +168,7 @@ func (p *TxPool) housekeeping() {
 	}
 }
 
-func (p *TxPool) fetchBlocklistLoop() {
+func (p *VeChainPool) fetchBlocklistLoop() {
 	var (
 		path = p.options.BlocklistCacheFilePath
 		url  = p.options.BlocklistFetchURL
@@ -219,7 +221,7 @@ func (p *TxPool) fetchBlocklistLoop() {
 }
 
 // Close cleanup inner go routines.
-func (p *TxPool) Close() {
+func (p *VeChainPool) Close() {
 	p.cancel()
 	p.scope.Close()
 	p.goes.Wait()
@@ -227,11 +229,11 @@ func (p *TxPool) Close() {
 }
 
 // SubscribeTxEvent receivers will receive a tx
-func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
+func (p *VeChainPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 	return p.scope.Track(p.txFeed.Subscribe(ch))
 }
 
-func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) (err error) {
+func (p *VeChainPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) (err error) {
 	source := "local"
 	if !localSubmitted {
 		source = "remote"
@@ -282,7 +284,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 }
 
 // isBlocked checks if the transaction origin or delegator is blocked.
-func (p *TxPool) isBlocked(newTx *tx.Transaction) bool {
+func (p *VeChainPool) isBlocked(newTx *tx.Transaction) bool {
 	origin, _ := newTx.Origin()
 	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
 		// tx origin blocked
@@ -301,7 +303,7 @@ func (p *TxPool) isBlocked(newTx *tx.Transaction) bool {
 // checkTxPriority checks if the new tx has higher priority than the bottom 10% of existing executable txs.
 // Since executables are sorted descending by price, the threshold at 90th percentile represents
 // the boundary where 90% have higher priority and 10% have lower priority.
-func (p *TxPool) checkTxPriority(txObj *TxObject, executable bool) bool {
+func (p *VeChainPool) checkTxPriority(txObj *TxObject, executable bool) bool {
 	if !executable {
 		return false
 	}
@@ -322,7 +324,7 @@ func (p *TxPool) checkTxPriority(txObj *TxObject, executable bool) bool {
 }
 
 // validateNonExecutableLimit validates that adding a non-executable transaction won't exceed pool limits.
-func (p *TxPool) validateNonExecutableLimit(executable bool) error {
+func (p *VeChainPool) validateNonExecutableLimit(executable bool) error {
 	// Check non-executable pool limit (20% of total)
 	if !executable {
 		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
@@ -334,7 +336,7 @@ func (p *TxPool) validateNonExecutableLimit(executable bool) error {
 }
 
 // addWhenSynced handles transaction addition when the chain is synced.
-func (p *TxPool) addWhenSynced(
+func (p *VeChainPool) addWhenSynced(
 	newTx *tx.Transaction,
 	txObj *TxObject,
 	headSummary *chain.BlockSummary,
@@ -398,7 +400,7 @@ func (p *TxPool) addWhenSynced(
 }
 
 // addWhenNotSynced handles transaction addition when the chain is not synced.
-func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error {
+func (p *VeChainPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error {
 	// we skip steps that rely on head block when chain is not synced,
 	// but check the pool's limit
 	if p.all.Len() >= p.options.Limit {
@@ -420,30 +422,44 @@ func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error 
 
 // Add adds a new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
-func (p *TxPool) Add(newTx *tx.Transaction) error {
+func (p *VeChainPool) Add(newTx *tx.Transaction) error {
 	return p.add(newTx, false, false)
 }
 
 // AddLocal adds new locally submitted tx into pool.
-func (p *TxPool) AddLocal(newTx *tx.Transaction) error {
+func (p *VeChainPool) AddLocal(newTx *tx.Transaction) error {
 	return p.add(newTx, false, true)
 }
 
 // Get get pooled tx by id.
-func (p *TxPool) Get(id thor.Bytes32) *tx.Transaction {
+func (p *VeChainPool) Get(id thor.Bytes32) *tx.Transaction {
 	if txObj := p.all.GetByID(id); txObj != nil {
 		return txObj.Transaction
 	}
 	return nil
 }
 
+// GetByHash returns a pooled tx by its RLP/wire hash.
+func (p *VeChainPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
+	if txObj := p.all.GetByHash(hash); txObj != nil {
+		return txObj.Transaction
+	}
+	return nil
+}
+
+// PoolNonce is a stub for the VeChain family; Ethereum-style pending nonce
+// tracking lives in EthPool.
+func (p *VeChainPool) PoolNonce(_ thor.Address) uint64 {
+	return 0
+}
+
 // StrictlyAdd add new tx into pool. A rejection error will be returned, if tx is not executable at this time.
-func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
+func (p *VeChainPool) StrictlyAdd(newTx *tx.Transaction) error {
 	return p.add(newTx, true, false)
 }
 
 // Remove removes tx from pool by its Hash.
-func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
+func (p *VeChainPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 	removedTransaction := p.all.GetByID(txID)
 	if removedTransaction == nil {
 		return false
@@ -463,7 +479,7 @@ func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 }
 
 // Executables returns executable txs.
-func (p *TxPool) Executables() tx.Transactions {
+func (p *VeChainPool) Executables() tx.Transactions {
 	if sorted := p.executables.Load(); sorted != nil {
 		return sorted.(tx.Transactions)
 	}
@@ -471,7 +487,7 @@ func (p *TxPool) Executables() tx.Transactions {
 }
 
 // Fill fills txs into pool.
-func (p *TxPool) Fill(txs tx.Transactions) {
+func (p *VeChainPool) Fill(txs tx.Transactions) {
 	txObjs := make([]*TxObject, 0, len(txs))
 	for _, tx := range txs {
 		if p.isBlocked(tx) {
@@ -486,13 +502,13 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 }
 
 // Dump dumps all txs in the pool.
-func (p *TxPool) Dump() tx.Transactions {
+func (p *VeChainPool) Dump() tx.Transactions {
 	return p.all.ToTxs()
 }
 
 // wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
 // this method should only be called in housekeeping go routine
-func (p *TxPool) wash(
+func (p *VeChainPool) wash(
 	headSummary *chain.BlockSummary,
 	headBlockChanged bool,
 ) (
@@ -686,12 +702,12 @@ func (p *TxPool) wash(
 }
 
 // Len returns the length of the `all` field
-func (p *TxPool) Len() int {
+func (p *VeChainPool) Len() int {
 	return p.all.Len()
 }
 
 // validateTxBasics runs static validation on a transaction.
-func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
+func (p *VeChainPool) validateTxBasics(trx *tx.Transaction) error {
 	if err := trx.EnforceSignatureLowS(); err != nil {
 		return badTxError{err.Error()}
 	}
