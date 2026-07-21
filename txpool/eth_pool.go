@@ -24,15 +24,15 @@ var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 // This is a scaffold: admission, nonce promotion, wash, and housekeeping
 // will be implemented in follow-up changes.
 //
-// When admission lands, place/promote/drop/wash paths must Reserve/Release on
-// costs (the shared PendingCostTracker) exactly like VeChainPool — never call
+// When admission lands, place/promote/drop/wash paths must reserve/release on
+// the shared costTracker exactly like VeChainPool — never call
 // into VeChainPool directly.
 type EthPool struct {
 	options    Options
 	repo       *chain.Repository
 	stater     *state.Stater
 	forkConfig *thor.ForkConfig
-	costs      *PendingCostTracker
+	costs      *costTracker
 
 	all *ethPoolMap
 
@@ -45,11 +45,11 @@ type EthPool struct {
 
 var _ Pool = (*EthPool)(nil)
 
-// NewEth creates a new EthPool stub with its own pending-cost tracker.
+// NewEth creates a new EthPool stub with its own cost tracker.
 // Close must be called at shutdown. Prefer NewCoordinator when both family
 // pools must share one ledger.
 func NewEth(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *EthPool {
-	return newEthPool(repo, stater, options, forkConfig, NewPendingCostTracker())
+	return newEthPool(repo, stater, options, forkConfig, newCostTracker())
 }
 
 // newEthPool creates an EthPool. costs is required (dependency injection).
@@ -58,7 +58,7 @@ func newEthPool(
 	stater *state.Stater,
 	options Options,
 	forkConfig *thor.ForkConfig,
-	costs *PendingCostTracker,
+	costs *costTracker,
 ) *EthPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &EthPool{

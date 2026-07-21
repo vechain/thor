@@ -19,15 +19,15 @@ import (
 type TxPoolCoordinator struct {
 	vechain *VeChainPool
 	eth     *EthPool
-	costs   *PendingCostTracker
+	costs   *costTracker
 }
 
 var _ Pool = (*TxPoolCoordinator)(nil)
 
-// NewCoordinator creates both sub-pools sharing one PendingCostTracker.
+// NewCoordinator creates both sub-pools sharing one cost tracker.
 // Close must be called at shutdown.
 func NewCoordinator(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPoolCoordinator {
-	costs := NewPendingCostTracker()
+	costs := newCostTracker()
 	return &TxPoolCoordinator{
 		costs:   costs,
 		vechain: newVeChainPool(repo, stater, options, forkConfig, costs),

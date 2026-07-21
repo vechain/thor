@@ -15,16 +15,16 @@ import (
 )
 
 // txObjectMap to maintain mapping of tx hash to tx object and account quota.
-// Pending VTHO cost is tracked in the shared PendingCostTracker.
+// Executable transaction cost is reserved in the shared costTracker.
 type txObjectMap struct {
 	lock      sync.RWMutex
 	mapByHash map[thor.Bytes32]*TxObject
 	mapByID   map[thor.Bytes32]*TxObject
 	quota     map[thor.Address]int
-	costs     *PendingCostTracker
+	costs     *costTracker
 }
 
-func newTxObjectMap(costs *PendingCostTracker) *txObjectMap {
+func newTxObjectMap(costs *costTracker) *txObjectMap {
 	return &txObjectMap{
 		mapByHash: make(map[thor.Bytes32]*TxObject),
 		mapByID:   make(map[thor.Bytes32]*TxObject),
@@ -40,7 +40,7 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error) error {
+func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, balance *big.Int) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -48,37 +48,37 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer fu
 	if _, found := m.mapByHash[hash]; found {
 		return nil
 	}
+	if err := m.checkQuotaLocked(txObj, limitPerAccount); err != nil {
+		return err
+	}
 
+	if txObj.Cost() != nil {
+		payer := *txObj.Payer()
+		if err := m.costs.reserve(vechainReservationOwner(hash), payer, txObj.Cost(), balance); err != nil {
+			return err
+		}
+	}
+
+	m.quota[txObj.Origin()]++
+	if delegator := txObj.Delegator(); delegator != nil {
+		m.quota[*delegator]++
+	}
+	m.mapByHash[hash] = txObj
+	m.mapByID[txObj.ID()] = txObj
+	return nil
+}
+
+func (m *txObjectMap) checkQuotaLocked(txObj *TxObject, limitPerAccount int) error {
 	if m.quota[txObj.Origin()] >= limitPerAccount {
 		metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "account"})
 		return errors.New("account quota exceeded")
 	}
-
-	delegator := txObj.Delegator()
-	if delegator != nil {
+	if delegator := txObj.Delegator(); delegator != nil {
 		if m.quota[*delegator] >= limitPerAccount {
 			metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "delegator"})
 			return errors.New("delegator quota exceeded")
 		}
 	}
-
-	if txObj.Cost() != nil {
-		payer := *txObj.Payer()
-		if err := m.costs.Reserve(payer, txObj.Cost(), func(needs *big.Int) error {
-			return validatePayer(payer, needs)
-		}); err != nil {
-			return err
-		}
-		txObj.costReserved = true
-	}
-
-	m.quota[txObj.Origin()]++
-	if delegator != nil {
-		m.quota[*delegator]++
-	}
-
-	m.mapByHash[hash] = txObj
-	m.mapByID[txObj.ID()] = txObj
 	return nil
 }
 
@@ -94,37 +94,54 @@ func (m *txObjectMap) GetByHash(hash thor.Bytes32) *TxObject {
 	return m.mapByHash[hash]
 }
 
+// ReserveCost reserves txObj's executable cost if it is still in the map.
+// Holding the map lock closes the race between wash promotion and removal;
+// costTracker is a leaf lock, so this is the required lock order.
+func (m *txObjectMap) ReserveCost(txObj *TxObject, balance *big.Int) (bool, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if current := m.mapByHash[txObj.Hash()]; current != txObj {
+		return false, nil
+	}
+	err := m.costs.reserve(
+		vechainReservationOwner(txObj.Hash()),
+		*txObj.Payer(),
+		txObj.Cost(),
+		balance,
+	)
+	return err == nil, err
+}
+
 func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if txObj, ok := m.mapByHash[txHash]; ok {
-		if m.quota[txObj.Origin()] > 1 {
-			m.quota[txObj.Origin()]--
-		} else {
-			delete(m.quota, txObj.Origin())
-		}
-
-		if delegator := txObj.Delegator(); delegator != nil {
-			if m.quota[*delegator] > 1 {
-				m.quota[*delegator]--
-			} else {
-				delete(m.quota, *delegator)
-			}
-		}
-
-		if txObj.costReserved {
-			if payer := txObj.Payer(); payer != nil {
-				m.costs.Release(*payer, txObj.Cost())
-			}
-			txObj.costReserved = false
-		}
-
-		delete(m.mapByHash, txHash)
-		delete(m.mapByID, txObj.ID())
-		return true
+	txObj, ok := m.mapByHash[txHash]
+	if !ok {
+		return false
 	}
-	return false
+
+	if m.quota[txObj.Origin()] > 1 {
+		m.quota[txObj.Origin()]--
+	} else {
+		delete(m.quota, txObj.Origin())
+	}
+
+	if delegator := txObj.Delegator(); delegator != nil {
+		if m.quota[*delegator] > 1 {
+			m.quota[*delegator]--
+		} else {
+			delete(m.quota, *delegator)
+		}
+	}
+
+	delete(m.mapByHash, txHash)
+	delete(m.mapByID, txObj.ID())
+	if err := m.costs.release(vechainReservationOwner(txHash)); err != nil {
+		logger.Error("failed to release transaction cost", "hash", txHash, "err", err)
+	}
+	return true
 }
 
 func (m *txObjectMap) ToTxObjects() []*TxObject {

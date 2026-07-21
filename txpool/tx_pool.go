@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
@@ -76,7 +75,7 @@ type VeChainPool struct {
 	blocklist    blocklist
 	forkConfig   *thor.ForkConfig
 	baseFeeCache *baseFeeCache
-	costs        *PendingCostTracker
+	costs        *costTracker
 
 	executables    atomic.Value
 	all            *txObjectMap
@@ -89,11 +88,11 @@ type VeChainPool struct {
 	goes   sync.WaitGroup
 }
 
-// New create a new VeChainPool instance with its own pending-cost tracker.
+// New creates a VeChainPool with its own cost tracker.
 // Shutdown is required to be called at end. Prefer NewCoordinator when both
 // family pools must share one ledger.
 func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *VeChainPool {
-	return newVeChainPool(repo, stater, options, forkConfig, NewPendingCostTracker())
+	return newVeChainPool(repo, stater, options, forkConfig, newCostTracker())
 }
 
 // newVeChainPool creates a VeChainPool. costs is required (dependency injection);
@@ -104,7 +103,7 @@ func newVeChainPool(
 	stater *state.Stater,
 	options Options,
 	forkConfig *thor.ForkConfig,
-	costs *PendingCostTracker,
+	costs *costTracker,
 ) *VeChainPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &VeChainPool{
@@ -392,19 +391,14 @@ func (p *VeChainPool) addWhenSynced(
 	}
 
 	txObj.executable = executable
-	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
-		// check payer's balance
-		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+	var balance *big.Int
+	if txObj.Cost() != nil {
+		balance, err = builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(*txObj.Payer())
 		if err != nil {
 			return err
 		}
-
-		if balance.Cmp(needs) < 0 {
-			return errors.New("insufficient energy for overall pending cost")
-		}
-
-		return nil
-	}); err != nil {
+	}
+	if err := p.all.Add(txObj, p.options.LimitPerAccount, balance); err != nil {
 		return txRejectedError{err.Error()}
 	}
 
@@ -425,7 +419,7 @@ func (p *VeChainPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) e
 	}
 
 	// skip pending cost check when chain is not synced
-	if err := p.all.Add(txObj, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
+	if err := p.all.Add(txObj, p.options.LimitPerAccount, nil); err != nil {
 		return txRejectedError{err.Error()}
 	}
 
@@ -698,22 +692,19 @@ func (p *VeChainPool) wash(
 		// the tx was not executable previously: validate payer energy before promoting
 		if !obj.executable {
 			payer := *obj.Payer()
-			err := p.costs.Reserve(payer, obj.Cost(), func(needs *big.Int) error {
-				energy, err := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
-				if err != nil {
-					return err
-				}
-				if energy.Cmp(needs) < 0 {
-					return errors.New("insufficient energy for overall pending cost")
-				}
-				return nil
-			})
+			balance, balanceErr := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+			if balanceErr != nil {
+				return nil, 0, 0, balanceErr
+			}
+			reserved, err := p.all.ReserveCost(obj, balance)
 			if err != nil {
 				toRemove = append(toRemove, obj)
 				logger.Trace("tx washed out", "id", obj.ID(), "err", "insufficient energy for overall pending cost")
 				continue
 			}
-			obj.costReserved = true
+			if !reserved {
+				continue
+			}
 			obj.executable = true
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		} else if obj.localSubmitted {
