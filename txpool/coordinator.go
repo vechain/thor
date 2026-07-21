@@ -55,8 +55,12 @@ func (c *TxPoolCoordinator) GetByHash(hash thor.Bytes32) *tx.Transaction {
 	return c.eth.GetByHash(hash)
 }
 
-func (c *TxPoolCoordinator) Add(newTx *tx.Transaction) error {
-	return c.route(newTx).Add(newTx)
+func (c *TxPoolCoordinator) AddRemote(newTx *tx.Transaction) error {
+	return c.route(newTx).AddRemote(newTx)
+}
+
+func (c *TxPoolCoordinator) ReinjectFromFork(newTx *tx.Transaction) error {
+	return c.route(newTx).ReinjectFromFork(newTx)
 }
 
 func (c *TxPoolCoordinator) AddLocal(newTx *tx.Transaction) error {

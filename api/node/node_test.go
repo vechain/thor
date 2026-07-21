@@ -67,7 +67,7 @@ func initCommServer(t *testing.T) {
 			Nonce(uint64(i)).
 			Build()
 		transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
-		err := pool.Add(transaction)
+		err := pool.AddRemote(transaction)
 		require.NoError(t, err)
 	}
 

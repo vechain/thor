@@ -58,7 +58,11 @@ func (m *instantMintPool) PoolNonce(_ thor.Address) uint64 {
 	return 0
 }
 
-func (m *instantMintPool) Add(newTx *tx.Transaction) error {
+func (m *instantMintPool) AddRemote(newTx *tx.Transaction) error {
+	return m.AddLocal(newTx)
+}
+
+func (m *instantMintPool) ReinjectFromFork(newTx *tx.Transaction) error {
 	return m.AddLocal(newTx)
 }
 
@@ -79,7 +83,7 @@ func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
 }
 
 func (m *instantMintPool) StrictlyAdd(newTx *tx.Transaction) error {
-	return m.Add(newTx)
+	return m.AddLocal(newTx)
 }
 
 func (m *instantMintPool) Dump() tx.Transactions {

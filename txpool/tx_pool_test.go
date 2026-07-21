@@ -122,15 +122,15 @@ func TestTxPoolMetrics(t *testing.T) {
 	defer pool.Close()
 
 	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	err := pool.Add(tx1)
+	err := pool.AddRemote(tx1)
 	assert.NoError(t, err)
 
 	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 0, nil, tx.Features(0), devAccounts[0])
-	err = pool.Add(tx2)
+	err = pool.AddRemote(tx2)
 	assert.Equal(t, "tx rejected: expired", err.Error())
 
 	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 0, nil, tx.Features(0), devAccounts[0])
-	err = pool.Add(tx3)
+	err = pool.AddRemote(tx3)
 	assert.Equal(t, "tx rejected: expired", err.Error())
 
 	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
@@ -230,7 +230,7 @@ func FillPoolWithLegacyTxs(pool *VeChainPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
+	err := pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 }
 
@@ -248,7 +248,7 @@ func FillPoolWithDynFeeTxs(pool *VeChainPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
+	err := pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
@@ -269,7 +269,7 @@ func FillPoolWithMixedTxs(pool *VeChainPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
+	err := pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
@@ -335,11 +335,11 @@ func TestDump(t *testing.T) {
 	for i := range 5 {
 		trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txsToAdd = append(txsToAdd, trx)
-		assert.Nil(t, pool.Add(trx))
+		assert.Nil(t, pool.AddRemote(trx))
 
 		trx = newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txsToAdd = append(txsToAdd, trx)
-		assert.Nil(t, pool.Add(trx))
+		assert.Nil(t, pool.AddRemote(trx))
 	}
 
 	// Use the Dump method to retrieve all transactions in the pool
@@ -367,7 +367,7 @@ func TestRemove(t *testing.T) {
 
 	// Create and add a legacy transaction to the pool
 	trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	assert.Nil(t, pool.Add(trx), "Adding transaction should not produce error")
+	assert.Nil(t, pool.AddRemote(trx), "Adding transaction should not produce error")
 
 	// Ensure the transaction is in the pool
 	assert.NotNil(t, pool.Get(trx.ID()), "Transaction should exist in the pool before removal")
@@ -381,7 +381,7 @@ func TestRemove(t *testing.T) {
 
 	// Create and add a dyn fee transaction to the pool
 	trx = newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	assert.Nil(t, pool.Add(trx), "Adding transaction should not produce error")
+	assert.Nil(t, pool.AddRemote(trx), "Adding transaction should not produce error")
 
 	// Ensure the transaction is in the pool
 	assert.NotNil(t, pool.Get(trx.ID()), "Transaction should exist in the pool before removal")
@@ -400,7 +400,7 @@ func TestRemoveWithError(t *testing.T) {
 
 	// Create and add a transaction to the pool
 	tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	// assert.Nil(t, pool.Add(tx), "Adding transaction should not produce error")
+	// assert.Nil(t, pool.AddRemote(tx), "Adding transaction should not produce error")
 
 	// Ensure the transaction is in the pool
 	assert.Nil(t, pool.Get(tx.ID()), "Transaction should exist in the pool before removal")
@@ -442,7 +442,7 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool.SubscribeTxEvent(txCh)
 
 	tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	assert.Nil(t, pool.Add(tx))
+	assert.Nil(t, pool.AddRemote(tx))
 
 	v := true
 	assert.Equal(t, &TxEvent{tx, &v}, <-txCh)
@@ -483,7 +483,7 @@ func TestSubscribeNewTypedTx(t *testing.T) {
 		MaxPriorityFeePerGas(big.NewInt(100)).
 		Build()
 	trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
-	assert.Nil(t, pool.Add(trx))
+	assert.Nil(t, pool.AddRemote(trx))
 
 	v := true
 	assert.Equal(t, &TxEvent{trx, &v}, <-txCh)
@@ -573,7 +573,7 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	for i := range poolLimit - 2 {
 		tx := tx.MustSign(generateRandomTx(t, i, repo.ChainTag()), devAccounts[i%len(devAccounts)].PrivateKey)
 		txs[tx.ID()] = tx
-		assert.Nil(t, pool.Add(tx))
+		assert.Nil(t, pool.AddRemote(tx))
 	}
 
 	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
@@ -608,8 +608,8 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 		Build()
 	lastTx = tx.MustSign(lastTx, devAccounts[0].PrivateKey)
 
-	assert.Nil(t, pool.Add(firstTx))
-	assert.Nil(t, pool.Add(lastTx))
+	assert.Nil(t, pool.AddRemote(firstTx))
+	assert.Nil(t, pool.AddRemote(lastTx))
 
 	execTxs, removedLegacy, removedDynamicFee, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
@@ -657,7 +657,7 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	for i := range totalPoolTxs {
 		tx := tx.MustSign(generateRandomTx(t, i, repo.ChainTag()), devAccounts[i%len(devAccounts)].PrivateKey)
 		txs[tx.ID()] = tx
-		assert.Nil(t, pool.Add(tx))
+		assert.Nil(t, pool.AddRemote(tx))
 	}
 
 	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
@@ -835,7 +835,7 @@ func TestAdd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.errStr, func(t *testing.T) {
-			err := pool.Add(tt.tx)
+			err := pool.AddRemote(tt.tx)
 			if tt.errStr == "" {
 				assert.Nil(t, err)
 			} else {
@@ -1078,7 +1078,7 @@ func TestExpiredTxs(t *testing.T) {
 	for i := range 90 {
 		assert.NoError(
 			t,
-			pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])),
+			pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])),
 		)
 	}
 
@@ -1086,7 +1086,9 @@ func TestExpiredTxs(t *testing.T) {
 	pool.executables.Store(executables)
 
 	// add 1 non-executable
-	assert.NoError(t, pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
+	assert.NoError(t, pool.AddRemote(
+		newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2]),
+	))
 
 	executables, washedLegacy, washedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
@@ -1116,7 +1118,7 @@ func TestBlocked(t *testing.T) {
 
 	// adding blocked should return nil
 	trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[len(devAccounts)-1])
-	err = pool.Add(trx)
+	err = pool.AddRemote(trx)
 	assert.Nil(t, err)
 
 	// added into all, will be washed out
@@ -1603,30 +1605,30 @@ func TestAddOverPendingCost(t *testing.T) {
 	defer pool.Close()
 
 	// first and second tx should be fine
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
 	// third tx should be rejected due to insufficient energy
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 
 	// first and second tx should be fine
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
 	assert.Nil(t, err)
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 }
 
@@ -1693,30 +1695,30 @@ func TestAddOverPendingCostDynamicFee(t *testing.T) {
 	defer pool.Close()
 
 	// first and second tx should be fine
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
 	// third tx should be rejected due to insufficient energy
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 
 	// first and second tx should be fine
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
 	assert.Nil(t, err)
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 }
 
@@ -2084,7 +2086,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 			Build()
 
 		trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
-		err := pool.Add(trx)
+		err := pool.AddRemote(trx)
 		assert.Nil(t, err)
 
 		txObj := pool.all.GetByID(trx.ID())
@@ -2119,7 +2121,7 @@ func TestEthDynFee_AdmitAndExecutables(t *testing.T) {
 		Build()
 	trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
 
-	err := pool.Add(trx)
+	err := pool.AddRemote(trx)
 	assert.Nil(t, err, "eth-tx with matching ChainID must be admitted")
 
 	found := false
@@ -2155,8 +2157,8 @@ func TestEthDynFee_NonceLinearGrowth(t *testing.T) {
 	exec := build(0)
 	queued := build(5)
 
-	assert.NoError(t, pool.Add(exec), "nonce==state.nonce must admit")
-	assert.NoError(t, pool.Add(queued), "nonce>state.nonce must admit (non-executable)")
+	assert.NoError(t, pool.AddRemote(exec), "nonce==state.nonce must admit")
+	assert.NoError(t, pool.AddRemote(queued), "nonce>state.nonce must admit (non-executable)")
 
 	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
@@ -2192,7 +2194,7 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 			To(&addr).Value(big.NewInt(1)).
 			Build()
 		trx = tx.MustSign(trx, signer.PrivateKey)
-		if err := pool.Add(trx); err != nil {
+		if err := pool.AddRemote(trx); err != nil {
 			t.Fatalf("admit signer %d: %v", i, err)
 		}
 	}
@@ -2203,4 +2205,116 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 	_, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, pool.all.Len(), "exactly one eth-tx remains after eviction")
+}
+
+// admitFunc is an admission entry point that must share rules with AddRemote /
+// ReinjectFromFork (rejectNonExecutable=false, localSubmitted=false).
+type admitFunc func(p *VeChainPool, trx *tx.Transaction) error
+
+func TestTxPoolSharedRemoteAdmissionRules(t *testing.T) {
+	// Both remote ingress paths must share identical admission rules.
+	admits := []struct {
+		name  string
+		admit admitFunc
+	}{
+		{"AddRemote", func(p *VeChainPool, trx *tx.Transaction) error { return p.AddRemote(trx) }},
+		{"ReinjectFromFork", func(p *VeChainPool, trx *tx.Transaction) error { return p.ReinjectFromFork(trx) }},
+	}
+
+	for _, entry := range admits {
+		t.Run(entry.name, func(t *testing.T) {
+			t.Run("duplicate hash is no-op", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+				require.NoError(t, entry.admit(pool, trx))
+				require.NoError(t, entry.admit(pool, trx))
+				assert.Equal(t, 1, pool.Len())
+				assert.NotNil(t, pool.Get(trx.ID()))
+			})
+
+			t.Run("validateTxBasics rejection", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag()+1, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+				err := entry.admit(pool, trx)
+				require.Error(t, err)
+				assert.Equal(t, "bad tx: chain tag mismatch", err.Error())
+				assert.Equal(t, 0, pool.Len())
+			})
+
+			t.Run("blocked origin silent drop", func(t *testing.T) {
+				acc := devAccounts[len(devAccounts)-1]
+				file, err := os.CreateTemp("", "blocklist*")
+				require.NoError(t, err)
+				_, err = file.WriteString(acc.Address.String())
+				require.NoError(t, err)
+				require.NoError(t, file.Close())
+				defer os.Remove(file.Name())
+
+				pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, file.Name(), "", uint64(time.Now().Unix()), &thor.NoFork)
+				defer pool.Close()
+				time.Sleep(10 * time.Millisecond)
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+				require.NoError(t, entry.admit(pool, trx))
+				assert.Equal(t, 0, pool.Len(), "blocked origin must not enter the pool")
+			})
+
+			t.Run("non-executable allowed unlike StrictlyAdd", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				dependsOn := &thor.Bytes32{1}
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, dependsOn, tx.Features(0), devAccounts[0])
+
+				require.Error(t, pool.StrictlyAdd(trx))
+				require.NoError(t, entry.admit(pool, trx))
+				assert.Equal(t, 1, pool.Len())
+				assert.NotNil(t, pool.Get(trx.ID()))
+			})
+
+			t.Run("remote pool-full gate", func(t *testing.T) {
+				pool := newPoolWithParams(10, 2, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+				defer pool.Close()
+
+				txs := make(tx.Transactions, 0, 12)
+				for i := range 12 {
+					trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
+					require.NoError(t, pool.add(trx, false, false))
+					txs = append(txs, trx)
+				}
+				pool.executables.Store(txs)
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
+				err := entry.admit(pool, trx)
+				require.Error(t, err)
+				assert.Equal(t, "tx rejected: pool is full", err.Error())
+			})
+
+			t.Run("event feed on admit", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				ch := make(chan *TxEvent, 1)
+				sub := pool.SubscribeTxEvent(ch)
+				defer sub.Unsubscribe()
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+				require.NoError(t, entry.admit(pool, trx))
+
+				select {
+				case ev := <-ch:
+					require.NotNil(t, ev)
+					assert.Equal(t, trx.ID(), ev.Tx.ID())
+					require.NotNil(t, ev.Executable)
+					assert.True(t, *ev.Executable)
+				case <-time.After(2 * time.Second):
+					t.Fatal("timed out waiting for tx event")
+				}
+			})
+		})
+	}
 }

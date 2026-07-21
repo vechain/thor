@@ -353,7 +353,7 @@ side-chain:   %v  %v`,
 			return
 		}
 		for _, tx := range b.Transactions() {
-			if err := n.txPool.Add(tx); err != nil {
+			if err := n.txPool.ReinjectFromFork(tx); err != nil {
 				logger.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}

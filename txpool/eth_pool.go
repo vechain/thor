@@ -71,7 +71,12 @@ func (p *EthPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
 	return nil
 }
 
-func (p *EthPool) Add(newTx *tx.Transaction) error {
+func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
+	_ = newTx
+	return errEthPoolNotImplemented
+}
+
+func (p *EthPool) ReinjectFromFork(newTx *tx.Transaction) error {
 	_ = newTx
 	return errEthPoolNotImplemented
 }

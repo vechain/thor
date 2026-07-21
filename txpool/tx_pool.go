@@ -54,7 +54,8 @@ type TxEvent struct {
 type Pool interface {
 	Get(txID thor.Bytes32) *tx.Transaction
 	GetByHash(hash thor.Bytes32) *tx.Transaction
-	Add(newTx *tx.Transaction) error
+	AddRemote(newTx *tx.Transaction) error
+	ReinjectFromFork(newTx *tx.Transaction) error
 	AddLocal(tx *tx.Transaction) error
 	StrictlyAdd(newTx *tx.Transaction) error
 	Remove(txHash thor.Bytes32, txID thor.Bytes32) bool
@@ -420,9 +421,15 @@ func (p *VeChainPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) e
 	return nil
 }
 
-// Add adds a new tx into pool.
-// It's not assumed as an error if the tx to be added is already in the pool,
-func (p *VeChainPool) Add(newTx *tx.Transaction) error {
+// AddRemote admits a remotely gossiped tx (P2P MsgNewTx).
+// It's not assumed as an error if the tx to be added is already in the pool.
+func (p *VeChainPool) AddRemote(newTx *tx.Transaction) error {
+	return p.add(newTx, false, false)
+}
+
+// ReinjectFromFork re-admits a tx from an orphaned side-chain block after a fork.
+// Admission rules match AddRemote (rejectNonExecutable=false, localSubmitted=false).
+func (p *VeChainPool) ReinjectFromFork(newTx *tx.Transaction) error {
 	return p.add(newTx, false, false)
 }
 

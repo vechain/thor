@@ -61,7 +61,11 @@ func (o *OnDemandTxPool) PoolNonce(_ thor.Address) uint64 {
 	return 0
 }
 
-func (o *OnDemandTxPool) Add(newTx *tx.Transaction) error {
+func (o *OnDemandTxPool) AddRemote(newTx *tx.Transaction) error {
+	return o.AddLocal(newTx)
+}
+
+func (o *OnDemandTxPool) ReinjectFromFork(newTx *tx.Transaction) error {
 	return o.AddLocal(newTx)
 }
 
@@ -156,5 +160,5 @@ func (o *OnDemandTxPool) Close() {}
 func (o *OnDemandTxPool) Fill(txs tx.Transactions) {}
 
 func (o *OnDemandTxPool) StrictlyAdd(newTx *tx.Transaction) error {
-	return o.Add(newTx)
+	return o.AddLocal(newTx)
 }

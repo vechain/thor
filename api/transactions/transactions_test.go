@@ -427,7 +427,7 @@ func initTransactionServer(t *testing.T) {
 	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	// Add a tx to the mempool to have both pending and non-pending transactions
-	e := mempool.Add(mempoolTx)
+	e := mempool.AddRemote(mempoolTx)
 	if e != nil {
 		t.Fatal(e)
 	}

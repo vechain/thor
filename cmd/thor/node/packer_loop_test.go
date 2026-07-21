@@ -102,7 +102,7 @@ func TestPack(t *testing.T) {
 		Nonce(uint64(1)).
 		Build()
 	transaction1 = tx.MustSign(transaction1, genesis.DevAccounts()[0].PrivateKey)
-	err := n.txPool.Add(transaction1)
+	err := n.txPool.AddRemote(transaction1)
 	assert.NoError(t, err)
 
 	transaction2 := new(tx.Builder).
@@ -113,7 +113,7 @@ func TestPack(t *testing.T) {
 		Gas(21000).
 		Build()
 	transaction2 = tx.MustSign(transaction2, genesis.DevAccounts()[0].PrivateKey)
-	err = n.txPool.Add(transaction2)
+	err = n.txPool.AddRemote(transaction2)
 	assert.NoError(t, err)
 
 	time.Sleep(1100 * time.Millisecond)
@@ -182,7 +182,7 @@ func TestCleanupTransactions_WithTransactions(t *testing.T) {
 	}
 
 	for _, tx := range transactions {
-		err := n.txPool.Add(tx)
+		err := n.txPool.AddRemote(tx)
 		assert.NoError(t, err)
 	}
 

@@ -37,12 +37,40 @@ type mockTxPool struct {
 	txpoolChan chan *txpool.TxEvent
 	txFeed     event.Feed
 	mu         sync.Mutex
+
+	// admitCalls records Pool admit entry points for wiring tests.
+	admitCalls []admitCall
+}
+
+type admitCall struct {
+	method string
+	txID   thor.Bytes32
 }
 
 func (m *mockTxPool) Fill(txs tx.Transactions) {
 }
 
-func (m *mockTxPool) Add(newTx *tx.Transaction) error {
+func (m *mockTxPool) recordAdmit(method string, newTx *tx.Transaction) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.admitCalls = append(m.admitCalls, admitCall{method: method, txID: newTx.ID()})
+}
+
+func (m *mockTxPool) getAdmitCalls() []admitCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]admitCall, len(m.admitCalls))
+	copy(out, m.admitCalls)
+	return out
+}
+
+func (m *mockTxPool) AddRemote(newTx *tx.Transaction) error {
+	m.recordAdmit("AddRemote", newTx)
+	return nil
+}
+
+func (m *mockTxPool) ReinjectFromFork(newTx *tx.Transaction) error {
+	m.recordAdmit("ReinjectFromFork", newTx)
 	return nil
 }
 
