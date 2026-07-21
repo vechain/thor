@@ -8,10 +8,12 @@ package txpool
 import (
 	"context"
 	"errors"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
 
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -28,11 +30,12 @@ var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 // the shared costTracker exactly like VeChainPool — never call
 // into VeChainPool directly.
 type EthPool struct {
-	options    Options
-	repo       *chain.Repository
-	stater     *state.Stater
-	forkConfig *thor.ForkConfig
-	costs      *costTracker
+	options      Options
+	repo         *chain.Repository
+	stater       *state.Stater
+	forkConfig   *thor.ForkConfig
+	costs        *costTracker
+	baseFeeCache *baseFeeCache
 
 	all *ethPoolMap
 
@@ -62,14 +65,15 @@ func newEthPool(
 ) *EthPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &EthPool{
-		options:    options,
-		repo:       repo,
-		stater:     stater,
-		forkConfig: forkConfig,
-		costs:      costs,
-		all:        newEthPoolMap(),
-		ctx:        ctx,
-		cancel:     cancel,
+		options:      options,
+		repo:         repo,
+		stater:       stater,
+		forkConfig:   forkConfig,
+		costs:        costs,
+		baseFeeCache: newBaseFeeCache(forkConfig),
+		all:          newEthPoolMap(costs),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 	pool.goes.Go(func() {
 		<-pool.ctx.Done()
@@ -78,9 +82,7 @@ func newEthPool(
 }
 
 func (p *EthPool) Get(txID thor.Bytes32) *tx.Transaction {
-	// Scaffold: ID-based lookup will use a dedicated index once admission lands.
-	_ = txID
-	return nil
+	return p.GetByHash(txID)
 }
 
 func (p *EthPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
@@ -91,8 +93,97 @@ func (p *EthPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
 }
 
 func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
-	_ = newTx
-	return errEthPoolNotImplemented
+	if newTx == nil || !newTx.IsEthereumTx() {
+		return badTxError{"invalid tx type for Ethereum pool"}
+	}
+	if p.all.GetByHash(newTx.Hash()) != nil {
+		return txRejectedError{errEthAlreadyKnown.Error()}
+	}
+	if err := validateTxBasics(p.repo, p.forkConfig, newTx); err != nil {
+		return err
+	}
+	txObj, err := ResolveTx(newTx, false)
+	if err != nil {
+		return badTxError{err.Error()}
+	}
+
+	head := p.repo.BestBlockSummary()
+	if newTx.Gas() > head.Header.GasLimit() {
+		return txRejectedError{"tx gas exceeds block gas limit"}
+	}
+	chainView := p.repo.NewChain(head.Header.ID())
+	if known, err := chainView.HasTransaction(newTx.ID(), 0); err != nil {
+		return err
+	} else if known {
+		return txRejectedError{"known tx"}
+	}
+	st := p.stater.NewState(head.Root())
+	stateNonce, err := st.GetNonce(txObj.Origin())
+	if err != nil {
+		return err
+	}
+	if newTx.Nonce() < stateNonce {
+		return txRejectedError{errEthNonceTooLow.Error()}
+	}
+
+	baseFee := p.baseFeeCache.Get(head.Header)
+	prepare := func(obj *TxObject) (reservationRequest, bool, error) {
+		if baseFee != nil && obj.MaxFeePerGas().Cmp(baseFee) < 0 {
+			return reservationRequest{}, false, nil
+		}
+		checkpoint := st.NewCheckpoint()
+		legacyBase, _, payer, prepaid, _, err := obj.resolved.BuyGas(
+			st,
+			head.Header.Timestamp()+thor.BlockInterval(),
+			baseFee,
+		)
+		st.RevertTo(checkpoint)
+		if err != nil {
+			return reservationRequest{}, false, err
+		}
+		normalizedBaseFee := baseFee
+		if normalizedBaseFee == nil {
+			normalizedBaseFee = new(big.Int)
+		}
+		obj.payer = &payer
+		obj.cost = prepaid
+		obj.priorityGasPrice = obj.EffectivePriorityFeePerGas(normalizedBaseFee, legacyBase, nil)
+		balance, err := builtin.Energy.Native(
+			st,
+			head.Header.Timestamp()+thor.BlockInterval(),
+		).Get(payer)
+		if err != nil {
+			return reservationRequest{}, false, err
+		}
+		return reservationRequest{
+			owner:   ethReservationOwner(obj.Origin(), obj.Nonce()),
+			payer:   payer,
+			cost:    prepaid,
+			balance: balance,
+		}, true, nil
+	}
+
+	executable, promoted, err := p.all.add(
+		txObj,
+		stateNonce,
+		p.options.Limit,
+		p.options.EthAccountSlots,
+		p.options.EthAccountQueue,
+		p.options.EthPriceBump,
+		prepare,
+	)
+	if err != nil {
+		return txRejectedError{err.Error()}
+	}
+	p.goes.Go(func() {
+		p.txFeed.Send(&TxEvent{Tx: newTx, Executable: &executable})
+		promotedExecutable := true
+		for _, promotedTx := range promoted {
+			p.txFeed.Send(&TxEvent{Tx: promotedTx.Transaction, Executable: &promotedExecutable})
+		}
+	})
+	logger.Trace("Ethereum tx added", "id", newTx.ID(), "executable", executable)
+	return nil
 }
 
 func (p *EthPool) ReinjectFromFork(newTx *tx.Transaction) error {
@@ -136,7 +227,15 @@ func (p *EthPool) Fill(txs tx.Transactions) {
 }
 
 func (p *EthPool) PoolNonce(addr thor.Address) uint64 {
-	return p.all.poolNonce(addr)
+	if nonce, ok := p.all.poolNonceOK(addr); ok {
+		return nonce
+	}
+	head := p.repo.BestBlockSummary()
+	nonce, err := p.stater.NewState(head.Root()).GetNonce(addr)
+	if err != nil {
+		return 0
+	}
+	return nonce
 }
 
 func (p *EthPool) Close() {

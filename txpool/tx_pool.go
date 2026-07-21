@@ -38,6 +38,9 @@ var logger = log.WithContext("pkg", "txpool")
 type Options struct {
 	Limit                  int
 	LimitPerAccount        int
+	EthAccountSlots        int
+	EthAccountQueue        int
+	EthPriceBump           uint64
 	MaxLifetime            time.Duration
 	BlocklistCacheFilePath string
 	BlocklistFetchURL      string
@@ -730,11 +733,15 @@ func (p *VeChainPool) Len() int {
 
 // validateTxBasics runs static validation on a transaction.
 func (p *VeChainPool) validateTxBasics(trx *tx.Transaction) error {
+	return validateTxBasics(p.repo, p.forkConfig, trx)
+}
+
+func validateTxBasics(repo *chain.Repository, forkConfig *thor.ForkConfig, trx *tx.Transaction) error {
 	if err := trx.EnforceSignatureLowS(); err != nil {
 		return badTxError{err.Error()}
 	}
 
-	if trx.ChainTag() != p.repo.ChainTag() && trx.Type() != tx.TypeEthDynamicFee {
+	if trx.ChainTag() != repo.ChainTag() && trx.Type() != tx.TypeEthDynamicFee {
 		// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
 		return badTxError{"chain tag mismatch"}
 	}
@@ -747,25 +754,25 @@ func (p *VeChainPool) validateTxBasics(trx *tx.Transaction) error {
 	//   pre-GALACTICA    → TypeLegacy only
 	//   pre-INTERSTELLAR → TypeLegacy + TypeDynamicFee (0x02 needs INTERSTELLAR)
 	//   post-INTERSTELLAR → all three types allowed
-	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
+	nextBlockNum := repo.BestBlockSummary().Header.Number() + 1
 	switch {
-	case !thor.IsForked(nextBlockNum, p.forkConfig.GALACTICA) && trx.Type() != tx.TypeLegacy:
+	case !thor.IsForked(nextBlockNum, forkConfig.GALACTICA) && trx.Type() != tx.TypeLegacy:
 		return badTxError{"invalid tx type"}
-	case !thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) && trx.Type() == tx.TypeEthDynamicFee:
+	case !thor.IsForked(nextBlockNum, forkConfig.INTERSTELLAR) && trx.Type() == tx.TypeEthDynamicFee:
 		return badTxError{"invalid tx type"}
 	}
 
 	// Validate that EIP-1559 transactions carry the correct Ethereum chain ID.
 	if trx.Type() == tx.TypeEthDynamicFee {
 		cid := trx.ChainID()
-		if cid == nil || cid.BitLen() > 64 || cid.Uint64() != p.repo.ChainID() {
+		if cid == nil || cid.BitLen() > 64 || cid.Uint64() != repo.ChainID() {
 			return badTxError{fmt.Sprintf("Ethereum chain ID %v does not match network chain ID %d",
-				cid, p.repo.ChainID())}
+				cid, repo.ChainID())}
 		}
 	}
 
 	// TODO add a comment with the EIP that activates this filter
-	if thor.IsForked(nextBlockNum, p.forkConfig.INTERSTELLAR) && trx.Gas() > thor.MaxTxGasLimit {
+	if thor.IsForked(nextBlockNum, forkConfig.INTERSTELLAR) && trx.Gas() > thor.MaxTxGasLimit {
 		return badTxError{"tx gas limit exceeds the maximum allowed"}
 	}
 

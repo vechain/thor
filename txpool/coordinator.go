@@ -6,6 +6,9 @@
 package txpool
 
 import (
+	"context"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/vechain/thor/v2/chain"
@@ -20,6 +23,12 @@ type TxPoolCoordinator struct {
 	vechain *VeChainPool
 	eth     *EthPool
 	costs   *costTracker
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	txFeed event.Feed
+	scope  event.SubscriptionScope
+	goes   sync.WaitGroup
 }
 
 var _ Pool = (*TxPoolCoordinator)(nil)
@@ -28,18 +37,39 @@ var _ Pool = (*TxPoolCoordinator)(nil)
 // Close must be called at shutdown.
 func NewCoordinator(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPoolCoordinator {
 	costs := newCostTracker()
-	return &TxPoolCoordinator{
+	ctx, cancel := context.WithCancel(context.Background())
+	coordinator := &TxPoolCoordinator{
 		costs:   costs,
 		vechain: newVeChainPool(repo, stater, options, forkConfig, costs),
 		eth:     newEthPool(repo, stater, options, forkConfig, costs),
+		ctx:     ctx,
+		cancel:  cancel,
 	}
+	coordinator.startEventRelay(coordinator.vechain)
+	coordinator.startEventRelay(coordinator.eth)
+	return coordinator
 }
 
-// route selects the sub-pool for a transaction.
-//
-// TODO(eth-txpool): flip to route by newTx.IsEthereumTx() once EthPool admission
-// is implemented. Until then, all families go to VeChainPool to preserve current
-// behavior.
+func (c *TxPoolCoordinator) startEventRelay(pool Pool) {
+	ch := make(chan *TxEvent, 16)
+	sub := pool.SubscribeTxEvent(ch)
+	c.goes.Go(func() {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-sub.Err():
+				return
+			case ev := <-ch:
+				c.txFeed.Send(ev)
+			}
+		}
+	})
+}
+
+// route is still used by the four admission flows whose EthPool implementation
+// is deferred. AddRemote performs its family routing explicitly.
 func (c *TxPoolCoordinator) route(newTx *tx.Transaction) Pool {
 	_ = newTx
 	return c.vechain
@@ -60,7 +90,13 @@ func (c *TxPoolCoordinator) GetByHash(hash thor.Bytes32) *tx.Transaction {
 }
 
 func (c *TxPoolCoordinator) AddRemote(newTx *tx.Transaction) error {
-	return c.route(newTx).AddRemote(newTx)
+	if newTx == nil {
+		return badTxError{"nil transaction"}
+	}
+	if newTx.IsEthereumTx() {
+		return c.eth.AddRemote(newTx)
+	}
+	return c.vechain.AddRemote(newTx)
 }
 
 func (c *TxPoolCoordinator) ReinjectFromFork(newTx *tx.Transaction) error {
@@ -99,9 +135,7 @@ func (c *TxPoolCoordinator) Len() int {
 }
 
 func (c *TxPoolCoordinator) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
-	// Scaffold: forward VeChain events only. Dual-pool event relay lands with
-	// the EthPool admission flip.
-	return c.vechain.SubscribeTxEvent(ch)
+	return c.scope.Track(c.txFeed.Subscribe(ch))
 }
 
 func (c *TxPoolCoordinator) Executables() tx.Transactions {
@@ -119,6 +153,9 @@ func (c *TxPoolCoordinator) PoolNonce(addr thor.Address) uint64 {
 }
 
 func (c *TxPoolCoordinator) Close() {
+	c.cancel()
+	c.scope.Close()
 	c.vechain.Close()
 	c.eth.Close()
+	c.goes.Wait()
 }

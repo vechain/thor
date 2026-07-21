@@ -277,6 +277,27 @@ var (
 		Usage:   "set tx limit per account in pool",
 		Sources: envVar("TX_POOL_LIMIT_PER_ACCOUNT"),
 	}
+	txPoolEthAccountSlotsFlag = &cli.Uint64Flag{
+		Name:    "txpool-eth-account-slots",
+		Local:   true,
+		Value:   16,
+		Usage:   "set guaranteed executable Ethereum transaction slots per account",
+		Sources: envVar("TX_POOL_ETH_ACCOUNT_SLOTS"),
+	}
+	txPoolEthAccountQueueFlag = &cli.Uint64Flag{
+		Name:    "txpool-eth-account-queue",
+		Local:   true,
+		Value:   64,
+		Usage:   "set queued Ethereum transaction limit per account",
+		Sources: envVar("TX_POOL_ETH_ACCOUNT_QUEUE"),
+	}
+	txPoolEthPriceBumpFlag = &cli.Uint64Flag{
+		Name:    "txpool-eth-price-bump",
+		Local:   true,
+		Value:   10,
+		Usage:   "set percentage fee bump required to replace an Ethereum transaction",
+		Sources: envVar("TX_POOL_ETH_PRICE_BUMP"),
+	}
 	allowedTracersFlag = &cli.StringFlag{
 		Name:    "api-allowed-tracers",
 		Local:   true,

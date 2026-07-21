@@ -56,6 +56,9 @@ var (
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,
 		LimitPerAccount: 128,
+		EthAccountSlots: 16,
+		EthAccountQueue: 64,
+		EthPriceBump:    10,
 		MaxLifetime:     20 * time.Minute,
 	}
 )
@@ -128,6 +131,9 @@ func main() {
 			adminAddrFlag,
 			enableAdminFlag,
 			txPoolLimitPerAccountFlag,
+			txPoolEthAccountSlotsFlag,
+			txPoolEthAccountQueueFlag,
+			txPoolEthPriceBumpFlag,
 			allowedTracersFlag,
 			minEffectivePriorityFeeFlag,
 		},
@@ -167,6 +173,9 @@ func main() {
 					skipLogsFlag,
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
+					txPoolEthAccountSlotsFlag,
+					txPoolEthAccountQueueFlag,
+					txPoolEthPriceBumpFlag,
 					disablePrunerFlag,
 					enableMetricsFlag,
 					metricsAddrFlag,
@@ -281,6 +290,15 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	if err != nil {
 		return errors.Wrap(err, "parse txpool-limit-per-account flag")
 	}
+	txpoolOpt.EthAccountSlots, err = readIntFromUInt64Flag(ctx.Uint64(txPoolEthAccountSlotsFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-eth-account-slots flag")
+	}
+	txpoolOpt.EthAccountQueue, err = readIntFromUInt64Flag(ctx.Uint64(txPoolEthAccountQueueFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-eth-account-queue flag")
+	}
+	txpoolOpt.EthPriceBump = ctx.Uint64(txPoolEthPriceBumpFlag.Name)
 	txPool := txpool.NewCoordinator(repo, state.NewStater(mainDB), txpoolOpt, forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
@@ -501,6 +519,15 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		if err != nil {
 			return errors.Wrap(err, "parse txpool-limit-per-account flag")
 		}
+		txPoolOption.EthAccountSlots, err = readIntFromUInt64Flag(ctx.Uint64(txPoolEthAccountSlotsFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-eth-account-slots flag")
+		}
+		txPoolOption.EthAccountQueue, err = readIntFromUInt64Flag(ctx.Uint64(txPoolEthAccountQueueFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-eth-account-queue flag")
+		}
+		txPoolOption.EthPriceBump = ctx.Uint64(txPoolEthPriceBumpFlag.Name)
 
 		txPool := txpool.NewCoordinator(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
 		defer func() { log.Info("closing tx pool..."); txPool.Close() }()
