@@ -246,7 +246,7 @@ func limitedEnergyPoolFixture(t *testing.T) (*chain.Repository, *state.Stater, *
 	return repo, state.NewStater(db), &forkConfig
 }
 
-func TestSharedPendingCost_CrossPoolAdmit(t *testing.T) {
+func TestCostTrackerCrossPoolAdmission(t *testing.T) {
 	repo, stater, forkConfig := limitedEnergyPoolFixture(t)
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
@@ -266,7 +266,7 @@ func TestSharedPendingCost_CrossPoolAdmit(t *testing.T) {
 	assert.Equal(t, 0, poolB.Len())
 }
 
-func TestSharedPendingCost_CrossPoolAdmitReverseOrder(t *testing.T) {
+func TestCostTrackerCrossPoolAdmissionReverseOrder(t *testing.T) {
 	repo, stater, forkConfig := limitedEnergyPoolFixture(t)
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
@@ -284,7 +284,7 @@ func TestSharedPendingCost_CrossPoolAdmitReverseOrder(t *testing.T) {
 	require.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 }
 
-func TestSharedPendingCost_ReleaseAllowsSecondPool(t *testing.T) {
+func TestCostTrackerReleaseAllowsSiblingPoolAdmission(t *testing.T) {
 	repo, stater, forkConfig := limitedEnergyPoolFixture(t)
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
@@ -308,7 +308,7 @@ func TestSharedPendingCost_ReleaseAllowsSecondPool(t *testing.T) {
 	assert.NotNil(t, poolB.Get(tx3.ID()))
 }
 
-func TestSharedPendingCost_WashPromotionRespectsSibling(t *testing.T) {
+func TestCostTrackerWashPromotionRespectsSiblingReservation(t *testing.T) {
 	repo, stater, forkConfig := limitedEnergyPoolFixture(t)
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
