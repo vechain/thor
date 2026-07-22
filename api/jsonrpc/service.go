@@ -129,16 +129,20 @@ func (c *callback) parseArgs(rawParams json.RawMessage) ([]reflect.Value, error)
 		}
 	}
 	if len(params) > len(c.argTypes) {
-		return nil, &jsonError{Code: errcodeInvalidParams,
-			Message: fmt.Sprintf("too many arguments, want at most %d", len(c.argTypes))}
+		return nil, &jsonError{
+			Code:    errcodeInvalidParams,
+			Message: fmt.Sprintf("too many arguments, want at most %d", len(c.argTypes)),
+		}
 	}
 	args := make([]reflect.Value, len(c.argTypes))
 	for i, t := range c.argTypes {
 		if i < len(params) && len(params[i]) > 0 && string(params[i]) != "null" {
 			val := reflect.New(t)
 			if err := json.Unmarshal(params[i], val.Interface()); err != nil {
-				return nil, &jsonError{Code: errcodeInvalidParams,
-					Message: fmt.Sprintf("invalid argument %d: %v", i, err)}
+				return nil, &jsonError{
+					Code:    errcodeInvalidParams,
+					Message: fmt.Sprintf("invalid argument %d: %v", i, err),
+				}
 			}
 			args[i] = val.Elem()
 		} else {

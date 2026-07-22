@@ -19,13 +19,17 @@ func (s *Server) RegisterName(namespace string, rcvr interface{}) error {
 
 func (s *Server) handleMsg(ctx context.Context, msg *jsonrpcMessage) *jsonrpcMessage {
 	if msg.Version != jsonrpcVersion || msg.Method == "" {
-		return errorResponse(msg.ID, &jsonError{Code: errcodeInvalidRequest,
-			Message: "invalid request"})
+		return errorResponse(msg.ID, &jsonError{
+			Code:    errcodeInvalidRequest,
+			Message: "invalid request",
+		})
 	}
 	cb := s.registry.callback(msg.Method)
 	if cb == nil {
-		return errorResponse(msg.ID, &jsonError{Code: errcodeMethodNotFound,
-			Message: "the method " + msg.Method + " does not exist/is not available"})
+		return errorResponse(msg.ID, &jsonError{
+			Code:    errcodeMethodNotFound,
+			Message: "the method " + msg.Method + " does not exist/is not available",
+		})
 	}
 	args, err := cb.parseArgs(msg.Params)
 	if err != nil {

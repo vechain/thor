@@ -25,8 +25,10 @@ func TestHandleMsg(t *testing.T) {
 	ctx := context.Background()
 
 	// success
-	resp := srv.handleMsg(ctx, &jsonrpcMessage{Version: "2.0", ID: json.RawMessage("1"),
-		Method: "dummy_echo", Params: json.RawMessage(`["hi"]`)})
+	resp := srv.handleMsg(ctx, &jsonrpcMessage{
+		Version: "2.0", ID: json.RawMessage("1"),
+		Method: "dummy_echo", Params: json.RawMessage(`["hi"]`),
+	})
 	assert.Nil(t, resp.Error)
 	assert.Equal(t, "hi", resp.Result)
 
@@ -41,8 +43,10 @@ func TestHandleMsg(t *testing.T) {
 	assert.Equal(t, errcodeMethodNotFound, resp.Error.Code)
 
 	// bad params -> -32602
-	resp = srv.handleMsg(ctx, &jsonrpcMessage{Version: "2.0", Method: "dummy_echo",
-		Params: json.RawMessage(`[1,2]`)})
+	resp = srv.handleMsg(ctx, &jsonrpcMessage{
+		Version: "2.0", Method: "dummy_echo",
+		Params: json.RawMessage(`[1,2]`),
+	})
 	require.NotNil(t, resp.Error)
 	assert.Equal(t, errcodeInvalidParams, resp.Error.Code)
 

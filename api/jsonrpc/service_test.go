@@ -21,7 +21,7 @@ func (dummy) WithCtx(ctx context.Context, n int) (int, error) { return n, nil }
 func (dummy) NoReturn()                                       {}
 func (dummy) Boom() (string, error)                           { panic("boom") }
 func (dummy) Bad() (int, int, int)                            { return 0, 0, 0 } // >2 returns, skipped
-func (dummy) internal()                                       {}                 // unexported, skipped
+func (dummy) internal()                                       {}                 //nolint:unused // present to prove reflection skips unexported methods
 
 func TestRegisterNameValidation(t *testing.T) {
 	var r serviceRegistry
