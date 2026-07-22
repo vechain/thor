@@ -5,9 +5,12 @@
 
 package txpool
 
-import "math/big"
+import (
+	"math"
+	"math/big"
 
-import "github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thor"
+)
 
 // ethSender tracks per-account nonce state for Ethereum-family transactions.
 type ethSender struct {
@@ -68,6 +71,23 @@ func (s *ethSender) demoteFrom(nonce uint64) []reservationOwner {
 		releases = append(releases, ethReservationOwner(s.origin, pendingNonce))
 	}
 	return releases
+}
+
+// dropNonce removes a pending transaction and demotes its higher-nonce suffix
+// so pending remains contiguous from stateNonce.
+func (s *ethSender) dropNonce(nonce uint64) ([]reservationOwner, bool) {
+	txObj := s.pending[nonce]
+	if txObj == nil {
+		return nil, false
+	}
+	txObj.executable = false
+	delete(s.pending, nonce)
+
+	releases := []reservationOwner{ethReservationOwner(s.origin, nonce)}
+	if nonce < math.MaxUint64 {
+		releases = append(releases, s.demoteFrom(nonce+1)...)
+	}
+	return releases, true
 }
 
 // resetStateNonce forces all nonce-ready transactions through fresh payer,

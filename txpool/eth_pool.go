@@ -343,12 +343,19 @@ func (p *EthPool) StrictlyAdd(newTx *tx.Transaction) error {
 }
 
 func (p *EthPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
-	_, _ = txHash, txID
-	return false
+	txObj := p.all.GetByHash(txHash)
+	if txObj == nil || txObj.ID() != txID {
+		return false
+	}
+	if !p.all.removeByHash(txHash) {
+		return false
+	}
+	logger.Debug("Ethereum tx removed", "id", txID)
+	return true
 }
 
 func (p *EthPool) Dump() tx.Transactions {
-	return nil
+	return p.all.ToTxs()
 }
 
 func (p *EthPool) Len() int {

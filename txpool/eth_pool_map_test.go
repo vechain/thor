@@ -128,6 +128,90 @@ func TestEthExecutableSnapshot(t *testing.T) {
 	}
 }
 
+func TestEthPoolMapRemoveByHash(t *testing.T) {
+	t.Run("pending removal demotes suffix and releases reservations", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		tx0 := newEthMapTestObject(t, 0, 10, 3)
+		tx1 := newEthMapTestObject(t, 1, 10, 3)
+		tx2 := newEthMapTestObject(t, 2, 10, 3)
+		origin := tx0.Origin()
+		sender := newEthSender(origin, 0)
+
+		for nonce, txObj := range []*TxObject{tx0, tx1, tx2} {
+			txObj.executable = true
+			sender.pending[uint64(nonce)] = txObj
+			m.allByHash[txObj.Hash()] = txObj
+			require.NoError(t, costs.reserve(
+				ethReservationOwner(origin, uint64(nonce)),
+				origin,
+				big.NewInt(10),
+				big.NewInt(100),
+			))
+		}
+		m.senders[origin] = sender
+
+		assert.True(t, m.removeByHash(tx1.Hash()))
+		assert.False(t, m.removeByHash(tx1.Hash()), "removal must be idempotent")
+		assert.Same(t, tx0, sender.pending[0])
+		assert.Nil(t, sender.pending[1])
+		assert.Nil(t, sender.pending[2])
+		assert.Same(t, tx2, sender.queue[2])
+		assert.False(t, tx1.executable)
+		assert.False(t, tx2.executable)
+		assert.Nil(t, m.GetByHash(tx1.Hash()))
+		assert.NotNil(t, m.GetByHash(tx2.Hash()))
+		assert.Equal(t, uint64(1), sender.poolNonce())
+		assert.Equal(t, int64(10), costs.pendingCost(origin).Int64())
+	})
+
+	t.Run("queued removal deletes empty sender without releasing costs", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		queued := newEthMapTestObject(t, 2, 10, 4)
+		origin := queued.Origin()
+		sender := newEthSender(origin, 0)
+		sender.queue[2] = queued
+		m.senders[origin] = sender
+		m.allByHash[queued.Hash()] = queued
+
+		assert.True(t, m.removeByHash(queued.Hash()))
+		assert.Nil(t, m.GetByHash(queued.Hash()))
+		assert.NotContains(t, m.senders, origin)
+		assert.Zero(t, costs.pendingCost(origin).Sign())
+	})
+
+	t.Run("inconsistent index is not partially removed", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		txObj := newEthMapTestObject(t, 0, 10, 5)
+		m.allByHash[txObj.Hash()] = txObj
+
+		assert.False(t, m.removeByHash(txObj.Hash()))
+		assert.Same(t, txObj, m.GetByHash(txObj.Hash()))
+	})
+}
+
+func TestEthPoolMapToTxsIncludesPendingAndQueued(t *testing.T) {
+	m := newEthPoolMap(newCostTracker())
+	pending := newEthMapTestObject(t, 0, 10, 6)
+	queued := newEthMapTestObject(t, 2, 10, 6)
+	origin := pending.Origin()
+	sender := newEthSender(origin, 0)
+	sender.pending[0] = pending
+	sender.queue[2] = queued
+	m.senders[origin] = sender
+	m.allByHash[pending.Hash()] = pending
+	m.allByHash[queued.Hash()] = queued
+
+	dump := m.ToTxs()
+	require.Len(t, dump, 2)
+	assert.ElementsMatch(t, tx.Transactions{pending.Transaction, queued.Transaction}, dump)
+
+	empty := newEthPoolMap(newCostTracker()).ToTxs()
+	assert.NotNil(t, empty)
+	assert.Empty(t, empty)
+}
+
 func TestResetForkSendersLocked(t *testing.T) {
 	t.Run("settles old nonce and releases all affected reservations", func(t *testing.T) {
 		costs := newCostTracker()

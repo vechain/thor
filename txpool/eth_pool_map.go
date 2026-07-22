@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 var (
@@ -64,6 +65,17 @@ func (m *ethPoolMap) GetByHash(hash thor.Bytes32) *TxObject {
 	return m.allByHash[hash]
 }
 
+func (m *ethPoolMap) ToTxs() tx.Transactions {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	txs := make(tx.Transactions, 0, len(m.allByHash))
+	for _, txObj := range m.allByHash {
+		txs = append(txs, txObj.Transaction)
+	}
+	return txs
+}
+
 func (m *ethPoolMap) poolNonce(addr thor.Address) uint64 {
 	nonce, _ := m.poolNonceOK(addr)
 	return nonce
@@ -113,6 +125,44 @@ func (m *ethPoolMap) executableSnapshot() ethExecutablesSnapshot {
 		}
 	}
 	return snapshot
+}
+
+func (m *ethPoolMap) removeByHash(hash thor.Bytes32) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	txObj := m.allByHash[hash]
+	if txObj == nil {
+		return false
+	}
+	origin, nonce := txObj.Origin(), txObj.Nonce()
+	sender := m.senders[origin]
+	if sender == nil {
+		return false
+	}
+
+	var releases []reservationOwner
+	switch {
+	case sender.pending[nonce] == txObj:
+		var removed bool
+		releases, removed = sender.dropNonce(nonce)
+		if !removed {
+			return false
+		}
+	case sender.queue[nonce] == txObj:
+		delete(sender.queue, nonce)
+	default:
+		return false
+	}
+
+	delete(m.allByHash, hash)
+	if err := m.costs.release(releases...); err != nil {
+		logger.Error("failed to release Ethereum transaction costs", "hash", hash, "err", err)
+	}
+	if sender.isEmpty() {
+		delete(m.senders, origin)
+	}
+	return true
 }
 
 // add places a transaction and performs all nonce-index and reservation changes

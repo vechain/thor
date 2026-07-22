@@ -99,6 +99,35 @@ func TestEthPoolAddRemoteNoncePlacementAndReplacement(t *testing.T) {
 	assert.Contains(t, err.Error(), "already known")
 }
 
+func TestEthPoolRemoveAndDump(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[6]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	nonce1 := buildEthPoolTx(t, tchain.Repo().ChainID(), 1, fee, big.NewInt(100), signer)
+	nonce0 := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, big.NewInt(100), signer)
+	require.NoError(t, pool.AddRemote(nonce1))
+	require.NoError(t, pool.AddRemote(nonce0))
+
+	assert.ElementsMatch(t, tx.Transactions{nonce0, nonce1}, pool.Dump())
+	assert.Equal(t, pool.Len(), len(pool.Dump()))
+	assert.False(t, pool.Remove(nonce0.Hash(), nonce1.ID()), "hash and ID must identify the same transaction")
+	assert.NotNil(t, pool.GetByHash(nonce0.Hash()))
+
+	assert.True(t, pool.Remove(nonce0.Hash(), nonce0.ID()))
+	assert.False(t, pool.Remove(nonce0.Hash(), nonce0.ID()))
+	assert.Nil(t, pool.GetByHash(nonce0.Hash()))
+	assert.NotNil(t, pool.GetByHash(nonce1.Hash()), "demoted suffix remains queued")
+	assert.Equal(t, uint64(0), pool.PoolNonce(signer.Address))
+	assert.Equal(t, tx.Transactions{nonce1}, pool.Dump())
+
+	assert.True(t, pool.Remove(nonce1.Hash(), nonce1.ID()))
+	assert.Empty(t, pool.Dump())
+	assert.Zero(t, pool.Len())
+}
+
 func TestEthPoolAddRemoteRejectsInvalidAndUnderpriced(t *testing.T) {
 	pool, tchain := newEthPoolTest(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
@@ -271,6 +300,32 @@ func TestCoordinatorRoutesOnlyEthAddRemoteAndRelaysEvent(t *testing.T) {
 	require.NoError(t, coordinator.AddLocal(local))
 	assert.NotNil(t, coordinator.vechain.GetByHash(local.Hash()), "non-remote flows must retain their current routing")
 	assert.Nil(t, coordinator.eth.GetByHash(local.Hash()))
+}
+
+func TestCoordinatorRemovesAndDumpsEthereumTransactions(t *testing.T) {
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	require.NoError(t, err)
+	coordinator := NewCoordinator(tchain.Repo(), tchain.Stater(), Options{
+		Limit: 100, LimitPerAccount: 100,
+		EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	}, &thor.SoloFork)
+	defer coordinator.Close()
+
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	ethTx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		devAccounts[7],
+	)
+	require.NoError(t, coordinator.AddRemote(ethTx))
+
+	assert.Contains(t, coordinator.Dump(), ethTx)
+	assert.True(t, coordinator.Remove(ethTx.Hash(), ethTx.ID()))
+	assert.NotContains(t, coordinator.Dump(), ethTx)
+	assert.Nil(t, coordinator.GetByHash(ethTx.Hash()))
 }
 
 func TestEthPoolReinjectFromForkAndReplacementPolicy(t *testing.T) {
