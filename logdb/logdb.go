@@ -12,9 +12,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 
@@ -42,10 +44,13 @@ type LogDB struct {
 	writeStmtCache *stmtCache
 	wconn          *sql.Conn
 	wconnSyncOff   *sql.Conn
+
+	// metricsUnregister releases the collector registered by EnableMetrics; nil if unset.
+	metricsUnregister func()
 }
 
 // New create or open log db at given path.
-func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
+func New(path string, createAdditionalIndexes bool, maxReadConns uint64) (logDB *LogDB, err error) {
 	// writeDB for write operations with immediate transaction lock
 	writeDB, err := sql.Open("sqlite3", path+"?_journal=wal&_txlock=immediate")
 	if err != nil {
@@ -115,6 +120,10 @@ func New(path string, createAdditionalIndexes bool) (logDB *LogDB, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	readDB.SetMaxOpenConns(int(maxReadConns))     // set maximum number of read connections
+	readDB.SetMaxIdleConns(int(maxReadConns / 2)) // set maximum number of idle connections
+
 	defer func() {
 		if err != nil {
 			_ = readDB.Close()
@@ -189,6 +198,10 @@ func NewMem() (*LogDB, error) {
 
 // Close close the log db.
 func (db *LogDB) Close() (err error) {
+	if db.metricsUnregister != nil {
+		db.metricsUnregister()
+	}
+
 	// Close write connections first
 	err = db.wconn.Close()
 	if db.wconnSyncOff != db.wconn { // Don't double-close for in-memory DB
@@ -241,20 +254,19 @@ FROM (%v) e
 	)
 
 	if filter.Range != nil {
-		subQuery += " AND seq >= ?"
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, from)
-		if filter.Range.To >= filter.Range.From {
-			subQuery += " AND seq <= ?"
-			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, to)
+		to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
+		if err != nil {
+			return nil, err
 		}
+		// Always bind both bounds. For an inverted range (To < From) this yields
+		// seq >= from AND seq <= to with to < from — an empty result — instead of
+		// silently dropping the upper bound and returning everything from `from` on.
+		subQuery += " AND seq >= ? AND seq <= ?"
+		args = append(args, from, to)
 	}
 
 	if len(filter.CriteriaSet) > 0 {
@@ -317,20 +329,19 @@ FROM (%v) t
 	)
 
 	if filter.Range != nil {
-		subQuery += " AND seq >= ?"
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, from)
-		if filter.Range.To >= filter.Range.From {
-			subQuery += " AND seq <= ?"
-			to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, to)
+		to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
+		if err != nil {
+			return nil, err
 		}
+		// Always bind both bounds. For an inverted range (To < From) this yields
+		// seq >= from AND seq <= to with to < from — an empty result — instead of
+		// silently dropping the upper bound and returning everything from `from` on.
+		subQuery += " AND seq >= ? AND seq <= ?"
+		args = append(args, from, to)
 	}
 
 	if len(filter.CriteriaSet) > 0 {
@@ -370,6 +381,20 @@ FROM (%v) t
 	return db.queryTransfers(ctx, transferQuery, args...)
 }
 
+// readDBStatsSampleInterval bounds how often the lock-guarded readDB.Stats() runs.
+const readDBStatsSampleInterval = 10 * time.Second
+
+// EnableMetrics registers a pull collector exporting the readDB connection pool
+// stats, sampled on scrape at most once per readDBStatsSampleInterval. No-op unless
+// Prometheus is initialized; call once per LogDB.
+func (db *LogDB) EnableMetrics() {
+	db.metricsUnregister = metrics.RegisterPullCollector(
+		"logdb",
+		readDBStatsSampleInterval,
+		func() []metrics.Sample { return readDBStatsSamples(db.readDB.Stats()) },
+	)
+}
+
 func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]*Event, error) {
 	rows, err := db.readDB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -379,11 +404,6 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...any) ([]
 
 	var events []*Event
 	for rows.Next() {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
 		var (
 			seq         sequence
 			blockID     []byte
@@ -446,11 +466,6 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...any) 
 	defer func() { _ = rows.Close() }()
 	var transfers []*Transfer
 	for rows.Next() {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
 		var (
 			seq         sequence
 			blockID     []byte

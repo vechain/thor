@@ -8,6 +8,7 @@ package testnode
 import (
 	"errors"
 	"net/http/httptest"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 
@@ -100,8 +101,8 @@ func (n *node) Start() error {
 	engine := bft.NewMockedEngine(repo.GenesisBlock().Header().ID())
 
 	accounts.New(repo, stater, 40_000_000, 5*1024*1024/2, forkConfig, engine, true).Mount(router, "/accounts")
-	events.New(repo, logDB, 1000, 10).Mount(router, "/logs/event")
-	transfers.New(repo, logDB, 1000, 10).Mount(router, "/logs/transfer")
+	events.New(repo, logDB, 1000, 100_000, 10).Mount(router, "/logs/event")
+	transfers.New(repo, logDB, 1000, 100_000, 10).Mount(router, "/logs/transfer")
 	blocks.New(repo, engine).Mount(router, "/blocks")
 	transactions.New(repo, n.txPool).Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, engine,
@@ -110,7 +111,9 @@ func (n *node) Start() error {
 		[]string{"all"},
 		true,
 	).Mount(router, "/debug")
-	node2.New(&solo.Communicator{}, n.txPool, true).Mount(router, "/node")
+	enableTxpool := &atomic.Bool{}
+	enableTxpool.Store(true)
+	node2.New(&solo.Communicator{}, n.txPool, enableTxpool).Mount(router, "/node")
 	fees.New(repo, engine, forkConfig, stater, fees.Config{
 		APIBacktraceLimit:          1000,
 		PriorityIncreasePercentage: 5,

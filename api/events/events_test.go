@@ -28,7 +28,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const defaultLogLimit uint64 = 1000
+const (
+	defaultLogLimit  uint64 = 1000
+	defaultLogOffset uint64 = 100
+)
 
 var (
 	ts      *httptest.Server
@@ -36,7 +39,7 @@ var (
 )
 
 func TestEmptyEvents(t *testing.T) {
-	initEventServer(t, defaultLogLimit)
+	initEventServer(t, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 
 	tclient = thorclient.New(ts.URL)
@@ -49,7 +52,7 @@ func TestEmptyEvents(t *testing.T) {
 }
 
 func TestEvents(t *testing.T) {
-	thorChain := initEventServer(t, defaultLogLimit)
+	thorChain := initEventServer(t, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 
 	blocksToInsert := 5
@@ -59,7 +62,7 @@ func TestEvents(t *testing.T) {
 }
 
 func TestOptionalIndexes(t *testing.T) {
-	thorChain := initEventServer(t, defaultLogLimit)
+	thorChain := initEventServer(t, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
 	tclient = thorclient.New(ts.URL)
@@ -86,7 +89,7 @@ func TestOptionalIndexes(t *testing.T) {
 			filter := api.EventFilter{
 				CriteriaSet: make([]*api.EventCriteria, 0),
 				Range:       nil,
-				Options:     &api.Options{Limit: ptr(6), IncludeIndexes: tc.includeIndexes},
+				Options:     &api.Options{Limit: new(uint64(6)), IncludeIndexes: tc.includeIndexes},
 				Order:       logdb.DESC,
 			}
 
@@ -109,7 +112,7 @@ func TestOptionalIndexes(t *testing.T) {
 }
 
 func TestEvents_WithOptionsNoLimit(t *testing.T) {
-	thorChain := initEventServer(t, defaultLogLimit)
+	thorChain := initEventServer(t, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
 
@@ -132,13 +135,8 @@ func TestEvents_WithOptionsNoLimit(t *testing.T) {
 	assert.Equal(t, 4, len(tLogs))
 }
 
-//go:fix inline
-func ptr(v uint64) *uint64 {
-	return new(v)
-}
-
 func TestOption(t *testing.T) {
-	thorChain := initEventServer(t, 5)
+	thorChain := initEventServer(t, 5, defaultLogOffset)
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
 
@@ -146,7 +144,7 @@ func TestOption(t *testing.T) {
 	filter := api.EventFilter{
 		CriteriaSet: make([]*api.EventCriteria, 0),
 		Range:       nil,
-		Options:     &api.Options{Limit: ptr(6)},
+		Options:     &api.Options{Limit: new(uint64(6))},
 		Order:       logdb.DESC,
 	}
 
@@ -155,7 +153,7 @@ func TestOption(t *testing.T) {
 	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
-	filter.Options.Limit = ptr(5)
+	filter.Options.Limit = new(uint64(5))
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
@@ -202,10 +200,27 @@ func TestOption(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	assert.Equal(t, "number of criteria in criteriaSet: 11 cannot be greater than: 10\n", string(res))
+
+	filter = api.EventFilter{
+		CriteriaSet: make([]*api.EventCriteria, 0),
+		Range:       nil,
+		Options:     &api.Options{Offset: defaultLogOffset, Limit: new(uint64(0))},
+		Order:       logdb.DESC,
+	}
+
+	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode)
+
+	filter.Options.Offset = defaultLogOffset * 2
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, statusCode)
+	assert.Equal(t, "options.offset exceeds the maximum allowed value of 100", strings.Trim(string(res), "\n"))
 }
 
 func TestZeroFrom(t *testing.T) {
-	thorChain := initEventServer(t, 100)
+	thorChain := initEventServer(t, 100, defaultLogOffset)
 	defer ts.Close()
 	insertBlocks(t, thorChain, 5)
 
@@ -239,7 +254,7 @@ func TestZeroFrom(t *testing.T) {
 }
 
 func TestNullCriteriaSet(t *testing.T) {
-	initEventServer(t, defaultLogLimit)
+	initEventServer(t, defaultLogLimit, defaultLogOffset)
 	defer ts.Close()
 
 	tclient = thorclient.New(ts.URL)
@@ -333,12 +348,12 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 }
 
 // Init functions
-func initEventServer(t *testing.T, limit uint64) *testchain.Chain {
+func initEventServer(t *testing.T, limit uint64, offset uint64) *testchain.Chain {
 	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), thorChain.LogDB(), limit, 10).Mount(router, "/logs/event")
+	New(thorChain.Repo(), thorChain.LogDB(), limit, offset, 10).Mount(router, "/logs/event")
 	ts = httptest.NewServer(router)
 
 	return thorChain

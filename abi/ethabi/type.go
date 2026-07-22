@@ -164,12 +164,12 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		}
 	case "tuple":
 		var (
-			fields     []reflect.StructField
-			elems      []*Type
-			names      []string
-			expression strings.Builder // canonical parameter expression
-			used       = make(map[string]bool)
+			fields []reflect.StructField
+			elems  []*Type
+			names  []string
+			used   = make(map[string]bool)
 		)
+		var expression strings.Builder // canonical parameter expression
 		expression.WriteString("(")
 		for idx, c := range components {
 			cType, err := NewType(c.Type, c.InternalType, c.Components)

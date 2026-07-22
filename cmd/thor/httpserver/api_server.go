@@ -8,7 +8,6 @@ package httpserver
 import (
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -79,7 +78,6 @@ type APIConfig struct {
 	CallGasLimit               uint64
 	BatchDataMaxSize           uint64
 	ClientVersion              string
-	PprofOn                    bool
 	SkipLogs                   bool
 	AllowCustomTracer          bool
 	EnableReqLogger            *atomic.Bool
@@ -88,12 +86,13 @@ type APIConfig struct {
 	AllowedTracers             []string
 	SoloMode                   bool
 	EnableDeprecated           bool
-	EnableTxPool               bool
+	EnableTxPool               *atomic.Bool
 	APIBacktraceLimit          int
 	PriorityIncreasePercentage int
 	Timeout                    int
 	SlowQueriesThreshold       int
 	Log5XXErrors               bool
+	MaxLogsOffset              uint64
 }
 
 func StartAPIServer(
@@ -138,8 +137,8 @@ func StartAPIServer(
 
 	accounts.New(repo, stater, config.CallGasLimit, config.BatchDataMaxSize, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
 	if !config.SkipLogs {
-		events.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/event")
-		transfers.New(repo, logDB, config.LogsLimit, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
+		events.New(repo, logDB, config.LogsLimit, config.MaxLogsOffset, defaultMaxCriteriaCount).Mount(router, "/logs/event")
+		transfers.New(repo, logDB, config.LogsLimit, config.MaxLogsOffset, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).Mount(router, "/blocks")
 	transactions.New(repo, txPool).Mount(router, "/transactions")
@@ -175,14 +174,6 @@ func StartAPIServer(
 	// WebSocket upgrade requests gain eth_subscribe / eth_unsubscribe.
 	rpcWs := rpcws.New(repo, txPool, origins, rpcSrv, syncer)
 	router.PathPrefix("/rpc").Handler(rpcWs)
-
-	if config.PprofOn {
-		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
-	}
 
 	// middlewares
 	// /rpc owns its body limit inside jsonrpc.Server; skip the REST 200 KB cap for that path.

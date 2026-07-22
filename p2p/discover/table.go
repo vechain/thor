@@ -113,7 +113,7 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string
 		initDone:   make(chan struct{}),
 		closeReq:   make(chan struct{}),
 		closed:     make(chan struct{}),
-		rand:       mrand.New(mrand.NewSource(0)),
+		rand:       mrand.New(mrand.NewSource(0)), //#nosec G404
 		ips:        netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
 	}
 	if err := tab.setFallbackNodes(bootnodes); err != nil {

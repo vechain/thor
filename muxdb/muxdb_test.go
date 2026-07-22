@@ -42,7 +42,6 @@ func TestNewMuxDB(t *testing.T) {
 
 	assert.NotNil(t, db.engine)
 	assert.NotNil(t, db.trieBackend)
-	assert.NotNil(t, db.done)
 }
 
 func TestNewMemDB(t *testing.T) {

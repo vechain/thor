@@ -109,7 +109,8 @@ func (n *fullNode) fstring(ind string) string {
 			fmt.Fprintf(&resp, "%s: %v", indices[i], node.fstring(ind+"  "))
 		}
 	}
-	return resp.String() + fmt.Sprintf("\n%s] ", ind)
+	fmt.Fprintf(&resp, "\n%s] ", ind)
+	return resp.String()
 }
 
 func (n *shortNode) fstring(ind string) string {
