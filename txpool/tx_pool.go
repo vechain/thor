@@ -176,7 +176,7 @@ func (p *VeChainPool) housekeeping() {
 				if err != nil {
 					ctx = append(ctx, "err", err)
 				} else {
-					p.executables.Store(executables)
+					p.storeExecutables(executables)
 					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
 				}
 
@@ -514,10 +514,21 @@ func (p *VeChainPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 
 // Executables returns executable txs.
 func (p *VeChainPool) Executables() tx.Transactions {
-	if sorted := p.executables.Load(); sorted != nil {
-		return sorted.(tx.Transactions)
+	if snapshot := p.executableSnapshot(); snapshot != nil {
+		return snapshot.transactions
 	}
 	return nil
+}
+
+func (p *VeChainPool) executableSnapshot() *vechainExecutablesSnapshot {
+	if snapshot := p.executables.Load(); snapshot != nil {
+		return snapshot.(*vechainExecutablesSnapshot)
+	}
+	return nil
+}
+
+func (p *VeChainPool) storeExecutables(txs tx.Transactions) {
+	p.executables.Store(p.all.executableSnapshot(txs))
 }
 
 // Fill fills txs into pool.

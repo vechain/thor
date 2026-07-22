@@ -78,6 +78,43 @@ func (m *ethPoolMap) poolNonceOK(addr thor.Address) (uint64, bool) {
 	return 0, false
 }
 
+// executableSnapshot returns one nonce-ordered executable stream per sender.
+// It copies only merge metadata, so the map lock is not held during heap work.
+func (m *ethPoolMap) executableSnapshot() ethExecutablesSnapshot {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	origins := make([]thor.Address, 0, len(m.senders))
+	for origin, sender := range m.senders {
+		if len(sender.pending) > 0 {
+			origins = append(origins, origin)
+		}
+	}
+	slices.SortFunc(origins, func(a, b thor.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
+
+	snapshot := ethExecutablesSnapshot{
+		groups: make([][]executableTx, 0, len(origins)),
+	}
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		group := make([]executableTx, 0, len(sender.pending))
+		for nonce := sender.stateNonce; nonce < sender.poolNonce(); nonce++ {
+			txObj := sender.pending[nonce]
+			if txObj == nil || !txObj.executable || txObj.priorityGasPrice == nil {
+				break
+			}
+			group = append(group, executableTxFromObject(txObj))
+		}
+		if len(group) > 0 {
+			snapshot.groups = append(snapshot.groups, group)
+			snapshot.total += len(group)
+		}
+	}
+	return snapshot
+}
+
 // add places a transaction and performs all nonce-index and reservation changes
 // while holding the map lock. costTracker is a leaf lock and never calls back
 // into the pool.

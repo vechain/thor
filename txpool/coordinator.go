@@ -160,8 +160,9 @@ func (c *TxPoolCoordinator) SubscribeTxEvent(ch chan *TxEvent) event.Subscriptio
 }
 
 func (c *TxPoolCoordinator) Executables() tx.Transactions {
-	// Scaffold: no k-way merge yet; EthPool returns empty.
-	return c.vechain.Executables()
+	vechain := c.vechain.executableSnapshot()
+	eth := c.eth.all.executableSnapshot()
+	return mergeExecutables(vechain.entries, eth)
 }
 
 func (c *TxPoolCoordinator) Fill(txs tx.Transactions) {

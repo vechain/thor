@@ -160,12 +160,6 @@ func (o *TxObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 
 func sortTxObjsByPriorityGasPriceDesc(txObjs []*TxObject) {
 	slices.SortFunc(txObjs, func(a, b *TxObject) int {
-		if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
-			return cmp
-		}
-		if a.timeAdded < b.timeAdded {
-			return 1
-		}
-		return -1
+		return compareExecutableTx(executableTxFromObject(a), executableTxFromObject(b))
 	})
 }

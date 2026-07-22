@@ -720,7 +720,7 @@ func TestFillPool(t *testing.T) {
 
 	// Test executables after wash
 	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
 
@@ -781,7 +781,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 
 	// Test executables after wash
 	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
 
@@ -1014,7 +1014,7 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 		pool.add(tx, false, false)
 		txs = append(txs, tx)
 	}
-	pool.executables.Store(txs)
+	pool.storeExecutables(txs)
 
 	trx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 
@@ -1062,7 +1062,7 @@ func TestNonExecutables(t *testing.T) {
 	}
 
 	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 
 	// add 1 non-executable
 	assert.NoError(
@@ -1083,7 +1083,7 @@ func TestExpiredTxs(t *testing.T) {
 	}
 
 	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 
 	// add 1 non-executable
 	assert.NoError(t, pool.AddRemote(
@@ -2283,7 +2283,7 @@ func TestTxPoolSharedRemoteAdmissionRules(t *testing.T) {
 					require.NoError(t, pool.add(trx, false, false))
 					txs = append(txs, trx)
 				}
-				pool.executables.Store(txs)
+				pool.storeExecutables(txs)
 
 				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 				err := entry.admit(pool, trx)

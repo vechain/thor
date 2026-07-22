@@ -166,6 +166,27 @@ func (m *txObjectMap) ToTxs() tx.Transactions {
 	return txs
 }
 
+// executableSnapshot preserves the order of txs while copying immutable merge
+// keys under one map lock. Transactions removed since the wash are omitted.
+func (m *txObjectMap) executableSnapshot(txs tx.Transactions) *vechainExecutablesSnapshot {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	snapshot := &vechainExecutablesSnapshot{
+		transactions: make(tx.Transactions, 0, len(txs)),
+		entries:      make([]executableTx, 0, len(txs)),
+	}
+	for _, trx := range txs {
+		txObj := m.mapByID[trx.ID()]
+		if txObj == nil || txObj.priorityGasPrice == nil {
+			continue
+		}
+		snapshot.transactions = append(snapshot.transactions, trx)
+		snapshot.entries = append(snapshot.entries, executableTxFromObject(txObj))
+	}
+	return snapshot
+}
+
 func (m *txObjectMap) Fill(txObjs []*TxObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()

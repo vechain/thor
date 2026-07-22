@@ -3,6 +3,7 @@
 package txpool
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 	"testing"
@@ -71,6 +72,60 @@ func TestExecutableHashesLocked(t *testing.T) {
 
 	assert.Contains(t, hashes, executable.Hash())
 	assert.NotContains(t, hashes, queued.Hash())
+}
+
+func TestEthExecutableSnapshot(t *testing.T) {
+	m := newEthPoolMap(newCostTracker())
+	first := newEthMapTestObject(t, 5, 10, 1)
+	second := newEthMapTestObject(t, 6, 10, 1)
+	queued := newEthMapTestObject(t, 7, 10, 1)
+	other := newEthMapTestObject(t, 0, 10, 2)
+
+	first.priorityGasPrice, second.priorityGasPrice = big.NewInt(10), big.NewInt(20)
+	other.priorityGasPrice = big.NewInt(30)
+	first.executable, second.executable, other.executable = true, true, true
+
+	firstOrigin, otherOrigin := first.Origin(), other.Origin()
+	firstSender := newEthSender(firstOrigin, 5)
+	firstSender.pending[5], firstSender.pending[6] = first, second
+	firstSender.queue[7] = queued
+	otherSender := newEthSender(otherOrigin, 0)
+	otherSender.pending[0] = other
+	m.senders[firstOrigin], m.senders[otherOrigin] = firstSender, otherSender
+
+	snapshot := m.executableSnapshot()
+	require.Len(t, snapshot.groups, 2)
+	assert.Equal(t, 3, snapshot.total)
+
+	expected := [][]*tx.Transaction{{first.Transaction, second.Transaction}, {other.Transaction}}
+	if bytes.Compare(firstOrigin[:], otherOrigin[:]) > 0 {
+		expected[0], expected[1] = expected[1], expected[0]
+	}
+	for i, group := range snapshot.groups {
+		actual := make([]*tx.Transaction, 0, len(group))
+		for _, entry := range group {
+			actual = append(actual, entry.tx)
+		}
+		assert.Equal(t, expected[i], actual)
+	}
+
+	// The snapshot owns its slices and ordering keys after the map changes.
+	delete(firstSender.pending, 5)
+	first.priorityGasPrice = big.NewInt(99)
+	var firstEntry executableTx
+	for _, group := range snapshot.groups {
+		for _, entry := range group {
+			if entry.tx == first.Transaction {
+				firstEntry = entry
+			}
+		}
+	}
+	assert.Equal(t, int64(10), firstEntry.priorityGasPrice.Int64())
+	for _, group := range snapshot.groups {
+		for _, entry := range group {
+			assert.NotSame(t, queued.Transaction, entry.tx)
+		}
+	}
 }
 
 func TestResetForkSendersLocked(t *testing.T) {
