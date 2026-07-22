@@ -100,15 +100,17 @@ func (n *refNode) String() string   { return n.fstring("") }
 func (n *valueNode) String() string { return n.fstring("") }
 
 func (n *fullNode) fstring(ind string) string {
-	resp := fmt.Sprintf("[\n%s  ", ind)
+	var resp strings.Builder
+	fmt.Fprintf(&resp, "[\n%s  ", ind)
 	for i, node := range n.children {
 		if node == nil {
-			resp += fmt.Sprintf("%s: <nil> ", indices[i])
+			fmt.Fprintf(&resp, "%s: <nil> ", indices[i])
 		} else {
-			resp += fmt.Sprintf("%s: %v", indices[i], node.fstring(ind+"  "))
+			fmt.Fprintf(&resp, "%s: %v", indices[i], node.fstring(ind+"  "))
 		}
 	}
-	return resp + fmt.Sprintf("\n%s] ", ind)
+	fmt.Fprintf(&resp, "\n%s] ", ind)
+	return resp.String()
 }
 
 func (n *shortNode) fstring(ind string) string {

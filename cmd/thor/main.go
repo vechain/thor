@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v3"
 
+	"github.com/vechain/thor/v2/api/admin"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
@@ -107,6 +108,7 @@ func main() {
 			apiEnableDeprecatedFlag,
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
+			apiLogsMaxOffsetFlag,
 			apiPriorityFeesPercentageFlag,
 			apiSlowQueriesThresholdFlag,
 			apiLog5xxErrorsFlag,
@@ -120,6 +122,7 @@ func main() {
 			allowedPeersFlag,
 			skipLogsFlag,
 			logDbAdditionalIndexesFlag,
+			logDbMaxReadConnsFlag,
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
@@ -141,6 +144,7 @@ func main() {
 					dataDirFlag,
 					cacheFlag,
 					logDbAdditionalIndexesFlag,
+					logDbMaxReadConnsFlag,
 					apiTxpoolFlag,
 					apiAddrFlag,
 					apiCorsFlag,
@@ -153,6 +157,7 @@ func main() {
 					apiSlowQueriesThresholdFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
+					apiLogsMaxOffsetFlag,
 					apiPriorityFeesPercentageFlag,
 					apiLog5xxErrorsFlag,
 					onDemandFlag,
@@ -251,9 +256,14 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
 	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
-	logDB, err := openLogDB(instanceDir, logDbAdditionalIndexes)
+	logDbMaxReadConns := ctx.Uint64(logDbMaxReadConnsFlag.Name)
+
+	logDB, err := openLogDB(instanceDir, logDbAdditionalIndexes, logDbMaxReadConns)
 	if err != nil {
 		return err
+	}
+	if enableMetrics {
+		logDB.EnableMetrics()
 	}
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
@@ -292,13 +302,25 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	adminURL := ""
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
 			p2pCommunicator.Communicator(),
-			logAPIRequests,
+			apiLogsGate,
+			txpoolGate,
+			pprofGate,
 			master,
 		)
 		if err != nil {
@@ -312,6 +334,13 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
 	}
+	// Skip resync when the pruner is enabled: it needs full historical state (pruned
+	// nodes lack it); leftover stale quality is safe — BFT only reads forward from finalized.
+	if ctx.Bool(disablePrunerFlag.Name) {
+		if err := resyncBFT(bftEngine); err != nil {
+			return errors.Wrap(err, "resync bft")
+		}
+	}
 
 	apiURL, srvCloser, err := httpserver.StartAPIServer(
 		ctx.String(apiAddrFlag.Name),
@@ -322,14 +351,14 @@ func defaultAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		p2pCommunicator.Communicator(),
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, false),
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, false, version),
 	)
 	if err != nil {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL, false)
+	printStartupMessage2(apiURL, apiURL+"rpc", p2pCommunicator.Enode(), metricsURL, adminURL, false)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err
@@ -419,6 +448,8 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	var instanceDir string
 
 	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
+	logDbMaxReadConns := ctx.Uint64(logDbMaxReadConnsFlag.Name)
+
 	if ctx.Bool(persistFlag.Name) {
 		if instanceDir, err = makeInstanceDir(ctx.String(dataDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name)); err != nil {
 			return err
@@ -431,8 +462,11 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-		if logDB, err = openLogDB(instanceDir, logDbAdditionalIndexes); err != nil {
+		if logDB, err = openLogDB(instanceDir, logDbAdditionalIndexes, logDbMaxReadConns); err != nil {
 			return err
+		}
+		if enableMetrics {
+			logDB.EnableMetrics()
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
 	} else {
@@ -449,13 +483,25 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 	adminURL := ""
 	logAPIRequests := &atomic.Bool{}
 	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
 	if ctx.Bool(enableAdminFlag.Name) {
 		url, closeFunc, err := httpserver.StartAdminServer(
 			ctx.String(adminAddrFlag.Name),
 			logLevel,
 			repo,
 			nil,
-			logAPIRequests,
+			apiLogsGate,
+			txpoolGate,
+			pprofGate,
 			nil,
 		)
 		if err != nil {
@@ -518,14 +564,14 @@ func soloAction(_ context.Context, ctx *cli.Command) error {
 		bftEngine,
 		&solo.Communicator{},
 		forkConfig,
-		makeAPIConfig(ctx, logAPIRequests, true),
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, true, version),
 	)
 	if err != nil {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
+	printStartupMessage2(apiURL, apiURL+"rpc", "", metricsURL, adminURL, isDevnet)
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
 		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
@@ -673,7 +719,7 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	}
 	defer func() { log.Info("closing database..."); mainDB.Close() }()
 
-	logDB, err := openLogDB(instanceDir, true)
+	logDB, err := openLogDB(instanceDir, true, ctx.Uint64(logDbMaxReadConnsFlag.Name))
 	if err != nil {
 		return errors.Wrap(err, "open log database")
 	}
@@ -694,6 +740,13 @@ func reprocessAction(_ context.Context, ctx *cli.Command) error {
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, thor.Address{})
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
+	}
+	// Skip resync when the pruner is enabled: it needs full historical state (pruned
+	// nodes lack it); leftover stale quality is safe — BFT only reads forward from finalized.
+	if ctx.Bool(disablePrunerFlag.Name) {
+		if err := resyncBFT(bftEngine); err != nil {
+			return errors.Wrap(err, "resync bft")
+		}
 	}
 
 	if !ctx.Bool(disablePrunerFlag.Name) {

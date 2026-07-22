@@ -257,13 +257,13 @@ func parseGenesisFile(uri string) (*genesis.Genesis, *thor.ForkConfig, error) {
 	return customGen, &forkConfig, nil
 }
 
-func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool) httpserver.APIConfig {
+func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, enableTxPool *atomic.Bool, soloMode bool, clientVersion string) httpserver.APIConfig {
 	return httpserver.APIConfig{
 		AllowedOrigins:             ctx.String(apiCorsFlag.Name),
 		BacktraceLimit:             uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
 		CallGasLimit:               ctx.Uint64(apiCallGasLimitFlag.Name),
 		BatchDataMaxSize:           ctx.Uint64(apiBatchDataMaxSizeFlag.Name),
-		PprofOn:                    ctx.Bool(pprofFlag.Name),
+		ClientVersion:              clientVersion,
 		SkipLogs:                   ctx.Bool(skipLogsFlag.Name),
 		APIBacktraceLimit:          int(ctx.Uint64(apiBacktraceLimitFlag.Name)),
 		PriorityIncreasePercentage: int(ctx.Uint64(apiPriorityFeesPercentageFlag.Name)),
@@ -274,10 +274,11 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool)
 		AllowedTracers:             parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 		EnableDeprecated:           ctx.Bool(apiEnableDeprecatedFlag.Name),
 		SoloMode:                   soloMode,
-		EnableTxPool:               ctx.Bool(apiTxpoolFlag.Name),
+		EnableTxPool:               enableTxPool,
 		Timeout:                    int(ctx.Uint64(apiTimeoutFlag.Name)),
 		SlowQueriesThreshold:       int(ctx.Uint64(apiSlowQueriesThresholdFlag.Name)),
 		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),
+		MaxLogsOffset:              ctx.Uint64(apiLogsMaxOffsetFlag.Name),
 	}
 }
 
@@ -388,9 +389,10 @@ func suggestFDCache() int {
 	return n
 }
 
-func openLogDB(dir string, createAdditionalIndexes bool) (*logdb.LogDB, error) {
+func openLogDB(dir string, createAdditionalIndexes bool, maxReadConns uint64) (*logdb.LogDB, error) {
 	path := filepath.Join(dir, "logs-v2.db")
-	db, err := logdb.New(path, createAdditionalIndexes)
+
+	db, err := logdb.New(path, createAdditionalIndexes, maxReadConns)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open log database [%v]", path)
 	}
@@ -593,14 +595,15 @@ func printStartupMessage1(
 }
 
 func printStartupMessage2(
-	gene *genesis.Genesis,
 	apiURL string,
+	ethRPCURL string,
 	nodeID string,
 	metricsURL string,
 	adminURL string,
 	isDevnet bool,
 ) {
-	message := fmt.Sprintf(`%v    API portal   [ %v ]%v%v%v`,
+	message := fmt.Sprintf(`%v    API portal   [ %v ]
+    Ethereum RPC [ %v ]%v%v%v`,
 		func() string { // node ID
 			if nodeID == "" {
 				return ""
@@ -611,6 +614,7 @@ func printStartupMessage2(
 			}
 		}(),
 		apiURL,
+		ethRPCURL,
 		func() string { // metrics URL
 			if metricsURL == "" {
 				return ""

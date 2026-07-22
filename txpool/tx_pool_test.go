@@ -115,6 +115,87 @@ func newHTTPServer() *httptest.Server {
 	return server
 }
 
+func gatherMetricFamily(t *testing.T, name string) *dto.MetricFamily {
+	t.Helper()
+
+	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
+	metricFamilies, err := gatherers.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range metricFamilies {
+		if mf.GetName() == name {
+			return mf
+		}
+	}
+	return nil
+}
+
+func gaugeValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
+	for _, m := range mf.GetMetric() {
+		matched := true
+		for key, want := range labels {
+			found := false
+			for _, label := range m.GetLabel() {
+				if label.GetName() == key {
+					found = true
+					if label.GetValue() != want {
+						matched = false
+					}
+					break
+				}
+			}
+			if !found {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return m.GetGauge().GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+func counterValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
+	if mf == nil {
+		return 0, false
+	}
+	for _, m := range mf.GetMetric() {
+		matched := true
+		for key, want := range labels {
+			found := false
+			for _, label := range m.GetLabel() {
+				if label.GetName() == key {
+					found = true
+					if label.GetValue() != want {
+						matched = false
+					}
+					break
+				}
+			}
+			if !found {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return m.GetCounter().GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+func hasLabelValue(mf *dto.MetricFamily, name string, value string) bool {
+	for _, m := range mf.GetMetric() {
+		for _, label := range m.GetLabel() {
+			if label.GetName() == name && label.GetValue() == value {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestTxPoolMetrics(t *testing.T) {
 	metrics.InitializePrometheusMetrics()
 
@@ -133,24 +214,8 @@ func TestTxPoolMetrics(t *testing.T) {
 	err = pool.Add(tx3)
 	assert.Equal(t, "tx rejected: expired", err.Error())
 
-	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
-	metricFamilies, err := gatherers.Gather()
-	require.NoError(t, err)
-
-	var txPoolMetric *dto.MetricFamily
-	var badTxMetric *dto.MetricFamily
-	for _, mf := range metricFamilies {
-		println("metric", mf.GetName())
-		if mf.GetName() == "thor_metrics_txpool_current_tx_count" {
-			txPoolMetric = mf
-			continue
-		}
-		if mf.GetName() == "thor_metrics_bad_tx_count" {
-			badTxMetric = mf
-			continue
-		}
-	}
-
+	txPoolMetric := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	badTxMetric := gatherMetricFamily(t, "thor_metrics_bad_tx_count")
 	require.NotNil(t, txPoolMetric, "txpool_current_tx_count metric should exist")
 	require.NotNil(t, badTxMetric, "bad_tx_count metric should exist")
 
@@ -159,25 +224,13 @@ func TestTxPoolMetrics(t *testing.T) {
 	badTxMetrics := badTxMetric.GetMetric()
 	require.Greater(t, len(badTxMetrics), 0, "should have at least one metric entry")
 
-	foundLegacy := false
-	for _, m := range metrics {
-		labels := m.GetLabel()
-		source := ""
-		txType := ""
-		for _, label := range labels {
-			if label.GetName() == "source" {
-				source = label.GetValue()
-			}
-			if label.GetName() == "type" {
-				txType = label.GetValue()
-			}
-		}
-
-		if source == "remote" && txType == "Legacy" {
-			foundLegacy = true
-			assert.Equal(t, float64(1), m.GetGauge().GetValue())
-		}
-	}
+	value, foundLegacy := gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+		"status": "executable",
+	})
+	require.True(t, foundLegacy, "should have metric entry for executable remote Legacy transaction")
+	assert.Equal(t, float64(1), value)
 
 	foundBad := false
 	for _, m := range badTxMetrics {
@@ -195,8 +248,65 @@ func TestTxPoolMetrics(t *testing.T) {
 		}
 	}
 
-	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
 	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "washed"))
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "n/a"))
+
+	removed := pool.Remove(tx1.Hash(), tx1.ID())
+	require.True(t, removed)
+
+	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+		"status": "executable",
+	})
+	require.True(t, foundLegacy, "removed tx metric entry should still exist after zeroing")
+	assert.Equal(t, float64(0), value)
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "n/a"))
+
+	tx4 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
+	require.NoError(t, pool.Add(tx4))
+	washCounterMetric := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	beforeWashCount, _ := counterValueByLabels(washCounterMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+	})
+	tx4Obj := pool.all.mapByID[tx4.ID()]
+	tx4Obj.timeAdded -= int64(pool.options.MaxLifetime) * 2
+	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	require.NoError(t, err)
+	require.Equal(t, 1, washed)
+
+	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+		"status": "executable",
+	})
+	require.True(t, foundLegacy, "washed tx metric entry should still exist after zeroing")
+	assert.Equal(t, float64(0), value)
+	assert.False(t, hasLabelValue(txPoolMetric, "source", "washed"))
+
+	washCounterMetric = gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	afterWashCount, foundWashed := counterValueByLabels(washCounterMetric, map[string]string{
+		"source": "remote",
+		"type":   "Legacy",
+	})
+	require.True(t, foundWashed, "should have washed tx counter for remote Legacy transaction")
+	assert.Equal(t, beforeWashCount+1, afterWashCount)
+
+	tx5 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
+	pool.Fill(tx.Transactions{tx5})
+
+	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
+		"source": "fill",
+		"type":   "Legacy",
+		"status": "non_executable",
+	})
+	require.True(t, foundLegacy, "should have metric entry for filled Legacy transaction")
+	assert.Equal(t, float64(1), value)
 }
 
 func TestNewCloseWithServer(t *testing.T) {
@@ -493,7 +603,7 @@ func TestWashTxs(t *testing.T) {
 	pool := newPool(1, LIMIT_PER_ACCOUNT, &thor.NoFork)
 	defer pool.Close()
 
-	txs, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Zero(t, len(txs))
 	assert.Zero(t, len(pool.Executables()))
@@ -501,7 +611,7 @@ func TestWashTxs(t *testing.T) {
 	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 	assert.Nil(t, pool.AddLocal(tx1)) // this tx won't participate in the wash out.
 
-	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, tx.Transactions{tx1}, txs)
 
@@ -517,22 +627,51 @@ func TestWashTxs(t *testing.T) {
 		Build()
 	pool.repo.AddBlock(b1, nil, 0, false)
 
-	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, tx.Transactions{tx1}, txs)
 
 	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 	txObj2, _ := ResolveTx(tx2, false)
-	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
+	assert.Nil(
+		t,
+		pool.all.Add(txObj2, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil }),
+	) // this tx will participate in the wash out.
 
 	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
 	txObj3, _ := ResolveTx(tx3, false)
-	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })) // this tx will participate in the wash out.
+	assert.Nil(
+		t,
+		pool.all.Add(txObj3, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil }),
+	) // this tx will participate in the wash out.
 
-	txs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(txs))
-	assert.Equal(t, 1, removedLegacy+removedDynamicFee)
+	assert.Equal(t, 1, washed)
+}
+
+func TestWashPromoteDrainsPendingCost(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	// Add a batch of txs from distinct accounts so wash promotes and accounts them.
+	for i := range 3 {
+		trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i])
+		assert.Nil(t, pool.Add(trx))
+	}
+
+	// Trigger wash to promote (executable) and account pending cost under the map lock.
+	_, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
+	assert.Nil(t, err)
+
+	// Remove every object one by one; removal must drain the accounting exactly.
+	for _, obj := range pool.all.ToTxObjects() {
+		assert.NotPanics(t, func() { pool.all.RemoveByHash(obj.Hash()) })
+	}
+
+	// No orphaned pending cost left behind.
+	assert.Equal(t, 0, len(pool.all.cost), "pending cost accounting must be fully drained")
 }
 
 func TestOrderTxsAfterGalacticaFork(t *testing.T) {
@@ -576,9 +715,9 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 		assert.Nil(t, pool.Add(tx))
 	}
 
-	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	execTxs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
-	assert.Zero(t, removedLegacy+removedDynamicFee)
+	assert.Zero(t, washed)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, poolLimit-2, len(execTxs))
 	for i := 1; i < len(txs); i++ {
@@ -611,9 +750,9 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	assert.Nil(t, pool.Add(firstTx))
 	assert.Nil(t, pool.Add(lastTx))
 
-	execTxs, removedLegacy, removedDynamicFee, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	execTxs, washed, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
-	assert.Zero(t, removedLegacy+removedDynamicFee)
+	assert.Zero(t, washed)
 	assert.Equal(t, poolLimit, len(execTxs))
 	assert.Equal(t, execTxs[0].ID(), firstTx.ID())
 	assert.Equal(t, execTxs[len(execTxs)-1].ID(), lastTx.ID())
@@ -660,9 +799,9 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 		assert.Nil(t, pool.Add(tx))
 	}
 
-	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	execTxs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
-	assert.Zero(t, removedLegacy+removedDynamicFee)
+	assert.Zero(t, washed)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, totalPoolTxs, len(execTxs))
 	for i := 1; i < len(txs); i++ {
@@ -719,7 +858,7 @@ func TestFillPool(t *testing.T) {
 	assert.Equal(t, len(txs), pool.all.Len(), "Number of transactions in the pool should match the number added")
 
 	// Test executables after wash
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.executables.Store(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
@@ -780,7 +919,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 	assert.Equal(t, len(txs), pool.all.Len(), "Number of transactions in the pool should match the number added")
 
 	// Test executables after wash
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.executables.Store(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
@@ -1061,7 +1200,7 @@ func TestNonExecutables(t *testing.T) {
 		)
 	}
 
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.executables.Store(executables)
 
 	// add 1 non-executable
@@ -1082,23 +1221,23 @@ func TestExpiredTxs(t *testing.T) {
 		)
 	}
 
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.executables.Store(executables)
 
 	// add 1 non-executable
 	assert.NoError(t, pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
 
-	executables, washedLegacy, washedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 90, len(executables))
-	assert.Equal(t, 0, washedLegacy+washedDynamicFee)
+	assert.Equal(t, 0, washed)
 	assert.Equal(t, 91, pool.all.Len())
 
 	time.Sleep(3 * time.Second)
-	executables, washedLegacy, washedDynamicFee, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, washed, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(executables))
-	assert.Equal(t, 91, washedLegacy+washedDynamicFee)
+	assert.Equal(t, 91, washed)
 	assert.Equal(t, 0, pool.all.Len())
 }
 
@@ -1122,7 +1261,7 @@ func TestBlocked(t *testing.T) {
 	// added into all, will be washed out
 	txObj, err := ResolveTx(trx, false)
 	assert.Nil(t, err)
-	pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+	pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 	pool.wash(pool.repo.BestBlockSummary(), false)
 	got := pool.Get(trx.ID())
@@ -1166,7 +1305,7 @@ func TestWash(t *testing.T) {
 
 				txObj, err := ResolveTx(trx, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx.ID())
@@ -1203,11 +1342,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx3.ID())
@@ -1254,11 +1393,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				// all non executable should be washed out
@@ -1329,7 +1468,7 @@ func TestWashWithDynFeeTx(t *testing.T) {
 
 				txObj, err := ResolveTx(trx, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx.ID())
@@ -1364,23 +1503,30 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 	err := pool.add(trx, false, false)
 	assert.Nil(t, err)
 
-	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
+	_, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.Nil(t, err)
 
 	txObj := pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	assert.NotNil(t, txObj.priorityGasPrice, "priorityGasPrice should be set after initial wash")
-	initialPriorityGasPrice := new(big.Int).Set(txObj.priorityGasPrice)
+	assert.NotNil(t, txObj.priorityGasPrice(), "priorityGasPrice should be set after initial wash")
+	initialPriorityGasPrice := new(big.Int).Set(txObj.priorityGasPrice())
 
 	// Test 1: Wash with headBlockChanged=false should not recompute priorityGasPrice
 	wrongPriorityGasPrice := new(big.Int).Mul(initialPriorityGasPrice, big.NewInt(999))
-	txObj.priorityGasPrice = wrongPriorityGasPrice
+	cur := txObj.pricing.Load()
+	txObj.setPricing(&txPricing{
+		payer:            cur.payer,
+		cost:             cur.cost,
+		priorityGasPrice: wrongPriorityGasPrice,
+		feeCeiling:       cur.feeCeiling,
+		priorityCeiling:  cur.priorityCeiling,
+	})
 
-	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	_, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	txObj = pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	assert.Equal(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
+	assert.Equal(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice().String(),
 		"priorityGasPrice should NOT be recomputed when headBlockChanged=false")
 
 	// Test 2: headBlockChanged=true with unchanged baseFee should not recompute
@@ -1407,11 +1553,11 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 	}
 
 	// Test 3: Wash with new block that has different baseFee should recompute priorityGasPrice
-	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
+	_, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.Nil(t, err)
 	txObj = pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	assert.NotEqual(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
+	assert.NotEqual(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice().String(),
 		"priorityGasPrice SHOULD be recomputed when baseFee changes")
 }
 
@@ -1469,11 +1615,11 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx3.ID())
@@ -1517,11 +1663,11 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				// all non executable should be washed out
@@ -1810,7 +1956,7 @@ func TestWashDeferredTxPendingCostEnforcement(t *testing.T) {
 		Build()
 	require.NoError(t, repo.AddBlock(b2, tx.Receipts{}, 0, true))
 
-	executables, _, _, err := pool.wash(repo.BestBlockSummary(), true)
+	executables, _, err := pool.wash(repo.BestBlockSummary(), true)
 	require.NoError(t, err)
 
 	promoted := 0
@@ -2096,7 +2242,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	// The wash method should keep the 10 highest priority transactions (6-15)
 	// and evict the 5 lowest priority ones (1-5).
 	pool.options.Limit = 10
-	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
+	executables, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.NoError(t, err)
 
 	for _, tx := range executables {
@@ -2158,7 +2304,7 @@ func TestEthDynFee_NonceLinearGrowth(t *testing.T) {
 	assert.NoError(t, pool.Add(exec), "nonce==state.nonce must admit")
 	assert.NoError(t, pool.Add(queued), "nonce>state.nonce must admit (non-executable)")
 
-	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 
 	execIDs := map[thor.Bytes32]bool{}
@@ -2200,7 +2346,130 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 	// Shrink the limit so wash must evict exactly one tx.
 	pool.options.Limit = 1
 
-	_, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	_, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, pool.all.Len(), "exactly one eth-tx remains after eviction")
+}
+
+func TestWashMetricsOverLimit(t *testing.T) {
+	metrics.InitializePrometheusMetrics()
+
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	// Snapshot all relevant metric values before mutating anything.
+	preGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	beforeExec, _ := gaugeValueByLabels(preGauge, map[string]string{
+		"source": "fill", "type": "Legacy", "status": "executable",
+	})
+	beforeNonExec, _ := gaugeValueByLabels(preGauge, map[string]string{
+		"source": "fill", "type": "Legacy", "status": "non_executable",
+	})
+	preCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	beforeWashed, _ := counterValueByLabels(preCounter, map[string]string{
+		"source": "fill", "type": "Legacy",
+	})
+
+	// Stage LIMIT+2 executable txs via Fill, which bypasses the remote
+	// pool-full check. Fill marks every tx with source="fill" and leaves
+	// executable=false; wash() then re-evaluates and they all land in
+	// executableObjs (not localExecutableObjs, since Fill sets
+	// localSubmitted=false), so they are subject to the limit branch.
+	const overflow = LIMIT + 2
+	fills := make(tx.Transactions, 0, overflow)
+	for i := range overflow {
+		fills = append(fills, newTx(
+			tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000,
+			tx.BlockRef{}, 100, nil, tx.Features(0),
+			devAccounts[i%len(devAccounts)],
+		))
+	}
+	pool.Fill(fills)
+	require.Equal(t, overflow, pool.all.Len())
+
+	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	require.NoError(t, err)
+	assert.Equal(t, overflow-LIMIT, washed)
+	assert.Equal(t, LIMIT, pool.all.Len())
+
+	postCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	afterWashed, ok := counterValueByLabels(postCounter, map[string]string{
+		"source": "fill", "type": "Legacy",
+	})
+	require.True(t, ok, "wash counter must exist for filled Legacy txs")
+	assert.Equal(t, float64(overflow-LIMIT), afterWashed-beforeWashed,
+		"wash counter must record one increment per evicted tx")
+
+	postGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	afterExec, ok := gaugeValueByLabels(postGauge, map[string]string{
+		"source": "fill", "type": "Legacy", "status": "executable",
+	})
+	require.True(t, ok)
+	assert.Equal(t, float64(LIMIT), afterExec-beforeExec,
+		"executable gauge must gain exactly LIMIT after over-limit wash")
+
+	afterNonExec, _ := gaugeValueByLabels(postGauge, map[string]string{
+		"source": "fill", "type": "Legacy", "status": "non_executable",
+	})
+	assert.Equal(t, float64(0), afterNonExec-beforeNonExec,
+		"non_executable gauge must net to zero (all fills promoted or evicted)")
+
+	// No washed/n/a labels should ever appear on the gauge.
+	assert.False(t, hasLabelValue(postGauge, "source", "washed"))
+	assert.False(t, hasLabelValue(postGauge, "source", "n/a"))
+}
+
+func TestWashMetricsNonExecutableLimit(t *testing.T) {
+	metrics.InitializePrometheusMetrics()
+
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	preGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	beforeNonExec, _ := gaugeValueByLabels(preGauge, map[string]string{
+		"source": "fill", "type": "Legacy", "status": "non_executable",
+	})
+	preCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	beforeWashed, _ := counterValueByLabels(preCounter, map[string]string{
+		"source": "fill", "type": "Legacy",
+	})
+
+	// Non-executable cap = Limit*20%. Stage one extra to force the third
+	// wash branch (no over-limit, no mixed over-limit, just non-exec over cap).
+	nonExecCap := pool.options.Limit * 2 / 10
+	overflow := nonExecCap + 1
+
+	// Future block ref makes the tx valid but non-executable
+	// (Executable returns (false, nil) when BlockRef > nextBlockNum).
+	fills := make(tx.Transactions, 0, overflow)
+	for i := range overflow {
+		fills = append(fills, newTx(
+			tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000,
+			tx.NewBlockRef(2), 100, nil, tx.Features(0),
+			devAccounts[i%len(devAccounts)],
+		))
+	}
+	pool.Fill(fills)
+	require.Equal(t, overflow, pool.all.Len())
+
+	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	require.NoError(t, err)
+	assert.Equal(t, overflow-nonExecCap, washed,
+		"only the over-cap non-executable txs should be evicted")
+	assert.Equal(t, nonExecCap, pool.all.Len())
+
+	postCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
+	afterWashed, ok := counterValueByLabels(postCounter, map[string]string{
+		"source": "fill", "type": "Legacy",
+	})
+	require.True(t, ok)
+	assert.Equal(t, float64(overflow-nonExecCap), afterWashed-beforeWashed)
+
+	postGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
+	afterNonExec, ok := gaugeValueByLabels(postGauge, map[string]string{
+		"source": "fill", "type": "Legacy", "status": "non_executable",
+	})
+	require.True(t, ok)
+	assert.Equal(t, float64(nonExecCap), afterNonExec-beforeNonExec,
+		"non_executable gauge delta must equal what stayed under the cap")
 }

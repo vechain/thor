@@ -27,6 +27,7 @@ variables, run: `bin/thor --help`
 | `--api-allowed-tracers`          | Comma-separated list of allowed tracers (default: "none")                                                                                |
 | `--enable-api-logs`              | Enables API requests logging                                                                                                             |
 | `--api-logs-limit`               | Limit the number of logs returned by /logs API (default: 1000)                                                                           |
+| `--api-logs-max-offset`          | Limit the maximum offset for /logs API (default: 100000)                                                                                 |
 | `--api-priority-fees-percentage` | Percentage of the block base fee for priority fees calculation (default: 5)                                                              |
 | `--verbosity`                    | Log verbosity (0-9) (default: 3)                                                                                                         |
 | `--max-peers`                    | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)                                                     |
@@ -161,6 +162,60 @@ Change the log level via a POST request to /admin/loglevel.
 ```shell
 curl -X POST -H "Content-Type: application/json" -d '{"level": "trace"}' http://localhost:2113/admin/loglevel
 ```
+
+#### Feature toggles
+
+Selected features can be switched on and off at runtime through the admin server, without
+restarting the node. Each toggle shares the atomic state of its startup flag, so toggling it
+overrides that flag for the running process. When a feature is disabled its API responds with
+`503 Service Unavailable` and a `Retry-After` header.
+
+The following features are exposed:
+
+|   Feature    |     Backing flag      |                 Description                 |
+|--------------|-----------------------|---------------------------------------------|
+| `apilogs`    | `--enable-api-logs`   | API request logging                         |
+| `txpool-api` | `--api-enable-txpool` | Transaction pool API endpoints              |
+| `pprof`      | `--pprof`             | go-pprof handlers served at `/debug/pprof/` |
+
+List the state of all features via a GET request to /admin/features.
+
+```shell
+curl http://localhost:2113/admin/features
+```
+
+```json
+[
+    {"name": "apilogs", "enabled": false},
+    {"name": "pprof", "enabled": false},
+    {"name": "txpool-api", "enabled": true}
+]
+```
+
+Retrieve a single feature's state via a GET request to /admin/features/{name}.
+
+```shell
+curl http://localhost:2113/admin/features/pprof
+```
+
+Toggle a feature via a POST request to /admin/features/{name}. The optional `ttlSeconds` field
+(clamped to `0`–`3600`, `0` meaning no expiry) only takes effect when enabling a feature; the
+feature auto-disables after the TTL elapses.
+
+```shell
+curl -X POST -H "Content-Type: application/json" -d '{"enabled": true, "ttlSeconds": 300}' http://localhost:2113/admin/features/pprof
+```
+
+```json
+{
+    "enabled": true,
+    "ttlSeconds": 300
+}
+```
+
+- **Note**: `GET`/`POST /admin/apilogs` is kept as a deprecated alias for the `apilogs` feature.
+  It returns a `Deprecation` header pointing at `/admin/features/apilogs`; use the unified
+  `/admin/features` endpoints instead.
 
 #### Health
 

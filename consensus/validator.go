@@ -221,6 +221,19 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 				return consensusError(fmt.Sprintf("tx Ethereum chain ID %v does not match network chain ID %d",
 					cid, c.repo.ChainID()))
 			}
+			// Field-range validation (maxFeePerGas > 0, maxPriority ≤ maxFee, etc.) is
+			// intentionally absent here, consistent with TypeDynamicFee. Both types rely
+			// on execution-time checks in ResolveTransaction and BuyGas — a block whose
+			// tx has invalid fields will fail verifyBlock when BuyGas returns an error.
+			// validateBlockBody is a fast-path structural check; semantic validation is
+			// deferred to execution.
+			//
+			// TODO: non-empty access lists are rejected by the pool (ParseEthTransaction /
+			// validateEth1559Fields) but are not checked here or in eth1559TxData.decode().
+			// A block built outside the pool can carry ETH txs with access lists — the
+			// entries are stored but not used for EIP-2929 warm/cold gas accounting (not
+			// yet implemented). Add an explicit consensus-level rejection once access list
+			// support is complete, or reject them here in the interim.
 		}
 
 		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {

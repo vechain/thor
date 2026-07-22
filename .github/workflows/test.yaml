@@ -31,7 +31,7 @@ jobs:
 
       - name: Make Test
         id: unit-test
-        run: make test
+        run: make clean test
 
   test_coverage:
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
         run: make test-coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         if: ${{ github.repository == 'vechain/thor' }}
         with:
           fail_ci_if_error: true

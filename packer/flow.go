@@ -100,6 +100,11 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 }
 
 func (f *Flow) txFitsBlockSize(t *tx.Transaction) bool {
+	// TODO: f.blockSize is the sum of individual tx sizes; blk.Size() in consensus
+	// measures the full RLP-encoded block (header + tx list framing). The 2 KB buffer
+	// covers expected header overhead, but the two accounting methods can diverge under
+	// RLP framing edge cases. Consider a property test that feeds blk.Size() back from
+	// Pack() to verify the packer never produces a block that fails the consensus check.
 	return f.blockSize+uint64(t.Size()) < thor.MaxRLPBlockSize-blockSizeBufferZone
 }
 
@@ -174,6 +179,9 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		return errGasLimitReached
 	}
 
+	// Block size enforcement is introduced with INTERSTELLAR; pre-INTERSTELLAR blocks
+	// have no packer-side size cap — only the gas limit bounds block size indirectly.
+	// This preserves pre-existing behaviour for all blocks before the fork.
 	if thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) && !f.txFitsBlockSize(t) {
 		return errBlockSizeLimitReached
 	}
