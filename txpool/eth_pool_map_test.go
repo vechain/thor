@@ -492,9 +492,11 @@ func TestEthPoolMapWash(t *testing.T) {
 		m := newEthPoolMap(costs)
 		origin := devAccounts[5].Address
 		sender := newEthSender(origin, 0)
+		var pending []*TxObject
 		for nonce := range uint64(2) {
 			txObj := newEthMapTestObject(t, nonce, 10, 5)
 			txObj.executable = true
+			pending = append(pending, txObj)
 			sender.pending[nonce] = txObj
 			m.allByHash[txObj.Hash()] = txObj
 			require.NoError(t, costs.reserve(
@@ -513,6 +515,7 @@ func TestEthPoolMapWash(t *testing.T) {
 		)
 		require.NoError(t, err)
 		assert.Empty(t, result.promoted)
+		assert.Equal(t, pending, result.demoted)
 		assert.Empty(t, sender.pending)
 		assert.Len(t, sender.queue, 2)
 		assert.Zero(t, costs.pendingCost(origin).Sign())

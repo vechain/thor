@@ -5,6 +5,7 @@ package txpool
 import (
 	"context"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -164,6 +165,154 @@ func TestEthPoolRemoveAndDump(t *testing.T) {
 	assert.True(t, pool.Remove(nonce1.Hash(), nonce1.ID()))
 	assert.Empty(t, pool.Dump())
 	assert.Zero(t, pool.Len())
+}
+
+func TestEthPoolRemoveEmitsDemotionEventsForRetainedSuffix(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[6]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	events := make(chan *TxEvent, 8)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+
+	txs := make(tx.Transactions, 3)
+	for nonce := range txs {
+		txs[nonce] = buildEthPoolTx(
+			t, tchain.Repo().ChainID(), uint64(nonce), fee, big.NewInt(100), signer,
+		)
+		require.NoError(t, pool.AddRemote(txs[nonce]))
+		event := nextTxEvent(t, events)
+		assert.Equal(t, txs[nonce].Hash(), event.Tx.Hash())
+		require.NotNil(t, event.Executable)
+		assert.True(t, *event.Executable)
+	}
+
+	require.True(t, pool.Remove(txs[0].Hash(), txs[0].ID()))
+
+	for _, demoted := range txs[1:] {
+		event := nextTxEvent(t, events)
+		assert.Equal(t, demoted.Hash(), event.Tx.Hash())
+		require.NotNil(t, event.Executable)
+		assert.False(t, *event.Executable)
+	}
+	select {
+	case unexpected := <-events:
+		t.Fatalf("unexpected event after suffix demotion: %v", unexpected.Tx.Hash())
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestEthPoolWashEmitsDemotionEvents(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
+		EthPriceBump: 10, MaxLifetime: time.Hour,
+	})
+	signer := devAccounts[7]
+	head := tchain.Repo().BestBlockSummary()
+	baseFee := head.Header.BaseFee()
+	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	events := make(chan *TxEvent, 8)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+
+	txs := make(tx.Transactions, 2)
+	for nonce := range txs {
+		txs[nonce] = buildEthPoolTx(
+			t, tchain.Repo().ChainID(), uint64(nonce), fee, big.NewInt(100), signer,
+		)
+		require.NoError(t, pool.AddRemote(txs[nonce]))
+		assert.True(t, *nextTxEvent(t, events).Executable)
+		require.NoError(t, pool.costs.release(
+			ethReservationOwner(signer.Address, uint64(nonce)),
+		))
+	}
+	st := tchain.Stater().NewState(head.Root())
+	balance, err := builtin.Energy.Native(
+		st,
+		head.Header.Timestamp()+thor.BlockInterval(),
+	).Get(signer.Address)
+	require.NoError(t, err)
+	externalOwner := vechainReservationOwner(thor.Bytes32{0xde})
+	require.NoError(t, pool.costs.reserve(externalOwner, signer.Address, balance, balance))
+	t.Cleanup(func() { _ = pool.costs.release(externalOwner) })
+
+	require.NoError(t, pool.wash(head))
+
+	for _, demoted := range txs {
+		event := nextTxEvent(t, events)
+		assert.Equal(t, demoted.Hash(), event.Tx.Hash())
+		require.NotNil(t, event.Executable)
+		assert.False(t, *event.Executable)
+	}
+	pool.all.lock.RLock()
+	defer pool.all.lock.RUnlock()
+	sender := pool.all.senders[signer.Address]
+	require.NotNil(t, sender)
+	assert.Empty(t, sender.pending)
+	assert.Len(t, sender.queue, 2)
+}
+
+func TestEthPoolBlocklistSilentlyDropsAdmission(t *testing.T) {
+	blockedSigner := devAccounts[8]
+	cachePath := t.TempDir() + "/blocklist.txt"
+	require.NoError(t, os.WriteFile(
+		cachePath,
+		[]byte(blockedSigner.Address.String()+"\n"),
+		0o600,
+	))
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+		BlocklistCacheFilePath: cachePath,
+	})
+	require.Eventually(t, func() bool {
+		return pool.blocklist.Contains(blockedSigner.Address)
+	}, time.Second, 10*time.Millisecond)
+
+	events := make(chan *TxEvent, 2)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	blockedTx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		blockedSigner,
+	)
+
+	require.NoError(t, pool.AddRemote(blockedTx))
+	assert.Zero(t, pool.Len())
+	assert.Nil(t, pool.GetByHash(blockedTx.Hash()))
+	select {
+	case event := <-events:
+		t.Fatalf("blocked admission emitted event: %v", event.Tx.Hash())
+	case <-time.After(20 * time.Millisecond):
+	}
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{blockedTx},
+	}))
+	assert.Zero(t, pool.Len())
+	select {
+	case event := <-events:
+		t.Fatalf("blocked fork admission emitted event: %v", event.Tx.Hash())
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	allowedTx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		devAccounts[9],
+	)
+	require.NoError(t, pool.AddRemote(allowedTx))
+	assert.Equal(t, allowedTx.Hash(), nextTxEvent(t, events).Tx.Hash())
+	assert.Equal(t, 1, pool.Len())
 }
 
 func TestEthPoolProcessHeadChange(t *testing.T) {

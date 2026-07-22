@@ -30,7 +30,7 @@ var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 // EthPool maintains unprocessed Ethereum-family transactions.
 //
 // TODO: complete strict admission, partitioned Fill, the VeChain
-// wrong-family guard, family-aware metrics, and demotion event policy.
+// wrong-family guard, and family-aware metrics.
 // Every future mutation path must use the shared costTracker and must never
 // call into VeChainPool directly.
 // AddLocal and Fill are intentionally no-ops until local/stash admission is wired.
@@ -41,6 +41,7 @@ type EthPool struct {
 	forkConfig   *thor.ForkConfig
 	costs        *costTracker
 	baseFeeCache *baseFeeCache
+	blocklist    *blocklist
 
 	all *ethPoolMap
 
@@ -69,6 +70,18 @@ func newEthPool(
 	forkConfig *thor.ForkConfig,
 	costs *costTracker,
 ) *EthPool {
+	return newEthPoolWithBlocklist(repo, stater, options, forkConfig, costs, new(blocklist), true)
+}
+
+func newEthPoolWithBlocklist(
+	repo *chain.Repository,
+	stater *state.Stater,
+	options Options,
+	forkConfig *thor.ForkConfig,
+	costs *costTracker,
+	blocked *blocklist,
+	manageBlocklist bool,
+) *EthPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &EthPool{
 		options:      options,
@@ -77,11 +90,17 @@ func newEthPool(
 		forkConfig:   forkConfig,
 		costs:        costs,
 		baseFeeCache: newBaseFeeCache(forkConfig),
+		blocklist:    blocked,
 		all:          newEthPoolMap(costs),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
 	pool.goes.Go(pool.housekeeping)
+	if manageBlocklist {
+		pool.goes.Go(func() {
+			runBlocklistLoop(pool.ctx, pool.options, pool.blocklist)
+		})
+	}
 	return pool
 }
 
@@ -152,6 +171,7 @@ func (p *EthPool) wash(head *chain.BlockSummary) error {
 	if err != nil {
 		return err
 	}
+	p.emitExecutableChanges(result.demoted, false)
 	for _, txObj := range result.promoted {
 		p.emitAdmission(txObj.Transaction, true, nil)
 	}
@@ -197,10 +217,15 @@ func (p *EthPool) processHeadChange(previous, current *chain.BlockSummary) error
 			return err
 		}
 	}
-	promoted, err := p.all.syncHead(ctx.stateNonces, p.options.EthAccountSlots, ctx.prepare)
+	promoted, demoted, err := p.all.syncHeadWithTransitions(
+		ctx.stateNonces,
+		p.options.EthAccountSlots,
+		ctx.prepare,
+	)
 	if err != nil {
 		return err
 	}
+	p.emitExecutableChanges(demoted, false)
 	for _, txObj := range promoted {
 		p.emitAdmission(txObj.Transaction, true, nil)
 	}
@@ -310,6 +335,9 @@ func (p *EthPool) resolveAdmission(
 	if err := validateTxBasics(p.repo, p.forkConfig, newTx); err != nil {
 		return nil, 0, false, err
 	}
+	if p.isBlocked(newTx) {
+		return nil, 0, true, nil
+	}
 	txObj, err := ResolveTx(newTx, false)
 	if err != nil {
 		return nil, 0, false, badTxError{err.Error()}
@@ -343,14 +371,29 @@ func (p *EthPool) emitAdmission(newTx *tx.Transaction, executable bool, promoted
 	})
 }
 
+func (p *EthPool) emitExecutableChanges(txObjs []*TxObject, executable bool) {
+	if len(txObjs) == 0 {
+		return
+	}
+	p.goes.Go(func() {
+		for _, txObj := range txObjs {
+			status := executable
+			p.txFeed.Send(&TxEvent{Tx: txObj.Transaction, Executable: &status})
+		}
+	})
+}
+
 func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 	ctx := p.newAdmissionContext()
-	txObj, stateNonce, _, err := p.resolveAdmission(newTx, ctx, false)
+	txObj, stateNonce, noop, err := p.resolveAdmission(newTx, ctx, false)
 	if err != nil {
 		return err
 	}
+	if noop {
+		return nil
+	}
 
-	executable, promoted, err := p.all.add(
+	executable, promoted, demoted, err := p.all.addWithTransitions(
 		txObj,
 		stateNonce,
 		p.options.Limit,
@@ -360,12 +403,24 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 		ctx.prepare,
 	)
 	if err != nil {
+		p.emitExecutableChanges(demoted, false)
 		return txRejectedError{err.Error()}
 	}
 	p.addedAfterWash.Add(1)
 	p.emitAdmission(newTx, executable, promoted)
+	p.emitExecutableChanges(demoted, false)
 	logger.Trace("Ethereum tx added", "id", newTx.ID(), "executable", executable)
 	return nil
+}
+
+func (p *EthPool) isBlocked(newTx *tx.Transaction) bool {
+	origin, _ := newTx.Origin()
+	if thor.IsOriginBlocked(origin) || (p.blocklist != nil && p.blocklist.Contains(origin)) {
+		return true
+	}
+	delegator, _ := newTx.Delegator()
+	return delegator != nil && (thor.IsOriginBlocked(*delegator) ||
+		(p.blocklist != nil && p.blocklist.Contains(*delegator)))
 }
 
 func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
@@ -380,7 +435,7 @@ func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
 	}
 	sortEthForkCandidates(candidates)
 
-	results, err := p.all.reconcileFork(
+	results, demoted, err := p.all.reconcileForkWithTransitions(
 		candidates,
 		ctx.stateNonces,
 		p.options.Limit,
@@ -392,6 +447,7 @@ func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
 	if err != nil {
 		return err
 	}
+	p.emitExecutableChanges(demoted, false)
 	p.emitForkResults(results)
 	return nil
 }
@@ -480,9 +536,11 @@ func (p *EthPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 	if txObj == nil || txObj.ID() != txID {
 		return false
 	}
-	if !p.all.removeByHash(txHash) {
+	removed, demoted := p.all.removeByHashWithTransitions(txHash)
+	if !removed {
 		return false
 	}
+	p.emitExecutableChanges(demoted, false)
 	logger.Debug("Ethereum tx removed", "id", txID)
 	return true
 }

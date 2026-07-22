@@ -38,11 +38,12 @@ var _ Pool = (*TxPoolCoordinator)(nil)
 // Close must be called at shutdown.
 func NewCoordinator(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPoolCoordinator {
 	costs := newCostTracker()
+	blocked := new(blocklist)
 	ctx, cancel := context.WithCancel(context.Background())
 	coordinator := &TxPoolCoordinator{
 		costs:   costs,
-		vechain: newVeChainPool(repo, stater, options, forkConfig, costs),
-		eth:     newEthPool(repo, stater, options, forkConfig, costs),
+		vechain: newVeChainPoolWithBlocklist(repo, stater, options, forkConfig, costs, blocked),
+		eth:     newEthPoolWithBlocklist(repo, stater, options, forkConfig, costs, blocked, false),
 		ctx:     ctx,
 		cancel:  cancel,
 	}

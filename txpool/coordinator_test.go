@@ -140,6 +140,22 @@ func TestCoordinatorAddRemoteRejectsNil(t *testing.T) {
 	}
 }
 
+func TestCoordinatorSharesBlocklistAcrossFamilies(t *testing.T) {
+	coordinator, tchain := newCoordinatorTest(t)
+	defer coordinator.Close()
+	require.Same(t, coordinator.vechain.blocklist, coordinator.eth.blocklist)
+
+	signer := devAccounts[9]
+	coordinator.vechain.blocklist.lock.Lock()
+	coordinator.vechain.blocklist.list = map[thor.Address]bool{signer.Address: true}
+	coordinator.vechain.blocklist.lock.Unlock()
+	ethereum := coordinatorEthTx(t, tchain, 9, 0)
+
+	require.NoError(t, coordinator.AddRemote(ethereum))
+	assert.Zero(t, coordinator.Len())
+	assert.Nil(t, coordinator.eth.GetByHash(ethereum.Hash()))
+}
+
 func TestCoordinatorFillUsesVeChainPoolOnly(t *testing.T) {
 	coordinator, tchain := newCoordinatorTest(t)
 	defer coordinator.Close()

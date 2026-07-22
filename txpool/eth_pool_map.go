@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"slices"
 	"sync"
@@ -48,6 +49,7 @@ type ethWashOptions struct {
 
 type ethWashResult struct {
 	promoted []*TxObject
+	demoted  []*TxObject
 	removed  int
 }
 
@@ -159,17 +161,23 @@ func (m *ethPoolMap) executableSnapshot() ethExecutablesSnapshot {
 }
 
 func (m *ethPoolMap) removeByHash(hash thor.Bytes32) bool {
+	removed, _ := m.removeByHashWithTransitions(hash)
+	return removed
+}
+
+func (m *ethPoolMap) removeByHashWithTransitions(hash thor.Bytes32) (bool, []*TxObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	wasExecutable := m.executableObjectsLocked()
 
 	txObj := m.allByHash[hash]
 	if txObj == nil {
-		return false
+		return false, nil
 	}
 	origin, nonce := txObj.Origin(), txObj.Nonce()
 	sender := m.senders[origin]
 	if sender == nil {
-		return false
+		return false, nil
 	}
 
 	var releases []reservationOwner
@@ -178,12 +186,12 @@ func (m *ethPoolMap) removeByHash(hash thor.Bytes32) bool {
 		var removed bool
 		releases, removed = sender.dropNonce(nonce)
 		if !removed {
-			return false
+			return false, nil
 		}
 	case sender.queue[nonce] == txObj:
 		delete(sender.queue, nonce)
 	default:
-		return false
+		return false, nil
 	}
 
 	delete(m.allByHash, hash)
@@ -193,7 +201,7 @@ func (m *ethPoolMap) removeByHash(hash thor.Bytes32) bool {
 	if sender.isEmpty() {
 		delete(m.senders, origin)
 	}
-	return true
+	return true, m.retainedDemotionsLocked(wasExecutable)
 }
 
 // add places a transaction and performs all nonce-index and reservation changes
@@ -208,9 +216,31 @@ func (m *ethPoolMap) add(
 	priceBump uint64,
 	prepare ethPrepare,
 ) (bool, []*TxObject, error) {
+	executable, promoted, _, err := m.addWithTransitions(
+		txObj, stateNonce, globalLimit, pendingLimit, queueLimit, priceBump, prepare,
+	)
+	return executable, promoted, err
+}
+
+func (m *ethPoolMap) addWithTransitions(
+	txObj *TxObject,
+	stateNonce uint64,
+	globalLimit int,
+	pendingLimit int,
+	queueLimit int,
+	priceBump uint64,
+	prepare ethPrepare,
+) (bool, []*TxObject, []*TxObject, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	return m.addLocked(txObj, stateNonce, globalLimit, pendingLimit, queueLimit, priceBump, prepare)
+	wasExecutable := m.executableObjectsLocked()
+	executable, promoted, err := m.addLocked(
+		txObj, stateNonce, globalLimit, pendingLimit, queueLimit, priceBump, prepare,
+	)
+	if err != nil {
+		return false, nil, m.retainedDemotionsLocked(wasExecutable), err
+	}
+	return executable, promoted, m.retainedDemotionsLocked(wasExecutable), nil
 }
 
 // addLocked inserts one transaction. The caller must hold m.lock for writing.
@@ -358,8 +388,18 @@ func (m *ethPoolMap) syncHead(
 	pendingLimit int,
 	prepare ethPrepare,
 ) ([]*TxObject, error) {
+	promoted, _, err := m.syncHeadWithTransitions(stateNonces, pendingLimit, prepare)
+	return promoted, err
+}
+
+func (m *ethPoolMap) syncHeadWithTransitions(
+	stateNonces map[thor.Address]uint64,
+	pendingLimit int,
+	prepare ethPrepare,
+) ([]*TxObject, []*TxObject, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	wasExecutableObjects := m.executableObjectsLocked()
 
 	origins := sortedEthOrigins(stateNonces)
 	wasExecutable := m.executableHashesLocked(origins)
@@ -371,19 +411,19 @@ func (m *ethPoolMap) syncHead(
 		}
 
 		if err := m.syncSenderNonceLocked(sender, stateNonces[origin]); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		promoted, err := m.promoteLocked(sender, pendingLimit, prepare)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		newlyPromoted = append(newlyPromoted, filterNewPromotions(promoted, wasExecutable)...)
 		if sender.isEmpty() {
 			delete(m.senders, origin)
 		}
 	}
-	return newlyPromoted, nil
+	return newlyPromoted, m.retainedDemotionsLocked(wasExecutableObjects), nil
 }
 
 func (m *ethPoolMap) syncSenderNonceLocked(sender *ethSender, stateNonce uint64) error {
@@ -411,6 +451,7 @@ func (m *ethPoolMap) wash(
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
+	wasExecutableObjects := m.executableObjectsLocked()
 	origins := m.sortedOriginsLocked()
 	wasExecutable := m.executableHashesLocked(origins)
 	var result ethWashResult
@@ -452,6 +493,7 @@ func (m *ethPoolMap) wash(
 		return ethWashResult{}, err
 	}
 	result.promoted = m.retainedPromotionsLocked(result.promoted, wasExecutable)
+	result.demoted = m.retainedDemotionsLocked(wasExecutableObjects)
 	return result, nil
 }
 
@@ -756,18 +798,34 @@ func (m *ethPoolMap) reconcileFork(
 	priceBump uint64,
 	prepare ethPrepare,
 ) ([]ethForkResult, error) {
+	results, _, err := m.reconcileForkWithTransitions(
+		candidates, stateNonces, globalLimit, pendingLimit, queueLimit, priceBump, prepare,
+	)
+	return results, err
+}
+
+func (m *ethPoolMap) reconcileForkWithTransitions(
+	candidates []ethForkCandidate,
+	stateNonces map[thor.Address]uint64,
+	globalLimit int,
+	pendingLimit int,
+	queueLimit int,
+	priceBump uint64,
+	prepare ethPrepare,
+) ([]ethForkResult, []*TxObject, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	wasExecutableObjects := m.executableObjectsLocked()
 
 	origins := sortedEthOrigins(stateNonces)
 	wasExecutable := m.executableHashesLocked(origins)
 	if err := m.resetForkSendersLocked(origins, stateNonces); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	results, err := m.promoteForkSendersLocked(origins, wasExecutable, pendingLimit, prepare)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	candidateResults, err := m.addForkCandidatesLocked(
 		candidates,
@@ -779,11 +837,11 @@ func (m *ethPoolMap) reconcileFork(
 		prepare,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	results = append(results, candidateResults...)
 	m.pruneForkSendersLocked(origins, candidates)
-	return results, nil
+	return results, m.retainedDemotionsLocked(wasExecutableObjects), nil
 }
 
 func sortedEthOrigins(stateNonces map[thor.Address]uint64) []thor.Address {
@@ -812,6 +870,37 @@ func (m *ethPoolMap) executableHashesLocked(origins []thor.Address) map[thor.Byt
 		}
 	}
 	return hashes
+}
+
+func (m *ethPoolMap) executableObjectsLocked() map[thor.Bytes32]*TxObject {
+	objects := make(map[thor.Bytes32]*TxObject)
+	for _, sender := range m.senders {
+		for _, txObj := range sender.pending {
+			if txObj.executable {
+				objects[txObj.Hash()] = txObj
+			}
+		}
+	}
+	return objects
+}
+
+func (m *ethPoolMap) retainedDemotionsLocked(
+	wasExecutable map[thor.Bytes32]*TxObject,
+) []*TxObject {
+	demoted := make([]*TxObject, 0)
+	for hash, txObj := range wasExecutable {
+		if m.allByHash[hash] == txObj && !txObj.executable {
+			demoted = append(demoted, txObj)
+		}
+	}
+	slices.SortFunc(demoted, func(a, b *TxObject) int {
+		aOrigin, bOrigin := a.Origin(), b.Origin()
+		if originCmp := bytes.Compare(aOrigin[:], bOrigin[:]); originCmp != 0 {
+			return originCmp
+		}
+		return cmp.Compare(a.Nonce(), b.Nonce())
+	})
+	return demoted
 }
 
 // resetForkSendersLocked releases every stale reservation before promotion.

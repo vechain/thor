@@ -9,8 +9,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"math/rand/v2"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,7 +78,7 @@ type VeChainPool struct {
 	options      Options
 	repo         *chain.Repository
 	stater       *state.Stater
-	blocklist    blocklist
+	blocklist    *blocklist
 	forkConfig   *thor.ForkConfig
 	baseFeeCache *baseFeeCache
 	costs        *costTracker
@@ -113,11 +111,23 @@ func newVeChainPool(
 	forkConfig *thor.ForkConfig,
 	costs *costTracker,
 ) *VeChainPool {
+	return newVeChainPoolWithBlocklist(repo, stater, options, forkConfig, costs, new(blocklist))
+}
+
+func newVeChainPoolWithBlocklist(
+	repo *chain.Repository,
+	stater *state.Stater,
+	options Options,
+	forkConfig *thor.ForkConfig,
+	costs *costTracker,
+	blocked *blocklist,
+) *VeChainPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &VeChainPool{
 		options:      options,
 		repo:         repo,
 		stater:       stater,
+		blocklist:    blocked,
 		all:          newTxObjectMap(costs),
 		costs:        costs,
 		ctx:          ctx,
@@ -193,55 +203,7 @@ func (p *VeChainPool) housekeeping() {
 }
 
 func (p *VeChainPool) fetchBlocklistLoop() {
-	var (
-		path = p.options.BlocklistCacheFilePath
-		url  = p.options.BlocklistFetchURL
-	)
-
-	if path != "" {
-		if err := p.blocklist.Load(path); err != nil {
-			if !os.IsNotExist(err) {
-				logger.Warn("blocklist load failed", "error", err, "path", path)
-			}
-		} else {
-			logger.Debug("blocklist loaded", "len", p.blocklist.Len())
-		}
-	}
-	if url == "" {
-		return
-	}
-
-	var eTag string
-	fetch := func() {
-		if err := p.blocklist.Fetch(p.ctx, url, &eTag); err != nil {
-			if err == context.Canceled {
-				return
-			}
-			logger.Warn("blocklist fetch failed", "error", err, "url", url)
-		} else {
-			logger.Debug("blocklist fetched", "len", p.blocklist.Len())
-			if path != "" {
-				if err := p.blocklist.Save(path); err != nil {
-					logger.Warn("blocklist save failed", "error", err, "path", path)
-				} else {
-					logger.Debug("blocklist saved")
-				}
-			}
-		}
-	}
-
-	fetch()
-
-	for {
-		// delay 1~2 min
-		delay := time.Second * time.Duration(rand.Int()%60+60) //#nosec G404
-		select {
-		case <-p.ctx.Done():
-			return
-		case <-time.After(delay):
-			fetch()
-		}
-	}
+	runBlocklistLoop(p.ctx, p.options, p.blocklist)
 }
 
 // Close cleanup inner go routines.
@@ -310,13 +272,14 @@ func (p *VeChainPool) add(newTx *tx.Transaction, rejectNonExecutable bool, local
 // isBlocked checks if the transaction origin or delegator is blocked.
 func (p *VeChainPool) isBlocked(newTx *tx.Transaction) bool {
 	origin, _ := newTx.Origin()
-	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
+	if thor.IsOriginBlocked(origin) || (p.blocklist != nil && p.blocklist.Contains(origin)) {
 		// tx origin blocked
 		return true
 	}
 
 	delegator, _ := newTx.Delegator()
-	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+	if delegator != nil && (thor.IsOriginBlocked(*delegator) ||
+		(p.blocklist != nil && p.blocklist.Contains(*delegator))) {
 		// tx delegator blocked
 		return true
 	}

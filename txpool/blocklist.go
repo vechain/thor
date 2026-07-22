@@ -10,10 +10,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -141,4 +143,49 @@ func (bl *blocklist) readList(r io.Reader) (map[thor.Address]bool, error) {
 		return nil, err
 	}
 	return list, nil
+}
+
+func runBlocklistLoop(ctx context.Context, options Options, bl *blocklist) {
+	path, url := options.BlocklistCacheFilePath, options.BlocklistFetchURL
+	if path != "" {
+		if err := bl.Load(path); err != nil {
+			if !os.IsNotExist(err) {
+				logger.Warn("blocklist load failed", "error", err, "path", path)
+			}
+		} else {
+			logger.Debug("blocklist loaded", "len", bl.Len())
+		}
+	}
+	if url == "" {
+		return
+	}
+
+	var eTag string
+	fetch := func() {
+		if err := bl.Fetch(ctx, url, &eTag); err != nil {
+			if err != context.Canceled {
+				logger.Warn("blocklist fetch failed", "error", err, "url", url)
+			}
+			return
+		}
+		logger.Debug("blocklist fetched", "len", bl.Len())
+		if path != "" {
+			if err := bl.Save(path); err != nil {
+				logger.Warn("blocklist save failed", "error", err, "path", path)
+			} else {
+				logger.Debug("blocklist saved")
+			}
+		}
+	}
+
+	fetch()
+	for {
+		delay := time.Second * time.Duration(rand.Int()%60+60) //#nosec G404
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+			fetch()
+		}
+	}
 }
