@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/event"
 
@@ -26,12 +27,12 @@ import (
 var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 
 // EthPool maintains unprocessed Ethereum-family transactions.
-// This is a scaffold: admission, nonce promotion, wash, and housekeeping
-// will be implemented in follow-up changes.
 //
-// When admission lands, place/promote/drop/wash paths must reserve/release on
-// the shared costTracker exactly like VeChainPool — never call
-// into VeChainPool directly.
+// TODO: complete local/strict admission, partitioned Fill, the VeChain
+// wrong-family guard, and a full Eth wash covering base-fee repricing,
+// affordability, MaxLifetime, limits, metrics, and demotion event policy.
+// Every future mutation path must use the shared costTracker and must never
+// call into VeChainPool directly.
 type EthPool struct {
 	options      Options
 	repo         *chain.Repository
@@ -78,10 +79,82 @@ func newEthPool(
 		ctx:          ctx,
 		cancel:       cancel,
 	}
-	pool.goes.Go(func() {
-		<-pool.ctx.Done()
-	})
+	pool.goes.Go(pool.housekeeping)
 	return pool
+}
+
+func (p *EthPool) housekeeping() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	processedHead := p.repo.BestBlockSummary()
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+			currentHead := p.repo.BestBlockSummary()
+			if currentHead.Header.ID() == processedHead.Header.ID() {
+				continue
+			}
+			if !isChainSynced(uint64(time.Now().Unix()), currentHead.Header.Timestamp()) {
+				continue
+			}
+			if err := p.processHeadChange(processedHead, currentHead); err != nil {
+				logger.Warn("failed to process Ethereum pool head change", "err", err)
+				continue
+			}
+			processedHead = currentHead
+		}
+	}
+}
+
+func (p *EthPool) processHeadChange(previous, current *chain.BlockSummary) error {
+	if current.Header.Number() <= previous.Header.Number() {
+		// Reorg arms at the same or a lower height are reconciled synchronously
+		// through ReinjectFromFork.
+		return nil
+	}
+
+	origins := make(map[thor.Address]struct{})
+	canonical := p.repo.NewChain(current.Header.ID())
+	for number := previous.Header.Number() + 1; ; number++ {
+		blk, err := canonical.GetBlock(number)
+		if err != nil {
+			return err
+		}
+		for _, trx := range blk.Transactions() {
+			if !trx.IsEthereumTx() {
+				continue
+			}
+			origin, err := trx.Origin()
+			if err != nil {
+				return err
+			}
+			origins[origin] = struct{}{}
+		}
+		if number == current.Header.Number() {
+			break
+		}
+	}
+	if len(origins) == 0 {
+		return nil
+	}
+
+	ctx := p.newAdmissionContextAt(current)
+	for origin := range origins {
+		if _, err := ctx.stateNonce(origin); err != nil {
+			return err
+		}
+	}
+	promoted, err := p.all.syncHead(ctx.stateNonces, p.options.EthAccountSlots, ctx.prepare)
+	if err != nil {
+		return err
+	}
+	for _, txObj := range promoted {
+		p.emitAdmission(txObj.Transaction, true, nil)
+	}
+	return nil
 }
 
 func (p *EthPool) Get(txID thor.Bytes32) *tx.Transaction {
@@ -103,7 +176,10 @@ type ethAdmissionContext struct {
 }
 
 func (p *EthPool) newAdmissionContext() *ethAdmissionContext {
-	head := p.repo.BestBlockSummary()
+	return p.newAdmissionContextAt(p.repo.BestBlockSummary())
+}
+
+func (p *EthPool) newAdmissionContextAt(head *chain.BlockSummary) *ethAdmissionContext {
 	st := p.stater.NewState(head.Root())
 	baseFee := p.baseFeeCache.Get(head.Header)
 	ctx := &ethAdmissionContext{
@@ -387,8 +463,8 @@ func (p *EthPool) PoolNonce(addr thor.Address) uint64 {
 }
 
 func (p *EthPool) Close() {
-	p.all.pruneEmptySenders()
 	p.cancel()
 	p.scope.Close()
 	p.goes.Wait()
+	p.all.pruneEmptySenders()
 }

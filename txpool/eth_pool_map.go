@@ -320,6 +320,52 @@ func (m *ethPoolMap) promoteLocked(
 	return promotions[:accepted], nil
 }
 
+// syncHead reconciles affected senders with the canonical head nonce and
+// promotes newly contiguous, affordable queued transactions.
+func (m *ethPoolMap) syncHead(
+	stateNonces map[thor.Address]uint64,
+	pendingLimit int,
+	prepare ethPrepare,
+) ([]*TxObject, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	origins := sortedEthOrigins(stateNonces)
+	wasExecutable := m.executableHashesLocked(origins)
+	var newlyPromoted []*TxObject
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		if sender == nil {
+			continue
+		}
+
+		stateNonce := stateNonces[origin]
+		var releases []reservationOwner
+		for nonce := range sender.pending {
+			if stateNonce < sender.stateNonce || nonce < stateNonce {
+				releases = append(releases, ethReservationOwner(origin, nonce))
+			}
+		}
+		if err := m.costs.release(releases...); err != nil {
+			return nil, err
+		}
+		settled, _ := sender.syncStateNonce(stateNonce)
+		for _, txObj := range settled {
+			delete(m.allByHash, txObj.Hash())
+		}
+
+		promoted, err := m.promoteLocked(sender, pendingLimit, prepare)
+		if err != nil {
+			return nil, err
+		}
+		newlyPromoted = append(newlyPromoted, filterNewPromotions(promoted, wasExecutable)...)
+		if sender.isEmpty() {
+			delete(m.senders, origin)
+		}
+	}
+	return newlyPromoted, nil
+}
+
 func (m *ethPoolMap) reconcileFork(
 	candidates []ethForkCandidate,
 	stateNonces map[thor.Address]uint64,

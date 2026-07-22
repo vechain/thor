@@ -69,10 +69,10 @@ func (c *TxPoolCoordinator) startEventRelay(pool Pool) {
 	})
 }
 
-// route is still used by the four admission flows whose EthPool implementation
-// is deferred. AddRemote performs its family routing explicitly.
 func (c *TxPoolCoordinator) route(newTx *tx.Transaction) Pool {
-	_ = newTx
+	if newTx != nil && newTx.IsEthereumTx() {
+		return c.eth
+	}
 	return c.vechain
 }
 

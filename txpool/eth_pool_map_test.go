@@ -212,6 +212,116 @@ func TestEthPoolMapToTxsIncludesPendingAndQueued(t *testing.T) {
 	assert.Empty(t, empty)
 }
 
+func TestEthPoolMapSyncHead(t *testing.T) {
+	t.Run("settles mined nonce, preserves suffix, and promotes queue", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		tx0 := newEthMapTestObject(t, 0, 10, 0)
+		tx1 := newEthMapTestObject(t, 1, 10, 0)
+		tx2 := newEthMapTestObject(t, 2, 10, 0)
+		origin := tx0.Origin()
+		sender := newEthSender(origin, 0)
+		tx0.executable, tx1.executable = true, true
+		sender.pending[0], sender.pending[1] = tx0, tx1
+		sender.queue[2] = tx2
+		m.senders[origin] = sender
+		m.allByHash[tx0.Hash()] = tx0
+		m.allByHash[tx1.Hash()] = tx1
+		m.allByHash[tx2.Hash()] = tx2
+		require.NoError(t, costs.reserve(
+			ethReservationOwner(origin, 0), origin, big.NewInt(10), big.NewInt(100),
+		))
+		require.NoError(t, costs.reserve(
+			ethReservationOwner(origin, 1), origin, big.NewInt(10), big.NewInt(100),
+		))
+
+		promoted, err := m.syncHead(
+			map[thor.Address]uint64{origin: 1},
+			16,
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, []*TxObject{tx2}, promoted)
+		assert.Nil(t, m.GetByHash(tx0.Hash()))
+		assert.Same(t, tx1, sender.pending[1])
+		assert.Same(t, tx2, sender.pending[2])
+		assert.Empty(t, sender.queue)
+		assert.Equal(t, uint64(3), sender.poolNonce())
+		assert.Equal(t, int64(20), costs.pendingCost(origin).Int64())
+
+		promoted, err = m.syncHead(
+			map[thor.Address]uint64{origin: 1},
+			16,
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Empty(t, promoted)
+		assert.Equal(t, int64(20), costs.pendingCost(origin).Int64())
+	})
+
+	t.Run("prunes sender after its final nonce settles", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		txObj := newEthMapTestObject(t, 0, 10, 1)
+		origin := txObj.Origin()
+		txObj.executable = true
+		sender := newEthSender(origin, 0)
+		sender.pending[0] = txObj
+		m.senders[origin] = sender
+		m.allByHash[txObj.Hash()] = txObj
+		require.NoError(t, costs.reserve(
+			ethReservationOwner(origin, 0), origin, big.NewInt(10), big.NewInt(100),
+		))
+
+		promoted, err := m.syncHead(
+			map[thor.Address]uint64{origin: 1},
+			16,
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Empty(t, promoted)
+		assert.NotContains(t, m.senders, origin)
+		assert.Zero(t, m.Len())
+		assert.Zero(t, costs.pendingCost(origin).Sign())
+	})
+
+	t.Run("cost error leaves nonce state retryable", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		txObj := newEthMapTestObject(t, 0, 10, 2)
+		origin := txObj.Origin()
+		txObj.executable = true
+		sender := newEthSender(origin, 0)
+		sender.pending[0] = txObj
+		m.senders[origin] = sender
+		m.allByHash[txObj.Hash()] = txObj
+		owner := ethReservationOwner(origin, 0)
+		costs.reservations[owner] = reservation{payer: origin, cost: big.NewInt(10)}
+		costs.pending[origin] = big.NewInt(5)
+
+		promoted, err := m.syncHead(
+			map[thor.Address]uint64{origin: 1},
+			16,
+			fixedEthPrepare(10, 100),
+		)
+		assert.ErrorIs(t, err, errCostTrackerState)
+		assert.Nil(t, promoted)
+		assert.Equal(t, uint64(0), sender.stateNonce)
+		assert.Same(t, txObj, sender.pending[0])
+		assert.Same(t, txObj, m.GetByHash(txObj.Hash()))
+
+		costs.pending[origin] = big.NewInt(10)
+		promoted, err = m.syncHead(
+			map[thor.Address]uint64{origin: 1},
+			16,
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Empty(t, promoted)
+		assert.Zero(t, m.Len())
+	})
+}
+
 func TestResetForkSendersLocked(t *testing.T) {
 	t.Run("settles old nonce and releases all affected reservations", func(t *testing.T) {
 		costs := newCostTracker()

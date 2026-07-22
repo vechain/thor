@@ -3,6 +3,7 @@
 package txpool
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -37,6 +38,27 @@ func newEthPoolTest(t *testing.T, options Options) (*EthPool, *testchain.Chain) 
 	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	require.NoError(t, err)
 	pool := NewEth(tchain.Repo(), tchain.Stater(), options, &thor.SoloFork)
+	t.Cleanup(pool.Close)
+	return pool, tchain
+}
+
+func newEthPoolWithoutHousekeeping(t *testing.T, options Options) (*EthPool, *testchain.Chain) {
+	t.Helper()
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	costs := newCostTracker()
+	pool := &EthPool{
+		options:      options,
+		repo:         tchain.Repo(),
+		stater:       tchain.Stater(),
+		forkConfig:   &thor.SoloFork,
+		costs:        costs,
+		baseFeeCache: newBaseFeeCache(&thor.SoloFork),
+		all:          newEthPoolMap(costs),
+		ctx:          ctx,
+		cancel:       cancel,
+	}
 	t.Cleanup(pool.Close)
 	return pool, tchain
 }
@@ -126,6 +148,102 @@ func TestEthPoolRemoveAndDump(t *testing.T) {
 	assert.True(t, pool.Remove(nonce1.Hash(), nonce1.ID()))
 	assert.Empty(t, pool.Dump())
 	assert.Zero(t, pool.Len())
+}
+
+func TestEthPoolProcessHeadChange(t *testing.T) {
+	options := Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	}
+	pool, tchain := newEthPoolWithoutHousekeeping(t, options)
+	signer := devAccounts[3]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	nonce0 := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, big.NewInt(100), signer)
+	nonce1 := buildEthPoolTx(t, tchain.Repo().ChainID(), 1, fee, big.NewInt(100), signer)
+	require.NoError(t, pool.AddRemote(nonce0))
+	require.NoError(t, pool.AddRemote(nonce1))
+
+	// Simulate a queued suffix so settling nonce 0 must promote nonce 1.
+	pool.all.lock.Lock()
+	sender := pool.all.senders[signer.Address]
+	delete(sender.pending, 1)
+	sender.queue[1] = pool.all.allByHash[nonce1.Hash()]
+	sender.queue[1].executable = false
+	require.NoError(t, pool.costs.release(ethReservationOwner(signer.Address, 1)))
+	pool.all.lock.Unlock()
+
+	events := make(chan *TxEvent, 1)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+	previous := tchain.Repo().BestBlockSummary()
+	require.NoError(t, tchain.MintBlock(nonce0))
+	current := tchain.Repo().BestBlockSummary()
+	require.NoError(t, pool.processHeadChange(previous, current))
+
+	assert.Nil(t, pool.GetByHash(nonce0.Hash()))
+	assert.NotNil(t, pool.GetByHash(nonce1.Hash()))
+	assert.Equal(t, uint64(2), pool.PoolNonce(signer.Address))
+	event := nextTxEvent(t, events)
+	assert.Equal(t, nonce1.Hash(), event.Tx.Hash())
+	require.NotNil(t, event.Executable)
+	assert.True(t, *event.Executable)
+
+	// Process two canonical blocks in one call to exercise catch-up.
+	nonce2 := buildEthPoolTx(t, tchain.Repo().ChainID(), 2, fee, big.NewInt(100), signer)
+	require.NoError(t, pool.AddRemote(nonce2))
+	previous = current
+	require.NoError(t, tchain.MintBlock(nonce1))
+	require.NoError(t, tchain.MintBlock(nonce2))
+	current = tchain.Repo().BestBlockSummary()
+	require.NoError(t, pool.processHeadChange(previous, current))
+	assert.Nil(t, pool.GetByHash(nonce1.Hash()))
+	assert.Nil(t, pool.GetByHash(nonce2.Hash()))
+	assert.Equal(t, uint64(3), pool.PoolNonce(signer.Address))
+}
+
+func TestEthPoolProcessHeadChangeIgnoresNativeOnlyBlocks(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[4]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	trx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		signer,
+	)
+	require.NoError(t, pool.AddRemote(trx))
+
+	previous := tchain.Repo().BestBlockSummary()
+	require.NoError(t, tchain.MintBlock())
+	require.NoError(t, pool.processHeadChange(previous, tchain.Repo().BestBlockSummary()))
+	assert.NotNil(t, pool.GetByHash(trx.Hash()))
+	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address))
+}
+
+func TestEthPoolHousekeepingProcessesHeadChange(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[5]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	trx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		signer,
+	)
+	require.NoError(t, pool.AddRemote(trx))
+	require.NoError(t, tchain.MintBlock(trx))
+
+	require.Eventually(t, func() bool {
+		return pool.GetByHash(trx.Hash()) == nil && pool.PoolNonce(signer.Address) == 1
+	}, 3*time.Second, 25*time.Millisecond)
 }
 
 func TestEthPoolAddRemoteRejectsInvalidAndUnderpriced(t *testing.T) {
@@ -268,7 +386,7 @@ func TestEthPoolPromotionStopsAtAffordablePrefix(t *testing.T) {
 	assert.NotNil(t, sender.queue[1])
 }
 
-func TestCoordinatorRoutesOnlyEthAddRemoteAndRelaysEvent(t *testing.T) {
+func TestCoordinatorRoutesEthereumAdmissionAndRelaysEvent(t *testing.T) {
 	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	require.NoError(t, err)
 	coordinator := NewCoordinator(tchain.Repo(), tchain.Stater(), Options{
@@ -297,9 +415,21 @@ func TestCoordinatorRoutesOnlyEthAddRemoteAndRelaysEvent(t *testing.T) {
 	}
 
 	local := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), devAccounts[9])
-	require.NoError(t, coordinator.AddLocal(local))
-	assert.NotNil(t, coordinator.vechain.GetByHash(local.Hash()), "non-remote flows must retain their current routing")
+	require.ErrorIs(t, coordinator.AddLocal(local), errEthPoolNotImplemented)
+	require.ErrorIs(t, coordinator.StrictlyAdd(local), errEthPoolNotImplemented)
+	assert.Nil(t, coordinator.vechain.GetByHash(local.Hash()))
 	assert.Nil(t, coordinator.eth.GetByHash(local.Hash()))
+}
+
+func TestCoordinatorRouteSelectsTransactionFamily(t *testing.T) {
+	vechainPool, ethPool := &VeChainPool{}, &EthPool{}
+	coordinator := &TxPoolCoordinator{vechain: vechainPool, eth: ethPool}
+
+	native := tx.NewBuilder(tx.TypeDynamicFee).Build()
+	ethereum := tx.NewBuilder(tx.TypeEthDynamicFee).Build()
+	assert.Same(t, vechainPool, coordinator.route(nil))
+	assert.Same(t, vechainPool, coordinator.route(native))
+	assert.Same(t, ethPool, coordinator.route(ethereum))
 }
 
 func TestCoordinatorRemovesAndDumpsEthereumTransactions(t *testing.T) {
