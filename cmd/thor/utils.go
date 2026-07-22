@@ -278,6 +278,7 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, soloMode bool)
 		Timeout:                    int(ctx.Uint64(apiTimeoutFlag.Name)),
 		SlowQueriesThreshold:       int(ctx.Uint64(apiSlowQueriesThresholdFlag.Name)),
 		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),
+		EnableRPC:                  ctx.Bool(enableRPCFlag.Name),
 	}
 }
 
