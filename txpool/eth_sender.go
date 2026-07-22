@@ -70,11 +70,38 @@ func (s *ethSender) demoteFrom(nonce uint64) []reservationOwner {
 	return releases
 }
 
+// resetStateNonce forces all nonce-ready transactions through fresh payer,
+// balance and base-fee validation after a canonical head change.
+func (s *ethSender) resetStateNonce(stateNonce uint64) ([]*TxObject, []reservationOwner) {
+	var settled []*TxObject
+	var releases []reservationOwner
+	for nonce, txObj := range s.pending {
+		releases = append(releases, ethReservationOwner(s.origin, nonce))
+		delete(s.pending, nonce)
+		if nonce < stateNonce {
+			settled = append(settled, txObj)
+			continue
+		}
+		txObj.executable = false
+		s.queue[nonce] = txObj
+	}
+	for nonce, txObj := range s.queue {
+		if nonce < stateNonce {
+			settled = append(settled, txObj)
+			delete(s.queue, nonce)
+		}
+	}
+	s.stateNonce = stateNonce
+	return settled, releases
+}
+
 // syncStateNonce reconciles the sender with the canonical account nonce. It
 // returns transactions which became settled and reservation owners which must
 // be released. A backwards move (reorg) conservatively queues all transactions
 // until the newly-created nonce gap is filled.
-func (s *ethSender) syncStateNonce(stateNonce uint64) (settled []*TxObject, releases []reservationOwner) {
+func (s *ethSender) syncStateNonce(stateNonce uint64) ([]*TxObject, []reservationOwner) {
+	var settled []*TxObject
+	var releases []reservationOwner
 	if stateNonce < s.stateNonce {
 		for nonce, txObj := range s.pending {
 			txObj.executable = false

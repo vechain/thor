@@ -80,6 +80,18 @@ func TestTxStash_ErrorsAndBranches(t *testing.T) {
 		assert.True(t, ok)
 	})
 
+	t.Run("Ethereum transactions are discarded on load", func(t *testing.T) {
+		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
+		stash := newTxStash(db, 10)
+		ethTx := newTx(tx.TypeEthDynamicFee)
+		assert.NoError(t, stash.Save(ethTx))
+		assert.Empty(t, stash.LoadAll())
+
+		ok, err := db.Has(ethTx.Hash().Bytes(), nil)
+		assert.NoError(t, err)
+		assert.False(t, ok)
+	})
+
 	t.Run("db.Write returns error", func(t *testing.T) {
 		db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 		stash := newTxStash(db, 10)

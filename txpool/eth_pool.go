@@ -6,9 +6,12 @@
 package txpool
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -92,42 +95,23 @@ func (p *EthPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
 	return nil
 }
 
-func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
-	if newTx == nil || !newTx.IsEthereumTx() {
-		return badTxError{"invalid tx type for Ethereum pool"}
-	}
-	if p.all.GetByHash(newTx.Hash()) != nil {
-		return txRejectedError{errEthAlreadyKnown.Error()}
-	}
-	if err := validateTxBasics(p.repo, p.forkConfig, newTx); err != nil {
-		return err
-	}
-	txObj, err := ResolveTx(newTx, false)
-	if err != nil {
-		return badTxError{err.Error()}
-	}
+type ethAdmissionContext struct {
+	head        *chain.BlockSummary
+	state       *state.State
+	stateNonces map[thor.Address]uint64
+	prepare     ethPrepare
+}
 
+func (p *EthPool) newAdmissionContext() *ethAdmissionContext {
 	head := p.repo.BestBlockSummary()
-	if newTx.Gas() > head.Header.GasLimit() {
-		return txRejectedError{"tx gas exceeds block gas limit"}
-	}
-	chainView := p.repo.NewChain(head.Header.ID())
-	if known, err := chainView.HasTransaction(newTx.ID(), 0); err != nil {
-		return err
-	} else if known {
-		return txRejectedError{"known tx"}
-	}
 	st := p.stater.NewState(head.Root())
-	stateNonce, err := st.GetNonce(txObj.Origin())
-	if err != nil {
-		return err
-	}
-	if newTx.Nonce() < stateNonce {
-		return txRejectedError{errEthNonceTooLow.Error()}
-	}
-
 	baseFee := p.baseFeeCache.Get(head.Header)
-	prepare := func(obj *TxObject) (reservationRequest, bool, error) {
+	ctx := &ethAdmissionContext{
+		head:        head,
+		state:       st,
+		stateNonces: make(map[thor.Address]uint64),
+	}
+	ctx.prepare = func(obj *TxObject) (reservationRequest, bool, error) {
 		if baseFee != nil && obj.MaxFeePerGas().Cmp(baseFee) < 0 {
 			return reservationRequest{}, false, nil
 		}
@@ -162,6 +146,77 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 			balance: balance,
 		}, true, nil
 	}
+	return ctx
+}
+
+func (ctx *ethAdmissionContext) stateNonce(origin thor.Address) (uint64, error) {
+	if nonce, cached := ctx.stateNonces[origin]; cached {
+		return nonce, nil
+	}
+	nonce, err := ctx.state.GetNonce(origin)
+	if err != nil {
+		return 0, err
+	}
+	ctx.stateNonces[origin] = nonce
+	return nonce, nil
+}
+
+func (p *EthPool) resolveAdmission(
+	newTx *tx.Transaction,
+	ctx *ethAdmissionContext,
+	duplicateNoop bool,
+) (*TxObject, uint64, bool, error) {
+	if newTx == nil || !newTx.IsEthereumTx() {
+		return nil, 0, false, badTxError{"invalid tx type for Ethereum pool"}
+	}
+	if p.all.GetByHash(newTx.Hash()) != nil {
+		if duplicateNoop {
+			return nil, 0, true, nil
+		}
+		return nil, 0, false, txRejectedError{errEthAlreadyKnown.Error()}
+	}
+	if err := validateTxBasics(p.repo, p.forkConfig, newTx); err != nil {
+		return nil, 0, false, err
+	}
+	txObj, err := ResolveTx(newTx, false)
+	if err != nil {
+		return nil, 0, false, badTxError{err.Error()}
+	}
+	if newTx.Gas() > ctx.head.Header.GasLimit() {
+		return nil, 0, false, txRejectedError{"tx gas exceeds block gas limit"}
+	}
+	chainView := p.repo.NewChain(ctx.head.Header.ID())
+	if known, err := chainView.HasTransaction(newTx.ID(), 0); err != nil {
+		return nil, 0, false, err
+	} else if known {
+		return nil, 0, false, txRejectedError{"known tx"}
+	}
+	stateNonce, err := ctx.stateNonce(txObj.Origin())
+	if err != nil {
+		return nil, 0, false, err
+	}
+	if newTx.Nonce() < stateNonce {
+		return nil, 0, false, txRejectedError{errEthNonceTooLow.Error()}
+	}
+	return txObj, stateNonce, false, nil
+}
+
+func (p *EthPool) emitAdmission(newTx *tx.Transaction, executable bool, promoted []*TxObject) {
+	p.goes.Go(func() {
+		p.txFeed.Send(&TxEvent{Tx: newTx, Executable: &executable})
+		promotedExecutable := true
+		for _, promotedTx := range promoted {
+			p.txFeed.Send(&TxEvent{Tx: promotedTx.Transaction, Executable: &promotedExecutable})
+		}
+	})
+}
+
+func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
+	ctx := p.newAdmissionContext()
+	txObj, stateNonce, _, err := p.resolveAdmission(newTx, ctx, false)
+	if err != nil {
+		return err
+	}
 
 	executable, promoted, err := p.all.add(
 		txObj,
@@ -170,25 +225,111 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 		p.options.EthAccountSlots,
 		p.options.EthAccountQueue,
 		p.options.EthPriceBump,
-		prepare,
+		ctx.prepare,
 	)
 	if err != nil {
 		return txRejectedError{err.Error()}
 	}
-	p.goes.Go(func() {
-		p.txFeed.Send(&TxEvent{Tx: newTx, Executable: &executable})
-		promotedExecutable := true
-		for _, promotedTx := range promoted {
-			p.txFeed.Send(&TxEvent{Tx: promotedTx.Transaction, Executable: &promotedExecutable})
-		}
-	})
+	p.emitAdmission(newTx, executable, promoted)
 	logger.Trace("Ethereum tx added", "id", newTx.ID(), "executable", executable)
 	return nil
 }
 
-func (p *EthPool) ReinjectFromFork(newTx *tx.Transaction) error {
-	_ = newTx
-	return errEthPoolNotImplemented
+func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
+	ctx := p.newAdmissionContext()
+	if err := p.collectIncludedForkNonces(ctx, fork.Included); err != nil {
+		return err
+	}
+
+	candidates, err := p.collectForkCandidates(ctx, fork.Discarded)
+	if err != nil {
+		return err
+	}
+	sortEthForkCandidates(candidates)
+
+	results, err := p.all.reconcileFork(
+		candidates,
+		ctx.stateNonces,
+		p.options.Limit,
+		p.options.EthAccountSlots,
+		p.options.EthAccountQueue,
+		p.options.EthPriceBump,
+		ctx.prepare,
+	)
+	if err != nil {
+		return err
+	}
+	p.emitForkResults(results)
+	return nil
+}
+
+func (p *EthPool) collectIncludedForkNonces(
+	ctx *ethAdmissionContext,
+	included tx.Transactions,
+) error {
+	for _, includedTx := range included {
+		if includedTx == nil || !includedTx.IsEthereumTx() {
+			continue
+		}
+		origin, err := includedTx.Origin()
+		if err != nil {
+			return err
+		}
+		if _, err := ctx.stateNonce(origin); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *EthPool) collectForkCandidates(
+	ctx *ethAdmissionContext,
+	discarded tx.Transactions,
+) ([]ethForkCandidate, error) {
+	candidates := make([]ethForkCandidate, 0, len(discarded))
+	for _, discardedTx := range discarded {
+		if discardedTx == nil || !discardedTx.IsEthereumTx() {
+			continue
+		}
+		if origin, err := discardedTx.Origin(); err == nil {
+			if _, err := ctx.stateNonce(origin); err != nil {
+				return nil, err
+			}
+		}
+
+		txObj, stateNonce, duplicate, err := p.resolveAdmission(discardedTx, ctx, true)
+		if err != nil {
+			if IsBadTx(err) || IsTxRejected(err) {
+				logger.Debug("failed to reinject Ethereum tx", "err", err, "id", discardedTx.ID())
+				continue
+			}
+			return nil, err
+		}
+		if !duplicate {
+			candidates = append(candidates, ethForkCandidate{txObj: txObj, stateNonce: stateNonce})
+		}
+	}
+	return candidates, nil
+}
+
+func sortEthForkCandidates(candidates []ethForkCandidate) {
+	slices.SortStableFunc(candidates, func(a, b ethForkCandidate) int {
+		aOrigin, bOrigin := a.txObj.Origin(), b.txObj.Origin()
+		if addressCmp := bytes.Compare(aOrigin[:], bOrigin[:]); addressCmp != 0 {
+			return addressCmp
+		}
+		return cmp.Compare(a.txObj.Nonce(), b.txObj.Nonce())
+	})
+}
+
+func (p *EthPool) emitForkResults(results []ethForkResult) {
+	for _, result := range results {
+		if result.err != nil {
+			logger.Debug("failed to reinject Ethereum tx", "err", result.err, "id", result.txObj.ID())
+			continue
+		}
+		p.emitAdmission(result.txObj.Transaction, result.executable, result.promoted)
+	}
 }
 
 func (p *EthPool) AddLocal(newTx *tx.Transaction) error {

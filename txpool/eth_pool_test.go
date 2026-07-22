@@ -272,3 +272,120 @@ func TestCoordinatorRoutesOnlyEthAddRemoteAndRelaysEvent(t *testing.T) {
 	assert.NotNil(t, coordinator.vechain.GetByHash(local.Hash()), "non-remote flows must retain their current routing")
 	assert.Nil(t, coordinator.eth.GetByHash(local.Hash()))
 }
+
+func TestEthPoolReinjectFromForkAndReplacementPolicy(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[2]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	original := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, big.NewInt(100), signer)
+	events := make(chan *TxEvent, 4)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{original},
+	}))
+	assert.Equal(t, original, pool.GetByHash(original.Hash()))
+	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address))
+	event := nextTxEvent(t, events)
+	assert.Equal(t, original.Hash(), event.Tx.Hash())
+	require.NotNil(t, event.Executable)
+	assert.True(t, *event.Executable)
+
+	// Reinjection is idempotent for a hash already retained by the pool.
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{original},
+	}))
+	assert.Equal(t, 1, pool.Len())
+	select {
+	case duplicateEvent := <-events:
+		t.Fatalf("duplicate reinjection emitted event for %v", duplicateEvent.Tx.ID())
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	underpriced := buildEthPoolTx(
+		t, tchain.Repo().ChainID(), 0,
+		new(big.Int).Add(fee, big.NewInt(1)), big.NewInt(109), signer,
+	)
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{underpriced},
+	}))
+	assert.Equal(t, original, pool.GetByHash(original.Hash()))
+	assert.Nil(t, pool.GetByHash(underpriced.Hash()))
+
+	replacement := buildEthPoolTx(
+		t, tchain.Repo().ChainID(), 0,
+		new(big.Int).Div(new(big.Int).Mul(fee, big.NewInt(110)), big.NewInt(100)),
+		big.NewInt(110), signer,
+	)
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{replacement},
+	}))
+	assert.Nil(t, pool.GetByHash(original.Hash()))
+	assert.Equal(t, replacement, pool.GetByHash(replacement.Hash()))
+}
+
+func TestEthPoolReinjectDuplicateResetsBackwardNonce(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[5]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	trx := buildEthPoolTx(
+		t, tchain.Repo().ChainID(), 0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), signer,
+	)
+	require.NoError(t, pool.AddRemote(trx))
+
+	// Simulate a pool sender initialized against the orphaned head where nonce
+	// had advanced. Reinjection of the already-retained hash must still reset it.
+	pool.all.lock.Lock()
+	pool.all.senders[signer.Address].stateNonce = 1
+	pool.all.lock.Unlock()
+
+	events := make(chan *TxEvent, 2)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{trx},
+	}))
+	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address))
+	event := nextTxEvent(t, events)
+	assert.Equal(t, trx.Hash(), event.Tx.Hash())
+	assert.True(t, *event.Executable)
+}
+
+func TestCoordinatorPartitionsForkReinjection(t *testing.T) {
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	require.NoError(t, err)
+	coordinator := NewCoordinator(tchain.Repo(), tchain.Stater(), Options{
+		Limit: 100, LimitPerAccount: 100,
+		EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	}, &thor.SoloFork)
+	defer coordinator.Close()
+
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	ethTx := buildEthPoolTx(
+		t, tchain.Repo().ChainID(), 0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), devAccounts[1],
+	)
+	to := devAccounts[1].Address
+	nativeTx := tx.MustSign(tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(tchain.Repo().ChainTag()).
+		Gas(21_000).
+		MaxFeePerGas(new(big.Int).Mul(baseFee, big.NewInt(2))).
+		MaxPriorityFeePerGas(big.NewInt(100)).
+		Clause(tx.NewClause(&to)).
+		Expiration(100).
+		Build(), devAccounts[0].PrivateKey)
+
+	require.NoError(t, coordinator.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{nativeTx, ethTx},
+	}))
+	assert.NotNil(t, coordinator.eth.GetByHash(ethTx.Hash()))
+	assert.Nil(t, coordinator.vechain.GetByHash(ethTx.Hash()))
+	assert.NotNil(t, coordinator.vechain.GetByHash(nativeTx.Hash()))
+}

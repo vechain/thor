@@ -6,7 +6,9 @@
 package txpool
 
 import (
+	"bytes"
 	"errors"
+	"slices"
 	"sync"
 
 	"github.com/vechain/thor/v2/thor"
@@ -21,6 +23,18 @@ var (
 )
 
 type ethPrepare func(*TxObject) (reservationRequest, bool, error)
+
+type ethForkCandidate struct {
+	txObj      *TxObject
+	stateNonce uint64
+}
+
+type ethForkResult struct {
+	txObj      *TxObject
+	executable bool
+	promoted   []*TxObject
+	err        error
+}
 
 // ethPoolMap is a thread-safe index of Ethereum-family pooled transactions.
 type ethPoolMap struct {
@@ -78,7 +92,19 @@ func (m *ethPoolMap) add(
 ) (bool, []*TxObject, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	return m.addLocked(txObj, stateNonce, globalLimit, pendingLimit, queueLimit, priceBump, prepare)
+}
 
+// addLocked inserts one transaction. The caller must hold m.lock for writing.
+func (m *ethPoolMap) addLocked(
+	txObj *TxObject,
+	stateNonce uint64,
+	globalLimit int,
+	pendingLimit int,
+	queueLimit int,
+	priceBump uint64,
+	prepare ethPrepare,
+) (bool, []*TxObject, error) {
 	hash := txObj.Hash()
 	if m.allByHash[hash] != nil {
 		return false, nil, errEthAlreadyKnown
@@ -153,8 +179,23 @@ func (m *ethPoolMap) add(
 	}
 	m.allByHash[hash] = txObj
 
-	// Filling a gap can expose a contiguous queued suffix. Prepare all viable
-	// entries and let the shared ledger accept only its affordable prefix.
+	promotions, err := m.promoteLocked(sender, pendingLimit, prepare)
+	if err != nil {
+		return false, nil, err
+	}
+
+	if len(sender.pending) > pendingLimit {
+		return false, nil, errEthAccountPendingOverflow
+	}
+	return sender.isPending(txObj.Nonce()), promotions, nil
+}
+
+// promoteLocked moves the affordable contiguous queue prefix into pending.
+func (m *ethPoolMap) promoteLocked(
+	sender *ethSender,
+	pendingLimit int,
+	prepare ethPrepare,
+) ([]*TxObject, error) {
 	var (
 		promotions []*TxObject
 		requests   []reservationRequest
@@ -182,18 +223,187 @@ func (m *ethPoolMap) add(
 	}
 	accepted, err := m.costs.reconcile(nil, requests, acceptAffordablePrefix)
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 	for _, promoted := range promotions[:accepted] {
 		promoted.executable = true
 		sender.pending[promoted.Nonce()] = promoted
 		delete(sender.queue, promoted.Nonce())
 	}
+	return promotions[:accepted], nil
+}
 
-	if len(sender.pending) > pendingLimit {
-		return false, nil, errEthAccountPendingOverflow
+func (m *ethPoolMap) reconcileFork(
+	candidates []ethForkCandidate,
+	stateNonces map[thor.Address]uint64,
+	globalLimit int,
+	pendingLimit int,
+	queueLimit int,
+	priceBump uint64,
+	prepare ethPrepare,
+) ([]ethForkResult, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	origins := sortedEthOrigins(stateNonces)
+	wasExecutable := m.executableHashesLocked(origins)
+	if err := m.resetForkSendersLocked(origins, stateNonces); err != nil {
+		return nil, err
 	}
-	return sender.isPending(txObj.Nonce()), promotions[:accepted], nil
+
+	results, err := m.promoteForkSendersLocked(origins, wasExecutable, pendingLimit, prepare)
+	if err != nil {
+		return nil, err
+	}
+	candidateResults, err := m.addForkCandidatesLocked(
+		candidates,
+		wasExecutable,
+		globalLimit,
+		pendingLimit,
+		queueLimit,
+		priceBump,
+		prepare,
+	)
+	if err != nil {
+		return nil, err
+	}
+	results = append(results, candidateResults...)
+	m.pruneForkSendersLocked(origins, candidates)
+	return results, nil
+}
+
+func sortedEthOrigins(stateNonces map[thor.Address]uint64) []thor.Address {
+	origins := make([]thor.Address, 0, len(stateNonces))
+	for origin := range stateNonces {
+		origins = append(origins, origin)
+	}
+	slices.SortFunc(origins, func(a, b thor.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
+	return origins
+}
+
+// executableHashesLocked snapshots affected executable transactions before reset.
+func (m *ethPoolMap) executableHashesLocked(origins []thor.Address) map[thor.Bytes32]struct{} {
+	hashes := make(map[thor.Bytes32]struct{})
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		if sender == nil {
+			continue
+		}
+		for _, txObj := range sender.pending {
+			if txObj.executable {
+				hashes[txObj.Hash()] = struct{}{}
+			}
+		}
+	}
+	return hashes
+}
+
+// resetForkSendersLocked releases every stale reservation before promotion.
+func (m *ethPoolMap) resetForkSendersLocked(
+	origins []thor.Address,
+	stateNonces map[thor.Address]uint64,
+) error {
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		if sender == nil {
+			continue
+		}
+		settled, releases := sender.resetStateNonce(stateNonces[origin])
+		if err := m.costs.release(releases...); err != nil {
+			return err
+		}
+		for _, old := range settled {
+			delete(m.allByHash, old.Hash())
+		}
+	}
+	return nil
+}
+
+func (m *ethPoolMap) promoteForkSendersLocked(
+	origins []thor.Address,
+	wasExecutable map[thor.Bytes32]struct{},
+	pendingLimit int,
+	prepare ethPrepare,
+) ([]ethForkResult, error) {
+	var results []ethForkResult
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		if sender == nil {
+			continue
+		}
+		promoted, err := m.promoteLocked(sender, pendingLimit, prepare)
+		if err != nil {
+			return nil, err
+		}
+		for _, txObj := range filterNewPromotions(promoted, wasExecutable) {
+			results = append(results, ethForkResult{txObj: txObj, executable: true})
+		}
+	}
+	return results, nil
+}
+
+func (m *ethPoolMap) addForkCandidatesLocked(
+	candidates []ethForkCandidate,
+	wasExecutable map[thor.Bytes32]struct{},
+	globalLimit int,
+	pendingLimit int,
+	queueLimit int,
+	priceBump uint64,
+	prepare ethPrepare,
+) ([]ethForkResult, error) {
+	results := make([]ethForkResult, 0, len(candidates))
+	for _, candidate := range candidates {
+		executable, promoted, err := m.addLocked(
+			candidate.txObj,
+			candidate.stateNonce,
+			globalLimit,
+			pendingLimit,
+			queueLimit,
+			priceBump,
+			prepare,
+		)
+		if errors.Is(err, errCostTrackerState) || errors.Is(err, errInvalidCost) {
+			return nil, err
+		}
+		results = append(results, ethForkResult{
+			txObj:      candidate.txObj,
+			executable: executable,
+			promoted:   filterNewPromotions(promoted, wasExecutable),
+			err:        err,
+		})
+	}
+	return results, nil
+}
+
+func filterNewPromotions(
+	promoted []*TxObject,
+	wasExecutable map[thor.Bytes32]struct{},
+) []*TxObject {
+	filtered := promoted[:0]
+	for _, txObj := range promoted {
+		if _, alreadyExecutable := wasExecutable[txObj.Hash()]; !alreadyExecutable {
+			filtered = append(filtered, txObj)
+		}
+	}
+	return filtered
+}
+
+func (m *ethPoolMap) pruneForkSendersLocked(origins []thor.Address, candidates []ethForkCandidate) {
+	for _, origin := range origins {
+		if sender := m.senders[origin]; sender != nil && sender.isEmpty() {
+			delete(m.senders, origin)
+		}
+	}
+	// Candidate origins normally appear in stateNonces, but include them
+	// defensively without scanning every sender in the pool.
+	for _, candidate := range candidates {
+		origin := candidate.txObj.Origin()
+		if sender := m.senders[origin]; sender != nil && sender.isEmpty() {
+			delete(m.senders, origin)
+		}
+	}
 }
 
 // pruneEmptySenders drops senders with no pending or queued txs.

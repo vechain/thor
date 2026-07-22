@@ -52,12 +52,17 @@ type TxEvent struct {
 	Executable *bool
 }
 
+type ForkReinjection struct {
+	Discarded tx.Transactions
+	Included  tx.Transactions
+}
+
 // Pool defines the interface for the transaction pool
 type Pool interface {
 	Get(txID thor.Bytes32) *tx.Transaction
 	GetByHash(hash thor.Bytes32) *tx.Transaction
 	AddRemote(newTx *tx.Transaction) error
-	ReinjectFromFork(newTx *tx.Transaction) error
+	ReinjectFromFork(fork ForkReinjection) error
 	AddLocal(tx *tx.Transaction) error
 	StrictlyAdd(newTx *tx.Transaction) error
 	Remove(txHash thor.Bytes32, txID thor.Bytes32) bool
@@ -442,8 +447,17 @@ func (p *VeChainPool) AddRemote(newTx *tx.Transaction) error {
 
 // ReinjectFromFork re-admits a tx from an orphaned side-chain block after a fork.
 // Admission rules match AddRemote (rejectNonExecutable=false, localSubmitted=false).
-func (p *VeChainPool) ReinjectFromFork(newTx *tx.Transaction) error {
-	return p.add(newTx, false, false)
+func (p *VeChainPool) ReinjectFromFork(fork ForkReinjection) error {
+	for _, newTx := range fork.Discarded {
+		if err := p.add(newTx, false, false); err != nil {
+			if IsBadTx(err) || IsTxRejected(err) {
+				logger.Debug("failed to reinject VeChain tx", "err", err, "id", newTx.ID())
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 // AddLocal adds new locally submitted tx into pool.

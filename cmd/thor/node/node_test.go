@@ -40,6 +40,7 @@ type mockTxPool struct {
 
 	// admitCalls records Pool admit entry points for wiring tests.
 	admitCalls []admitCall
+	forkCalls  []txpool.ForkReinjection
 }
 
 type admitCall struct {
@@ -69,9 +70,22 @@ func (m *mockTxPool) AddRemote(newTx *tx.Transaction) error {
 	return nil
 }
 
-func (m *mockTxPool) ReinjectFromFork(newTx *tx.Transaction) error {
-	m.recordAdmit("ReinjectFromFork", newTx)
+func (m *mockTxPool) ReinjectFromFork(fork txpool.ForkReinjection) error {
+	m.mu.Lock()
+	m.forkCalls = append(m.forkCalls, fork)
+	m.mu.Unlock()
+	for _, newTx := range fork.Discarded {
+		m.recordAdmit("ReinjectFromFork", newTx)
+	}
 	return nil
+}
+
+func (m *mockTxPool) getForkCalls() []txpool.ForkReinjection {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]txpool.ForkReinjection, len(m.forkCalls))
+	copy(out, m.forkCalls)
+	return out
 }
 
 func (m *mockTxPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
@@ -434,6 +448,37 @@ func TestNode_TxStashLoop_UnexecutableTx_Processing(t *testing.T) {
 	stashedTxs := stash.LoadAll()
 	assert.Equal(t, 1, len(stashedTxs), "Unexecutable transactions should be stashed")
 	assert.Equal(t, txEvent.Tx.ID(), stashedTxs[0].ID(), "Stashed transaction should match the unexecutable transaction sent")
+}
+
+func TestNode_TxStashLoop_SkipsEthereumTx(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	require.NoError(t, err)
+	defer db.Close()
+
+	node, stash, pool := setupTestNodeForTxstashLoop(db)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		node.txStashLoop(ctx, stash)
+	}()
+
+	var txChan chan *txpool.TxEvent
+	require.Eventually(t, func() bool {
+		txChan = pool.getTxChannel()
+		return txChan != nil
+	}, time.Second, 10*time.Millisecond)
+
+	executable := false
+	txChan <- &txpool.TxEvent{Tx: newTx(tx.TypeEthDynamicFee), Executable: &executable}
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("tx stash loop did not stop")
+	}
+	assert.Empty(t, stash.LoadAll())
 }
 
 func TestNode_TxStashLoop_StashErrorHandling(t *testing.T) {

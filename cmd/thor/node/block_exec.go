@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 type blockExecContext struct {
@@ -327,35 +328,66 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 	oldTrunk := n.repo.NewChain(oldBestBlockID)
 	newTrunk := n.repo.NewChain(newBlock.Header().ParentID())
 
-	sideIDs, err := oldTrunk.Exclude(newTrunk)
+	discardedIDs, err := oldTrunk.Exclude(newTrunk)
+	if err != nil {
+		logger.Warn("failed to process fork", "err", err)
+		return
+	}
+	includedIDs, err := newTrunk.Exclude(oldTrunk)
 	if err != nil {
 		logger.Warn("failed to process fork", "err", err)
 		return
 	}
 
-	metricChainForkCount().Add(int64(len(sideIDs)))
+	metricChainForkCount().Add(int64(len(discardedIDs)))
 
-	if len(sideIDs) == 0 {
-		return
-	}
-
-	if n := len(sideIDs); n >= 2 {
+	if forkLen := len(discardedIDs); forkLen >= 2 {
 		logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,
-			n, sideIDs[n-1]))
+			forkLen, discardedIDs[forkLen-1]))
 	}
 
-	for _, id := range sideIDs {
-		b, err := n.repo.GetBlock(id)
-		if err != nil {
-			logger.Warn("failed to process fork", "err", err)
-			return
-		}
-		for _, tx := range b.Transactions() {
-			if err := n.txPool.ReinjectFromFork(tx); err != nil {
-				logger.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
+	loadTransactions := func(ids []thor.Bytes32) (tx.Transactions, error) {
+		var transactions tx.Transactions
+		for _, id := range ids {
+			b, err := n.repo.GetBlock(id)
+			if err != nil {
+				return nil, err
 			}
+			transactions = append(transactions, b.Transactions()...)
 		}
+		return transactions, nil
+	}
+	discarded, err := loadTransactions(discardedIDs)
+	if err != nil {
+		logger.Warn("failed to process fork", "err", err)
+		return
+	}
+	included, err := loadTransactions(includedIDs)
+	if err != nil {
+		logger.Warn("failed to process fork", "err", err)
+		return
+	}
+	included = append(included, newBlock.Transactions()...)
+
+	includedIDsByTx := make(map[thor.Bytes32]struct{}, len(included))
+	for _, trx := range included {
+		includedIDsByTx[trx.ID()] = struct{}{}
+	}
+	lost := make(tx.Transactions, 0, len(discarded))
+	for _, trx := range discarded {
+		if _, exists := includedIDsByTx[trx.ID()]; !exists {
+			lost = append(lost, trx)
+		}
+	}
+	if n.txPool == nil {
+		return
+	}
+	if err := n.txPool.ReinjectFromFork(txpool.ForkReinjection{
+		Discarded: lost,
+		Included:  included,
+	}); err != nil {
+		logger.Debug("failed to reconcile fork transactions", "err", err)
 	}
 }

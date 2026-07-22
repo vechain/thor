@@ -65,8 +65,13 @@ func (o *OnDemandTxPool) AddRemote(newTx *tx.Transaction) error {
 	return o.AddLocal(newTx)
 }
 
-func (o *OnDemandTxPool) ReinjectFromFork(newTx *tx.Transaction) error {
-	return o.AddLocal(newTx)
+func (o *OnDemandTxPool) ReinjectFromFork(fork txpool.ForkReinjection) error {
+	for _, newTx := range fork.Discarded {
+		if err := o.AddLocal(newTx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {

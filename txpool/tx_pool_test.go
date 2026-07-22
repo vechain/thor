@@ -2207,18 +2207,15 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 	assert.Equal(t, 1, pool.all.Len(), "exactly one eth-tx remains after eviction")
 }
 
-// admitFunc is an admission entry point that must share rules with AddRemote /
-// ReinjectFromFork (rejectNonExecutable=false, localSubmitted=false).
+// admitFunc is an admission entry point with remote admission rules.
 type admitFunc func(p *VeChainPool, trx *tx.Transaction) error
 
 func TestTxPoolSharedRemoteAdmissionRules(t *testing.T) {
-	// Both remote ingress paths must share identical admission rules.
 	admits := []struct {
 		name  string
 		admit admitFunc
 	}{
 		{"AddRemote", func(p *VeChainPool, trx *tx.Transaction) error { return p.AddRemote(trx) }},
-		{"ReinjectFromFork", func(p *VeChainPool, trx *tx.Transaction) error { return p.ReinjectFromFork(trx) }},
 	}
 
 	for _, entry := range admits {

@@ -62,8 +62,13 @@ func (m *instantMintPool) AddRemote(newTx *tx.Transaction) error {
 	return m.AddLocal(newTx)
 }
 
-func (m *instantMintPool) ReinjectFromFork(newTx *tx.Transaction) error {
-	return m.AddLocal(newTx)
+func (m *instantMintPool) ReinjectFromFork(fork txpool.ForkReinjection) error {
+	for _, newTx := range fork.Discarded {
+		if err := m.AddLocal(newTx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {

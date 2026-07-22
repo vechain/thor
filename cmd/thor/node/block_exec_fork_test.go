@@ -57,6 +57,25 @@ func TestProcessFork_ReinjectsSideChainTxs(t *testing.T) {
 	require.Len(t, calls, 1, "exactly one side-chain tx should be reinjected")
 	assert.Equal(t, "ReinjectFromFork", calls[0].method)
 	assert.Equal(t, sideTx.ID(), calls[0].txID)
+
+	// A transaction present on both fork arms is not lost, but the complete new
+	// arm (including the uncommitted tip argument) is still passed for nonce reset.
+	sameTxTip := signBlock(t, new(block.Builder).
+		ParentID(newParentID).
+		Timestamp(oldBest.Header().Timestamp()+thor.BlockInterval()).
+		TotalScore(oldBest.Header().TotalScore()+1).
+		GasLimit(oldBest.Header().GasLimit()).
+		Transaction(sideTx).
+		Build())
+	pool = &mockTxPool{}
+	n = &Node{repo: repo, txPool: pool}
+	n.processFork(sameTxTip, oldBest.Header().ID())
+	assert.Empty(t, pool.getAdmitCalls())
+	forks := pool.getForkCalls()
+	require.Len(t, forks, 1)
+	assert.Empty(t, forks[0].Discarded)
+	require.Len(t, forks[0].Included, 1)
+	assert.Equal(t, sideTx.ID(), forks[0].Included[0].ID())
 }
 
 func TestProcessFork_NoSideChainIsNoOp(t *testing.T) {

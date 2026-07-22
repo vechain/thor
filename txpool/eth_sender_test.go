@@ -45,3 +45,37 @@ func TestEthSenderPoolNonceAndStateSync(t *testing.T) {
 	assert.NotNil(t, sender.pending[5])
 	assert.NotNil(t, sender.queue[8])
 }
+
+func TestEthSenderSyncStateNonceBackward(t *testing.T) {
+	origin := thor.Address{2}
+	sender := newEthSender(origin, 6)
+	tx6, tx7 := feeTx(10, 1), feeTx(10, 1)
+	tx6.executable, tx7.executable = true, true
+	sender.pending[6], sender.pending[7] = tx6, tx7
+
+	settled, releases := sender.syncStateNonce(4)
+	assert.Empty(t, settled)
+	assert.Len(t, releases, 2)
+	assert.Equal(t, uint64(4), sender.poolNonce())
+	assert.Empty(t, sender.pending)
+	assert.Same(t, tx6, sender.queue[6])
+	assert.Same(t, tx7, sender.queue[7])
+	assert.False(t, tx6.executable)
+	assert.False(t, tx7.executable)
+}
+
+func TestEthSenderResetStateNonceRevalidatesUnchangedNonce(t *testing.T) {
+	origin := thor.Address{3}
+	sender := newEthSender(origin, 4)
+	tx4 := feeTx(10, 1)
+	tx4.executable = true
+	sender.pending[4] = tx4
+
+	settled, releases := sender.resetStateNonce(4)
+	assert.Empty(t, settled)
+	assert.Len(t, releases, 1)
+	assert.Empty(t, sender.pending)
+	assert.Same(t, tx4, sender.queue[4])
+	assert.False(t, tx4.executable)
+	assert.Equal(t, uint64(4), sender.poolNonce())
+}

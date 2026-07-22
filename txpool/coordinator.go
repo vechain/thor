@@ -7,6 +7,7 @@ package txpool
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -99,8 +100,28 @@ func (c *TxPoolCoordinator) AddRemote(newTx *tx.Transaction) error {
 	return c.vechain.AddRemote(newTx)
 }
 
-func (c *TxPoolCoordinator) ReinjectFromFork(newTx *tx.Transaction) error {
-	return c.route(newTx).ReinjectFromFork(newTx)
+func (c *TxPoolCoordinator) ReinjectFromFork(fork ForkReinjection) error {
+	var vechainFork, ethFork ForkReinjection
+	partition := func(src tx.Transactions, vechainDst, ethDst *tx.Transactions) {
+		for _, trx := range src {
+			if trx.IsEthereumTx() {
+				*ethDst = append(*ethDst, trx)
+			} else {
+				*vechainDst = append(*vechainDst, trx)
+			}
+		}
+	}
+	partition(fork.Discarded, &vechainFork.Discarded, &ethFork.Discarded)
+	partition(fork.Included, &vechainFork.Included, &ethFork.Included)
+
+	var vechainErr, ethErr error
+	if len(vechainFork.Discarded) > 0 {
+		vechainErr = c.vechain.ReinjectFromFork(vechainFork)
+	}
+	if len(ethFork.Discarded) > 0 || len(ethFork.Included) > 0 {
+		ethErr = c.eth.ReinjectFromFork(ethFork)
+	}
+	return errors.Join(vechainErr, ethErr)
 }
 
 func (c *TxPoolCoordinator) AddLocal(newTx *tx.Transaction) error {

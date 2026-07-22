@@ -69,6 +69,10 @@ func (ts *txStash) LoadAll() tx.Transactions {
 		if err := tx.UnmarshalBinary(it.Value()); err != nil {
 			logger.Warn("decode stashed tx", "err", err)
 			batch.Delete(it.Key())
+		} else if tx.IsEthereumTx() {
+			// Ethereum queue entries are remote-only and must not be restored
+			// through VeChainPool.Fill.
+			batch.Delete(it.Key())
 		} else {
 			txs = append(txs, &tx)
 			ts.fifo.PushBack(tx.Hash())
