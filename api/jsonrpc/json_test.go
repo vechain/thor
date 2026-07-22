@@ -14,9 +14,9 @@ import (
 
 type dataErr struct{}
 
-func (dataErr) Error() string           { return "boom" }
-func (dataErr) ErrorCode() int          { return -32050 }
-func (dataErr) ErrorData() interface{}  { return map[string]int{"x": 1} }
+func (dataErr) Error() string          { return "boom" }
+func (dataErr) ErrorCode() int         { return -32050 }
+func (dataErr) ErrorData() interface{} { return map[string]int{"x": 1} }
 
 func TestToJSONError(t *testing.T) {
 	// plain jsonError passes through unchanged
