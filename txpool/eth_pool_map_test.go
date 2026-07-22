@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,10 @@ import (
 )
 
 func newEthMapTestObject(t *testing.T, nonce uint64, fee int64, signer int) *TxObject {
+	return newEthMapTestObjectWithTip(t, nonce, fee, 1, signer)
+}
+
+func newEthMapTestObjectWithTip(t *testing.T, nonce uint64, fee, tip int64, signer int) *TxObject {
 	t.Helper()
 	to := devAccounts[(signer+1)%len(devAccounts)].Address
 	trx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
@@ -24,12 +29,97 @@ func newEthMapTestObject(t *testing.T, nonce uint64, fee int64, signer int) *TxO
 		Nonce(nonce).
 		Gas(21_000).
 		MaxFeePerGas(big.NewInt(fee)).
-		MaxPriorityFeePerGas(big.NewInt(1)).
+		MaxPriorityFeePerGas(big.NewInt(tip)).
 		To(&to).
 		Build(), devAccounts[signer].PrivateKey)
 	txObj, err := ResolveTx(trx, false)
 	require.NoError(t, err)
 	return txObj
+}
+
+func TestEthPoolMapQueuedReplacementAtGlobalLimit(t *testing.T) {
+	m := newEthPoolMap(newCostTracker())
+	incumbent := newEthMapTestObjectWithTip(t, 2, 10, 1, 0)
+	underpriced := newEthMapTestObjectWithTip(t, 2, 10, 2, 0)
+	replacement := newEthMapTestObjectWithTip(t, 2, 11, 2, 0)
+	newNonce := newEthMapTestObjectWithTip(t, 3, 12, 2, 0)
+
+	executable, promoted, err := m.add(incumbent, 0, 1, 16, 64, 10, fixedEthPrepare(1, 100))
+	require.NoError(t, err)
+	assert.False(t, executable)
+	assert.Empty(t, promoted)
+	assert.Equal(t, 1, m.Len())
+
+	_, _, err = m.add(underpriced, 0, 1, 16, 64, 10, fixedEthPrepare(1, 100))
+	require.ErrorIs(t, err, errEthReplaceUnderpriced)
+	assert.Same(t, incumbent, m.GetByHash(incumbent.Hash()))
+	assert.Nil(t, m.GetByHash(underpriced.Hash()))
+
+	_, _, err = m.add(newNonce, 0, 1, 16, 64, 10, fixedEthPrepare(1, 100))
+	require.EqualError(t, err, "pool is full")
+	assert.Same(t, incumbent, m.GetByHash(incumbent.Hash()))
+
+	executable, promoted, err = m.add(replacement, 0, 1, 16, 64, 10, fixedEthPrepare(1, 100))
+	require.NoError(t, err)
+	assert.False(t, executable)
+	assert.Empty(t, promoted)
+	assert.Equal(t, 1, m.Len())
+	assert.Nil(t, m.GetByHash(incumbent.Hash()))
+	assert.Same(t, replacement, m.GetByHash(replacement.Hash()))
+
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	sender := m.senders[replacement.Origin()]
+	require.NotNil(t, sender)
+	assert.Same(t, replacement, sender.queue[2])
+	assert.Empty(t, sender.pending)
+}
+
+func TestEthPoolMapConcurrentAddRemoveAndSnapshot(t *testing.T) {
+	m := newEthPoolMap(newCostTracker())
+	txObjs := make([]*TxObject, 32)
+	for nonce := range txObjs {
+		txObjs[nonce] = newEthMapTestObjectWithTip(t, uint64(nonce), 100, 10, 1)
+	}
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for _, txObj := range txObjs {
+			_, _, _ = m.add(txObj, 0, 100, 32, 64, 10, fixedEthPrepare(1, 1_000))
+		}
+	})
+	wg.Go(func() {
+		for range 4 {
+			for _, txObj := range txObjs {
+				m.removeByHash(txObj.Hash())
+			}
+		}
+	})
+	wg.Go(func() {
+		for range 128 {
+			snapshot := m.executableSnapshot()
+			assert.LessOrEqual(t, snapshot.total, len(txObjs))
+			_ = snapshot.transactions()
+		}
+	})
+	wg.Wait()
+
+	assert.Equal(t, m.Len(), len(m.ToTxs()))
+}
+
+func TestEthPoolMapPruneEmptySenders(t *testing.T) {
+	m := newEthPoolMap(newCostTracker())
+	emptyOrigin := thor.Address{0xa1}
+	liveOrigin := thor.Address{0xa2}
+	m.senders[emptyOrigin] = newEthSender(emptyOrigin, 0)
+	live := newEthSender(liveOrigin, 0)
+	live.queue[1] = feeTx(10, 1)
+	m.senders[liveOrigin] = live
+
+	m.pruneEmptySenders()
+
+	assert.NotContains(t, m.senders, emptyOrigin)
+	assert.Same(t, live, m.senders[liveOrigin])
 }
 
 func fixedEthPrepare(cost, balance int64) ethPrepare {

@@ -29,10 +29,11 @@ var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 
 // EthPool maintains unprocessed Ethereum-family transactions.
 //
-// TODO: complete local/strict admission, partitioned Fill, the VeChain
+// TODO: complete strict admission, partitioned Fill, the VeChain
 // wrong-family guard, family-aware metrics, and demotion event policy.
 // Every future mutation path must use the shared costTracker and must never
 // call into VeChainPool directly.
+// AddLocal and Fill are intentionally no-ops until local/stash admission is wired.
 type EthPool struct {
 	options      Options
 	repo         *chain.Repository
@@ -466,7 +467,7 @@ func (p *EthPool) emitForkResults(results []ethForkResult) {
 
 func (p *EthPool) AddLocal(newTx *tx.Transaction) error {
 	_ = newTx
-	return errEthPoolNotImplemented
+	return nil
 }
 
 func (p *EthPool) StrictlyAdd(newTx *tx.Transaction) error {
@@ -499,7 +500,7 @@ func (p *EthPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 }
 
 func (p *EthPool) Executables() tx.Transactions {
-	return nil
+	return p.all.executableSnapshot().transactions()
 }
 
 func (p *EthPool) Fill(txs tx.Transactions) {

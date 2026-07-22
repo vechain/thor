@@ -39,6 +39,10 @@ type ethExecutablesSnapshot struct {
 	total  int
 }
 
+func (s ethExecutablesSnapshot) transactions() tx.Transactions {
+	return orderExecutableStreams(s.groups, s.total)
+}
+
 // compareExecutableTx returns a negative value when a sorts before b.
 func compareExecutableTx(a, b executableTx) int {
 	if cmp := b.priorityGasPrice.Cmp(a.priorityGasPrice); cmp != 0 {
@@ -92,7 +96,7 @@ func (h *executableMergeHeap) Pop() any {
 	return item
 }
 
-func mergeExecutables(vechain []executableTx, eth ethExecutablesSnapshot) tx.Transactions {
+func mergePoolExecutables(vechain []executableTx, eth ethExecutablesSnapshot) tx.Transactions {
 	if len(vechain) == 0 && eth.total == 0 {
 		return nil
 	}
@@ -102,6 +106,14 @@ func mergeExecutables(vechain []executableTx, eth ethExecutablesSnapshot) tx.Tra
 		sources = append(sources, vechain)
 	}
 	sources = append(sources, eth.groups...)
+
+	return orderExecutableStreams(sources, len(vechain)+eth.total)
+}
+
+func orderExecutableStreams(sources [][]executableTx, total int) tx.Transactions {
+	if total == 0 {
+		return nil
+	}
 
 	mergeHeap := make(executableMergeHeap, 0, len(sources))
 	for sourceIndex, source := range sources {
@@ -115,10 +127,10 @@ func mergeExecutables(vechain []executableTx, eth ethExecutablesSnapshot) tx.Tra
 	}
 	heap.Init(&mergeHeap)
 
-	merged := make(tx.Transactions, 0, len(vechain)+eth.total)
+	ordered := make(tx.Transactions, 0, total)
 	for mergeHeap.Len() > 0 {
 		item := heap.Pop(&mergeHeap).(executableMergeItem)
-		merged = append(merged, item.entry.tx)
+		ordered = append(ordered, item.entry.tx)
 
 		item.entryIndex++
 		source := sources[item.sourceIndex]
@@ -127,5 +139,5 @@ func mergeExecutables(vechain []executableTx, eth ethExecutablesSnapshot) tx.Tra
 			heap.Push(&mergeHeap, item)
 		}
 	}
-	return merged
+	return ordered
 }

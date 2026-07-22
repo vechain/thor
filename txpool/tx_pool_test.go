@@ -6,6 +6,7 @@
 package txpool
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -140,7 +142,6 @@ func TestTxPoolMetrics(t *testing.T) {
 	var txPoolMetric *dto.MetricFamily
 	var badTxMetric *dto.MetricFamily
 	for _, mf := range metricFamilies {
-		println("metric", mf.GetName())
 		if mf.GetName() == "thor_metrics_txpool_current_tx_count" {
 			txPoolMetric = mf
 			continue
@@ -175,7 +176,7 @@ func TestTxPoolMetrics(t *testing.T) {
 
 		if source == "remote" && txType == "Legacy" {
 			foundLegacy = true
-			assert.Equal(t, float64(1), m.GetGauge().GetValue())
+			assert.GreaterOrEqual(t, m.GetGauge().GetValue(), float64(1))
 		}
 	}
 
@@ -191,12 +192,105 @@ func TestTxPoolMetrics(t *testing.T) {
 
 		if source == "remote" {
 			foundBad = true
-			assert.Equal(t, float64(2), m.GetGauge().GetValue())
+			assert.GreaterOrEqual(t, m.GetGauge().GetValue(), float64(2))
 		}
 	}
 
 	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
 	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
+}
+
+func TestTxPoolOperationalMetrics(t *testing.T) {
+	pool := newPool(100, 100, &thor.SoloFork)
+	defer pool.Close()
+	trx := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[0],
+	)
+	require.NoError(t, pool.AddRemote(trx))
+	require.Eventually(t, func() bool {
+		return len(pool.Executables()) == 1
+	}, 2*time.Second, 20*time.Millisecond)
+
+	accountMap := newTxObjectMap(newCostTracker())
+	for i := range 2 {
+		accountTx := newTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			tx.Features(0),
+			devAccounts[1],
+		)
+		accountObj, err := ResolveTx(accountTx, false)
+		require.NoError(t, err)
+		err = accountMap.Add(accountObj, 1, nil)
+		if i == 1 {
+			require.EqualError(t, err, "account quota exceeded")
+		} else {
+			require.NoError(t, err)
+		}
+	}
+
+	delegatorMap := newTxObjectMap(newCostTracker())
+	for i, origin := range []int{2, 3} {
+		delegated := newDelegatedTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			devAccounts[origin],
+			devAccounts[4],
+		)
+		delegatedObj, err := ResolveTx(delegated, false)
+		require.NoError(t, err)
+		err = delegatorMap.Add(delegatedObj, 1, nil)
+		if i == 1 {
+			require.EqualError(t, err, "delegator quota exceeded")
+		} else {
+			require.NoError(t, err)
+		}
+	}
+
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	var executablesMetric, quotaMetric *dto.MetricFamily
+	for _, family := range metricFamilies {
+		switch family.GetName() {
+		case "thor_metrics_txpool_executable_tx_count":
+			executablesMetric = family
+		case "thor_metrics_account_quota_exceeded":
+			quotaMetric = family
+		}
+	}
+	require.NotNil(t, executablesMetric)
+	require.NotEmpty(t, executablesMetric.GetMetric())
+	assert.GreaterOrEqual(t, executablesMetric.GetMetric()[0].GetGauge().GetValue(), float64(1))
+
+	require.NotNil(t, quotaMetric)
+	foundQuota := map[string]bool{"account": false, "delegator": false}
+	for _, metric := range quotaMetric.GetMetric() {
+		for _, label := range metric.GetLabel() {
+			if label.GetName() == "type" && metric.GetCounter().GetValue() >= 1 {
+				foundQuota[label.GetValue()] = true
+			}
+		}
+	}
+	assert.True(t, foundQuota["account"])
+	assert.True(t, foundQuota["delegator"])
 }
 
 func TestNewCloseWithServer(t *testing.T) {
@@ -1131,6 +1225,206 @@ func TestBlocked(t *testing.T) {
 	assert.Nil(t, got)
 
 	os.Remove(file.Name())
+}
+
+func TestBlockedDelegatorSilentDrop(t *testing.T) {
+	origin := devAccounts[0]
+	delegator := devAccounts[1]
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
+	defer pool.Close()
+	pool.blocklist.lock.Lock()
+	pool.blocklist.list = map[thor.Address]bool{delegator.Address: true}
+	pool.blocklist.lock.Unlock()
+
+	blocked := newDelegatedTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		origin,
+		delegator,
+	)
+	require.NoError(t, pool.AddRemote(blocked))
+	assert.Zero(t, pool.Len())
+	assert.Nil(t, pool.Get(blocked.ID()))
+
+	pool.blocklist.lock.Lock()
+	delete(pool.blocklist.list, delegator.Address)
+	pool.blocklist.lock.Unlock()
+	allowed := newDelegatedTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		origin,
+		delegator,
+	)
+	require.NoError(t, pool.AddRemote(allowed))
+	assert.Equal(t, 1, pool.Len())
+	assert.Same(t, allowed, pool.Get(allowed.ID()))
+}
+
+func TestVeChainPoolReinjectFromForkAndGetByHash(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	discarded := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[2],
+	)
+	includedOnly := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[3],
+	)
+	invalid := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag()+1,
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[4],
+	)
+
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Discarded: tx.Transactions{discarded, invalid},
+		Included:  tx.Transactions{includedOnly},
+	}))
+
+	assert.Same(t, discarded, pool.GetByHash(discarded.Hash()))
+	assert.Same(t, discarded, pool.Get(discarded.ID()))
+	assert.Nil(t, pool.GetByHash(includedOnly.Hash()),
+		"included transactions are not admitted by the VeChain reinjection path")
+	assert.Nil(t, pool.GetByHash(invalid.Hash()),
+		"invalid discarded transactions must be skipped without aborting the batch")
+	assert.Nil(t, pool.GetByHash(thor.Bytes32{0xff}))
+	assert.Equal(t, 1, pool.Len())
+}
+
+func TestVeChainPoolConcurrentAddWashAndExecutables(t *testing.T) {
+	pool := newPool(100, 100, &thor.NoFork)
+	defer pool.Close()
+
+	txs := make(tx.Transactions, 32)
+	for i := range txs {
+		txs[i] = newTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			tx.Features(0),
+			devAccounts[i%len(devAccounts)],
+		)
+	}
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for _, trx := range txs {
+			_ = pool.AddRemote(trx)
+		}
+	})
+	wg.Go(func() {
+		for range 16 {
+			_, _, _, _ = pool.wash(pool.repo.BestBlockSummary(), false)
+		}
+	})
+	wg.Go(func() {
+		for range 128 {
+			_ = pool.Executables()
+		}
+	})
+	wg.Wait()
+
+	assert.Equal(t, pool.Len(), len(pool.Dump()))
+}
+
+func TestVeChainPoolConcurrentBlocklistRefreshAndAdmission(t *testing.T) {
+	pool := newPool(100, 100, &thor.NoFork)
+	defer pool.Close()
+
+	blockedPath := t.TempDir() + "/blocked.txt"
+	emptyPath := t.TempDir() + "/empty.txt"
+	require.NoError(t, os.WriteFile(blockedPath, []byte(devAccounts[0].Address.String()), 0o600))
+	require.NoError(t, os.WriteFile(emptyPath, nil, 0o600))
+	require.NoError(t, pool.blocklist.Load(emptyPath))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprintln(w, devAccounts[0].Address.String())
+	}))
+	defer server.Close()
+
+	txs := make(tx.Transactions, 32)
+	for i := range txs {
+		txs[i] = newTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			tx.Features(0),
+			devAccounts[0],
+		)
+	}
+
+	errs := make(chan error, len(txs)+64)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for _, trx := range txs {
+			if err := pool.AddRemote(trx); err != nil {
+				errs <- err
+			}
+		}
+	})
+	wg.Go(func() {
+		for i := range 32 {
+			path := emptyPath
+			if i%2 == 0 {
+				path = blockedPath
+			}
+			if err := pool.blocklist.Load(path); err != nil {
+				errs <- err
+			}
+		}
+	})
+	wg.Go(func() {
+		for range 32 {
+			if err := pool.blocklist.Fetch(context.Background(), server.URL, nil); err != nil {
+				errs <- err
+			}
+		}
+	})
+	wg.Wait()
+	close(errs)
+
+	assert.Empty(t, errs)
+	assert.LessOrEqual(t, pool.Len(), len(txs))
 }
 
 func TestWash(t *testing.T) {

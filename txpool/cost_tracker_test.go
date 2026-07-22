@@ -133,6 +133,57 @@ func TestCostTrackerReconcileAffordablePrefix(t *testing.T) {
 	assert.Zero(t, tr.pendingCost(payer).Sign())
 }
 
+func TestCostTrackerRejectsDuplicateDesiredOwnerWithoutMutation(t *testing.T) {
+	tr := newCostTracker()
+	payer := thor.Address{0x61}
+	existing := ethReservationOwner(payer, 0)
+	duplicate := ethReservationOwner(payer, 1)
+	require.NoError(t, tr.reserve(existing, payer, big.NewInt(30), big.NewInt(100)))
+
+	accepted, err := tr.reconcile(
+		[]reservationOwner{existing},
+		[]reservationRequest{
+			{owner: duplicate, payer: payer, cost: big.NewInt(20), balance: big.NewInt(100)},
+			{owner: duplicate, payer: payer, cost: big.NewInt(10), balance: big.NewInt(100)},
+		},
+		requireAllReservations,
+	)
+
+	require.EqualError(t, err, "cost tracker: duplicate reservation owner")
+	assert.Zero(t, accepted)
+	assert.Equal(t, big.NewInt(30), tr.pendingCost(payer))
+	assert.Contains(t, tr.reservations, existing)
+	assert.NotContains(t, tr.reservations, duplicate)
+}
+
+func TestCostTrackerZeroCostReservationLifecycle(t *testing.T) {
+	tr := newCostTracker()
+	payer := thor.Address{0x62}
+	owner := ethReservationOwner(payer, 0)
+
+	require.NoError(t, tr.reserve(owner, payer, new(big.Int), new(big.Int)))
+	assert.NotContains(t, tr.pending, payer)
+	require.Contains(t, tr.reservations, owner)
+	assert.Zero(t, tr.reservations[owner].cost.Sign())
+
+	require.NoError(t, tr.release(owner))
+	assert.NotContains(t, tr.pending, payer)
+	assert.NotContains(t, tr.reservations, owner)
+}
+
+func TestCostTrackerDeletesPendingEntryAtZero(t *testing.T) {
+	tr := newCostTracker()
+	payer := thor.Address{0x63}
+	owner := vechainReservationOwner(thor.Bytes32{0x63})
+
+	require.NoError(t, tr.reserve(owner, payer, big.NewInt(25), big.NewInt(25)))
+	require.Contains(t, tr.pending, payer)
+	require.NoError(t, tr.release(owner))
+
+	assert.NotContains(t, tr.pending, payer)
+	assert.Zero(t, tr.pendingCost(payer).Sign())
+}
+
 func TestCostTrackerMapAddRelease(t *testing.T) {
 	costs := newCostTracker()
 	m := newTxObjectMap(costs)

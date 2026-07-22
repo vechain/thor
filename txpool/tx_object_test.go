@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -171,6 +172,91 @@ func TestResolve(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, trx, txObj.Transaction)
 	assert.Equal(t, acc.Address, txObj.Origin())
+}
+
+func TestExecutableSetsAccountingSideEffectsOnSuccess(t *testing.T) {
+	acc, repo, best, st, forkConfig := SetupTest()
+	trx := newTx(
+		tx.TypeDynamicFee,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		acc,
+	)
+	txObj, err := ResolveTx(trx, false)
+	require.NoError(t, err)
+	assert.Nil(t, txObj.Payer())
+	assert.Nil(t, txObj.Cost())
+	assert.Nil(t, txObj.priorityGasPrice)
+
+	executable, err := txObj.Executable(
+		repo.NewChain(best.Header().ID()),
+		st,
+		best.Header(),
+		forkConfig,
+		galacticaBaseFee(best),
+	)
+
+	require.NoError(t, err)
+	require.True(t, executable)
+	require.NotNil(t, txObj.Payer())
+	assert.Equal(t, acc.Address, *txObj.Payer())
+	require.NotNil(t, txObj.Cost())
+	assert.Positive(t, txObj.Cost().Sign())
+	require.NotNil(t, txObj.priorityGasPrice)
+	assert.GreaterOrEqual(t, txObj.priorityGasPrice.Sign(), 0)
+
+	payer, cost, priority := txObj.payer, txObj.cost, txObj.priorityGasPrice
+	txObj.executable = true
+	executable, err = txObj.Executable(
+		repo.NewChain(best.Header().ID()),
+		st,
+		best.Header(),
+		forkConfig,
+		galacticaBaseFee(best),
+	)
+	require.NoError(t, err)
+	require.True(t, executable)
+	assert.Same(t, payer, txObj.payer)
+	assert.Same(t, cost, txObj.cost)
+	assert.Same(t, priority, txObj.priorityGasPrice)
+}
+
+func TestEthTxObjectExecutableNonceDecisions(t *testing.T) {
+	acc, repo, best, st, forkConfig := SetupTest()
+	require.NoError(t, st.SetNonce(acc.Address, 1))
+	to := genesis.DevAccounts()[1].Address
+	build := func(nonce uint64) *TxObject {
+		trx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
+			ChainID(repo.ChainID()).
+			Nonce(nonce).
+			Gas(21_000).
+			MaxFeePerGas(new(big.Int).Mul(galacticaBaseFee(best), big.NewInt(2))).
+			MaxPriorityFeePerGas(big.NewInt(100)).
+			To(&to).
+			Build(), acc.PrivateKey)
+		txObj, err := ResolveTx(trx, false)
+		require.NoError(t, err)
+		return txObj
+	}
+	chainView := repo.NewChain(best.Header().ID())
+	baseFee := galacticaBaseFee(best)
+
+	executable, err := build(0).Executable(chainView, st, best.Header(), forkConfig, baseFee)
+	require.EqualError(t, err, "nonce too low")
+	assert.False(t, executable)
+
+	executable, err = build(2).Executable(chainView, st, best.Header(), forkConfig, baseFee)
+	require.NoError(t, err)
+	assert.False(t, executable, "a nonce gap must remain queued")
+
+	executable, err = build(1).Executable(chainView, st, best.Header(), forkConfig, baseFee)
+	require.NoError(t, err)
+	assert.True(t, executable)
 }
 
 func TestExecutable(t *testing.T) {

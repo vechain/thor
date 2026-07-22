@@ -4,12 +4,88 @@ package txpool
 
 import (
 	"math/big"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
+
+func benchmarkEthMapObject(b *testing.B, nonce uint64) *TxObject {
+	b.Helper()
+	to := devAccounts[1].Address
+	trx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
+		ChainID(1).
+		Nonce(nonce).
+		Gas(21_000).
+		MaxFeePerGas(big.NewInt(100)).
+		MaxPriorityFeePerGas(big.NewInt(10)).
+		To(&to).
+		Build(), devAccounts[0].PrivateKey)
+	txObj, err := ResolveTx(trx, false)
+	if err != nil {
+		b.Fatal(err)
+	}
+	return txObj
+}
+
+func benchmarkEthPrepare(txObj *TxObject) (reservationRequest, bool, error) {
+	payer := txObj.Origin()
+	return reservationRequest{
+		owner:   ethReservationOwner(payer, txObj.Nonce()),
+		payer:   payer,
+		cost:    big.NewInt(1),
+		balance: big.NewInt(1_000_000),
+	}, true, nil
+}
+
+func benchmarkPopulatedEthMap(b *testing.B) *ethPoolMap {
+	b.Helper()
+	poolMap := newEthPoolMap(newCostTracker())
+	for nonce := uint64(1); nonce <= 80; nonce++ {
+		txObj := benchmarkEthMapObject(b, nonce)
+		if _, _, err := poolMap.add(txObj, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
+			b.Fatal(err)
+		}
+	}
+	return poolMap
+}
+
+func BenchmarkEthPoolMapAdd(b *testing.B) {
+	poolMap := benchmarkPopulatedEthMap(b)
+	candidate := benchmarkEthMapObject(b, 1_000)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, _, err := poolMap.add(candidate, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		poolMap.removeByHash(candidate.Hash())
+		b.StartTimer()
+	}
+}
+
+func BenchmarkEthPoolMapAddParallel(b *testing.B) {
+	poolMap := benchmarkPopulatedEthMap(b)
+	candidates := make([]*TxObject, 256)
+	for i := range candidates {
+		candidates[i] = benchmarkEthMapObject(b, uint64(2_000+i))
+	}
+	var cursor atomic.Uint64
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			candidate := candidates[cursor.Add(1)%uint64(len(candidates))]
+			_, _, _ = poolMap.add(candidate, 0, 0, 16, 1_000, 10, benchmarkEthPrepare)
+			poolMap.removeByHash(candidate.Hash())
+		}
+	})
+}
 
 func BenchmarkEthPoolMapWashDefaultLimit(b *testing.B) {
 	const (

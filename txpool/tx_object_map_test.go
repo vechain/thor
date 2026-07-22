@@ -209,3 +209,65 @@ func TestPendingCost(t *testing.T) {
 	m.RemoveByHash(txObj3.Hash())
 	assert.Equal(t, 0, m.costs.pendingCost(genesis.DevAccounts()[2].Address).Sign())
 }
+
+func TestTxObjectMapReserveCostAfterRemoval(t *testing.T) {
+	repo := newChainRepo()
+	trx := newTx(
+		tx.TypeDynamicFee,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[0],
+	)
+	txObj, err := ResolveTx(trx, false)
+	assert.NoError(t, err)
+
+	costs := newCostTracker()
+	m := newTxObjectMap(costs)
+	assert.NoError(t, m.Add(txObj, 1, nil))
+	assert.True(t, m.RemoveByHash(txObj.Hash()))
+
+	payer := txObj.Origin()
+	txObj.payer = &payer
+	txObj.cost = big.NewInt(10)
+	reserved, err := m.ReserveCost(txObj, big.NewInt(100))
+
+	assert.NoError(t, err)
+	assert.False(t, reserved)
+	assert.Zero(t, costs.pendingCost(payer).Sign())
+	assert.Empty(t, costs.reservations)
+}
+
+func TestTxObjectMapExecutableSnapshotSkipsMissingPriority(t *testing.T) {
+	repo := newChainRepo()
+	trx := newTx(
+		tx.TypeDynamicFee,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[0],
+	)
+	txObj, err := ResolveTx(trx, false)
+	assert.NoError(t, err)
+
+	m := newTxObjectMap(newCostTracker())
+	assert.NoError(t, m.Add(txObj, 1, nil))
+
+	snapshot := m.executableSnapshot(tx.Transactions{trx})
+	assert.Empty(t, snapshot.transactions)
+	assert.Empty(t, snapshot.entries)
+
+	txObj.priorityGasPrice = big.NewInt(1)
+	snapshot = m.executableSnapshot(tx.Transactions{trx})
+	assert.Equal(t, tx.Transactions{trx}, snapshot.transactions)
+	assert.Len(t, snapshot.entries, 1)
+	assert.Same(t, trx, snapshot.entries[0].tx)
+}

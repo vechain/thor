@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -19,12 +20,21 @@ import (
 )
 
 func buildEthPoolTx(t *testing.T, chainID, nonce uint64, feeCap, tipCap *big.Int, signer genesis.DevAccount) *tx.Transaction {
+	return buildEthPoolTxWithGas(t, chainID, nonce, 21_000, feeCap, tipCap, signer)
+}
+
+func buildEthPoolTxWithGas(
+	t *testing.T,
+	chainID, nonce, gas uint64,
+	feeCap, tipCap *big.Int,
+	signer genesis.DevAccount,
+) *tx.Transaction {
 	t.Helper()
 	to := devAccounts[1].Address
 	trx := tx.NewBuilder(tx.TypeEthDynamicFee).
 		ChainID(chainID).
 		Nonce(nonce).
-		Gas(21_000).
+		Gas(gas).
 		MaxFeePerGas(feeCap).
 		MaxPriorityFeePerGas(tipCap).
 		To(&to).
@@ -114,11 +124,17 @@ func TestEthPoolAddRemoteNoncePlacementAndReplacement(t *testing.T) {
 	assert.Nil(t, pool.GetByHash(nonce1.Hash()))
 	assert.Equal(t, replacement, pool.GetByHash(replacement.Hash()))
 	assert.Equal(t, 2, pool.Len())
+	assert.Equal(t, replacement.Hash(), nextTxEvent(t, events).Tx.Hash())
 
 	err := pool.AddRemote(replacement)
 	require.Error(t, err)
 	assert.True(t, IsTxRejected(err))
 	assert.Contains(t, err.Error(), "already known")
+	select {
+	case duplicateEvent := <-events:
+		t.Fatalf("duplicate admission emitted event for %v", duplicateEvent.Tx.ID())
+	case <-time.After(20 * time.Millisecond):
+	}
 }
 
 func TestEthPoolRemoveAndDump(t *testing.T) {
@@ -439,6 +455,160 @@ func TestEthPoolAddRemoteRejectsInvalidAndUnderpriced(t *testing.T) {
 	assert.True(t, IsBadTx(err))
 }
 
+func TestEthPoolRejectsGasAboveBlockLimit(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	head := tchain.Repo().BestBlockSummary()
+	baseFee := head.Header.BaseFee()
+	trx := buildEthPoolTxWithGas(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		21_000,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		devAccounts[0],
+	)
+
+	ctx := pool.newAdmissionContext()
+	lowGasHead := *ctx.head
+	lowGasHead.Header = new(block.Builder).GasLimit(20_000).Build().Header()
+	ctx.head = &lowGasHead
+	_, _, _, err := pool.resolveAdmission(trx, ctx, false)
+
+	require.Error(t, err)
+	assert.True(t, IsTxRejected(err))
+	assert.Contains(t, err.Error(), "tx gas exceeds block gas limit")
+	assert.Nil(t, pool.GetByHash(trx.Hash()))
+	assert.Zero(t, pool.Len())
+
+	atProtocolLimit := buildEthPoolTxWithGas(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		thor.MaxTxGasLimit,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		devAccounts[0],
+	)
+	_, _, _, err = pool.resolveAdmission(atProtocolLimit, pool.newAdmissionContext(), false)
+	require.NoError(t, err)
+}
+
+func TestEthPoolRejectsKnownOnChainTransaction(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	trx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		devAccounts[1],
+	)
+	require.NoError(t, tchain.MintBlock(trx))
+
+	err := pool.AddRemote(trx)
+
+	require.Error(t, err)
+	assert.True(t, IsTxRejected(err))
+	assert.Contains(t, err.Error(), "known tx")
+	assert.Nil(t, pool.GetByHash(trx.Hash()))
+}
+
+func TestEthPoolPoolNonceStateFallbackAndSender(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[2]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	mined := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		signer,
+	)
+	require.NoError(t, tchain.MintBlock(mined))
+
+	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address),
+		"an absent sender must fall back to canonical state")
+
+	pending := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		1,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		signer,
+	)
+	require.NoError(t, pool.AddRemote(pending))
+	assert.Equal(t, uint64(2), pool.PoolNonce(signer.Address),
+		"a present sender must report its contiguous pending nonce")
+	assert.True(t, pool.Remove(pending.Hash(), pending.ID()))
+	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address),
+		"after sender pruning PoolNonce must fall back to canonical state")
+}
+
+func TestEthPoolStubInterfaceContracts(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	trx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		tchain.Repo().BestBlockSummary().Header.BaseFee(),
+		big.NewInt(0),
+		devAccounts[3],
+	)
+
+	assert.Nil(t, pool.Executables())
+	pool.Fill(tx.Transactions{trx})
+	assert.Zero(t, pool.Len())
+	assert.Nil(t, pool.GetByHash(trx.Hash()))
+}
+
+func TestEthPoolWashReconcilesBackwardStateNonce(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
+		EthPriceBump: 10, MaxLifetime: time.Hour,
+	})
+	signer := devAccounts[4]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	trx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		signer,
+	)
+	require.NoError(t, pool.AddRemote(trx))
+
+	pool.all.lock.Lock()
+	pool.all.senders[signer.Address].stateNonce = 1
+	pool.all.lock.Unlock()
+
+	require.NoError(t, pool.wash(tchain.Repo().BestBlockSummary()))
+
+	pool.all.lock.RLock()
+	defer pool.all.lock.RUnlock()
+	sender := pool.all.senders[signer.Address]
+	require.NotNil(t, sender)
+	assert.Equal(t, uint64(0), sender.stateNonce)
+	assert.Same(t, pool.all.allByHash[trx.Hash()], sender.pending[0],
+		"wash must revalidate and promote the transaction against the lower canonical nonce")
+	assert.Empty(t, sender.queue)
+	assert.True(t, sender.pending[0].executable)
+	assert.Equal(t, uint64(1), sender.poolNonce())
+	assert.Positive(t, pool.costs.pendingCost(signer.Address).Sign())
+}
+
 func TestEthPoolReplacementCostRollback(t *testing.T) {
 	pool, tchain := newEthPoolTest(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
@@ -559,7 +729,7 @@ func TestCoordinatorRoutesEthereumAdmissionAndRelaysEvent(t *testing.T) {
 	}
 
 	local := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), devAccounts[9])
-	require.ErrorIs(t, coordinator.AddLocal(local), errEthPoolNotImplemented)
+	require.NoError(t, coordinator.AddLocal(local))
 	require.ErrorIs(t, coordinator.StrictlyAdd(local), errEthPoolNotImplemented)
 	assert.Nil(t, coordinator.vechain.GetByHash(local.Hash()))
 	assert.Nil(t, coordinator.eth.GetByHash(local.Hash()))
