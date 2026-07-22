@@ -18,7 +18,7 @@ import (
 type ethAPI struct{ b *backend }
 
 // eth_chainId
-func (a *ethAPI) ChainId() (*hexutil.Big, error) {
+func (a *ethAPI) ChainId() (*hexutil.Big, error) { //nolint:revive // must be ChainId so it maps to eth_chainId
 	return (*hexutil.Big)(new(big.Int).SetUint64(a.b.repo.ChainID())), nil
 }
 
