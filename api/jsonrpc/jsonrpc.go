@@ -8,6 +8,7 @@ package jsonrpc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -28,9 +29,18 @@ func New(repo *chain.Repository, stater *state.Stater, bft bft.Committer, forkCo
 	srv := NewServer()
 	b := &backend{repo: repo, stater: stater, bft: bft, forkConfig: forkConfig}
 
-	_ = srv.RegisterName("eth", &ethAPI{b: b})
-	_ = srv.RegisterName("net", &netAPI{b: b})
-	_ = srv.RegisterName("web3", &web3API{})
+	for _, reg := range []struct {
+		namespace string
+		service   interface{}
+	}{
+		{"eth", &ethAPI{b: b}},
+		{"net", &netAPI{b: b}},
+		{"web3", &web3API{}},
+	} {
+		if err := srv.RegisterName(reg.namespace, reg.service); err != nil {
+			panic(fmt.Sprintf("jsonrpc: register namespace %q: %v", reg.namespace, err))
+		}
+	}
 
 	return &JSONRPC{server: srv}
 }
