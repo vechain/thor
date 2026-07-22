@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -29,8 +30,7 @@ var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 // EthPool maintains unprocessed Ethereum-family transactions.
 //
 // TODO: complete local/strict admission, partitioned Fill, the VeChain
-// wrong-family guard, and a full Eth wash covering base-fee repricing,
-// affordability, MaxLifetime, limits, metrics, and demotion event policy.
+// wrong-family guard, family-aware metrics, and demotion event policy.
 // Every future mutation path must use the shared costTracker and must never
 // call into VeChainPool directly.
 type EthPool struct {
@@ -43,11 +43,12 @@ type EthPool struct {
 
 	all *ethPoolMap
 
-	ctx    context.Context
-	cancel func()
-	txFeed event.Feed
-	scope  event.SubscriptionScope
-	goes   sync.WaitGroup
+	addedAfterWash atomic.Uint32
+	ctx            context.Context
+	cancel         func()
+	txFeed         event.Feed
+	scope          event.SubscriptionScope
+	goes           sync.WaitGroup
 }
 
 var _ Pool = (*EthPool)(nil)
@@ -93,20 +94,68 @@ func (p *EthPool) housekeeping() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			currentHead := p.repo.BestBlockSummary()
-			if currentHead.Header.ID() == processedHead.Header.ID() {
+			nextHead, err := p.runHousekeepingTick(processedHead)
+			if err != nil {
+				logger.Warn("failed to maintain Ethereum pool", "err", err)
 				continue
 			}
-			if !isChainSynced(uint64(time.Now().Unix()), currentHead.Header.Timestamp()) {
-				continue
-			}
-			if err := p.processHeadChange(processedHead, currentHead); err != nil {
-				logger.Warn("failed to process Ethereum pool head change", "err", err)
-				continue
-			}
-			processedHead = currentHead
+			processedHead = nextHead
 		}
 	}
+}
+
+func (p *EthPool) runHousekeepingTick(processedHead *chain.BlockSummary) (*chain.BlockSummary, error) {
+	currentHead := p.repo.BestBlockSummary()
+	headChanged := currentHead.Header.ID() != processedHead.Header.ID()
+	poolLen := p.all.Len()
+	overLimit := p.options.Limit > 0 && poolLen > p.options.Limit
+	if !headChanged && !overLimit && p.addedAfterWash.Load() <= 0 {
+		return processedHead, nil
+	}
+	if !isChainSynced(uint64(time.Now().Unix()), currentHead.Header.Timestamp()) {
+		return processedHead, nil
+	}
+	if headChanged {
+		if err := p.processHeadChange(processedHead, currentHead); err != nil {
+			return processedHead, err
+		}
+	}
+	if err := p.wash(currentHead); err != nil {
+		return processedHead, err
+	}
+	p.addedAfterWash.Store(0)
+	if headChanged {
+		return currentHead, nil
+	}
+	return processedHead, nil
+}
+
+func (p *EthPool) wash(head *chain.BlockSummary) error {
+	ctx := p.newAdmissionContextAt(head)
+	for _, origin := range p.all.origins() {
+		if _, err := ctx.stateNonce(origin); err != nil {
+			return err
+		}
+	}
+	result, err := p.all.wash(
+		ctx.stateNonces,
+		ethWashOptions{
+			now:          time.Now().UnixNano(),
+			maxLifetime:  p.options.MaxLifetime,
+			pendingLimit: p.options.EthAccountSlots,
+			queueLimit:   p.options.EthAccountQueue,
+			globalLimit:  p.options.Limit,
+		},
+		ctx.prepare,
+	)
+	if err != nil {
+		return err
+	}
+	for _, txObj := range result.promoted {
+		p.emitAdmission(txObj.Transaction, true, nil)
+	}
+	logger.Trace("Ethereum pool wash complete", "removed", result.removed, "promoted", len(result.promoted))
+	return nil
 }
 
 func (p *EthPool) processHeadChange(previous, current *chain.BlockSummary) error {
@@ -172,6 +221,7 @@ type ethAdmissionContext struct {
 	head        *chain.BlockSummary
 	state       *state.State
 	stateNonces map[thor.Address]uint64
+	payerFunds  map[thor.Address]*big.Int
 	prepare     ethPrepare
 }
 
@@ -186,6 +236,7 @@ func (p *EthPool) newAdmissionContextAt(head *chain.BlockSummary) *ethAdmissionC
 		head:        head,
 		state:       st,
 		stateNonces: make(map[thor.Address]uint64),
+		payerFunds:  make(map[thor.Address]*big.Int),
 	}
 	ctx.prepare = func(obj *TxObject) (reservationRequest, bool, error) {
 		if baseFee != nil && obj.MaxFeePerGas().Cmp(baseFee) < 0 {
@@ -208,12 +259,16 @@ func (p *EthPool) newAdmissionContextAt(head *chain.BlockSummary) *ethAdmissionC
 		obj.payer = &payer
 		obj.cost = prepaid
 		obj.priorityGasPrice = obj.EffectivePriorityFeePerGas(normalizedBaseFee, legacyBase, nil)
-		balance, err := builtin.Energy.Native(
-			st,
-			head.Header.Timestamp()+thor.BlockInterval(),
-		).Get(payer)
-		if err != nil {
-			return reservationRequest{}, false, err
+		balance := ctx.payerFunds[payer]
+		if balance == nil {
+			balance, err = builtin.Energy.Native(
+				st,
+				head.Header.Timestamp()+thor.BlockInterval(),
+			).Get(payer)
+			if err != nil {
+				return reservationRequest{}, false, err
+			}
+			ctx.payerFunds[payer] = balance
 		}
 		return reservationRequest{
 			owner:   ethReservationOwner(obj.Origin(), obj.Nonce()),
@@ -306,6 +361,7 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 	if err != nil {
 		return txRejectedError{err.Error()}
 	}
+	p.addedAfterWash.Add(1)
 	p.emitAdmission(newTx, executable, promoted)
 	logger.Trace("Ethereum tx added", "id", newTx.ID(), "executable", executable)
 	return nil

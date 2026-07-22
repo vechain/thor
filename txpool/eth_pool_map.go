@@ -10,6 +10,7 @@ import (
 	"errors"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -35,6 +36,19 @@ type ethForkResult struct {
 	executable bool
 	promoted   []*TxObject
 	err        error
+}
+
+type ethWashOptions struct {
+	now          int64
+	maxLifetime  time.Duration
+	pendingLimit int
+	queueLimit   int
+	globalLimit  int
+}
+
+type ethWashResult struct {
+	promoted []*TxObject
+	removed  int
 }
 
 // ethPoolMap is a thread-safe index of Ethereum-family pooled transactions.
@@ -74,6 +88,23 @@ func (m *ethPoolMap) ToTxs() tx.Transactions {
 		txs = append(txs, txObj.Transaction)
 	}
 	return txs
+}
+
+func (m *ethPoolMap) origins() []thor.Address {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.sortedOriginsLocked()
+}
+
+func (m *ethPoolMap) sortedOriginsLocked() []thor.Address {
+	origins := make([]thor.Address, 0, len(m.senders))
+	for origin := range m.senders {
+		origins = append(origins, origin)
+	}
+	slices.SortFunc(origins, func(a, b thor.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
+	return origins
 }
 
 func (m *ethPoolMap) poolNonce(addr thor.Address) uint64 {
@@ -339,19 +370,8 @@ func (m *ethPoolMap) syncHead(
 			continue
 		}
 
-		stateNonce := stateNonces[origin]
-		var releases []reservationOwner
-		for nonce := range sender.pending {
-			if stateNonce < sender.stateNonce || nonce < stateNonce {
-				releases = append(releases, ethReservationOwner(origin, nonce))
-			}
-		}
-		if err := m.costs.release(releases...); err != nil {
+		if err := m.syncSenderNonceLocked(sender, stateNonces[origin]); err != nil {
 			return nil, err
-		}
-		settled, _ := sender.syncStateNonce(stateNonce)
-		for _, txObj := range settled {
-			delete(m.allByHash, txObj.Hash())
 		}
 
 		promoted, err := m.promoteLocked(sender, pendingLimit, prepare)
@@ -364,6 +384,367 @@ func (m *ethPoolMap) syncHead(
 		}
 	}
 	return newlyPromoted, nil
+}
+
+func (m *ethPoolMap) syncSenderNonceLocked(sender *ethSender, stateNonce uint64) error {
+	var releases []reservationOwner
+	for nonce := range sender.pending {
+		if stateNonce < sender.stateNonce || nonce < stateNonce {
+			releases = append(releases, ethReservationOwner(sender.origin, nonce))
+		}
+	}
+	if err := m.costs.release(releases...); err != nil {
+		return err
+	}
+	settled, _ := sender.syncStateNonce(stateNonce)
+	for _, txObj := range settled {
+		delete(m.allByHash, txObj.Hash())
+	}
+	return nil
+}
+
+func (m *ethPoolMap) wash(
+	stateNonces map[thor.Address]uint64,
+	options ethWashOptions,
+	prepare ethPrepare,
+) (ethWashResult, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	origins := m.sortedOriginsLocked()
+	wasExecutable := m.executableHashesLocked(origins)
+	var result ethWashResult
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		if sender == nil {
+			continue
+		}
+		stateNonce, present := stateNonces[origin]
+		if !present {
+			// A sender admitted after the state snapshot is washed next time.
+			continue
+		}
+		if err := m.syncSenderNonceLocked(sender, stateNonce); err != nil {
+			return ethWashResult{}, err
+		}
+		if err := m.removeExpiredLocked(sender, options, &result); err != nil {
+			return ethWashResult{}, err
+		}
+		if sender.isEmpty() {
+			delete(m.senders, origin)
+			continue
+		}
+
+		promoted, err := m.revalidateSenderLocked(sender, options.pendingLimit, prepare)
+		if err != nil {
+			return ethWashResult{}, err
+		}
+		result.promoted = append(result.promoted, promoted...)
+		if err := m.enforceSenderLimitsLocked(sender, options, &result); err != nil {
+			return ethWashResult{}, err
+		}
+		if sender.isEmpty() {
+			delete(m.senders, origin)
+		}
+	}
+
+	if err := m.enforceGlobalLimitLocked(origins, options.globalLimit, &result); err != nil {
+		return ethWashResult{}, err
+	}
+	result.promoted = m.retainedPromotionsLocked(result.promoted, wasExecutable)
+	return result, nil
+}
+
+func (m *ethPoolMap) removeExpiredLocked(
+	sender *ethSender,
+	options ethWashOptions,
+	result *ethWashResult,
+) error {
+	if options.maxLifetime <= 0 {
+		return nil
+	}
+	expired := func(txObj *TxObject) bool {
+		return !txObj.localSubmitted &&
+			options.now > txObj.timeAdded &&
+			options.now-txObj.timeAdded > int64(options.maxLifetime)
+	}
+
+	for nonce := sender.stateNonce; nonce < sender.poolNonce(); nonce++ {
+		txObj := sender.pending[nonce]
+		if txObj != nil && expired(txObj) {
+			if err := m.evictPendingFromLocked(sender, nonce, txObj, result); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	for nonce, txObj := range sender.queue {
+		if expired(txObj) {
+			delete(sender.queue, nonce)
+			delete(m.allByHash, txObj.Hash())
+			result.removed++
+		}
+	}
+	return nil
+}
+
+// evictPendingFromLocked removes target and demotes its higher nonce suffix.
+func (m *ethPoolMap) evictPendingFromLocked(
+	sender *ethSender,
+	nonce uint64,
+	target *TxObject,
+	result *ethWashResult,
+) error {
+	var releases []reservationOwner
+	for pendingNonce := range sender.pending {
+		if pendingNonce >= nonce {
+			releases = append(releases, ethReservationOwner(sender.origin, pendingNonce))
+		}
+	}
+	if err := m.costs.release(releases...); err != nil {
+		return err
+	}
+	_, removed := sender.dropNonce(nonce)
+	if !removed {
+		return nil
+	}
+	delete(m.allByHash, target.Hash())
+	result.removed++
+	return nil
+}
+
+func (m *ethPoolMap) revalidateSenderLocked(
+	sender *ethSender,
+	pendingLimit int,
+	prepare ethPrepare,
+) ([]*TxObject, error) {
+	pending := make([]*TxObject, 0, len(sender.pending))
+	releases := make([]reservationOwner, 0, len(sender.pending))
+	requests := make([]reservationRequest, 0, len(sender.pending))
+	preparing := true
+	for nonce := sender.stateNonce; nonce < sender.poolNonce(); nonce++ {
+		txObj := sender.pending[nonce]
+		if txObj == nil {
+			break
+		}
+		pending = append(pending, txObj)
+		releases = append(releases, ethReservationOwner(sender.origin, nonce))
+		if preparing {
+			request, viable, err := prepare(txObj)
+			if err != nil || !viable {
+				preparing = false
+			} else {
+				requests = append(requests, request)
+			}
+		}
+	}
+
+	accepted, err := m.costs.reconcile(releases, requests, acceptAffordablePrefix)
+	if err != nil {
+		return nil, err
+	}
+	for i := range accepted {
+		pending[i].executable = true
+	}
+	if accepted < len(pending) {
+		sender.demoteFrom(pending[accepted].Nonce())
+	}
+	if pendingLimit < 0 {
+		pendingLimit = len(sender.pending) + len(sender.queue)
+	}
+	return m.promoteLocked(sender, pendingLimit, prepare)
+}
+
+func (m *ethPoolMap) enforceSenderLimitsLocked(
+	sender *ethSender,
+	options ethWashOptions,
+	result *ethWashResult,
+) error {
+	if options.pendingLimit >= 0 && len(sender.pending) > options.pendingLimit {
+		cutoff := sender.stateNonce + uint64(options.pendingLimit)
+		var releases []reservationOwner
+		for nonce := range sender.pending {
+			if nonce >= cutoff {
+				releases = append(releases, ethReservationOwner(sender.origin, nonce))
+			}
+		}
+		if err := m.costs.release(releases...); err != nil {
+			return err
+		}
+		sender.demoteFrom(cutoff)
+	}
+	if options.queueLimit >= 0 && len(sender.queue) > options.queueLimit {
+		nonces := sortedNoncesDesc(sender.queue)
+		excess := len(nonces) - options.queueLimit
+		for _, nonce := range nonces[:excess] {
+			txObj := sender.queue[nonce]
+			delete(sender.queue, nonce)
+			delete(m.allByHash, txObj.Hash())
+			result.removed++
+		}
+	}
+	return nil
+}
+
+func sortedNoncesDesc(txObjs map[uint64]*TxObject) []uint64 {
+	nonces := make([]uint64, 0, len(txObjs))
+	for nonce := range txObjs {
+		nonces = append(nonces, nonce)
+	}
+	slices.Sort(nonces)
+	slices.Reverse(nonces)
+	return nonces
+}
+
+type queuedEvictionCursor struct {
+	sender *ethSender
+	nonces []uint64
+	next   int
+}
+
+type pendingTail struct {
+	sender *ethSender
+	nonce  uint64
+	txObj  *TxObject
+}
+
+func (m *ethPoolMap) enforceGlobalLimitLocked(
+	origins []thor.Address,
+	limit int,
+	result *ethWashResult,
+) error {
+	if limit <= 0 || len(m.allByHash) <= limit {
+		return nil
+	}
+
+	m.evictQueuedUntilLimitLocked(m.queueEvictionCursorsLocked(origins), limit, result)
+	if err := m.evictPendingTailsUntilLimitLocked(origins, limit, result); err != nil {
+		return err
+	}
+	m.pruneEmptyOriginsLocked(origins)
+	return nil
+}
+
+func (m *ethPoolMap) queueEvictionCursorsLocked(origins []thor.Address) []queuedEvictionCursor {
+	cursors := make([]queuedEvictionCursor, 0, len(origins))
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		if sender != nil && len(sender.queue) > 0 {
+			cursors = append(cursors, queuedEvictionCursor{
+				sender: sender,
+				nonces: sortedNoncesDesc(sender.queue),
+			})
+		}
+	}
+	return cursors
+}
+
+func (m *ethPoolMap) evictQueuedUntilLimitLocked(
+	cursors []queuedEvictionCursor,
+	limit int,
+	result *ethWashResult,
+) {
+	for len(m.allByHash) > limit {
+		removed := false
+		for i := range cursors {
+			cursor := &cursors[i]
+			if cursor.next >= len(cursor.nonces) {
+				continue
+			}
+			nonce := cursor.nonces[cursor.next]
+			cursor.next++
+			txObj := cursor.sender.queue[nonce]
+			if txObj == nil {
+				continue
+			}
+			delete(cursor.sender.queue, nonce)
+			delete(m.allByHash, txObj.Hash())
+			result.removed++
+			removed = true
+			if len(m.allByHash) <= limit {
+				break
+			}
+		}
+		if !removed {
+			return
+		}
+	}
+}
+
+func (m *ethPoolMap) evictPendingTailsUntilLimitLocked(
+	origins []thor.Address,
+	limit int,
+	result *ethWashResult,
+) error {
+	for len(m.allByHash) > limit {
+		tails, releases := m.pendingTailBatchLocked(origins, len(m.allByHash)-limit)
+		if len(tails) == 0 {
+			return nil
+		}
+		if err := m.costs.release(releases...); err != nil {
+			return err
+		}
+		for _, tail := range tails {
+			tail.txObj.executable = false
+			delete(tail.sender.pending, tail.nonce)
+			delete(m.allByHash, tail.txObj.Hash())
+			result.removed++
+		}
+	}
+	return nil
+}
+
+func (m *ethPoolMap) pendingTailBatchLocked(
+	origins []thor.Address,
+	maxCount int,
+) ([]pendingTail, []reservationOwner) {
+	if maxCount <= 0 {
+		return nil, nil
+	}
+	capacity := min(len(origins), maxCount)
+	tails := make([]pendingTail, 0, capacity)
+	releases := make([]reservationOwner, 0, capacity)
+	for _, origin := range origins {
+		sender := m.senders[origin]
+		if sender == nil || len(sender.pending) == 0 {
+			continue
+		}
+		nonce := sender.poolNonce() - 1
+		txObj := sender.pending[nonce]
+		if txObj == nil {
+			continue
+		}
+		tails = append(tails, pendingTail{sender, nonce, txObj})
+		releases = append(releases, ethReservationOwner(origin, nonce))
+		if len(tails) == maxCount {
+			break
+		}
+	}
+	return tails, releases
+}
+
+func (m *ethPoolMap) pruneEmptyOriginsLocked(origins []thor.Address) {
+	for _, origin := range origins {
+		if sender := m.senders[origin]; sender != nil && sender.isEmpty() {
+			delete(m.senders, origin)
+		}
+	}
+}
+
+func (m *ethPoolMap) retainedPromotionsLocked(
+	promoted []*TxObject,
+	wasExecutable map[thor.Bytes32]struct{},
+) []*TxObject {
+	retained := promoted[:0]
+	for _, txObj := range promoted {
+		if _, existed := wasExecutable[txObj.Hash()]; existed {
+			continue
+		}
+		if m.allByHash[txObj.Hash()] == txObj && txObj.executable {
+			retained = append(retained, txObj)
+		}
+	}
+	return retained
 }
 
 func (m *ethPoolMap) reconcileFork(

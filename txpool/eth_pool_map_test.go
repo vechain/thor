@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -319,6 +320,450 @@ func TestEthPoolMapSyncHead(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, promoted)
 		assert.Zero(t, m.Len())
+	})
+}
+
+func TestEthPoolMapWash(t *testing.T) {
+	t.Run("expires pending and queued transactions", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		expired := newEthMapTestObject(t, 0, 10, 3)
+		retained := newEthMapTestObject(t, 1, 10, 3)
+		expiredQueued := newEthMapTestObject(t, 3, 10, 3)
+		origin := expired.Origin()
+		sender := newEthSender(origin, 0)
+		expired.executable, retained.executable = true, true
+		sender.pending[0], sender.pending[1] = expired, retained
+		sender.queue[3] = expiredQueued
+		m.senders[origin] = sender
+		for _, txObj := range []*TxObject{expired, retained, expiredQueued} {
+			m.allByHash[txObj.Hash()] = txObj
+		}
+		require.NoError(t, costs.reserve(
+			ethReservationOwner(origin, 0), origin, big.NewInt(10), big.NewInt(100),
+		))
+		require.NoError(t, costs.reserve(
+			ethReservationOwner(origin, 1), origin, big.NewInt(10), big.NewInt(100),
+		))
+		now := time.Now().UnixNano()
+		expired.timeAdded = now - int64(2*time.Hour)
+		expiredQueued.timeAdded = expired.timeAdded
+
+		result, err := m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{
+				now: now, maxLifetime: time.Hour,
+				pendingLimit: 16, queueLimit: 64, globalLimit: 100,
+			},
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 2, result.removed)
+		assert.Nil(t, m.GetByHash(expired.Hash()))
+		assert.Nil(t, m.GetByHash(expiredQueued.Hash()))
+		assert.Same(t, retained, sender.queue[1])
+		assert.False(t, retained.executable)
+		assert.Zero(t, costs.pendingCost(origin).Sign())
+	})
+
+	t.Run("keeps only affordable pending prefix", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		origin := devAccounts[4].Address
+		sender := newEthSender(origin, 0)
+		for nonce := range uint64(3) {
+			txObj := newEthMapTestObject(t, nonce, 10, 4)
+			txObj.executable = true
+			sender.pending[nonce] = txObj
+			m.allByHash[txObj.Hash()] = txObj
+			require.NoError(t, costs.reserve(
+				ethReservationOwner(origin, nonce), origin, big.NewInt(10), big.NewInt(100),
+			))
+		}
+		m.senders[origin] = sender
+
+		result, err := m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{pendingLimit: 16, queueLimit: 64, globalLimit: 100},
+			fixedEthPrepare(10, 15),
+		)
+		require.NoError(t, err)
+		assert.Empty(t, result.promoted)
+		assert.Len(t, sender.pending, 1)
+		assert.Len(t, sender.queue, 2)
+		assert.NotNil(t, sender.pending[0])
+		assert.NotNil(t, sender.queue[1])
+		assert.NotNil(t, sender.queue[2])
+		assert.Equal(t, int64(10), costs.pendingCost(origin).Int64())
+	})
+
+	t.Run("demotes non-viable pending suffix", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		origin := devAccounts[5].Address
+		sender := newEthSender(origin, 0)
+		for nonce := range uint64(2) {
+			txObj := newEthMapTestObject(t, nonce, 10, 5)
+			txObj.executable = true
+			sender.pending[nonce] = txObj
+			m.allByHash[txObj.Hash()] = txObj
+			require.NoError(t, costs.reserve(
+				ethReservationOwner(origin, nonce), origin, big.NewInt(10), big.NewInt(100),
+			))
+		}
+		m.senders[origin] = sender
+		notViable := func(*TxObject) (reservationRequest, bool, error) {
+			return reservationRequest{}, false, nil
+		}
+
+		result, err := m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{pendingLimit: 16, queueLimit: 64, globalLimit: 100},
+			notViable,
+		)
+		require.NoError(t, err)
+		assert.Empty(t, result.promoted)
+		assert.Empty(t, sender.pending)
+		assert.Len(t, sender.queue, 2)
+		assert.Zero(t, costs.pendingCost(origin).Sign())
+	})
+
+	t.Run("promotes a newly affordable queue prefix", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		tx0 := newEthMapTestObject(t, 0, 10, 5)
+		tx1 := newEthMapTestObject(t, 1, 10, 5)
+		origin := tx0.Origin()
+		tx0.executable = true
+		sender := newEthSender(origin, 0)
+		sender.pending[0], sender.queue[1] = tx0, tx1
+		m.senders[origin] = sender
+		m.allByHash[tx0.Hash()], m.allByHash[tx1.Hash()] = tx0, tx1
+		require.NoError(t, costs.reserve(
+			ethReservationOwner(origin, 0), origin, big.NewInt(10), big.NewInt(100),
+		))
+
+		result, err := m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{pendingLimit: 16, queueLimit: 64, globalLimit: 100},
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, []*TxObject{tx1}, result.promoted)
+		assert.Same(t, tx1, sender.pending[1])
+		assert.Empty(t, sender.queue)
+		assert.Equal(t, int64(20), costs.pendingCost(origin).Int64())
+	})
+
+	t.Run("enforces account limits without nonce holes", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		origin := devAccounts[6].Address
+		sender := newEthSender(origin, 0)
+		for nonce := range uint64(3) {
+			txObj := newEthMapTestObject(t, nonce, 10, 6)
+			txObj.executable = true
+			sender.pending[nonce] = txObj
+			m.allByHash[txObj.Hash()] = txObj
+			require.NoError(t, costs.reserve(
+				ethReservationOwner(origin, nonce), origin, big.NewInt(10), big.NewInt(100),
+			))
+		}
+		queued := newEthMapTestObject(t, 3, 10, 6)
+		sender.queue[3] = queued
+		m.allByHash[queued.Hash()] = queued
+		m.senders[origin] = sender
+
+		result, err := m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{pendingLimit: 2, queueLimit: 1, globalLimit: 100},
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.removed)
+		assert.Len(t, sender.pending, 2)
+		assert.NotNil(t, sender.pending[0])
+		assert.NotNil(t, sender.pending[1])
+		assert.Len(t, sender.queue, 1)
+		assert.NotNil(t, sender.queue[2])
+		assert.Nil(t, sender.queue[3])
+		assert.Equal(t, int64(20), costs.pendingCost(origin).Int64())
+	})
+
+	t.Run("global trimming removes queues before pending tails", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		for signer := 7; signer <= 8; signer++ {
+			pending := newEthMapTestObject(t, 0, 10, signer)
+			queue1 := newEthMapTestObject(t, 1, 10, signer)
+			queue2 := newEthMapTestObject(t, 2, 10, signer)
+			origin := pending.Origin()
+			pending.executable = true
+			sender := newEthSender(origin, 0)
+			sender.pending[0] = pending
+			sender.queue[1], sender.queue[2] = queue1, queue2
+			m.senders[origin] = sender
+			for _, txObj := range []*TxObject{pending, queue1, queue2} {
+				m.allByHash[txObj.Hash()] = txObj
+			}
+			require.NoError(t, costs.reserve(
+				ethReservationOwner(origin, 0), origin, big.NewInt(10), big.NewInt(100),
+			))
+		}
+
+		result, err := m.wash(
+			map[thor.Address]uint64{
+				devAccounts[7].Address: 0,
+				devAccounts[8].Address: 0,
+			},
+			ethWashOptions{pendingLimit: 16, queueLimit: 64, globalLimit: 1},
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 5, result.removed)
+		assert.Equal(t, 1, m.Len())
+		for _, sender := range m.senders {
+			assert.Empty(t, sender.queue)
+			assert.Len(t, sender.pending, 1)
+		}
+	})
+
+	t.Run("tracker failure leaves pending state retryable", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		txObj := newEthMapTestObject(t, 0, 10, 9)
+		origin := txObj.Origin()
+		txObj.executable = true
+		sender := newEthSender(origin, 0)
+		sender.pending[0] = txObj
+		m.senders[origin] = sender
+		m.allByHash[txObj.Hash()] = txObj
+		owner := ethReservationOwner(origin, 0)
+		costs.reservations[owner] = reservation{payer: origin, cost: big.NewInt(10)}
+		costs.pending[origin] = big.NewInt(5)
+
+		_, err := m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{pendingLimit: 16, queueLimit: 64, globalLimit: 100},
+			fixedEthPrepare(10, 100),
+		)
+		assert.ErrorIs(t, err, errCostTrackerState)
+		assert.Same(t, txObj, sender.pending[0])
+		assert.Same(t, txObj, m.GetByHash(txObj.Hash()))
+
+		costs.pending[origin] = big.NewInt(10)
+		_, err = m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{pendingLimit: 16, queueLimit: 64, globalLimit: 100},
+			fixedEthPrepare(10, 100),
+		)
+		require.NoError(t, err)
+		assert.Same(t, txObj, sender.pending[0])
+	})
+}
+
+func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
+	t.Run("global enforcement skips disabled and satisfied limits", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		queued := newEthMapTestObject(t, 1, 10, 0)
+		origin := queued.Origin()
+		sender := newEthSender(origin, 0)
+		sender.queue[1] = queued
+		m.senders[origin] = sender
+		m.allByHash[queued.Hash()] = queued
+		var result ethWashResult
+
+		m.lock.Lock()
+		errDisabled := m.enforceGlobalLimitLocked([]thor.Address{origin}, 0, &result)
+		errSatisfied := m.enforceGlobalLimitLocked([]thor.Address{origin}, 1, &result)
+		m.lock.Unlock()
+
+		require.NoError(t, errDisabled)
+		require.NoError(t, errSatisfied)
+		assert.Zero(t, result.removed)
+		assert.Same(t, queued, m.GetByHash(queued.Hash()))
+	})
+
+	t.Run("queue cursors include only queued senders in nonce order", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		queued1 := newEthMapTestObject(t, 1, 10, 0)
+		queued3 := newEthMapTestObject(t, 3, 10, 0)
+		origin := queued1.Origin()
+		sender := newEthSender(origin, 0)
+		sender.queue[1], sender.queue[3] = queued1, queued3
+		m.senders[origin] = sender
+		emptyOrigin := devAccounts[1].Address
+		m.senders[emptyOrigin] = newEthSender(emptyOrigin, 0)
+
+		m.lock.Lock()
+		cursors := m.queueEvictionCursorsLocked([]thor.Address{origin, emptyOrigin, {0xff}})
+		none := m.queueEvictionCursorsLocked(nil)
+		m.lock.Unlock()
+
+		require.Len(t, cursors, 1)
+		assert.Same(t, sender, cursors[0].sender)
+		assert.Equal(t, []uint64{3, 1}, cursors[0].nonces)
+		assert.Zero(t, cursors[0].next)
+		assert.Empty(t, none)
+	})
+
+	t.Run("queued eviction is round-robin and tolerates exhausted cursors", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		var origins []thor.Address
+		for signer := range 2 {
+			queue1 := newEthMapTestObject(t, 1, 10, signer)
+			queue2 := newEthMapTestObject(t, 2, 10, signer)
+			origin := queue1.Origin()
+			origins = append(origins, origin)
+			sender := newEthSender(origin, 0)
+			sender.queue[1], sender.queue[2] = queue1, queue2
+			m.senders[origin] = sender
+			m.allByHash[queue1.Hash()], m.allByHash[queue2.Hash()] = queue1, queue2
+		}
+		var result ethWashResult
+		m.lock.Lock()
+		m.evictQueuedUntilLimitLocked(m.queueEvictionCursorsLocked(origins), 2, &result)
+		m.lock.Unlock()
+
+		assert.Equal(t, 2, result.removed)
+		assert.Equal(t, 2, m.Len())
+		for _, origin := range origins {
+			assert.NotNil(t, m.senders[origin].queue[1])
+			assert.Nil(t, m.senders[origin].queue[2])
+		}
+
+		// A stale cursor cannot occur while the map lock is respected, but the
+		// helper still fails safely if handed one.
+		orphan := newEthMapTestObject(t, 9, 10, 2)
+		m.allByHash[orphan.Hash()] = orphan
+		stale := []queuedEvictionCursor{{
+			sender: newEthSender(orphan.Origin(), 0),
+			nonces: []uint64{9},
+		}}
+		m.lock.Lock()
+		m.evictQueuedUntilLimitLocked(stale, 0, &result)
+		m.lock.Unlock()
+		assert.NotNil(t, m.GetByHash(orphan.Hash()))
+	})
+
+	t.Run("pending tail batches respect bounds and skip invalid senders", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		tx0 := newEthMapTestObject(t, 0, 10, 3)
+		tx1 := newEthMapTestObject(t, 1, 10, 3)
+		other := newEthMapTestObject(t, 0, 10, 4)
+		firstOrigin, otherOrigin := tx0.Origin(), other.Origin()
+		first := newEthSender(firstOrigin, 0)
+		first.pending[0], first.pending[1] = tx0, tx1
+		second := newEthSender(otherOrigin, 0)
+		second.pending[0] = other
+		m.senders[firstOrigin], m.senders[otherOrigin] = first, second
+
+		m.lock.Lock()
+		tails, releases := m.pendingTailBatchLocked(
+			[]thor.Address{firstOrigin, {0xff}, otherOrigin},
+			2,
+		)
+		none, noReleases := m.pendingTailBatchLocked(
+			[]thor.Address{firstOrigin, otherOrigin},
+			0,
+		)
+		m.lock.Unlock()
+
+		require.Len(t, tails, 2)
+		assert.Same(t, tx1, tails[0].txObj)
+		assert.Same(t, other, tails[1].txObj)
+		assert.Equal(t, []reservationOwner{
+			ethReservationOwner(firstOrigin, 1),
+			ethReservationOwner(otherOrigin, 0),
+		}, releases)
+		assert.Nil(t, none)
+		assert.Nil(t, noReleases)
+	})
+
+	t.Run("pending tail eviction batches releases and handles empty capacity", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		var origins []thor.Address
+		for signer, count := range []int{2, 1} {
+			origin := devAccounts[signer+5].Address
+			origins = append(origins, origin)
+			sender := newEthSender(origin, 0)
+			for nonce := range count {
+				txObj := newEthMapTestObject(t, uint64(nonce), 10, signer+5)
+				txObj.executable = true
+				sender.pending[uint64(nonce)] = txObj
+				m.allByHash[txObj.Hash()] = txObj
+				require.NoError(t, costs.reserve(
+					ethReservationOwner(origin, uint64(nonce)),
+					origin,
+					big.NewInt(10),
+					big.NewInt(100),
+				))
+			}
+			m.senders[origin] = sender
+		}
+		var result ethWashResult
+		m.lock.Lock()
+		err := m.evictPendingTailsUntilLimitLocked(origins, 1, &result)
+		m.lock.Unlock()
+
+		require.NoError(t, err)
+		assert.Equal(t, 2, result.removed)
+		assert.Equal(t, 1, m.Len())
+		assert.NotNil(t, m.senders[origins[0]].pending[0])
+		assert.NotContains(t, m.senders[origins[0]].pending, uint64(1))
+		assert.Empty(t, m.senders[origins[1]].pending)
+
+		orphan := newEthMapTestObject(t, 4, 10, 9)
+		m.allByHash[orphan.Hash()] = orphan
+		m.lock.Lock()
+		err = m.evictPendingTailsUntilLimitLocked(nil, 0, &result)
+		m.lock.Unlock()
+		require.NoError(t, err)
+		assert.NotNil(t, m.GetByHash(orphan.Hash()))
+	})
+
+	t.Run("pending tail release failure leaves maps unchanged", func(t *testing.T) {
+		costs := newCostTracker()
+		m := newEthPoolMap(costs)
+		txObj := newEthMapTestObject(t, 0, 10, 0)
+		origin := txObj.Origin()
+		txObj.executable = true
+		sender := newEthSender(origin, 0)
+		sender.pending[0] = txObj
+		m.senders[origin] = sender
+		m.allByHash[txObj.Hash()] = txObj
+		owner := ethReservationOwner(origin, 0)
+		costs.reservations[owner] = reservation{payer: origin, cost: big.NewInt(10)}
+		costs.pending[origin] = big.NewInt(5)
+		var result ethWashResult
+
+		m.lock.Lock()
+		err := m.evictPendingTailsUntilLimitLocked([]thor.Address{origin}, 0, &result)
+		m.lock.Unlock()
+
+		assert.ErrorIs(t, err, errCostTrackerState)
+		assert.Zero(t, result.removed)
+		assert.Same(t, txObj, sender.pending[0])
+		assert.Same(t, txObj, m.GetByHash(txObj.Hash()))
+	})
+
+	t.Run("empty sender pruning ignores live and unknown origins", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		emptyOrigin := devAccounts[1].Address
+		liveTx := newEthMapTestObject(t, 0, 10, 2)
+		liveOrigin := liveTx.Origin()
+		m.senders[emptyOrigin] = newEthSender(emptyOrigin, 0)
+		live := newEthSender(liveOrigin, 0)
+		live.queue[0] = liveTx
+		m.senders[liveOrigin] = live
+
+		m.lock.Lock()
+		m.pruneEmptyOriginsLocked([]thor.Address{emptyOrigin, liveOrigin, {0xff}})
+		m.lock.Unlock()
+
+		assert.NotContains(t, m.senders, emptyOrigin)
+		assert.Same(t, live, m.senders[liveOrigin])
 	})
 }
 
