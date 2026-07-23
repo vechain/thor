@@ -37,44 +37,21 @@ jobs:
     name: Notify Slack on Failure
     needs: permutation-test
     if: always() && needs.permutation-test.result != 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify Slack
-        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": ":alert: Permutation Testing Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":alert: *Permutation Testing Failed*\n\nThe weekly permutation tests have failed. Please check the logs for details."
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Repository:*\n${{ github.repository }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Status:*\n${{ needs.permutation-test.result == 'failure' && ':x: Failed' || needs.permutation-test.result == 'cancelled' && ':warning: Cancelled' || ':question: Unknown' }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Branch:*\n${{ github.ref_name }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Workflow:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
-                    }
-                  ]
-                }
-              ]
-            }
+    uses: ./.github/workflows/notify-slack.yaml
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    with:
+      payload: |
+        {
+          "unit-test-status": ":alert: Permutation Test Failure",
+          "docker-publish-status": ":fast_forward: Skipped",
+          "commit-message": ${{ toJSON(github.event.head_commit.message) }},
+          "commit-url": "${{ github.event.head_commit.url }}",
+          "e2e-test-status": ":fast_forward: Skipped",
+          "branch": "${{ github.ref }}",
+          "repository": "${{ github.repository }}",
+          "commit-author": "${{ github.event.head_commit.author.name }}",
+          "lint-status": ":fast_forward: Skipped",
+          "license-check": ":fast_forward: Skipped",
+          "module-check": ":fast_forward: Skipped"
+        }
