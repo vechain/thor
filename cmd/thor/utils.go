@@ -278,6 +278,7 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, enableTxPool *
 		SlowQueriesThreshold:       int(ctx.Uint64(apiSlowQueriesThresholdFlag.Name)),
 		Log5XXErrors:               ctx.Bool(apiLog5xxErrorsFlag.Name),
 		MaxLogsOffset:              ctx.Uint64(apiLogsMaxOffsetFlag.Name),
+		EnableRPC:                  ctx.Bool(enableRPCFlag.Name),
 	}
 }
 

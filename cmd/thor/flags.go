@@ -124,6 +124,12 @@ var (
 		Usage:   "enables API requests logging",
 		Sources: envVar("ENABLE_API_LOGS"),
 	}
+	enableRPCFlag = &cli.BoolFlag{
+		Name:    "enable-rpc",
+		Local:   true,
+		Usage:   "enables the JSON-RPC server under /rpc",
+		Sources: envVar("ENABLE_RPC"),
+	}
 	apiTxpoolFlag = &cli.BoolFlag{
 		Name:    "api-enable-txpool",
 		Local:   true,

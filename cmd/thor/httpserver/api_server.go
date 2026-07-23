@@ -24,6 +24,7 @@ import (
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/fees"
+	"github.com/vechain/thor/v2/api/jsonrpc"
 	"github.com/vechain/thor/v2/api/middleware"
 	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/api/subscriptions"
@@ -66,6 +67,7 @@ type APIConfig struct {
 	SlowQueriesThreshold       int
 	Log5XXErrors               bool
 	MaxLogsOffset              uint64
+	EnableRPC                  bool
 }
 
 func StartAPIServer(
@@ -129,6 +131,10 @@ func StartAPIServer(
 	}).Mount(router, "/fees")
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
+
+	if config.EnableRPC {
+		jsonrpc.New(repo).Mount(router, "/rpc")
+	}
 
 	// middlewares
 	// body limit and timeout
