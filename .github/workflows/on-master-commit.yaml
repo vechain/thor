@@ -112,31 +112,13 @@ jobs:
       needs.thor-docker-test-suite.result != 'success' || 
       needs.license-check.result != 'success' || 
       needs.module-check.result != 'success')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-      - name: Get the commit message
-        id: commit_message
-        # This is a workaround to get the first line of the commit message. Passing the entire message can cause the payload (JSON) to be invalid.
-        run: |
-          echo "commit_message=$(git show-branch --no-name HEAD)" >> "$GITHUB_ENV"
-      - name: Notify Slack
-        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "unit-test-status": "${{ needs.run-unit-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
-              "docker-publish-status": "${{ needs.publish-docker-image.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
-              "commit-message": "${{ env.commit_message }}",
-              "commit-url": "${{ github.event.head_commit.url }}",
-              "e2e-test-status": "${{ needs.thor-docker-test-suite.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
-              "branch": "${{ github.ref }}",
-              "repository": "${{ github.repository }}",
-              "commit-author": "${{ github.event.head_commit.author.name }}",
-              "lint-status": "${{ needs.lint.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
-              "license-check": "${{ needs.license-check.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
-              "module-check": "${{ needs.module-check.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
-            }
+    uses: ./.github/workflows/notify-slack.yaml
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    with:
+      unit-test-status: ${{ needs.run-unit-tests.result }}
+      docker-publish-status: ${{ needs.publish-docker-image.result }}
+      e2e-test-status: ${{ needs.thor-docker-test-suite.result }}
+      lint-status: ${{ needs.lint.result }}
+      license-check-status: ${{ needs.license-check.result }}
+      module-check-status: ${{ needs.module-check.result }}

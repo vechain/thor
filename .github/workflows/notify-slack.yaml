@@ -1,0 +1,55 @@
+name: Notify Slack
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      unit-test-status:      { type: string, required: true }
+      docker-publish-status: { type: string, required: true }
+      e2e-test-status:       { type: string, required: true }
+      lint-status:           { type: string, required: true }
+      license-check-status:  { type: string, required: true }
+      module-check-status:   { type: string, required: true }
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: true
+  workflow_dispatch:
+    inputs:
+      unit-test-status:      { type: string, default: 'success' }
+      docker-publish-status: { type: string, default: 'success' }
+      e2e-test-status:       { type: string, default: 'success' }
+      lint-status:           { type: string, default: 'success' }
+      license-check-status:  { type: string, default: 'success' }
+      module-check-status:   { type: string, default: 'success' }
+
+jobs:
+  notify:
+    name: Notify Slack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Get the commit message
+        # Only the first line: a multi-line message breaks the JSON payload.
+        run: echo "commit_message=$(git show-branch --no-name HEAD)" >> "$GITHUB_ENV"
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "unit-test-status": "${{ inputs.unit-test-status != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "docker-publish-status": "${{ inputs.docker-publish-status != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "commit-message": "${{ env.commit_message }}",
+              "commit-url": "${{ github.event.head_commit.url }}",
+              "e2e-test-status": "${{ inputs.e2e-test-status != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "branch": "${{ github.ref }}",
+              "repository": "${{ github.repository }}",
+              "commit-author": "${{ github.event.head_commit.author.name }}",
+              "lint-status": "${{ inputs.lint-status != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "license-check": "${{ inputs.license-check-status != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "module-check": "${{ inputs.module-check-status != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
+            }
