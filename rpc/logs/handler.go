@@ -157,6 +157,13 @@ func (h *Handler) ethGetLogs(req jsonrpc.Request) jsonrpc.Response {
 	// Build criteria set via cross-product of addresses × topic alternatives.
 	// Criteria count grows as the product of per-position alternative counts and
 	// address count; typical usage is small and no hard cap is enforced.
+	//
+	// TODO(security, DoS): cap the criteria count. Within the 2 MB request body an
+	// attacker can supply thousands of address/topic alternatives whose
+	// cross-product explodes (e.g. 100 per position × 4 positions ≈ 1e8 criteria),
+	// exhausting memory and CPU. The REST /logs/event path already enforces
+	// defaultMaxCriteriaCount (=10); apply the same cap here (and in rpc/filters
+	// ethNewFilter) before this endpoint is exposed to untrusted clients.
 	criteriaSet := buildCriteriaSet(addresses, topicAlts)
 
 	// Fetch one extra result to detect truncation: if the logdb returns more than

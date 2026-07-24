@@ -77,6 +77,14 @@ type entry struct {
 
 	// kindPendingTx only.
 	// Only executable ETH-typed transactions are reported; see eth_newPendingTransactionFilter.
+	//
+	// TODO(resource/DoS): this channel is drained only on eth_getFilterChanges. The
+	// txpool posts events via a blocking event.Feed.Send (in txpool goroutines), so
+	// once this buffer (pendingTxBufSize) fills, every subsequent tx leaves a Send
+	// goroutine blocked until the filter is TTL-evicted (~filterTTL + ttlCheckInterval,
+	// i.e. up to ~6 min). With maxActiveFilters idle filters this accumulates a large
+	// number of blocked goroutines under load. Consider a non-blocking/drop-oldest
+	// drain, a shorter idle teardown, or bounding pending-tx filters separately.
 	txCh  chan *txpool.TxEvent
 	txSub event.Subscription
 }

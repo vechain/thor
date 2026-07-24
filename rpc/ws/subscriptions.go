@@ -185,9 +185,6 @@ func runNewPendingTransactions(ctx context.Context, c *wsConn, subID string) {
 				continue
 			}
 			c.notify(subID, common.Hash(ev.Tx.ID()))
-		case <-time.After(pongWait * time.Second):
-			// Safety valve: if txCh produces nothing for a full pong cycle,
-			// loop back so connCtx.Done() is checked.
 		}
 	}
 }

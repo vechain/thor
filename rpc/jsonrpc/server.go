@@ -83,6 +83,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Dispatch routes a parsed JSON-RPC request to its registered handler.
 // It is exported so that the WebSocket handler can proxy non-subscribe
 // methods (eth_call, eth_blockNumber, etc.) over a WS connection.
+//
+// TODO(security, HIGH): wrap the handler call in a defer/recover() that converts
+// a panic into an ErrResponse(CodeInternalError). Handlers index on-chain-derived
+// data under invariants that are not defensively checked; on the HTTP path a panic
+// is contained by net/http + middleware.HandlePanics, but the WebSocket path runs
+// Dispatch in a detached goroutine (rpc/ws) with NO recovery boundary, so a single
+// handler panic crashes the whole node. A recover here fixes every call site at once.
 func (s *Server) Dispatch(req Request) Response {
 	h, ok := s.methods[req.Method]
 	if !ok {
