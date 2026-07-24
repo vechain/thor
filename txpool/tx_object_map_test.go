@@ -262,12 +262,12 @@ func TestTxObjectMapExecutableSnapshotSkipsMissingPriority(t *testing.T) {
 	assert.NoError(t, m.Add(txObj, 1, nil))
 
 	snapshot := m.executableSnapshot(tx.Transactions{trx})
-	assert.Empty(t, snapshot.transactions)
-	assert.Empty(t, snapshot.entries)
+	assert.Empty(t, snapshot.transactions())
+	assert.Empty(t, *snapshot)
 
 	txObj.priorityGasPrice = big.NewInt(1)
 	snapshot = m.executableSnapshot(tx.Transactions{trx})
-	assert.Equal(t, tx.Transactions{trx}, snapshot.transactions)
-	assert.Len(t, snapshot.entries, 1)
-	assert.Same(t, trx, snapshot.entries[0].tx)
+	assert.Equal(t, tx.Transactions{trx}, snapshot.transactions())
+	assert.Len(t, *snapshot, 1)
+	assert.Same(t, trx, (*snapshot)[0].tx)
 }

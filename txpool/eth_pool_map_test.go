@@ -98,8 +98,7 @@ func TestEthPoolMapConcurrentAddRemoveAndSnapshot(t *testing.T) {
 	wg.Go(func() {
 		for range 128 {
 			snapshot := m.executableSnapshot()
-			assert.LessOrEqual(t, snapshot.total, len(txObjs))
-			_ = snapshot.transactions()
+			assert.LessOrEqual(t, len(snapshot.transactions()), len(txObjs))
 		}
 	})
 	wg.Wait()
@@ -185,14 +184,14 @@ func TestEthExecutableSnapshot(t *testing.T) {
 	m.senders[firstOrigin], m.senders[otherOrigin] = firstSender, otherSender
 
 	snapshot := m.executableSnapshot()
-	require.Len(t, snapshot.groups, 2)
-	assert.Equal(t, 3, snapshot.total)
+	require.Len(t, snapshot, 2)
+	assert.Len(t, snapshot.transactions(), 3)
 
 	expected := [][]*tx.Transaction{{first.Transaction, second.Transaction}, {other.Transaction}}
 	if bytes.Compare(firstOrigin[:], otherOrigin[:]) > 0 {
 		expected[0], expected[1] = expected[1], expected[0]
 	}
-	for i, group := range snapshot.groups {
+	for i, group := range snapshot {
 		actual := make([]*tx.Transaction, 0, len(group))
 		for _, entry := range group {
 			actual = append(actual, entry.tx)
@@ -204,7 +203,7 @@ func TestEthExecutableSnapshot(t *testing.T) {
 	delete(firstSender.pending, 5)
 	first.priorityGasPrice = big.NewInt(99)
 	var firstEntry executableTx
-	for _, group := range snapshot.groups {
+	for _, group := range snapshot {
 		for _, entry := range group {
 			if entry.tx == first.Transaction {
 				firstEntry = entry
@@ -212,7 +211,7 @@ func TestEthExecutableSnapshot(t *testing.T) {
 		}
 	}
 	assert.Equal(t, int64(10), firstEntry.priorityGasPrice.Int64())
-	for _, group := range snapshot.groups {
+	for _, group := range snapshot {
 		for _, entry := range group {
 			assert.NotSame(t, queued.Transaction, entry.tx)
 		}

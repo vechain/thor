@@ -521,9 +521,12 @@ func (p *EthPool) emitForkResults(results []ethForkResult) {
 	}
 }
 
+// AddLocal admits a locally submitted Ethereum tx (e.g. REST POST /transactions).
+// Local privilege policy for Eth is not differentiated yet, so admission matches
+// AddRemote.
+// TODO: temorarily just delegate to AddRemote, but should be refactor to implement local privilege policy.
 func (p *EthPool) AddLocal(newTx *tx.Transaction) error {
-	_ = newTx
-	return nil
+	return p.AddRemote(newTx)
 }
 
 func (p *EthPool) StrictlyAdd(newTx *tx.Transaction) error {

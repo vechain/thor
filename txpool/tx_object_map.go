@@ -172,19 +172,15 @@ func (m *txObjectMap) executableSnapshot(txs tx.Transactions) *vechainExecutable
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	snapshot := &vechainExecutablesSnapshot{
-		transactions: make(tx.Transactions, 0, len(txs)),
-		entries:      make([]executableTx, 0, len(txs)),
-	}
+	snapshot := make(vechainExecutablesSnapshot, 0, len(txs))
 	for _, trx := range txs {
 		txObj := m.mapByID[trx.ID()]
 		if txObj == nil || txObj.priorityGasPrice == nil {
 			continue
 		}
-		snapshot.transactions = append(snapshot.transactions, trx)
-		snapshot.entries = append(snapshot.entries, executableTxFromObject(txObj))
+		snapshot = append(snapshot, executableTxFromObject(txObj))
 	}
-	return snapshot
+	return &snapshot
 }
 
 func (m *txObjectMap) Fill(txObjs []*TxObject) {

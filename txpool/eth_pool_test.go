@@ -138,6 +138,37 @@ func TestEthPoolAddRemoteNoncePlacementAndReplacement(t *testing.T) {
 	}
 }
 
+func TestEthPoolAddLocalUsesRemoteAdmission(t *testing.T) {
+	pool, tchain := newEthPoolTest(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	events := make(chan *TxEvent, 1)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	trx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		devAccounts[5],
+	)
+
+	require.NoError(t, pool.AddLocal(trx))
+	assert.Equal(t, trx, pool.GetByHash(trx.Hash()))
+	event := nextTxEvent(t, events)
+	assert.Equal(t, trx.Hash(), event.Tx.Hash())
+	require.NotNil(t, event.Executable)
+	assert.True(t, *event.Executable)
+
+	err := pool.AddLocal(trx)
+	require.Error(t, err)
+	assert.True(t, IsTxRejected(err))
+	assert.Contains(t, err.Error(), "already known")
+}
+
 func TestEthPoolRemoveAndDump(t *testing.T) {
 	pool, tchain := newEthPoolTest(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
@@ -881,7 +912,11 @@ func TestCoordinatorRoutesEthereumAdmissionAndRelaysEvent(t *testing.T) {
 	require.NoError(t, coordinator.AddLocal(local))
 	require.ErrorIs(t, coordinator.StrictlyAdd(local), errEthPoolNotImplemented)
 	assert.Nil(t, coordinator.vechain.GetByHash(local.Hash()))
-	assert.Nil(t, coordinator.eth.GetByHash(local.Hash()))
+	assert.Equal(t, local, coordinator.eth.GetByHash(local.Hash()))
+	localEvent := nextTxEvent(t, events)
+	assert.Equal(t, local.Hash(), localEvent.Tx.Hash())
+	require.NotNil(t, localEvent.Executable)
+	assert.True(t, *localEvent.Executable)
 }
 
 func TestCoordinatorRouteSelectsTransactionFamily(t *testing.T) {

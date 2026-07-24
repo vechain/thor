@@ -29,18 +29,20 @@ func executableTxFromObject(txObj *TxObject) executableTx {
 	}
 }
 
-type vechainExecutablesSnapshot struct {
-	transactions tx.Transactions
-	entries      []executableTx
+type vechainExecutablesSnapshot []executableTx
+
+func (s vechainExecutablesSnapshot) transactions() tx.Transactions {
+	transactions := make(tx.Transactions, len(s))
+	for i, entry := range s {
+		transactions[i] = entry.tx
+	}
+	return transactions
 }
 
-type ethExecutablesSnapshot struct {
-	groups [][]executableTx
-	total  int
-}
+type ethExecutablesSnapshot [][]executableTx
 
 func (s ethExecutablesSnapshot) transactions() tx.Transactions {
-	return orderExecutableStreams(s.groups, s.total)
+	return orderExecutableStreams(s)
 }
 
 // compareExecutableTx returns a negative value when a sorts before b.
@@ -96,21 +98,21 @@ func (h *executableMergeHeap) Pop() any {
 	return item
 }
 
-func mergePoolExecutables(vechain []executableTx, eth ethExecutablesSnapshot) tx.Transactions {
-	if len(vechain) == 0 && eth.total == 0 {
-		return nil
-	}
-
-	sources := make([][]executableTx, 0, 1+len(eth.groups))
+func mergePoolExecutables(vechain vechainExecutablesSnapshot, eth ethExecutablesSnapshot) tx.Transactions {
+	sources := make([][]executableTx, 0, 1+len(eth))
 	if len(vechain) > 0 {
 		sources = append(sources, vechain)
 	}
-	sources = append(sources, eth.groups...)
+	sources = append(sources, eth...)
 
-	return orderExecutableStreams(sources, len(vechain)+eth.total)
+	return orderExecutableStreams(sources)
 }
 
-func orderExecutableStreams(sources [][]executableTx, total int) tx.Transactions {
+func orderExecutableStreams(sources [][]executableTx) tx.Transactions {
+	total := 0
+	for _, source := range sources {
+		total += len(source)
+	}
 	if total == 0 {
 		return nil
 	}

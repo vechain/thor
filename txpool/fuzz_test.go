@@ -46,7 +46,7 @@ func FuzzMergeExecutableStreams(f *testing.F) {
 			sources = append(sources, source)
 		}
 
-		merged := orderExecutableStreams(sources, total)
+		merged := orderExecutableStreams(sources)
 		require.Len(t, merged, total)
 		lastIndex := make(map[int]int)
 		for _, trx := range merged {

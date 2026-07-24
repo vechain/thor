@@ -83,7 +83,7 @@ type VeChainPool struct {
 	baseFeeCache *baseFeeCache
 	costs        *costTracker
 
-	executables    atomic.Value
+	executables    atomic.Pointer[vechainExecutablesSnapshot]
 	all            *txObjectMap
 	addedAfterWash uint32
 
@@ -135,7 +135,6 @@ func newVeChainPoolWithBlocklist(
 		forkConfig:   forkConfig,
 		baseFeeCache: newBaseFeeCache(forkConfig),
 	}
-
 	pool.goes.Go(pool.housekeeping)
 	pool.goes.Go(pool.fetchBlocklistLoop)
 	return pool
@@ -477,17 +476,14 @@ func (p *VeChainPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 
 // Executables returns executable txs.
 func (p *VeChainPool) Executables() tx.Transactions {
-	if snapshot := p.executableSnapshot(); snapshot != nil {
-		return snapshot.transactions
-	}
-	return nil
+	return p.executableSnapshot().transactions()
 }
 
-func (p *VeChainPool) executableSnapshot() *vechainExecutablesSnapshot {
+func (p *VeChainPool) executableSnapshot() vechainExecutablesSnapshot {
 	if snapshot := p.executables.Load(); snapshot != nil {
-		return snapshot.(*vechainExecutablesSnapshot)
+		return *snapshot
 	}
-	return nil
+	return vechainExecutablesSnapshot{}
 }
 
 func (p *VeChainPool) storeExecutables(txs tx.Transactions) {

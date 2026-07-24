@@ -59,6 +59,20 @@ func coordinatorEthTx(t *testing.T, tchain *testchain.Chain, signer int, nonce u
 	)
 }
 
+func TestCoordinatorExecutablesAreDefinedBeforeFirstWash(t *testing.T) {
+	coordinator, tchain := newCoordinatorTest(t)
+	defer coordinator.Close()
+
+	snapshot := coordinator.vechain.executableSnapshot()
+	assert.Empty(t, snapshot)
+	assert.Empty(t, coordinator.Executables())
+
+	ethereum := coordinatorEthTx(t, tchain, 2, 0)
+	require.NoError(t, coordinator.AddRemote(ethereum))
+	assert.Equal(t, tx.Transactions{ethereum}, coordinator.Executables(),
+		"Ethereum executables must be available without waiting for a VeChain wash")
+}
+
 func TestCoordinatorRelaysVeChainAdmissionEvent(t *testing.T) {
 	coordinator, tchain := newCoordinatorTest(t)
 	defer coordinator.Close()

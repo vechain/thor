@@ -29,7 +29,7 @@ func BenchmarkMergeExecutables(b *testing.B) {
 			}
 		}
 	}
-	eth := ethExecutablesSnapshot{groups: groups, total: senderCount * perSender}
+	eth := ethExecutablesSnapshot(groups)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -45,7 +45,6 @@ func BenchmarkCoordinatorExecutables(b *testing.B) {
 		perSender    = 16
 	)
 	vechainEntries := make([]executableTx, vechainCount)
-	vechainTxs := make(tx.Transactions, vechainCount)
 	for i := range vechainCount {
 		entry := executableTx{
 			tx:               &tx.Transaction{},
@@ -53,13 +52,10 @@ func BenchmarkCoordinatorExecutables(b *testing.B) {
 			timeAdded:        int64(i),
 		}
 		vechainEntries[i] = entry
-		vechainTxs[i] = entry.tx
 	}
 	vechain := &VeChainPool{}
-	vechain.executables.Store(&vechainExecutablesSnapshot{
-		transactions: vechainTxs,
-		entries:      vechainEntries,
-	})
+	snapshot := vechainExecutablesSnapshot(vechainEntries)
+	vechain.executables.Store(&snapshot)
 
 	ethMap := newEthPoolMap(newCostTracker())
 	for senderIndex := range senderCount {

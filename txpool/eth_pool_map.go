@@ -139,9 +139,7 @@ func (m *ethPoolMap) executableSnapshot() ethExecutablesSnapshot {
 		return bytes.Compare(a[:], b[:])
 	})
 
-	snapshot := ethExecutablesSnapshot{
-		groups: make([][]executableTx, 0, len(origins)),
-	}
+	snapshot := make(ethExecutablesSnapshot, 0, len(origins))
 	for _, origin := range origins {
 		sender := m.senders[origin]
 		group := make([]executableTx, 0, len(sender.pending))
@@ -153,8 +151,7 @@ func (m *ethPoolMap) executableSnapshot() ethExecutablesSnapshot {
 			group = append(group, executableTxFromObject(txObj))
 		}
 		if len(group) > 0 {
-			snapshot.groups = append(snapshot.groups, group)
-			snapshot.total += len(group)
+			snapshot = append(snapshot, group)
 		}
 	}
 	return snapshot

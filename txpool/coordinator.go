@@ -163,7 +163,7 @@ func (c *TxPoolCoordinator) SubscribeTxEvent(ch chan *TxEvent) event.Subscriptio
 func (c *TxPoolCoordinator) Executables() tx.Transactions {
 	vechain := c.vechain.executableSnapshot()
 	eth := c.eth.all.executableSnapshot()
-	return mergePoolExecutables(vechain.entries, eth)
+	return mergePoolExecutables(vechain, eth)
 }
 
 func (c *TxPoolCoordinator) Fill(txs tx.Transactions) {
