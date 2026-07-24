@@ -455,7 +455,8 @@ func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
 	}
 
 	h := header
-	for h.Number() >= engine.forkConfig.FINALITY {
+	// stop iterating at the genesis block, whose signer is the zero address
+	for h.Number() > 0 && h.Number() >= engine.forkConfig.FINALITY {
 		signer, _ := h.Signer()
 
 		var weight uint64
