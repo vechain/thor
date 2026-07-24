@@ -121,7 +121,25 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	if !ok {
 		return false
 	}
+	m.removeLocked(txHash, txObj)
+	return true
+}
 
+// RemoveByHashAndID removes a transaction only when the object at txHash has
+// txID. The check and removal are atomic with respect to map mutations.
+func (m *txObjectMap) RemoveByHashAndID(txHash, txID thor.Bytes32) *TxObject {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	txObj := m.mapByHash[txHash]
+	if txObj == nil || txObj.ID() != txID {
+		return nil
+	}
+	m.removeLocked(txHash, txObj)
+	return txObj
+}
+
+func (m *txObjectMap) removeLocked(txHash thor.Bytes32, txObj *TxObject) {
 	if m.quota[txObj.Origin()] > 1 {
 		m.quota[txObj.Origin()]--
 	} else {
@@ -137,11 +155,12 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	}
 
 	delete(m.mapByHash, txHash)
-	delete(m.mapByID, txObj.ID())
+	if m.mapByID[txObj.ID()] == txObj {
+		delete(m.mapByID, txObj.ID())
+	}
 	if err := m.costs.release(vechainReservationOwner(txHash)); err != nil {
 		logger.Error("failed to release transaction cost", "hash", txHash, "err", err)
 	}
-	return true
 }
 
 func (m *txObjectMap) ToTxObjects() []*TxObject {

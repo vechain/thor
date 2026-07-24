@@ -456,22 +456,18 @@ func (p *VeChainPool) StrictlyAdd(newTx *tx.Transaction) error {
 
 // Remove removes tx from pool by its Hash.
 func (p *VeChainPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
-	removedTransaction := p.all.GetByID(txID)
+	removedTransaction := p.all.RemoveByHashAndID(txHash, txID)
 	if removedTransaction == nil {
 		return false
 	}
-	if p.all.RemoveByHash(txHash) {
-		txTypeString := "Unknown"
-		if removedTransaction.Type() == tx.TypeLegacy {
-			txTypeString = "Legacy"
-		} else if removedTransaction.Type() == tx.TypeDynamicFee {
-			txTypeString = "DynamicFee"
-		}
-		metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "type": txTypeString})
-		logger.Debug("tx removed", "id", txID)
-		return true
+
+	txTypeString := "Legacy"
+	if removedTransaction.Type() == tx.TypeDynamicFee {
+		txTypeString = "DynamicFee"
 	}
-	return false
+	metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "type": txTypeString})
+	logger.Debug("tx removed", "id", txID)
+	return true
 }
 
 // Executables returns executable txs.

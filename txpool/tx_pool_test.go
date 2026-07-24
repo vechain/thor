@@ -488,6 +488,45 @@ func TestRemove(t *testing.T) {
 	assert.Nil(t, pool.Get(trx.ID()), "Transaction should not exist in the pool after removal")
 }
 
+func TestRemoveRejectsMismatchedHashAndID(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	first := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[0],
+	)
+	second := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		101,
+		nil,
+		tx.Features(0),
+		devAccounts[1],
+	)
+	require.NoError(t, pool.AddRemote(first))
+	require.NoError(t, pool.AddRemote(second))
+
+	assert.False(t, pool.Remove(first.Hash(), second.ID()))
+	assert.Same(t, first, pool.GetByHash(first.Hash()))
+	assert.Same(t, second, pool.Get(second.ID()))
+	assert.Equal(t, 2, pool.Len())
+
+	assert.True(t, pool.Remove(first.Hash(), first.ID()))
+	assert.Nil(t, pool.GetByHash(first.Hash()))
+	assert.Same(t, second, pool.Get(second.ID()))
+}
+
 func TestRemoveWithError(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
 	defer pool.Close()
