@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
@@ -91,6 +92,151 @@ func TestFill(t *testing.T) {
 	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[2].Address], "Delegator quota should be 1 for account 2")
 	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[3].Address], "Account quota should be 1 for account 3")
 	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[4].Address], "Delegator quota should be 1 for account 4")
+}
+
+func TestTxObjectMapCountsTrackMutations(t *testing.T) {
+	repo := newChainRepo()
+	nonExecutableTx := newTx(
+		tx.TypeLegacy,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[0],
+	)
+	executableTx := newTx(
+		tx.TypeLegacy,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		101,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[1],
+	)
+	filledTx := newTx(
+		tx.TypeLegacy,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		102,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[2],
+	)
+
+	nonExecutable, err := ResolveTx(nonExecutableTx, false)
+	require.NoError(t, err)
+	executable, err := ResolveTx(executableTx, false)
+	require.NoError(t, err)
+	executable.executable = true
+	filled, err := ResolveTx(filledTx, false)
+	require.NoError(t, err)
+	filled.executable = true
+
+	m := newTxObjectMap(newCostTracker())
+	require.NoError(t, m.Add(nonExecutable, 10, nil))
+	require.NoError(t, m.Add(executable, 10, nil))
+	require.NoError(t, m.Add(executable, 10, nil))
+	total, executableCount := m.Counts()
+	assert.Equal(t, 2, total)
+	assert.Equal(t, 1, executableCount)
+
+	require.True(t, m.RemoveByHash(executable.Hash()))
+	total, executableCount = m.Counts()
+	assert.Equal(t, 1, total)
+	assert.Zero(t, executableCount)
+
+	payer := nonExecutable.Origin()
+	nonExecutable.payer = &payer
+	nonExecutable.cost = big.NewInt(1)
+	reserved, err := m.ReserveCost(nonExecutable, big.NewInt(1))
+	require.NoError(t, err)
+	require.True(t, reserved)
+	total, executableCount = m.Counts()
+	assert.Equal(t, 1, total)
+	assert.Equal(t, 1, executableCount)
+
+	m.Fill([]*TxObject{filled, filled})
+	total, executableCount = m.Counts()
+	assert.Equal(t, 2, total)
+	assert.Equal(t, 2, executableCount)
+}
+
+func TestTxObjectMapCountsInvariantUnderMixedMutations(t *testing.T) {
+	repo := newChainRepo()
+	txObjs := make([]*TxObject, 32)
+	for i := range txObjs {
+		trx := newTx(
+			tx.TypeLegacy,
+			repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			uint32(100+i),
+			nil,
+			tx.Features(0),
+			genesis.DevAccounts()[i%len(genesis.DevAccounts())],
+		)
+		txObj, err := ResolveTx(trx, false)
+		require.NoError(t, err)
+		txObjs[i] = txObj
+	}
+
+	m := newTxObjectMap(newCostTracker())
+	balance := big.NewInt(1_000_000)
+	var sequence uint64 = 1
+	for range 5_000 {
+		sequence = sequence*6364136223846793005 + 1442695040888963407
+		index := int(sequence % uint64(len(txObjs)))
+		txObj := txObjs[index]
+
+		switch (sequence >> 32) % 6 {
+		case 0:
+			_ = m.Add(txObj, len(txObjs), balance)
+		case 1:
+			m.RemoveByHash(txObj.Hash())
+		case 2:
+			m.Fill([]*TxObject{txObj, txObj})
+		case 3:
+			if m.GetByHash(txObj.Hash()) == txObj {
+				payer := txObj.Origin()
+				txObj.payer = &payer
+				txObj.cost = big.NewInt(1)
+				_, _ = m.ReserveCost(txObj, balance)
+			}
+		case 4:
+			other := txObjs[(index+1)%len(txObjs)]
+			m.RemoveByHashAndID(txObj.Hash(), other.ID())
+		case 5:
+			m.RemoveByHashAndID(txObj.Hash(), txObj.ID())
+		}
+
+		assertTxObjectMapCountsInvariant(t, m)
+	}
+}
+
+func assertTxObjectMapCountsInvariant(t *testing.T, m *txObjectMap) {
+	t.Helper()
+
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	executableCount := 0
+	for _, txObj := range m.mapByHash {
+		if txObj.executable {
+			executableCount++
+		}
+	}
+	assert.Equal(t, len(m.mapByHash), len(m.mapByID))
+	assert.Equal(t, executableCount, m.executableCount)
+	assert.GreaterOrEqual(t, m.executableCount, 0)
+	assert.LessOrEqual(t, m.executableCount, len(m.mapByHash))
 }
 
 func TestTxObjMap(t *testing.T) {

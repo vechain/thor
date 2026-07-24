@@ -1183,6 +1183,54 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 	assert.Equal(t, "tx rejected: non executable pool is full", err.Error())
 }
 
+func TestNonExecutableLimitUsesLiveCountsBeforeSnapshotRefresh(t *testing.T) {
+	pool := newPoolWithParams(5, 2, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+	pool.cancel()
+	pool.goes.Wait()
+	defer pool.Close()
+
+	executable := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[0],
+	)
+	require.NoError(t, pool.AddRemote(executable))
+	assert.Empty(t, pool.Executables(), "the wash snapshot should still be stale")
+
+	firstNonExecutable := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		&thor.Bytes32{1},
+		tx.Features(0),
+		devAccounts[1],
+	)
+	require.NoError(t, pool.AddRemote(firstNonExecutable))
+
+	secondNonExecutable := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		&thor.Bytes32{2},
+		tx.Features(0),
+		devAccounts[2],
+	)
+	err := pool.AddRemote(secondNonExecutable)
+	assert.Equal(t, txRejectedError{"non executable pool is full"}, err)
+}
+
 func TestNonExecutables(t *testing.T) {
 	pool := newPoolWithParams(100, 100, "", "", uint64(time.Now().Unix()), &thor.NoFork)
 

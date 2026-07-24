@@ -17,11 +17,12 @@ import (
 // txObjectMap to maintain mapping of tx hash to tx object and account quota.
 // Executable transaction cost is reserved in the shared costTracker.
 type txObjectMap struct {
-	lock      sync.RWMutex
-	mapByHash map[thor.Bytes32]*TxObject
-	mapByID   map[thor.Bytes32]*TxObject
-	quota     map[thor.Address]int
-	costs     *costTracker
+	lock            sync.RWMutex
+	mapByHash       map[thor.Bytes32]*TxObject
+	mapByID         map[thor.Bytes32]*TxObject
+	quota           map[thor.Address]int
+	executableCount int
+	costs           *costTracker
 }
 
 func newTxObjectMap(costs *costTracker) *txObjectMap {
@@ -59,12 +60,7 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, balance *big.Int
 		}
 	}
 
-	m.quota[txObj.Origin()]++
-	if delegator := txObj.Delegator(); delegator != nil {
-		m.quota[*delegator]++
-	}
-	m.mapByHash[hash] = txObj
-	m.mapByID[txObj.ID()] = txObj
+	m.insertLocked(hash, txObj)
 	return nil
 }
 
@@ -94,7 +90,8 @@ func (m *txObjectMap) GetByHash(hash thor.Bytes32) *TxObject {
 	return m.mapByHash[hash]
 }
 
-// ReserveCost reserves txObj's executable cost if it is still in the map.
+// ReserveCost reserves txObj's executable cost and marks it executable if it
+// is still in the map.
 // Holding the map lock closes the race between wash promotion and removal;
 // costTracker is a leaf lock, so this is the required lock order.
 func (m *txObjectMap) ReserveCost(txObj *TxObject, balance *big.Int) (bool, error) {
@@ -110,6 +107,9 @@ func (m *txObjectMap) ReserveCost(txObj *TxObject, balance *big.Int) (bool, erro
 		txObj.Cost(),
 		balance,
 	)
+	if err == nil {
+		m.setExecutableLocked(txObj, true)
+	}
 	return err == nil, err
 }
 
@@ -139,6 +139,30 @@ func (m *txObjectMap) RemoveByHashAndID(txHash, txID thor.Bytes32) *TxObject {
 	return txObj
 }
 
+func (m *txObjectMap) insertLocked(hash thor.Bytes32, txObj *TxObject) {
+	m.quota[txObj.Origin()]++
+	if delegator := txObj.Delegator(); delegator != nil {
+		m.quota[*delegator]++
+	}
+	m.mapByHash[hash] = txObj
+	m.mapByID[txObj.ID()] = txObj
+	if txObj.executable {
+		m.executableCount++
+	}
+}
+
+func (m *txObjectMap) setExecutableLocked(txObj *TxObject, executable bool) {
+	if txObj.executable == executable {
+		return
+	}
+	txObj.executable = executable
+	if executable {
+		m.executableCount++
+	} else {
+		m.executableCount--
+	}
+}
+
 func (m *txObjectMap) removeLocked(txHash thor.Bytes32, txObj *TxObject) {
 	if m.quota[txObj.Origin()] > 1 {
 		m.quota[txObj.Origin()]--
@@ -157,6 +181,9 @@ func (m *txObjectMap) removeLocked(txHash thor.Bytes32, txObj *TxObject) {
 	delete(m.mapByHash, txHash)
 	if m.mapByID[txObj.ID()] == txObj {
 		delete(m.mapByID, txObj.ID())
+	}
+	if txObj.executable {
+		m.executableCount--
 	}
 	if err := m.costs.release(vechainReservationOwner(txHash)); err != nil {
 		logger.Error("failed to release transaction cost", "hash", txHash, "err", err)
@@ -206,18 +233,21 @@ func (m *txObjectMap) Fill(txObjs []*TxObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, txObj := range txObjs {
-		if _, found := m.mapByHash[txObj.Hash()]; found {
+		hash := txObj.Hash()
+		if _, found := m.mapByHash[hash]; found {
 			continue
 		}
 		// skip account limit check
-		m.quota[txObj.Origin()]++
-		if delegator := txObj.Delegator(); delegator != nil {
-			m.quota[*delegator]++
-		}
-		m.mapByHash[txObj.Hash()] = txObj
-		m.mapByID[txObj.ID()] = txObj
+		m.insertLocked(hash, txObj)
 		// skip cost check and accumulation
 	}
+}
+
+// Counts returns a consistent view of total and executable transactions.
+func (m *txObjectMap) Counts() (total, executable int) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return len(m.mapByHash), m.executableCount
 }
 
 func (m *txObjectMap) Len() int {

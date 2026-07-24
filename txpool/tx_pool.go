@@ -286,34 +286,29 @@ func (p *VeChainPool) isBlocked(newTx *tx.Transaction) bool {
 	return false
 }
 
-// checkTxPriority checks if the new tx has higher priority than the bottom 10% of existing executable txs.
-// Since executables are sorted descending by price, the threshold at 90th percentile represents
-// the boundary where 90% have higher priority and 10% have lower priority.
+// checkTxPriority checks the new tx against the bottom 10% threshold from the
+// last completed wash. The snapshot is sorted by descending priority.
 func (p *VeChainPool) checkTxPriority(txObj *TxObject, executable bool) bool {
 	if !executable {
 		return false
 	}
 
-	executables := p.Executables()
-	if len(executables) == 0 {
+	snapshot := p.executableSnapshot()
+	if len(snapshot) == 0 {
 		return true
 	}
 
 	// Get the transaction at the 90th percentile (bottom 10% threshold)
-	thresholdIdx := len(executables) * 9 / 10 // 90th percentile, executables are sorted by price desc
-	thresholdTxObj := p.all.GetByID(executables[thresholdIdx].ID())
-	if thresholdTxObj == nil {
-		return false
-	}
-
-	return txObj.priorityGasPrice.Cmp(thresholdTxObj.priorityGasPrice) > 0
+	thresholdIdx := len(snapshot) * 9 / 10 // 90th percentile, executables are sorted by price desc
+	return txObj.priorityGasPrice.Cmp(snapshot[thresholdIdx].priorityGasPrice) > 0
 }
 
 // validateNonExecutableLimit validates that adding a non-executable transaction won't exceed pool limits.
 func (p *VeChainPool) validateNonExecutableLimit(executable bool) error {
 	// Check non-executable pool limit (20% of total)
 	if !executable {
-		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
+		total, executableCount := p.all.Counts()
+		if total-executableCount >= p.options.Limit*2/10 {
 			return txRejectedError{"non executable pool is full"}
 		}
 	}
@@ -688,7 +683,6 @@ func (p *VeChainPool) wash(
 			if !reserved {
 				continue
 			}
-			obj.executable = true
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		} else if obj.localSubmitted {
 			// broadcast local submitted even it's already executable
