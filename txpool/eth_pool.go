@@ -10,7 +10,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"math/big"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 
-	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -27,7 +25,9 @@ import (
 
 var errEthPoolNotImplemented = errors.New("eth pool: not implemented")
 
-// EthPool maintains unprocessed Ethereum-family transactions.
+// EthPool is the Ethereum-family Pool facade. It owns chain admission,
+// housekeeping, and event publication; ethPoolCore owns transaction state,
+// mutation ordering, and its locks.
 //
 // TODO: complete strict admission, partitioned Fill, the VeChain
 // wrong-family guard, and family-aware metrics.
@@ -43,7 +43,7 @@ type EthPool struct {
 	baseFeeCache *baseFeeCache
 	blocklist    *blocklist
 
-	all *ethPoolMap
+	core *ethPoolCore
 
 	addedAfterWash atomic.Uint32
 	ctx            context.Context
@@ -91,7 +91,7 @@ func newEthPoolWithBlocklist(
 		costs:        costs,
 		baseFeeCache: newBaseFeeCache(forkConfig),
 		blocklist:    blocked,
-		all:          newEthPoolMap(costs),
+		core:         newEthPoolCore(costs),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -127,7 +127,7 @@ func (p *EthPool) housekeeping() {
 func (p *EthPool) runHousekeepingTick(processedHead *chain.BlockSummary) (*chain.BlockSummary, error) {
 	currentHead := p.repo.BestBlockSummary()
 	headChanged := currentHead.Header.ID() != processedHead.Header.ID()
-	poolLen := p.all.Len()
+	poolLen := p.core.Len()
 	overLimit := p.options.Limit > 0 && poolLen > p.options.Limit
 	if !headChanged && !overLimit && p.addedAfterWash.Load() <= 0 {
 		return processedHead, nil
@@ -152,12 +152,12 @@ func (p *EthPool) runHousekeepingTick(processedHead *chain.BlockSummary) (*chain
 
 func (p *EthPool) wash(head *chain.BlockSummary) error {
 	ctx := p.newAdmissionContextAt(head)
-	for _, origin := range p.all.origins() {
+	for _, origin := range p.core.origins() {
 		if _, err := ctx.stateNonce(origin); err != nil {
 			return err
 		}
 	}
-	result, err := p.all.wash(
+	result, err := p.core.wash(
 		ctx.stateNonces,
 		ethWashOptions{
 			now:          time.Now().UnixNano(),
@@ -217,7 +217,7 @@ func (p *EthPool) processHeadChange(previous, current *chain.BlockSummary) error
 			return err
 		}
 	}
-	promoted, demoted, err := p.all.syncHeadWithTransitions(
+	promoted, demoted, err := p.core.syncHeadWithTransitions(
 		ctx.stateNonces,
 		p.options.EthAccountSlots,
 		ctx.prepare,
@@ -237,129 +237,10 @@ func (p *EthPool) Get(txID thor.Bytes32) *tx.Transaction {
 }
 
 func (p *EthPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
-	if txObj := p.all.GetByHash(hash); txObj != nil {
+	if txObj := p.core.GetByHash(hash); txObj != nil {
 		return txObj.Transaction
 	}
 	return nil
-}
-
-type ethAdmissionContext struct {
-	head        *chain.BlockSummary
-	state       *state.State
-	stateNonces map[thor.Address]uint64
-	payerFunds  map[thor.Address]*big.Int
-	prepare     ethPrepare
-}
-
-func (p *EthPool) newAdmissionContext() *ethAdmissionContext {
-	return p.newAdmissionContextAt(p.repo.BestBlockSummary())
-}
-
-func (p *EthPool) newAdmissionContextAt(head *chain.BlockSummary) *ethAdmissionContext {
-	st := p.stater.NewState(head.Root())
-	baseFee := p.baseFeeCache.Get(head.Header)
-	ctx := &ethAdmissionContext{
-		head:        head,
-		state:       st,
-		stateNonces: make(map[thor.Address]uint64),
-		payerFunds:  make(map[thor.Address]*big.Int),
-	}
-	ctx.prepare = func(obj *TxObject) ethPreparation {
-		if baseFee != nil && obj.MaxFeePerGas().Cmp(baseFee) < 0 {
-			return ethPreparation{}
-		}
-		checkpoint := st.NewCheckpoint()
-		legacyBase, _, payer, prepaid, _, err := obj.resolved.BuyGas(
-			st,
-			head.Header.Timestamp()+thor.BlockInterval(),
-			baseFee,
-		)
-		st.RevertTo(checkpoint)
-		if err != nil {
-			return ethPreparation{err: err}
-		}
-		normalizedBaseFee := baseFee
-		if normalizedBaseFee == nil {
-			normalizedBaseFee = new(big.Int)
-		}
-		balance := ctx.payerFunds[payer]
-		if balance == nil {
-			balance, err = builtin.Energy.Native(
-				st,
-				head.Header.Timestamp()+thor.BlockInterval(),
-			).Get(payer)
-			if err != nil {
-				return ethPreparation{err: err}
-			}
-			ctx.payerFunds[payer] = balance
-		}
-		return ethPreparation{
-			request: reservationRequest{
-				owner:   ethReservationOwner(obj.Origin(), obj.Nonce()),
-				payer:   payer,
-				cost:    prepaid,
-				balance: balance,
-			},
-			viable:           true,
-			priorityGasPrice: obj.EffectivePriorityFeePerGas(normalizedBaseFee, legacyBase, nil),
-		}
-	}
-	return ctx
-}
-
-func (ctx *ethAdmissionContext) stateNonce(origin thor.Address) (uint64, error) {
-	if nonce, cached := ctx.stateNonces[origin]; cached {
-		return nonce, nil
-	}
-	nonce, err := ctx.state.GetNonce(origin)
-	if err != nil {
-		return 0, err
-	}
-	ctx.stateNonces[origin] = nonce
-	return nonce, nil
-}
-
-func (p *EthPool) resolveAdmission(
-	newTx *tx.Transaction,
-	ctx *ethAdmissionContext,
-	duplicateNoop bool,
-) (*TxObject, uint64, bool, error) {
-	if newTx == nil || !newTx.IsEthereumTx() {
-		return nil, 0, false, badTxError{"invalid tx type for Ethereum pool"}
-	}
-	if p.all.GetByHash(newTx.Hash()) != nil {
-		if duplicateNoop {
-			return nil, 0, true, nil
-		}
-		return nil, 0, false, txRejectedError{errEthAlreadyKnown.Error()}
-	}
-	if err := validateTxBasics(p.repo, p.forkConfig, newTx); err != nil {
-		return nil, 0, false, err
-	}
-	if p.isBlocked(newTx) {
-		return nil, 0, true, nil
-	}
-	txObj, err := ResolveTx(newTx, false)
-	if err != nil {
-		return nil, 0, false, badTxError{err.Error()}
-	}
-	if newTx.Gas() > ctx.head.Header.GasLimit() {
-		return nil, 0, false, txRejectedError{"tx gas exceeds block gas limit"}
-	}
-	chainView := p.repo.NewChain(ctx.head.Header.ID())
-	if known, err := chainView.HasTransaction(newTx.ID(), 0); err != nil {
-		return nil, 0, false, err
-	} else if known {
-		return nil, 0, false, txRejectedError{"known tx"}
-	}
-	stateNonce, err := ctx.stateNonce(txObj.Origin())
-	if err != nil {
-		return nil, 0, false, err
-	}
-	if newTx.Nonce() < stateNonce {
-		return nil, 0, false, txRejectedError{errEthNonceTooLow.Error()}
-	}
-	return txObj, stateNonce, false, nil
 }
 
 func (p *EthPool) emitAdmission(newTx *tx.Transaction, executable bool, promoted []*TxObject) {
@@ -394,7 +275,7 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 		return nil
 	}
 
-	executable, promoted, demoted, err := p.all.addWithTransitions(
+	executable, promoted, demoted, err := p.core.addWithTransitions(
 		txObj,
 		stateNonce,
 		p.options.Limit,
@@ -414,16 +295,6 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 	return nil
 }
 
-func (p *EthPool) isBlocked(newTx *tx.Transaction) bool {
-	origin, _ := newTx.Origin()
-	if thor.IsOriginBlocked(origin) || (p.blocklist != nil && p.blocklist.Contains(origin)) {
-		return true
-	}
-	delegator, _ := newTx.Delegator()
-	return delegator != nil && (thor.IsOriginBlocked(*delegator) ||
-		(p.blocklist != nil && p.blocklist.Contains(*delegator)))
-}
-
 func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
 	ctx := p.newAdmissionContext()
 	if err := p.collectIncludedForkNonces(ctx, fork.Included); err != nil {
@@ -436,7 +307,7 @@ func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
 	}
 	sortEthForkCandidates(candidates)
 
-	results, demoted, err := p.all.reconcileForkWithTransitions(
+	results, demoted, err := p.core.reconcileForkWithTransitions(
 		candidates,
 		ctx.stateNonces,
 		p.options.Limit,
@@ -536,11 +407,11 @@ func (p *EthPool) StrictlyAdd(newTx *tx.Transaction) error {
 }
 
 func (p *EthPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
-	txObj := p.all.GetByHash(txHash)
+	txObj := p.core.GetByHash(txHash)
 	if txObj == nil || txObj.ID() != txID {
 		return false
 	}
-	removed, demoted := p.all.removeByHashWithTransitions(txHash)
+	removed, demoted := p.core.removeByHashWithTransitions(txHash)
 	if !removed {
 		return false
 	}
@@ -550,11 +421,11 @@ func (p *EthPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 }
 
 func (p *EthPool) Dump() tx.Transactions {
-	return p.all.ToTxs()
+	return p.core.ToTxs()
 }
 
 func (p *EthPool) Len() int {
-	return p.all.Len()
+	return p.core.Len()
 }
 
 func (p *EthPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
@@ -562,7 +433,13 @@ func (p *EthPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 }
 
 func (p *EthPool) Executables() tx.Transactions {
-	return p.all.executableSnapshot().transactions()
+	return p.executableSnapshot().transactions()
+}
+
+// executableSnapshot exposes immutable merge metadata without revealing the
+// core's storage or lock ownership to the coordinator.
+func (p *EthPool) executableSnapshot() ethExecutablesSnapshot {
+	return p.core.executableSnapshot()
 }
 
 func (p *EthPool) Fill(txs tx.Transactions) {
@@ -570,7 +447,7 @@ func (p *EthPool) Fill(txs tx.Transactions) {
 }
 
 func (p *EthPool) PoolNonce(addr thor.Address) uint64 {
-	if nonce, ok := p.all.poolNonceOK(addr); ok {
+	if nonce, ok := p.core.poolNonceOK(addr); ok {
 		return nonce
 	}
 	head := p.repo.BestBlockSummary()
@@ -585,5 +462,5 @@ func (p *EthPool) Close() {
 	p.cancel()
 	p.scope.Close()
 	p.goes.Wait()
-	p.all.pruneEmptySenders()
+	p.core.pruneEmptySenders()
 }

@@ -66,7 +66,7 @@ func newEthPoolWithoutHousekeeping(t *testing.T, options Options) (*EthPool, *te
 		forkConfig:   &thor.SoloFork,
 		costs:        costs,
 		baseFeeCache: newBaseFeeCache(&thor.SoloFork),
-		all:          newEthPoolMap(costs),
+		core:         newEthPoolCore(costs),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -307,9 +307,9 @@ func TestEthPoolWashEmitsDemotionEvents(t *testing.T) {
 		require.NotNil(t, event.Executable)
 		assert.False(t, *event.Executable)
 	}
-	pool.all.lock.RLock()
-	defer pool.all.lock.RUnlock()
-	sender := pool.all.senders[signer.Address]
+	pool.core.lock.RLock()
+	defer pool.core.lock.RUnlock()
+	sender := pool.core.senders[signer.Address]
 	require.NotNil(t, sender)
 	assert.Empty(t, sender.pending)
 	assert.Len(t, sender.queue, 2)
@@ -389,13 +389,13 @@ func TestEthPoolProcessHeadChange(t *testing.T) {
 	require.NoError(t, pool.AddRemote(nonce1))
 
 	// Simulate a queued suffix so settling nonce 0 must promote nonce 1.
-	pool.all.lock.Lock()
-	sender := pool.all.senders[signer.Address]
+	pool.core.lock.Lock()
+	sender := pool.core.senders[signer.Address]
 	delete(sender.pending, 1)
-	sender.queue[1] = pool.all.allByHash[nonce1.Hash()]
+	sender.queue[1] = pool.core.allByHash[nonce1.Hash()]
 	sender.queue[1].executable = false
 	require.NoError(t, pool.costs.release(ethReservationOwner(signer.Address, 1)))
-	pool.all.lock.Unlock()
+	pool.core.lock.Unlock()
 
 	events := make(chan *TxEvent, 1)
 	sub := pool.SubscribeTxEvent(events)
@@ -483,7 +483,7 @@ func TestEthPoolWashRepricesAndExpires(t *testing.T) {
 		new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), signer,
 	)
 	require.NoError(t, pool.AddRemote(trx))
-	txObj := pool.all.GetByHash(trx.Hash())
+	txObj := pool.core.GetByHash(trx.Hash())
 	require.NotNil(t, txObj)
 	txObj.priorityGasPrice = big.NewInt(-1)
 
@@ -555,7 +555,7 @@ func TestEthPoolHousekeepingTickTriggersWash(t *testing.T) {
 		new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), signer,
 	)
 	require.NoError(t, pool.AddRemote(trx))
-	txObj := pool.all.GetByHash(trx.Hash())
+	txObj := pool.core.GetByHash(trx.Hash())
 	txObj.priorityGasPrice = big.NewInt(-1)
 	head := tchain.Repo().BestBlockSummary()
 
@@ -595,7 +595,7 @@ func TestEthPoolHousekeepingTickDefersWhileUnsynced(t *testing.T) {
 		forkConfig:   &thor.SoloFork,
 		costs:        costs,
 		baseFeeCache: newBaseFeeCache(&thor.SoloFork),
-		all:          newEthPoolMap(costs),
+		core:         newEthPoolCore(costs),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -799,18 +799,18 @@ func TestEthPoolWashReconcilesBackwardStateNonce(t *testing.T) {
 	)
 	require.NoError(t, pool.AddRemote(trx))
 
-	pool.all.lock.Lock()
-	pool.all.senders[signer.Address].stateNonce = 1
-	pool.all.lock.Unlock()
+	pool.core.lock.Lock()
+	pool.core.senders[signer.Address].stateNonce = 1
+	pool.core.lock.Unlock()
 
 	require.NoError(t, pool.wash(tchain.Repo().BestBlockSummary()))
 
-	pool.all.lock.RLock()
-	defer pool.all.lock.RUnlock()
-	sender := pool.all.senders[signer.Address]
+	pool.core.lock.RLock()
+	defer pool.core.lock.RUnlock()
+	sender := pool.core.senders[signer.Address]
 	require.NotNil(t, sender)
 	assert.Equal(t, uint64(0), sender.stateNonce)
-	assert.Same(t, pool.all.allByHash[trx.Hash()], sender.pending[0],
+	assert.Same(t, pool.core.allByHash[trx.Hash()], sender.pending[0],
 		"wash must revalidate and promote the transaction against the lower canonical nonce")
 	assert.Empty(t, sender.queue)
 	assert.True(t, sender.pending[0].executable)
@@ -829,7 +829,7 @@ func TestEthPoolReplacementCostRollback(t *testing.T) {
 
 	original := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, big.NewInt(100), signer)
 	require.NoError(t, pool.AddRemote(original))
-	originalObj := pool.all.GetByHash(original.Hash())
+	originalObj := pool.core.GetByHash(original.Hash())
 	require.NotNil(t, originalObj)
 	require.NotNil(t, originalObj.Cost())
 
@@ -901,9 +901,9 @@ func TestEthPoolPromotionStopsAtAffordablePrefix(t *testing.T) {
 	require.NoError(t, pool.AddRemote(nonce0))
 	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address), "unaffordable queued suffix must not be promoted")
 
-	pool.all.lock.RLock()
-	defer pool.all.lock.RUnlock()
-	sender := pool.all.senders[signer.Address]
+	pool.core.lock.RLock()
+	defer pool.core.lock.RUnlock()
+	sender := pool.core.senders[signer.Address]
 	require.NotNil(t, sender)
 	assert.NotNil(t, sender.pending[0])
 	assert.NotNil(t, sender.queue[1])
@@ -1054,9 +1054,9 @@ func TestEthPoolReinjectDuplicateResetsBackwardNonce(t *testing.T) {
 
 	// Simulate a pool sender initialized against the orphaned head where nonce
 	// had advanced. Reinjection of the already-retained hash must still reset it.
-	pool.all.lock.Lock()
-	pool.all.senders[signer.Address].stateNonce = 1
-	pool.all.lock.Unlock()
+	pool.core.lock.Lock()
+	pool.core.senders[signer.Address].stateNonce = 1
+	pool.core.lock.Unlock()
 
 	events := make(chan *TxEvent, 2)
 	sub := pool.SubscribeTxEvent(events)

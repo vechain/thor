@@ -12,7 +12,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func benchmarkEthMapObject(b *testing.B, nonce uint64) *TxObject {
+func benchmarkEthCoreObject(b *testing.B, nonce uint64) *TxObject {
 	b.Helper()
 	to := devAccounts[1].Address
 	trx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
@@ -43,39 +43,39 @@ func benchmarkEthPrepare(txObj *TxObject) ethPreparation {
 	}
 }
 
-func benchmarkPopulatedEthMap(b *testing.B) *ethPoolMap {
+func benchmarkPopulatedEthCore(b *testing.B) *ethPoolCore {
 	b.Helper()
-	poolMap := newEthPoolMap(newCostTracker())
+	core := newEthPoolCore(newCostTracker())
 	for nonce := uint64(1); nonce <= 80; nonce++ {
-		txObj := benchmarkEthMapObject(b, nonce)
-		if _, _, err := poolMap.add(txObj, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
+		txObj := benchmarkEthCoreObject(b, nonce)
+		if _, _, err := core.add(txObj, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
 			b.Fatal(err)
 		}
 	}
-	return poolMap
+	return core
 }
 
-func BenchmarkEthPoolMapAdd(b *testing.B) {
-	poolMap := benchmarkPopulatedEthMap(b)
-	candidate := benchmarkEthMapObject(b, 1_000)
+func BenchmarkEthPoolCoreAdd(b *testing.B) {
+	core := benchmarkPopulatedEthCore(b)
+	candidate := benchmarkEthCoreObject(b, 1_000)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if _, _, err := poolMap.add(candidate, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
+		if _, _, err := core.add(candidate, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
 			b.Fatal(err)
 		}
 		b.StopTimer()
-		poolMap.removeByHash(candidate.Hash())
+		core.removeByHash(candidate.Hash())
 		b.StartTimer()
 	}
 }
 
-func BenchmarkEthPoolMapAddParallel(b *testing.B) {
-	poolMap := benchmarkPopulatedEthMap(b)
+func BenchmarkEthPoolCoreAddParallel(b *testing.B) {
+	core := benchmarkPopulatedEthCore(b)
 	candidates := make([]*TxObject, 256)
 	for i := range candidates {
-		candidates[i] = benchmarkEthMapObject(b, uint64(2_000+i))
+		candidates[i] = benchmarkEthCoreObject(b, uint64(2_000+i))
 	}
 	var cursor atomic.Uint64
 
@@ -84,15 +84,15 @@ func BenchmarkEthPoolMapAddParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			candidate := candidates[cursor.Add(1)%uint64(len(candidates))]
-			_, _, _ = poolMap.add(candidate, 0, 0, 16, 1_000, 10, benchmarkEthPrepare)
-			poolMap.removeByHash(candidate.Hash())
+			_, _, _ = core.add(candidate, 0, 0, 16, 1_000, 10, benchmarkEthPrepare)
+			core.removeByHash(candidate.Hash())
 		}
 	})
 }
 
-func BenchmarkEthPoolMapReadersDuringSlowPrepare(b *testing.B) {
-	poolMap := newEthPoolMap(newCostTracker())
-	candidate := benchmarkEthMapObject(b, 0)
+func BenchmarkEthPoolCoreReadersDuringSlowPrepare(b *testing.B) {
+	core := newEthPoolCore(newCostTracker())
+	candidate := benchmarkEthCoreObject(b, 0)
 	stop := make(chan struct{})
 	writerDone := make(chan struct{})
 	prepare := func(txObj *TxObject) ethPreparation {
@@ -108,30 +108,30 @@ func BenchmarkEthPoolMapReadersDuringSlowPrepare(b *testing.B) {
 				return
 			default:
 			}
-			_, _, _ = poolMap.add(candidate, 0, 1, 16, 64, 10, prepare)
-			poolMap.removeByHash(candidate.Hash())
+			_, _, _ = core.add(candidate, 0, 1, 16, 64, 10, prepare)
+			core.removeByHash(candidate.Hash())
 		}
 	}()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		_ = poolMap.Len()
-		_ = poolMap.executableSnapshot()
+		_ = core.Len()
+		_ = core.executableSnapshot()
 	}
 	b.StopTimer()
 	close(stop)
 	<-writerDone
 }
 
-func BenchmarkEthPoolMapWashDefaultLimit(b *testing.B) {
+func BenchmarkEthPoolCoreWashDefaultLimit(b *testing.B) {
 	const (
 		senderCount = 125
 		pendingPer  = 16
 		queuedPer   = 64
 	)
 	costs := newCostTracker()
-	poolMap := newEthPoolMap(costs)
+	core := newEthPoolCore(costs)
 	stateNonces := make(map[thor.Address]uint64, senderCount)
 	origins := make(map[*TxObject]thor.Address, senderCount*(pendingPer+queuedPer))
 	balance := big.NewInt(1_000_000)
@@ -156,7 +156,7 @@ func BenchmarkEthPoolMapWashDefaultLimit(b *testing.B) {
 				executable:       nonce < pendingPer,
 			}
 			origins[txObj] = origin
-			poolMap.allByHash[txObj.Hash()] = txObj
+			core.allByHash[txObj.Hash()] = txObj
 			if nonce < pendingPer {
 				sender.pending[uint64(nonce)] = txObj
 				if err := costs.reserve(
@@ -171,7 +171,7 @@ func BenchmarkEthPoolMapWashDefaultLimit(b *testing.B) {
 				sender.queue[uint64(nonce)] = txObj
 			}
 		}
-		poolMap.senders[origin] = sender
+		core.senders[origin] = sender
 	}
 	prepare := func(txObj *TxObject) ethPreparation {
 		origin := origins[txObj]
@@ -194,7 +194,7 @@ func BenchmarkEthPoolMapWashDefaultLimit(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if _, err := poolMap.wash(stateNonces, options, prepare); err != nil {
+		if _, err := core.wash(stateNonces, options, prepare); err != nil {
 			b.Fatal(err)
 		}
 	}

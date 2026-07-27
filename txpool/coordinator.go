@@ -18,7 +18,9 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// TxPoolCoordinator is the façade over VeChainPool and EthPool.
+// TxPoolCoordinator is the façade over VeChainPool and EthPool. It routes
+// families, owns shared cross-pool dependencies, relays events, and merges
+// snapshots without mutating or inspecting sub-pool storage.
 // Callers should depend on the Pool interface backed by this type.
 type TxPoolCoordinator struct {
 	vechain *VeChainPool
@@ -162,7 +164,7 @@ func (c *TxPoolCoordinator) SubscribeTxEvent(ch chan *TxEvent) event.Subscriptio
 
 func (c *TxPoolCoordinator) Executables() tx.Transactions {
 	vechain := c.vechain.executableSnapshot()
-	eth := c.eth.all.executableSnapshot()
+	eth := c.eth.executableSnapshot()
 	return mergePoolExecutables(vechain, eth)
 }
 

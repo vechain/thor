@@ -57,7 +57,7 @@ func BenchmarkCoordinatorExecutables(b *testing.B) {
 	snapshot := vechainExecutablesSnapshot(vechainEntries)
 	vechain.executables.Store(&snapshot)
 
-	ethMap := newEthPoolMap(newCostTracker())
+	ethCore := newEthPoolCore(newCostTracker())
 	for senderIndex := range senderCount {
 		var origin thor.Address
 		origin[0] = byte(senderIndex + 1)
@@ -70,11 +70,11 @@ func BenchmarkCoordinatorExecutables(b *testing.B) {
 				executable:       true,
 			}
 		}
-		ethMap.senders[origin] = sender
+		ethCore.senders[origin] = sender
 	}
 	coordinator := &TxPoolCoordinator{
 		vechain: vechain,
-		eth:     &EthPool{all: ethMap},
+		eth:     &EthPool{core: ethCore},
 	}
 
 	b.ReportAllocs()

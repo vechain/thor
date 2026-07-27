@@ -17,11 +17,11 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newEthMapTestObject(t *testing.T, nonce uint64, fee int64, signer int) *TxObject {
-	return newEthMapTestObjectWithTip(t, nonce, fee, 1, signer)
+func newEthCoreTestObject(t *testing.T, nonce uint64, fee int64, signer int) *TxObject {
+	return newEthCoreTestObjectWithTip(t, nonce, fee, 1, signer)
 }
 
-func newEthMapTestObjectWithTip(t *testing.T, nonce uint64, fee, tip int64, signer int) *TxObject {
+func newEthCoreTestObjectWithTip(t *testing.T, nonce uint64, fee, tip int64, signer int) *TxObject {
 	t.Helper()
 	to := devAccounts[(signer+1)%len(devAccounts)].Address
 	trx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
@@ -37,12 +37,12 @@ func newEthMapTestObjectWithTip(t *testing.T, nonce uint64, fee, tip int64, sign
 	return txObj
 }
 
-func TestEthPoolMapQueuedReplacementAtGlobalLimit(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
-	incumbent := newEthMapTestObjectWithTip(t, 2, 10, 1, 0)
-	underpriced := newEthMapTestObjectWithTip(t, 2, 10, 2, 0)
-	replacement := newEthMapTestObjectWithTip(t, 2, 11, 2, 0)
-	newNonce := newEthMapTestObjectWithTip(t, 3, 12, 2, 0)
+func TestEthPoolCoreQueuedReplacementAtGlobalLimit(t *testing.T) {
+	m := newEthPoolCore(newCostTracker())
+	incumbent := newEthCoreTestObjectWithTip(t, 2, 10, 1, 0)
+	underpriced := newEthCoreTestObjectWithTip(t, 2, 10, 2, 0)
+	replacement := newEthCoreTestObjectWithTip(t, 2, 11, 2, 0)
+	newNonce := newEthCoreTestObjectWithTip(t, 3, 12, 2, 0)
 
 	executable, promoted, err := m.add(incumbent, 0, 1, 16, 64, 10, fixedEthPrepare(1, 100))
 	require.NoError(t, err)
@@ -75,11 +75,11 @@ func TestEthPoolMapQueuedReplacementAtGlobalLimit(t *testing.T) {
 	assert.Empty(t, sender.pending)
 }
 
-func TestEthPoolMapConcurrentAddRemoveAndSnapshot(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
+func TestEthPoolCoreConcurrentAddRemoveAndSnapshot(t *testing.T) {
+	m := newEthPoolCore(newCostTracker())
 	txObjs := make([]*TxObject, 32)
 	for nonce := range txObjs {
-		txObjs[nonce] = newEthMapTestObjectWithTip(t, uint64(nonce), 100, 10, 1)
+		txObjs[nonce] = newEthCoreTestObjectWithTip(t, uint64(nonce), 100, 10, 1)
 	}
 
 	var wg sync.WaitGroup
@@ -106,13 +106,13 @@ func TestEthPoolMapConcurrentAddRemoveAndSnapshot(t *testing.T) {
 	assert.Equal(t, m.Len(), len(m.ToTxs()))
 }
 
-func TestEthPoolMapPrepareRunsOutsideWriteLock(t *testing.T) {
-	assertUnlockedPrepare := func(t *testing.T, m *ethPoolMap) ethPrepare {
+func TestEthPoolCorePrepareRunsOutsideWriteLock(t *testing.T) {
+	assertUnlockedPrepare := func(t *testing.T, m *ethPoolCore) ethPrepare {
 		t.Helper()
 		delegate := fixedEthPrepare(1, 1_000)
 		return func(txObj *TxObject) ethPreparation {
 			if !m.lock.TryRLock() {
-				t.Fatal("prepare called while ethPoolMap write lock is held")
+				t.Fatal("prepare called while ethPoolCore write lock is held")
 			}
 			m.lock.RUnlock()
 			return delegate(txObj)
@@ -120,15 +120,15 @@ func TestEthPoolMapPrepareRunsOutsideWriteLock(t *testing.T) {
 	}
 
 	t.Run("add", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 100, 0)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 100, 0)
 		_, _, err := m.add(txObj, 0, 100, 16, 64, 10, assertUnlockedPrepare(t, m))
 		require.NoError(t, err)
 	})
 
 	t.Run("sync head", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 100, 1)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 100, 1)
 		origin := txObj.Origin()
 		sender := newEthSender(origin, 0)
 		sender.queue[0] = txObj
@@ -144,8 +144,8 @@ func TestEthPoolMapPrepareRunsOutsideWriteLock(t *testing.T) {
 	})
 
 	t.Run("wash", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 100, 2)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 100, 2)
 		origin := txObj.Origin()
 		sender := newEthSender(origin, 0)
 		sender.queue[0] = txObj
@@ -161,8 +161,8 @@ func TestEthPoolMapPrepareRunsOutsideWriteLock(t *testing.T) {
 	})
 
 	t.Run("fork", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 100, 3)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 100, 3)
 		_, err := m.reconcileFork(
 			[]ethForkCandidate{{txObj: txObj, stateNonce: 0}},
 			map[thor.Address]uint64{txObj.Origin(): 0},
@@ -176,9 +176,9 @@ func TestEthPoolMapPrepareRunsOutsideWriteLock(t *testing.T) {
 	})
 }
 
-func TestEthPoolMapReadersProceedDuringPrepare(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
-	txObj := newEthMapTestObject(t, 0, 100, 0)
+func TestEthPoolCoreReadersProceedDuringPrepare(t *testing.T) {
+	m := newEthPoolCore(newCostTracker())
+	txObj := newEthCoreTestObject(t, 0, 100, 0)
 	prepareEntered := make(chan struct{})
 	releasePrepare := make(chan struct{})
 	addDone := make(chan error, 1)
@@ -221,14 +221,14 @@ func TestEthPoolMapReadersProceedDuringPrepare(t *testing.T) {
 	assert.Same(t, txObj, m.GetByHash(txObj.Hash()))
 }
 
-func TestEthPoolMapConcurrentAddWashAndSnapshot(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
+func TestEthPoolCoreConcurrentAddWashAndSnapshot(t *testing.T) {
+	m := newEthPoolCore(newCostTracker())
 	const senderCount = 8
 	stateNonces := make(map[thor.Address]uint64, senderCount)
 	txObjs := make([]*TxObject, senderCount*8)
 	for senderIndex := range senderCount {
 		for nonce := range 8 {
-			txObj := newEthMapTestObjectWithTip(t, uint64(nonce), 100, 10, senderIndex)
+			txObj := newEthCoreTestObjectWithTip(t, uint64(nonce), 100, 10, senderIndex)
 			txObjs[senderIndex*8+nonce] = txObj
 			stateNonces[txObj.Origin()] = 0
 		}
@@ -262,8 +262,8 @@ func TestEthPoolMapConcurrentAddWashAndSnapshot(t *testing.T) {
 	assert.Equal(t, m.Len(), len(m.ToTxs()))
 }
 
-func TestEthPoolMapPruneEmptySenders(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
+func TestEthPoolCorePruneEmptySenders(t *testing.T) {
+	m := newEthPoolCore(newCostTracker())
 	emptyOrigin := thor.Address{0xa1}
 	liveOrigin := thor.Address{0xa2}
 	m.senders[emptyOrigin] = newEthSender(emptyOrigin, 0)
@@ -306,9 +306,9 @@ func TestSortedEthOrigins(t *testing.T) {
 }
 
 func TestExecutableHashesLocked(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
-	executable := newEthMapTestObject(t, 0, 10, 0)
-	queued := newEthMapTestObject(t, 1, 10, 0)
+	m := newEthPoolCore(newCostTracker())
+	executable := newEthCoreTestObject(t, 0, 10, 0)
+	queued := newEthCoreTestObject(t, 1, 10, 0)
 	executable.executable = true
 	sender := newEthSender(executable.Origin(), 0)
 	sender.pending[0] = executable
@@ -324,11 +324,11 @@ func TestExecutableHashesLocked(t *testing.T) {
 }
 
 func TestEthExecutableSnapshot(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
-	first := newEthMapTestObject(t, 5, 10, 1)
-	second := newEthMapTestObject(t, 6, 10, 1)
-	queued := newEthMapTestObject(t, 7, 10, 1)
-	other := newEthMapTestObject(t, 0, 10, 2)
+	m := newEthPoolCore(newCostTracker())
+	first := newEthCoreTestObject(t, 5, 10, 1)
+	second := newEthCoreTestObject(t, 6, 10, 1)
+	queued := newEthCoreTestObject(t, 7, 10, 1)
+	other := newEthCoreTestObject(t, 0, 10, 2)
 
 	first.priorityGasPrice, second.priorityGasPrice = big.NewInt(10), big.NewInt(20)
 	other.priorityGasPrice = big.NewInt(30)
@@ -377,13 +377,13 @@ func TestEthExecutableSnapshot(t *testing.T) {
 	}
 }
 
-func TestEthPoolMapRemoveByHash(t *testing.T) {
+func TestEthPoolCoreRemoveByHash(t *testing.T) {
 	t.Run("pending removal demotes suffix and releases reservations", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		tx0 := newEthMapTestObject(t, 0, 10, 3)
-		tx1 := newEthMapTestObject(t, 1, 10, 3)
-		tx2 := newEthMapTestObject(t, 2, 10, 3)
+		m := newEthPoolCore(costs)
+		tx0 := newEthCoreTestObject(t, 0, 10, 3)
+		tx1 := newEthCoreTestObject(t, 1, 10, 3)
+		tx2 := newEthCoreTestObject(t, 2, 10, 3)
 		origin := tx0.Origin()
 		sender := newEthSender(origin, 0)
 
@@ -416,8 +416,8 @@ func TestEthPoolMapRemoveByHash(t *testing.T) {
 
 	t.Run("queued removal deletes empty sender without releasing costs", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		queued := newEthMapTestObject(t, 2, 10, 4)
+		m := newEthPoolCore(costs)
+		queued := newEthCoreTestObject(t, 2, 10, 4)
 		origin := queued.Origin()
 		sender := newEthSender(origin, 0)
 		sender.queue[2] = queued
@@ -431,8 +431,8 @@ func TestEthPoolMapRemoveByHash(t *testing.T) {
 	})
 
 	t.Run("inconsistent index is not partially removed", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 10, 5)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 10, 5)
 		m.allByHash[txObj.Hash()] = txObj
 
 		assert.False(t, m.removeByHash(txObj.Hash()))
@@ -440,10 +440,10 @@ func TestEthPoolMapRemoveByHash(t *testing.T) {
 	})
 }
 
-func TestEthPoolMapToTxsIncludesPendingAndQueued(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
-	pending := newEthMapTestObject(t, 0, 10, 6)
-	queued := newEthMapTestObject(t, 2, 10, 6)
+func TestEthPoolCoreToTxsIncludesPendingAndQueued(t *testing.T) {
+	m := newEthPoolCore(newCostTracker())
+	pending := newEthCoreTestObject(t, 0, 10, 6)
+	queued := newEthCoreTestObject(t, 2, 10, 6)
 	origin := pending.Origin()
 	sender := newEthSender(origin, 0)
 	sender.pending[0] = pending
@@ -456,18 +456,18 @@ func TestEthPoolMapToTxsIncludesPendingAndQueued(t *testing.T) {
 	require.Len(t, dump, 2)
 	assert.ElementsMatch(t, tx.Transactions{pending.Transaction, queued.Transaction}, dump)
 
-	empty := newEthPoolMap(newCostTracker()).ToTxs()
+	empty := newEthPoolCore(newCostTracker()).ToTxs()
 	assert.NotNil(t, empty)
 	assert.Empty(t, empty)
 }
 
-func TestEthPoolMapSyncHead(t *testing.T) {
+func TestEthPoolCoreSyncHead(t *testing.T) {
 	t.Run("settles mined nonce, preserves suffix, and promotes queue", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		tx0 := newEthMapTestObject(t, 0, 10, 0)
-		tx1 := newEthMapTestObject(t, 1, 10, 0)
-		tx2 := newEthMapTestObject(t, 2, 10, 0)
+		m := newEthPoolCore(costs)
+		tx0 := newEthCoreTestObject(t, 0, 10, 0)
+		tx1 := newEthCoreTestObject(t, 1, 10, 0)
+		tx2 := newEthCoreTestObject(t, 2, 10, 0)
 		origin := tx0.Origin()
 		sender := newEthSender(origin, 0)
 		tx0.executable, tx1.executable = true, true
@@ -510,8 +510,8 @@ func TestEthPoolMapSyncHead(t *testing.T) {
 
 	t.Run("prunes sender after its final nonce settles", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		txObj := newEthMapTestObject(t, 0, 10, 1)
+		m := newEthPoolCore(costs)
+		txObj := newEthCoreTestObject(t, 0, 10, 1)
 		origin := txObj.Origin()
 		txObj.executable = true
 		sender := newEthSender(origin, 0)
@@ -536,8 +536,8 @@ func TestEthPoolMapSyncHead(t *testing.T) {
 
 	t.Run("cost error leaves nonce state retryable", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		txObj := newEthMapTestObject(t, 0, 10, 2)
+		m := newEthPoolCore(costs)
+		txObj := newEthCoreTestObject(t, 0, 10, 2)
 		origin := txObj.Origin()
 		txObj.executable = true
 		sender := newEthSender(origin, 0)
@@ -571,13 +571,13 @@ func TestEthPoolMapSyncHead(t *testing.T) {
 	})
 }
 
-func TestEthPoolMapWash(t *testing.T) {
+func TestEthPoolCoreWash(t *testing.T) {
 	t.Run("expires pending and queued transactions", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		expired := newEthMapTestObject(t, 0, 10, 3)
-		retained := newEthMapTestObject(t, 1, 10, 3)
-		expiredQueued := newEthMapTestObject(t, 3, 10, 3)
+		m := newEthPoolCore(costs)
+		expired := newEthCoreTestObject(t, 0, 10, 3)
+		retained := newEthCoreTestObject(t, 1, 10, 3)
+		expiredQueued := newEthCoreTestObject(t, 3, 10, 3)
 		origin := expired.Origin()
 		sender := newEthSender(origin, 0)
 		expired.executable, retained.executable = true, true
@@ -616,11 +616,11 @@ func TestEthPoolMapWash(t *testing.T) {
 
 	t.Run("keeps only affordable pending prefix", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
+		m := newEthPoolCore(costs)
 		origin := devAccounts[4].Address
 		sender := newEthSender(origin, 0)
 		for nonce := range uint64(3) {
-			txObj := newEthMapTestObject(t, nonce, 10, 4)
+			txObj := newEthCoreTestObject(t, nonce, 10, 4)
 			txObj.executable = true
 			sender.pending[nonce] = txObj
 			m.allByHash[txObj.Hash()] = txObj
@@ -647,12 +647,12 @@ func TestEthPoolMapWash(t *testing.T) {
 
 	t.Run("demotes non-viable pending suffix", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
+		m := newEthPoolCore(costs)
 		origin := devAccounts[5].Address
 		sender := newEthSender(origin, 0)
 		var pending []*TxObject
 		for nonce := range uint64(2) {
-			txObj := newEthMapTestObject(t, nonce, 10, 5)
+			txObj := newEthCoreTestObject(t, nonce, 10, 5)
 			txObj.executable = true
 			pending = append(pending, txObj)
 			sender.pending[nonce] = txObj
@@ -681,9 +681,9 @@ func TestEthPoolMapWash(t *testing.T) {
 
 	t.Run("promotes a newly affordable queue prefix", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		tx0 := newEthMapTestObject(t, 0, 10, 5)
-		tx1 := newEthMapTestObject(t, 1, 10, 5)
+		m := newEthPoolCore(costs)
+		tx0 := newEthCoreTestObject(t, 0, 10, 5)
+		tx1 := newEthCoreTestObject(t, 1, 10, 5)
 		origin := tx0.Origin()
 		tx0.executable = true
 		sender := newEthSender(origin, 0)
@@ -708,11 +708,11 @@ func TestEthPoolMapWash(t *testing.T) {
 
 	t.Run("enforces account limits without nonce holes", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
+		m := newEthPoolCore(costs)
 		origin := devAccounts[6].Address
 		sender := newEthSender(origin, 0)
 		for nonce := range uint64(3) {
-			txObj := newEthMapTestObject(t, nonce, 10, 6)
+			txObj := newEthCoreTestObject(t, nonce, 10, 6)
 			txObj.executable = true
 			sender.pending[nonce] = txObj
 			m.allByHash[txObj.Hash()] = txObj
@@ -720,7 +720,7 @@ func TestEthPoolMapWash(t *testing.T) {
 				ethReservationOwner(origin, nonce), origin, big.NewInt(10), big.NewInt(100),
 			))
 		}
-		queued := newEthMapTestObject(t, 3, 10, 6)
+		queued := newEthCoreTestObject(t, 3, 10, 6)
 		sender.queue[3] = queued
 		m.allByHash[queued.Hash()] = queued
 		m.senders[origin] = sender
@@ -743,11 +743,11 @@ func TestEthPoolMapWash(t *testing.T) {
 
 	t.Run("global trimming removes queues before pending tails", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
+		m := newEthPoolCore(costs)
 		for signer := 7; signer <= 8; signer++ {
-			pending := newEthMapTestObject(t, 0, 10, signer)
-			queue1 := newEthMapTestObject(t, 1, 10, signer)
-			queue2 := newEthMapTestObject(t, 2, 10, signer)
+			pending := newEthCoreTestObject(t, 0, 10, signer)
+			queue1 := newEthCoreTestObject(t, 1, 10, signer)
+			queue2 := newEthCoreTestObject(t, 2, 10, signer)
 			origin := pending.Origin()
 			pending.executable = true
 			sender := newEthSender(origin, 0)
@@ -781,8 +781,8 @@ func TestEthPoolMapWash(t *testing.T) {
 
 	t.Run("tracker failure leaves pending state retryable", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		txObj := newEthMapTestObject(t, 0, 10, 9)
+		m := newEthPoolCore(costs)
+		txObj := newEthCoreTestObject(t, 0, 10, 9)
 		origin := txObj.Origin()
 		txObj.executable = true
 		sender := newEthSender(origin, 0)
@@ -813,10 +813,10 @@ func TestEthPoolMapWash(t *testing.T) {
 	})
 }
 
-func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
+func TestEthPoolCoreGlobalLimitHelpers(t *testing.T) {
 	t.Run("global enforcement skips disabled and satisfied limits", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		queued := newEthMapTestObject(t, 1, 10, 0)
+		m := newEthPoolCore(newCostTracker())
+		queued := newEthCoreTestObject(t, 1, 10, 0)
 		origin := queued.Origin()
 		sender := newEthSender(origin, 0)
 		sender.queue[1] = queued
@@ -836,9 +836,9 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 	})
 
 	t.Run("queue cursors include only queued senders in nonce order", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		queued1 := newEthMapTestObject(t, 1, 10, 0)
-		queued3 := newEthMapTestObject(t, 3, 10, 0)
+		m := newEthPoolCore(newCostTracker())
+		queued1 := newEthCoreTestObject(t, 1, 10, 0)
+		queued3 := newEthCoreTestObject(t, 3, 10, 0)
 		origin := queued1.Origin()
 		sender := newEthSender(origin, 0)
 		sender.queue[1], sender.queue[3] = queued1, queued3
@@ -859,11 +859,11 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 	})
 
 	t.Run("queued eviction is round-robin and tolerates exhausted cursors", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
+		m := newEthPoolCore(newCostTracker())
 		var origins []thor.Address
 		for signer := range 2 {
-			queue1 := newEthMapTestObject(t, 1, 10, signer)
-			queue2 := newEthMapTestObject(t, 2, 10, signer)
+			queue1 := newEthCoreTestObject(t, 1, 10, signer)
+			queue2 := newEthCoreTestObject(t, 2, 10, signer)
 			origin := queue1.Origin()
 			origins = append(origins, origin)
 			sender := newEthSender(origin, 0)
@@ -885,7 +885,7 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 
 		// A stale cursor cannot occur while the map lock is respected, but the
 		// helper still fails safely if handed one.
-		orphan := newEthMapTestObject(t, 9, 10, 2)
+		orphan := newEthCoreTestObject(t, 9, 10, 2)
 		m.allByHash[orphan.Hash()] = orphan
 		stale := []queuedEvictionCursor{{
 			sender: newEthSender(orphan.Origin(), 0),
@@ -898,10 +898,10 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 	})
 
 	t.Run("pending tail batches respect bounds and skip invalid senders", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		tx0 := newEthMapTestObject(t, 0, 10, 3)
-		tx1 := newEthMapTestObject(t, 1, 10, 3)
-		other := newEthMapTestObject(t, 0, 10, 4)
+		m := newEthPoolCore(newCostTracker())
+		tx0 := newEthCoreTestObject(t, 0, 10, 3)
+		tx1 := newEthCoreTestObject(t, 1, 10, 3)
+		other := newEthCoreTestObject(t, 0, 10, 4)
 		firstOrigin, otherOrigin := tx0.Origin(), other.Origin()
 		first := newEthSender(firstOrigin, 0)
 		first.pending[0], first.pending[1] = tx0, tx1
@@ -933,14 +933,14 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 
 	t.Run("pending tail eviction batches releases and handles empty capacity", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
+		m := newEthPoolCore(costs)
 		var origins []thor.Address
 		for signer, count := range []int{2, 1} {
 			origin := devAccounts[signer+5].Address
 			origins = append(origins, origin)
 			sender := newEthSender(origin, 0)
 			for nonce := range count {
-				txObj := newEthMapTestObject(t, uint64(nonce), 10, signer+5)
+				txObj := newEthCoreTestObject(t, uint64(nonce), 10, signer+5)
 				txObj.executable = true
 				sender.pending[uint64(nonce)] = txObj
 				m.allByHash[txObj.Hash()] = txObj
@@ -965,7 +965,7 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 		assert.NotContains(t, m.senders[origins[0]].pending, uint64(1))
 		assert.Empty(t, m.senders[origins[1]].pending)
 
-		orphan := newEthMapTestObject(t, 4, 10, 9)
+		orphan := newEthCoreTestObject(t, 4, 10, 9)
 		m.allByHash[orphan.Hash()] = orphan
 		m.lock.Lock()
 		err = m.evictPendingTailsUntilLimitLocked(nil, 0, &result)
@@ -976,8 +976,8 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 
 	t.Run("pending tail release failure leaves maps unchanged", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		txObj := newEthMapTestObject(t, 0, 10, 0)
+		m := newEthPoolCore(costs)
+		txObj := newEthCoreTestObject(t, 0, 10, 0)
 		origin := txObj.Origin()
 		txObj.executable = true
 		sender := newEthSender(origin, 0)
@@ -1000,9 +1000,9 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 	})
 
 	t.Run("empty sender pruning ignores live and unknown origins", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
+		m := newEthPoolCore(newCostTracker())
 		emptyOrigin := devAccounts[1].Address
-		liveTx := newEthMapTestObject(t, 0, 10, 2)
+		liveTx := newEthCoreTestObject(t, 0, 10, 2)
 		liveOrigin := liveTx.Origin()
 		m.senders[emptyOrigin] = newEthSender(emptyOrigin, 0)
 		live := newEthSender(liveOrigin, 0)
@@ -1021,9 +1021,9 @@ func TestEthPoolMapGlobalLimitHelpers(t *testing.T) {
 func TestResetForkSendersLocked(t *testing.T) {
 	t.Run("settles old nonce and releases all affected reservations", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		settled := newEthMapTestObject(t, 0, 10, 1)
-		retained := newEthMapTestObject(t, 1, 10, 1)
+		m := newEthPoolCore(costs)
+		settled := newEthCoreTestObject(t, 0, 10, 1)
+		retained := newEthCoreTestObject(t, 1, 10, 1)
 		origin := settled.Origin()
 		sender := newEthSender(origin, 0)
 		sender.pending[0], sender.pending[1] = settled, retained
@@ -1047,8 +1047,8 @@ func TestResetForkSendersLocked(t *testing.T) {
 
 	t.Run("reports inconsistent cost tracker state", func(t *testing.T) {
 		costs := newCostTracker()
-		m := newEthPoolMap(costs)
-		txObj := newEthMapTestObject(t, 0, 10, 2)
+		m := newEthPoolCore(costs)
+		txObj := newEthCoreTestObject(t, 0, 10, 2)
 		origin := txObj.Origin()
 		sender := newEthSender(origin, 0)
 		sender.pending[0] = txObj
@@ -1068,8 +1068,8 @@ func TestResetForkSendersLocked(t *testing.T) {
 
 func TestPromoteForkSendersLocked(t *testing.T) {
 	t.Run("promotes a newly executable queued transaction", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 10, 3)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 10, 3)
 		origin := txObj.Origin()
 		sender := newEthSender(origin, 0)
 		sender.queue[0] = txObj
@@ -1093,8 +1093,8 @@ func TestPromoteForkSendersLocked(t *testing.T) {
 	})
 
 	t.Run("returns a fatal invalid reservation error", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 10, 4)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 10, 4)
 		origin := txObj.Origin()
 		sender := newEthSender(origin, 0)
 		sender.queue[0] = txObj
@@ -1119,8 +1119,8 @@ func TestPromoteForkSendersLocked(t *testing.T) {
 
 func TestAddForkCandidatesLocked(t *testing.T) {
 	t.Run("adds a valid candidate", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 10, 5)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 10, 5)
 
 		m.lock.Lock()
 		results, err := m.addForkCandidatesLocked(
@@ -1142,8 +1142,8 @@ func TestAddForkCandidatesLocked(t *testing.T) {
 	})
 
 	t.Run("records policy rejection without aborting the batch", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 10, 6)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 10, 6)
 		m.allByHash[txObj.Hash()] = txObj
 
 		m.lock.Lock()
@@ -1164,8 +1164,8 @@ func TestAddForkCandidatesLocked(t *testing.T) {
 	})
 
 	t.Run("aborts on fatal cost corruption", func(t *testing.T) {
-		m := newEthPoolMap(newCostTracker())
-		txObj := newEthMapTestObject(t, 0, 10, 7)
+		m := newEthPoolCore(newCostTracker())
+		txObj := newEthCoreTestObject(t, 0, 10, 7)
 		invalidPrepare := func(*TxObject) ethPreparation {
 			return ethPreparation{viable: true}
 		}
@@ -1188,8 +1188,8 @@ func TestAddForkCandidatesLocked(t *testing.T) {
 }
 
 func TestFilterNewPromotions(t *testing.T) {
-	oldTx := newEthMapTestObject(t, 0, 10, 8)
-	newTx := newEthMapTestObject(t, 1, 10, 8)
+	oldTx := newEthCoreTestObject(t, 0, 10, 8)
+	newTx := newEthCoreTestObject(t, 1, 10, 8)
 
 	filtered := filterNewPromotions(
 		[]*TxObject{oldTx, newTx},
@@ -1200,14 +1200,14 @@ func TestFilterNewPromotions(t *testing.T) {
 }
 
 func TestPruneForkSendersLocked(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
+	m := newEthPoolCore(newCostTracker())
 	affected := thor.Address{0x01}
-	candidate := newEthMapTestObject(t, 0, 10, 9)
+	candidate := newEthCoreTestObject(t, 0, 10, 9)
 	untouched := thor.Address{0x03}
 	m.senders[affected] = newEthSender(affected, 0)
 	m.senders[candidate.Origin()] = newEthSender(candidate.Origin(), 0)
 	untouchedSender := newEthSender(untouched, 0)
-	untouchedSender.queue[2] = newEthMapTestObject(t, 2, 10, 0)
+	untouchedSender.queue[2] = newEthCoreTestObject(t, 2, 10, 0)
 	m.senders[untouched] = untouchedSender
 
 	m.lock.Lock()
@@ -1223,8 +1223,8 @@ func TestPruneForkSendersLocked(t *testing.T) {
 }
 
 func TestPromoteForkSendersLockedPrepareFailureKeepsQueued(t *testing.T) {
-	m := newEthPoolMap(newCostTracker())
-	txObj := newEthMapTestObject(t, 0, 10, 0)
+	m := newEthPoolCore(newCostTracker())
+	txObj := newEthCoreTestObject(t, 0, 10, 0)
 	origin := txObj.Origin()
 	sender := newEthSender(origin, 0)
 	sender.queue[0] = txObj

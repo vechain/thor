@@ -121,8 +121,8 @@ func TestMergePoolExecutablesExactTieUsesSourceOrder(t *testing.T) {
 }
 
 func TestEthPoolExecutables(t *testing.T) {
-	ethMap := newEthPoolMap(newCostTracker())
-	pool := &EthPool{all: ethMap}
+	ethCore := newEthPoolCore(newCostTracker())
+	pool := &EthPool{core: ethCore}
 	assert.Nil(t, pool.Executables())
 
 	senderANonce0 := newMergeTestEntry(10, 1)
@@ -149,8 +149,8 @@ func TestEthPoolExecutables(t *testing.T) {
 		timeAdded:        senderBNonce0.timeAdded,
 		executable:       true,
 	}
-	ethMap.senders[senderA.origin] = senderA
-	ethMap.senders[senderB.origin] = senderB
+	ethCore.senders[senderA.origin] = senderA
+	ethCore.senders[senderB.origin] = senderB
 
 	assert.Equal(t, transactionsOf(
 		senderBNonce0,
@@ -168,7 +168,7 @@ func TestCoordinatorExecutablesMergesFamilies(t *testing.T) {
 	snapshot := vechainExecutablesSnapshot{vechainEntry}
 	vechain.executables.Store(&snapshot)
 
-	ethMap := newEthPoolMap(newCostTracker())
+	ethCore := newEthPoolCore(newCostTracker())
 	sender := newEthSender(thor.Address{0x01}, 0)
 	sender.pending[0] = &TxObject{
 		Transaction:      ethNonce0.tx,
@@ -182,18 +182,18 @@ func TestCoordinatorExecutablesMergesFamilies(t *testing.T) {
 		timeAdded:        ethNonce1.timeAdded,
 		executable:       true,
 	}
-	ethMap.senders[sender.origin] = sender
+	ethCore.senders[sender.origin] = sender
 
 	coordinator := &TxPoolCoordinator{
 		vechain: vechain,
-		eth:     &EthPool{all: ethMap},
+		eth:     &EthPool{core: ethCore},
 	}
 	assert.Equal(t, transactionsOf(vechainEntry, ethNonce0, ethNonce1), coordinator.Executables())
 }
 
 func TestCoordinatorExecutablesHandlesUninitializedVeChainSnapshot(t *testing.T) {
 	ethEntry := newMergeTestEntry(10, 1)
-	ethMap := newEthPoolMap(newCostTracker())
+	ethCore := newEthPoolCore(newCostTracker())
 	sender := newEthSender(thor.Address{0x01}, 0)
 	sender.pending[0] = &TxObject{
 		Transaction:      ethEntry.tx,
@@ -201,11 +201,11 @@ func TestCoordinatorExecutablesHandlesUninitializedVeChainSnapshot(t *testing.T)
 		timeAdded:        ethEntry.timeAdded,
 		executable:       true,
 	}
-	ethMap.senders[sender.origin] = sender
+	ethCore.senders[sender.origin] = sender
 
 	coordinator := &TxPoolCoordinator{
 		vechain: &VeChainPool{},
-		eth:     &EthPool{all: ethMap},
+		eth:     &EthPool{core: ethCore},
 	}
 
 	assert.Equal(t, transactionsOf(ethEntry), coordinator.Executables())

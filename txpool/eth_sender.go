@@ -12,7 +12,9 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// ethSender tracks per-account nonce state for Ethereum-family transactions.
+// ethSender tracks one account's nonce, pending, and queue state. It owns no
+// locks, global policy, or reservation state; live senders are mutated only
+// while ethPoolCore.lock is held for writing.
 type ethSender struct {
 	origin     thor.Address
 	stateNonce uint64

@@ -366,14 +366,14 @@ func TestEthRemovalReleasesCostForVeChainAdmission(t *testing.T) {
 	vechainPool := newVeChainPool(repo, stater, opts, forkConfig, costs)
 	defer vechainPool.Close()
 
-	ethMap := newEthPoolMap(costs)
-	ethTxObj := newEthMapTestObject(t, 0, 10, 0)
+	ethCore := newEthPoolCore(costs)
+	ethTxObj := newEthCoreTestObject(t, 0, 10, 0)
 	origin := ethTxObj.Origin()
 	ethTxObj.executable = true
 	sender := newEthSender(origin, 0)
 	sender.pending[0] = ethTxObj
-	ethMap.senders[origin] = sender
-	ethMap.allByHash[ethTxObj.Hash()] = ethTxObj
+	ethCore.senders[origin] = sender
+	ethCore.allByHash[ethTxObj.Hash()] = ethTxObj
 
 	balance, ok := new(big.Int).SetString("42000000000000000000", 10)
 	require.True(t, ok)
@@ -397,7 +397,7 @@ func TestEthRemovalReleasesCostForVeChainAdmission(t *testing.T) {
 	)
 	require.EqualError(t, vechainPool.AddRemote(nativeTx), "tx rejected: insufficient energy for overall pending cost")
 
-	ethPool := &EthPool{all: ethMap}
+	ethPool := &EthPool{core: ethCore}
 	require.True(t, ethPool.Remove(ethTxObj.Hash(), ethTxObj.ID()))
 	require.NoError(t, vechainPool.AddRemote(nativeTx))
 	assert.NotNil(t, vechainPool.Get(nativeTx.ID()))
