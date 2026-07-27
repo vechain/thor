@@ -30,14 +30,17 @@ func benchmarkEthMapObject(b *testing.B, nonce uint64) *TxObject {
 	return txObj
 }
 
-func benchmarkEthPrepare(txObj *TxObject) (reservationRequest, bool, error) {
+func benchmarkEthPrepare(txObj *TxObject) ethPreparation {
 	payer := txObj.Origin()
-	return reservationRequest{
-		owner:   ethReservationOwner(payer, txObj.Nonce()),
-		payer:   payer,
-		cost:    big.NewInt(1),
-		balance: big.NewInt(1_000_000),
-	}, true, nil
+	return ethPreparation{
+		request: reservationRequest{
+			owner:   ethReservationOwner(payer, txObj.Nonce()),
+			payer:   payer,
+			cost:    big.NewInt(1),
+			balance: big.NewInt(1_000_000),
+		},
+		viable: true,
+	}
 }
 
 func benchmarkPopulatedEthMap(b *testing.B) *ethPoolMap {
@@ -85,6 +88,40 @@ func BenchmarkEthPoolMapAddParallel(b *testing.B) {
 			poolMap.removeByHash(candidate.Hash())
 		}
 	})
+}
+
+func BenchmarkEthPoolMapReadersDuringSlowPrepare(b *testing.B) {
+	poolMap := newEthPoolMap(newCostTracker())
+	candidate := benchmarkEthMapObject(b, 0)
+	stop := make(chan struct{})
+	writerDone := make(chan struct{})
+	prepare := func(txObj *TxObject) ethPreparation {
+		time.Sleep(50 * time.Microsecond)
+		return benchmarkEthPrepare(txObj)
+	}
+
+	go func() {
+		defer close(writerDone)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_, _, _ = poolMap.add(candidate, 0, 1, 16, 64, 10, prepare)
+			poolMap.removeByHash(candidate.Hash())
+		}
+	}()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = poolMap.Len()
+		_ = poolMap.executableSnapshot()
+	}
+	b.StopTimer()
+	close(stop)
+	<-writerDone
 }
 
 func BenchmarkEthPoolMapWashDefaultLimit(b *testing.B) {
@@ -136,14 +173,17 @@ func BenchmarkEthPoolMapWashDefaultLimit(b *testing.B) {
 		}
 		poolMap.senders[origin] = sender
 	}
-	prepare := func(txObj *TxObject) (reservationRequest, bool, error) {
+	prepare := func(txObj *TxObject) ethPreparation {
 		origin := origins[txObj]
-		return reservationRequest{
-			owner:   ethReservationOwner(origin, txObj.Nonce()),
-			payer:   origin,
-			cost:    big.NewInt(1),
-			balance: balance,
-		}, true, nil
+		return ethPreparation{
+			request: reservationRequest{
+				owner:   ethReservationOwner(origin, txObj.Nonce()),
+				payer:   origin,
+				cost:    big.NewInt(1),
+				balance: balance,
+			},
+			viable: true,
+		}
 	}
 	options := ethWashOptions{
 		pendingLimit: pendingPer,

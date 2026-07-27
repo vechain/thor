@@ -106,6 +106,162 @@ func TestEthPoolMapConcurrentAddRemoveAndSnapshot(t *testing.T) {
 	assert.Equal(t, m.Len(), len(m.ToTxs()))
 }
 
+func TestEthPoolMapPrepareRunsOutsideWriteLock(t *testing.T) {
+	assertUnlockedPrepare := func(t *testing.T, m *ethPoolMap) ethPrepare {
+		t.Helper()
+		delegate := fixedEthPrepare(1, 1_000)
+		return func(txObj *TxObject) ethPreparation {
+			if !m.lock.TryRLock() {
+				t.Fatal("prepare called while ethPoolMap write lock is held")
+			}
+			m.lock.RUnlock()
+			return delegate(txObj)
+		}
+	}
+
+	t.Run("add", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		txObj := newEthMapTestObject(t, 0, 100, 0)
+		_, _, err := m.add(txObj, 0, 100, 16, 64, 10, assertUnlockedPrepare(t, m))
+		require.NoError(t, err)
+	})
+
+	t.Run("sync head", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		txObj := newEthMapTestObject(t, 0, 100, 1)
+		origin := txObj.Origin()
+		sender := newEthSender(origin, 0)
+		sender.queue[0] = txObj
+		m.senders[origin] = sender
+		m.allByHash[txObj.Hash()] = txObj
+
+		_, err := m.syncHead(
+			map[thor.Address]uint64{origin: 0},
+			16,
+			assertUnlockedPrepare(t, m),
+		)
+		require.NoError(t, err)
+	})
+
+	t.Run("wash", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		txObj := newEthMapTestObject(t, 0, 100, 2)
+		origin := txObj.Origin()
+		sender := newEthSender(origin, 0)
+		sender.queue[0] = txObj
+		m.senders[origin] = sender
+		m.allByHash[txObj.Hash()] = txObj
+
+		_, err := m.wash(
+			map[thor.Address]uint64{origin: 0},
+			ethWashOptions{pendingLimit: 16, queueLimit: 64, globalLimit: 100},
+			assertUnlockedPrepare(t, m),
+		)
+		require.NoError(t, err)
+	})
+
+	t.Run("fork", func(t *testing.T) {
+		m := newEthPoolMap(newCostTracker())
+		txObj := newEthMapTestObject(t, 0, 100, 3)
+		_, err := m.reconcileFork(
+			[]ethForkCandidate{{txObj: txObj, stateNonce: 0}},
+			map[thor.Address]uint64{txObj.Origin(): 0},
+			100,
+			16,
+			64,
+			10,
+			assertUnlockedPrepare(t, m),
+		)
+		require.NoError(t, err)
+	})
+}
+
+func TestEthPoolMapReadersProceedDuringPrepare(t *testing.T) {
+	m := newEthPoolMap(newCostTracker())
+	txObj := newEthMapTestObject(t, 0, 100, 0)
+	prepareEntered := make(chan struct{})
+	releasePrepare := make(chan struct{})
+	addDone := make(chan error, 1)
+	delegate := fixedEthPrepare(1, 1_000)
+
+	go func() {
+		_, _, err := m.add(
+			txObj,
+			0,
+			100,
+			16,
+			64,
+			10,
+			func(txObj *TxObject) ethPreparation {
+				close(prepareEntered)
+				<-releasePrepare
+				return delegate(txObj)
+			},
+		)
+		addDone <- err
+	}()
+
+	<-prepareEntered
+	readDone := make(chan struct{})
+	go func() {
+		assert.Zero(t, m.Len())
+		assert.Nil(t, m.GetByHash(txObj.Hash()))
+		assert.Empty(t, m.executableSnapshot())
+		close(readDone)
+	}()
+
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("map readers blocked while transaction preparation was running")
+	}
+
+	close(releasePrepare)
+	require.NoError(t, <-addDone)
+	assert.Same(t, txObj, m.GetByHash(txObj.Hash()))
+}
+
+func TestEthPoolMapConcurrentAddWashAndSnapshot(t *testing.T) {
+	m := newEthPoolMap(newCostTracker())
+	const senderCount = 8
+	stateNonces := make(map[thor.Address]uint64, senderCount)
+	txObjs := make([]*TxObject, senderCount*8)
+	for senderIndex := range senderCount {
+		for nonce := range 8 {
+			txObj := newEthMapTestObjectWithTip(t, uint64(nonce), 100, 10, senderIndex)
+			txObjs[senderIndex*8+nonce] = txObj
+			stateNonces[txObj.Origin()] = 0
+		}
+	}
+	options := ethWashOptions{
+		pendingLimit: 16,
+		queueLimit:   64,
+		globalLimit:  len(txObjs),
+	}
+	prepare := fixedEthPrepare(1, 1_000_000)
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for _, txObj := range txObjs {
+			_, _, _ = m.add(txObj, 0, len(txObjs), 16, 64, 10, prepare)
+		}
+	})
+	wg.Go(func() {
+		for range 16 {
+			_, _ = m.wash(stateNonces, options, prepare)
+		}
+	})
+	wg.Go(func() {
+		for range 256 {
+			_ = m.executableSnapshot()
+			_ = m.Len()
+		}
+	})
+	wg.Wait()
+
+	assert.Equal(t, m.Len(), len(m.ToTxs()))
+}
+
 func TestEthPoolMapPruneEmptySenders(t *testing.T) {
 	m := newEthPoolMap(newCostTracker())
 	emptyOrigin := thor.Address{0xa1}
@@ -122,14 +278,17 @@ func TestEthPoolMapPruneEmptySenders(t *testing.T) {
 }
 
 func fixedEthPrepare(cost, balance int64) ethPrepare {
-	return func(txObj *TxObject) (reservationRequest, bool, error) {
+	return func(txObj *TxObject) ethPreparation {
 		payer := txObj.Origin()
-		return reservationRequest{
-			owner:   ethReservationOwner(txObj.Origin(), txObj.Nonce()),
-			payer:   payer,
-			cost:    big.NewInt(cost),
-			balance: big.NewInt(balance),
-		}, true, nil
+		return ethPreparation{
+			request: reservationRequest{
+				owner:   ethReservationOwner(txObj.Origin(), txObj.Nonce()),
+				payer:   payer,
+				cost:    big.NewInt(cost),
+				balance: big.NewInt(balance),
+			},
+			viable: true,
+		}
 	}
 }
 
@@ -503,8 +662,8 @@ func TestEthPoolMapWash(t *testing.T) {
 			))
 		}
 		m.senders[origin] = sender
-		notViable := func(*TxObject) (reservationRequest, bool, error) {
-			return reservationRequest{}, false, nil
+		notViable := func(*TxObject) ethPreparation {
+			return ethPreparation{}
 		}
 
 		result, err := m.wash(
@@ -919,7 +1078,10 @@ func TestPromoteForkSendersLocked(t *testing.T) {
 
 		m.lock.Lock()
 		results, err := m.promoteForkSendersLocked(
-			[]thor.Address{origin}, nil, 16, fixedEthPrepare(10, 100),
+			[]thor.Address{origin},
+			nil,
+			16,
+			prepareEthObjects([]*TxObject{txObj}, fixedEthPrepare(10, 100)),
 		)
 		m.lock.Unlock()
 
@@ -937,12 +1099,17 @@ func TestPromoteForkSendersLocked(t *testing.T) {
 		sender := newEthSender(origin, 0)
 		sender.queue[0] = txObj
 		m.senders[origin] = sender
-		invalidPrepare := func(*TxObject) (reservationRequest, bool, error) {
-			return reservationRequest{}, true, nil
+		invalidPrepare := func(*TxObject) ethPreparation {
+			return ethPreparation{viable: true}
 		}
 
 		m.lock.Lock()
-		results, err := m.promoteForkSendersLocked([]thor.Address{origin}, nil, 16, invalidPrepare)
+		results, err := m.promoteForkSendersLocked(
+			[]thor.Address{origin},
+			nil,
+			16,
+			prepareEthObjects([]*TxObject{txObj}, invalidPrepare),
+		)
 		m.lock.Unlock()
 
 		assert.Nil(t, results)
@@ -963,7 +1130,7 @@ func TestAddForkCandidatesLocked(t *testing.T) {
 			16,
 			64,
 			10,
-			fixedEthPrepare(10, 100),
+			prepareEthObjects([]*TxObject{txObj}, fixedEthPrepare(10, 100)),
 		)
 		m.lock.Unlock()
 
@@ -987,7 +1154,7 @@ func TestAddForkCandidatesLocked(t *testing.T) {
 			16,
 			64,
 			10,
-			fixedEthPrepare(10, 100),
+			prepareEthObjects([]*TxObject{txObj}, fixedEthPrepare(10, 100)),
 		)
 		m.lock.Unlock()
 
@@ -999,8 +1166,8 @@ func TestAddForkCandidatesLocked(t *testing.T) {
 	t.Run("aborts on fatal cost corruption", func(t *testing.T) {
 		m := newEthPoolMap(newCostTracker())
 		txObj := newEthMapTestObject(t, 0, 10, 7)
-		invalidPrepare := func(*TxObject) (reservationRequest, bool, error) {
-			return reservationRequest{}, true, nil
+		invalidPrepare := func(*TxObject) ethPreparation {
+			return ethPreparation{viable: true}
 		}
 
 		m.lock.Lock()
@@ -1011,7 +1178,7 @@ func TestAddForkCandidatesLocked(t *testing.T) {
 			16,
 			64,
 			10,
-			invalidPrepare,
+			prepareEthObjects([]*TxObject{txObj}, invalidPrepare),
 		)
 		m.lock.Unlock()
 
@@ -1063,12 +1230,17 @@ func TestPromoteForkSendersLockedPrepareFailureKeepsQueued(t *testing.T) {
 	sender.queue[0] = txObj
 	m.senders[origin] = sender
 	prepareErr := errors.New("state unavailable")
-	prepare := func(*TxObject) (reservationRequest, bool, error) {
-		return reservationRequest{}, false, prepareErr
+	prepare := func(*TxObject) ethPreparation {
+		return ethPreparation{err: prepareErr}
 	}
 
 	m.lock.Lock()
-	results, err := m.promoteForkSendersLocked([]thor.Address{origin}, nil, 16, prepare)
+	results, err := m.promoteForkSendersLocked(
+		[]thor.Address{origin},
+		nil,
+		16,
+		prepareEthObjects([]*TxObject{txObj}, prepare),
+	)
 	m.lock.Unlock()
 
 	require.NoError(t, err)

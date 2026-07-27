@@ -25,8 +25,6 @@ var (
 	errEthAccountQueueOverflow   = errors.New("account queue limit exceeded")
 )
 
-type ethPrepare func(*TxObject) (reservationRequest, bool, error)
-
 type ethForkCandidate struct {
 	txObj      *TxObject
 	stateNonce uint64
@@ -55,10 +53,14 @@ type ethWashResult struct {
 
 // ethPoolMap is a thread-safe index of Ethereum-family pooled transactions.
 type ethPoolMap struct {
-	lock      sync.RWMutex
-	allByHash map[thor.Bytes32]*TxObject
-	senders   map[thor.Address]*ethSender
-	costs     *costTracker
+	// mutationMu preserves the original single-writer operation ordering while
+	// allowing map-lock-free chain/state preparation between planning and commit.
+	// Readers only use lock and remain available during preparation.
+	mutationMu sync.Mutex
+	lock       sync.RWMutex
+	allByHash  map[thor.Bytes32]*TxObject
+	senders    map[thor.Address]*ethSender
+	costs      *costTracker
 }
 
 func newEthPoolMap(costs *costTracker) *ethPoolMap {
@@ -163,6 +165,9 @@ func (m *ethPoolMap) removeByHash(hash thor.Bytes32) bool {
 }
 
 func (m *ethPoolMap) removeByHashWithTransitions(hash thor.Bytes32) (bool, []*TxObject) {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	wasExecutable := m.executableObjectsLocked()
@@ -228,11 +233,17 @@ func (m *ethPoolMap) addWithTransitions(
 	priceBump uint64,
 	prepare ethPrepare,
 ) (bool, []*TxObject, []*TxObject, error) {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+
+	objects := m.addPreparationObjects(txObj, stateNonce, pendingLimit, priceBump)
+	prepared := prepareEthObjects(objects, prepare)
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	wasExecutable := m.executableObjectsLocked()
 	executable, promoted, err := m.addLocked(
-		txObj, stateNonce, globalLimit, pendingLimit, queueLimit, priceBump, prepare,
+		txObj, stateNonce, globalLimit, pendingLimit, queueLimit, priceBump, prepared,
 	)
 	if err != nil {
 		return false, nil, m.retainedDemotionsLocked(wasExecutable), err
@@ -248,7 +259,7 @@ func (m *ethPoolMap) addLocked(
 	pendingLimit int,
 	queueLimit int,
 	priceBump uint64,
-	prepare ethPrepare,
+	prepared ethPreparations,
 ) (bool, []*TxObject, error) {
 	hash := txObj.Hash()
 	if m.allByHash[hash] != nil {
@@ -285,14 +296,23 @@ func (m *ethPoolMap) addLocked(
 	canEnterPending := replacePending ||
 		(txObj.Nonce() == sender.poolNonce() && len(sender.pending) < pendingLimit)
 	if canEnterPending {
-		request, viable, err := prepare(txObj)
+		preparation, err := prepared.get(txObj)
 		if err != nil {
 			return false, nil, err
 		}
-		if viable {
-			if err := m.costs.reserve(request.owner, request.payer, request.cost, request.balance); err != nil {
+		if preparation.err != nil {
+			return false, nil, preparation.err
+		}
+		if preparation.viable {
+			if err := m.costs.reserve(
+				preparation.request.owner,
+				preparation.request.payer,
+				preparation.request.cost,
+				preparation.request.balance,
+			); err != nil {
 				return false, nil, err
 			}
+			preparation.apply(txObj)
 			txObj.executable = true
 			sender.pending[txObj.Nonce()] = txObj
 			delete(sender.queue, txObj.Nonce())
@@ -324,7 +344,7 @@ func (m *ethPoolMap) addLocked(
 	}
 	m.allByHash[hash] = txObj
 
-	promotions, err := m.promoteLocked(sender, pendingLimit, prepare)
+	promotions, err := m.promoteLocked(sender, pendingLimit, prepared)
 	if err != nil {
 		return false, nil, err
 	}
@@ -339,7 +359,7 @@ func (m *ethPoolMap) addLocked(
 func (m *ethPoolMap) promoteLocked(
 	sender *ethSender,
 	pendingLimit int,
-	prepare ethPrepare,
+	prepared ethPreparations,
 ) ([]*TxObject, error) {
 	var (
 		promotions []*TxObject
@@ -351,12 +371,15 @@ func (m *ethPoolMap) promoteLocked(
 		if queued == nil {
 			break
 		}
-		request, viable, err := prepare(queued)
-		if err != nil || !viable {
+		preparation, err := prepared.get(queued)
+		if err != nil {
+			return nil, err
+		}
+		if preparation.err != nil || !preparation.viable {
 			break
 		}
 		promotions = append(promotions, queued)
-		requests = append(requests, request)
+		requests = append(requests, preparation.request)
 		// Temporarily advance the contiguous cursor. Restore before touching the
 		// cost tracker so only the accepted prefix is committed.
 		sender.pending[next] = queued
@@ -371,6 +394,7 @@ func (m *ethPoolMap) promoteLocked(
 		return nil, err
 	}
 	for _, promoted := range promotions[:accepted] {
+		prepared[promoted].apply(promoted)
 		promoted.executable = true
 		sender.pending[promoted.Nonce()] = promoted
 		delete(sender.queue, promoted.Nonce())
@@ -394,6 +418,12 @@ func (m *ethPoolMap) syncHeadWithTransitions(
 	pendingLimit int,
 	prepare ethPrepare,
 ) ([]*TxObject, []*TxObject, error) {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+
+	objects := m.syncPreparationObjects(stateNonces, pendingLimit)
+	prepared := prepareEthObjects(objects, prepare)
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	wasExecutableObjects := m.executableObjectsLocked()
@@ -411,7 +441,7 @@ func (m *ethPoolMap) syncHeadWithTransitions(
 			return nil, nil, err
 		}
 
-		promoted, err := m.promoteLocked(sender, pendingLimit, prepare)
+		promoted, err := m.promoteLocked(sender, pendingLimit, prepared)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -445,6 +475,12 @@ func (m *ethPoolMap) wash(
 	options ethWashOptions,
 	prepare ethPrepare,
 ) (ethWashResult, error) {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+
+	objects := m.washPreparationObjects(stateNonces, options)
+	prepared := prepareEthObjects(objects, prepare)
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -473,7 +509,7 @@ func (m *ethPoolMap) wash(
 			continue
 		}
 
-		promoted, err := m.revalidateSenderLocked(sender, options.pendingLimit, prepare)
+		promoted, err := m.revalidateSenderLocked(sender, options.pendingLimit, prepared)
 		if err != nil {
 			return ethWashResult{}, err
 		}
@@ -555,7 +591,7 @@ func (m *ethPoolMap) evictPendingFromLocked(
 func (m *ethPoolMap) revalidateSenderLocked(
 	sender *ethSender,
 	pendingLimit int,
-	prepare ethPrepare,
+	prepared ethPreparations,
 ) ([]*TxObject, error) {
 	pending := make([]*TxObject, 0, len(sender.pending))
 	releases := make([]reservationOwner, 0, len(sender.pending))
@@ -569,11 +605,14 @@ func (m *ethPoolMap) revalidateSenderLocked(
 		pending = append(pending, txObj)
 		releases = append(releases, ethReservationOwner(sender.origin, nonce))
 		if preparing {
-			request, viable, err := prepare(txObj)
-			if err != nil || !viable {
+			preparation, err := prepared.get(txObj)
+			if err != nil {
+				return nil, err
+			}
+			if preparation.err != nil || !preparation.viable {
 				preparing = false
 			} else {
-				requests = append(requests, request)
+				requests = append(requests, preparation.request)
 			}
 		}
 	}
@@ -583,6 +622,7 @@ func (m *ethPoolMap) revalidateSenderLocked(
 		return nil, err
 	}
 	for i := range accepted {
+		prepared[pending[i]].apply(pending[i])
 		pending[i].executable = true
 	}
 	if accepted < len(pending) {
@@ -591,7 +631,7 @@ func (m *ethPoolMap) revalidateSenderLocked(
 	if pendingLimit < 0 {
 		pendingLimit = len(sender.pending) + len(sender.queue)
 	}
-	return m.promoteLocked(sender, pendingLimit, prepare)
+	return m.promoteLocked(sender, pendingLimit, prepared)
 }
 
 func (m *ethPoolMap) enforceSenderLimitsLocked(
@@ -810,6 +850,12 @@ func (m *ethPoolMap) reconcileForkWithTransitions(
 	priceBump uint64,
 	prepare ethPrepare,
 ) ([]ethForkResult, []*TxObject, error) {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+
+	objects := m.forkPreparationObjects(candidates, stateNonces)
+	prepared := prepareEthObjects(objects, prepare)
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	wasExecutableObjects := m.executableObjectsLocked()
@@ -820,7 +866,7 @@ func (m *ethPoolMap) reconcileForkWithTransitions(
 		return nil, nil, err
 	}
 
-	results, err := m.promoteForkSendersLocked(origins, wasExecutable, pendingLimit, prepare)
+	results, err := m.promoteForkSendersLocked(origins, wasExecutable, pendingLimit, prepared)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -831,7 +877,7 @@ func (m *ethPoolMap) reconcileForkWithTransitions(
 		pendingLimit,
 		queueLimit,
 		priceBump,
-		prepare,
+		prepared,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -925,7 +971,7 @@ func (m *ethPoolMap) promoteForkSendersLocked(
 	origins []thor.Address,
 	wasExecutable map[thor.Bytes32]struct{},
 	pendingLimit int,
-	prepare ethPrepare,
+	prepared ethPreparations,
 ) ([]ethForkResult, error) {
 	var results []ethForkResult
 	for _, origin := range origins {
@@ -933,7 +979,7 @@ func (m *ethPoolMap) promoteForkSendersLocked(
 		if sender == nil {
 			continue
 		}
-		promoted, err := m.promoteLocked(sender, pendingLimit, prepare)
+		promoted, err := m.promoteLocked(sender, pendingLimit, prepared)
 		if err != nil {
 			return nil, err
 		}
@@ -951,7 +997,7 @@ func (m *ethPoolMap) addForkCandidatesLocked(
 	pendingLimit int,
 	queueLimit int,
 	priceBump uint64,
-	prepare ethPrepare,
+	prepared ethPreparations,
 ) ([]ethForkResult, error) {
 	results := make([]ethForkResult, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -962,7 +1008,7 @@ func (m *ethPoolMap) addForkCandidatesLocked(
 			pendingLimit,
 			queueLimit,
 			priceBump,
-			prepare,
+			prepared,
 		)
 		if errors.Is(err, errCostTrackerState) || errors.Is(err, errInvalidCost) {
 			return nil, err
@@ -1009,6 +1055,9 @@ func (m *ethPoolMap) pruneForkSendersLocked(origins []thor.Address, candidates [
 // pruneEmptySenders drops senders with no pending or queued txs.
 // Scaffold hook for post-mutation GC.
 func (m *ethPoolMap) pruneEmptySenders() {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for addr, s := range m.senders {

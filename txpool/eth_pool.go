@@ -264,9 +264,9 @@ func (p *EthPool) newAdmissionContextAt(head *chain.BlockSummary) *ethAdmissionC
 		stateNonces: make(map[thor.Address]uint64),
 		payerFunds:  make(map[thor.Address]*big.Int),
 	}
-	ctx.prepare = func(obj *TxObject) (reservationRequest, bool, error) {
+	ctx.prepare = func(obj *TxObject) ethPreparation {
 		if baseFee != nil && obj.MaxFeePerGas().Cmp(baseFee) < 0 {
-			return reservationRequest{}, false, nil
+			return ethPreparation{}
 		}
 		checkpoint := st.NewCheckpoint()
 		legacyBase, _, payer, prepaid, _, err := obj.resolved.BuyGas(
@@ -276,15 +276,12 @@ func (p *EthPool) newAdmissionContextAt(head *chain.BlockSummary) *ethAdmissionC
 		)
 		st.RevertTo(checkpoint)
 		if err != nil {
-			return reservationRequest{}, false, err
+			return ethPreparation{err: err}
 		}
 		normalizedBaseFee := baseFee
 		if normalizedBaseFee == nil {
 			normalizedBaseFee = new(big.Int)
 		}
-		obj.payer = &payer
-		obj.cost = prepaid
-		obj.priorityGasPrice = obj.EffectivePriorityFeePerGas(normalizedBaseFee, legacyBase, nil)
 		balance := ctx.payerFunds[payer]
 		if balance == nil {
 			balance, err = builtin.Energy.Native(
@@ -292,16 +289,20 @@ func (p *EthPool) newAdmissionContextAt(head *chain.BlockSummary) *ethAdmissionC
 				head.Header.Timestamp()+thor.BlockInterval(),
 			).Get(payer)
 			if err != nil {
-				return reservationRequest{}, false, err
+				return ethPreparation{err: err}
 			}
 			ctx.payerFunds[payer] = balance
 		}
-		return reservationRequest{
-			owner:   ethReservationOwner(obj.Origin(), obj.Nonce()),
-			payer:   payer,
-			cost:    prepaid,
-			balance: balance,
-		}, true, nil
+		return ethPreparation{
+			request: reservationRequest{
+				owner:   ethReservationOwner(obj.Origin(), obj.Nonce()),
+				payer:   payer,
+				cost:    prepaid,
+				balance: balance,
+			},
+			viable:           true,
+			priorityGasPrice: obj.EffectivePriorityFeePerGas(normalizedBaseFee, legacyBase, nil),
+		}
 	}
 	return ctx
 }

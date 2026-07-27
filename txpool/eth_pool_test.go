@@ -85,6 +85,35 @@ func nextTxEvent(t *testing.T, events <-chan *TxEvent) *TxEvent {
 	}
 }
 
+func TestEthAdmissionPreparationIsPureUntilCommit(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	trx := buildEthPoolTx(
+		t,
+		tchain.Repo().ChainID(),
+		0,
+		new(big.Int).Mul(baseFee, big.NewInt(2)),
+		big.NewInt(100),
+		devAccounts[0],
+	)
+	txObj, err := ResolveTx(trx, false)
+	require.NoError(t, err)
+
+	prepared := pool.newAdmissionContext().prepare(txObj)
+	require.NoError(t, prepared.err)
+	require.True(t, prepared.viable)
+	assert.Nil(t, txObj.Payer())
+	assert.Nil(t, txObj.Cost())
+	assert.Nil(t, txObj.priorityGasPrice)
+
+	prepared.apply(txObj)
+	assert.NotNil(t, txObj.Payer())
+	assert.NotNil(t, txObj.Cost())
+	assert.NotNil(t, txObj.priorityGasPrice)
+}
+
 func TestEthPoolAddRemoteNoncePlacementAndReplacement(t *testing.T) {
 	pool, tchain := newEthPoolTest(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
