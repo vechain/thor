@@ -8,6 +8,7 @@ package builtin_test
 import (
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,22 +24,28 @@ import (
 // VM has no EIP-2929 warm/cold accounting; activating it will move these.
 const (
 	historyGasSuccess     uint64 = 2085
+	historyGasValueSent   uint64 = 45  // value > 0; the callvalue guard runs before any validation
 	historyGasBadLength   uint64 = 78  // calldatasize != 32
 	historyGasFutureBlock uint64 = 215 // num >= block.number, short-circuits
 	historyGasOutOfWindow uint64 = 297 // block.number-num > HISTORY_SERVE_WINDOW
 )
 
-// callHistoryRaw invokes History with raw calldata (EIP-2935 has no selector).
-// A revert lands in res.VMErr with res.GasUsed intact.
-func callHistoryRaw(t *testing.T, chain *testchain.Chain, data []byte) *testchain.ClauseResult {
+// callHistoryRaw invokes History with raw calldata (EIP-2935 has no selector)
+// and an optional clause value. A revert lands in res.VMErr with res.GasUsed
+// intact.
+func callHistoryRaw(t *testing.T, chain *testchain.Chain, data []byte, value *big.Int) *testchain.ClauseResult {
 	t.Helper()
 
 	addr := builtin.History.Address
+	clause := tx.NewClause(&addr).WithData(data)
+	if value != nil {
+		clause = clause.WithValue(value)
+	}
 	trx := new(tx.Builder).
 		ChainTag(chain.Repo().ChainTag()).
 		Expiration(50).
 		Gas(200000).
-		Clause(tx.NewClause(&addr).WithData(data)).
+		Clause(clause).
 		Build()
 
 	res, err := chain.ExecClause(genesis.DevAccounts()[0], trx, 0)
@@ -52,7 +59,7 @@ func callHistory(t *testing.T, chain *testchain.Chain, num uint32) *testchain.Cl
 
 	var data [32]byte
 	binary.BigEndian.PutUint32(data[28:], num)
-	return callHistoryRaw(t, chain, data[:])
+	return callHistoryRaw(t, chain, data[:], nil)
 }
 
 func TestHistory_ForkActivation(t *testing.T) {
@@ -143,10 +150,38 @@ func TestHistory_InvalidCalldataLength(t *testing.T) {
 	// SYSTEM_ADDRESS set-path shape; Thor has no such path.
 	for _, data := range [][]byte{nil, make([]byte, 31), make([]byte, 33), make([]byte, 64)} {
 		t.Run(fmt.Sprintf("len=%d", len(data)), func(t *testing.T) {
-			res := callHistoryRaw(t, chain, data)
+			res := callHistoryRaw(t, chain, data, nil)
 			require.ErrorContains(t, res.VMErr, "execution reverted")
 			require.Empty(t, res.Data, "EIP-2935 revert must carry no return data")
 			require.Equal(t, historyGasBadLength, res.GasUsed)
+		})
+	}
+}
+
+// The fallback is non-payable, a deliberate divergence from the reference
+// contract, which has no callvalue guard and would accept the funds. The guard
+// runs ahead of every other check, so the gas is identical whatever the
+// calldata — pinning it also catches the fallback turning payable by accident.
+func TestHistory_RejectsValue(t *testing.T) {
+	chain := newChain(t, nil)
+	require.NoError(t, chain.MintBlock())
+	require.NoError(t, chain.MintBlock())
+
+	best := chain.Repo().BestBlockSummary().Header.Number()
+	var valid [32]byte
+	binary.BigEndian.PutUint32(valid[28:], best-1)
+
+	// Control: the same calldata succeeds when no value is attached.
+	res := callHistoryRaw(t, chain, valid[:], nil)
+	require.NoError(t, res.VMErr)
+	require.Equal(t, historyGasSuccess, res.GasUsed)
+
+	for _, data := range [][]byte{valid[:], make([]byte, 31), nil} {
+		t.Run(fmt.Sprintf("len=%d", len(data)), func(t *testing.T) {
+			res := callHistoryRaw(t, chain, data, big.NewInt(1))
+			require.ErrorContains(t, res.VMErr, "execution reverted")
+			require.Empty(t, res.Data, "EIP-2935 revert must carry no return data")
+			require.Equal(t, historyGasValueSent, res.GasUsed)
 		})
 	}
 }
