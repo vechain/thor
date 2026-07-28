@@ -898,7 +898,7 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	}
 
 	if thor.IsForked(b.Header().Number(), test.fc.FINALITY) {
-		if err = test.engine.CommitBlock(b.Header(), false); err != nil {
+		if err = test.engine.CommitBlock(b.Header(), conflicts, false); err != nil {
 			return nil, err
 		}
 	}
