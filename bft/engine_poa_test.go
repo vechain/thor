@@ -213,7 +213,7 @@ func (test *TestBFT) addBlock(
 	}
 
 	if thor.IsForked(b.Header().Number(), test.fc.FINALITY) {
-		if err = test.engine.CommitBlock(b.Header(), false); err != nil {
+		if err = test.engine.CommitBlock(b.Header(), conflicts, false); err != nil {
 			return nil, err
 		}
 	}
@@ -284,7 +284,7 @@ func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, asBest bool) (
 	}
 
 	if thor.IsForked(blk.Header.Number(), test.fc.FINALITY) {
-		if err := test.engine.CommitBlock(blk.Header, true); err != nil {
+		if err := test.engine.CommitBlock(blk.Header, blk.Conflicts, true); err != nil {
 			return nil, err
 		}
 	}
