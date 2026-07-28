@@ -6,6 +6,7 @@
 package logdb
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -23,6 +24,31 @@ var (
 		0, 5, 10, 25, 50, 100, 250, 500, 1000,
 	})
 )
+
+// readDBStatsSamples converts readDB pool stats into samples: InUse is a gauge;
+// the cumulative WaitCount and WaitDuration are counters.
+func readDBStatsSamples(stats sql.DBStats) []metrics.Sample {
+	return []metrics.Sample{
+		{
+			Name:  "readdb_in_use_connections",
+			Help:  "Number of readDB connections currently in use.",
+			Kind:  metrics.KindGauge,
+			Value: float64(stats.InUse),
+		},
+		{
+			Name:  "readdb_wait_count",
+			Help:  "Cumulative number of readDB connections waited for.",
+			Kind:  metrics.KindCounter,
+			Value: float64(stats.WaitCount),
+		},
+		{
+			Name:  "readdb_wait_duration_ms",
+			Help:  "Cumulative time (ms) blocked waiting for a readDB connection.",
+			Kind:  metrics.KindCounter,
+			Value: float64(stats.WaitDuration.Milliseconds()),
+		},
+	}
+}
 
 func metricsHandleEventsFilter(filter *EventFilter) {
 	metricsHandleCommonFilter(filter.Options, filter.Order, len(filter.CriteriaSet), "event")

@@ -7,7 +7,6 @@ package api
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -73,15 +72,16 @@ type Options struct {
 	IncludeIndexes bool    `json:"includeIndexes,omitempty"`
 }
 
-func (o *Options) Validate(limit uint64) error {
+func (o *Options) Validate(limit uint64, offset uint64) error {
 	if o == nil {
 		return nil
 	}
 	if o.Limit != nil && *o.Limit > limit {
 		return fmt.Errorf("options.limit exceeds the maximum allowed value of %d", limit)
 	}
-	if o.Offset > math.MaxInt64 {
-		return fmt.Errorf("options.offset exceeds the maximum allowed value of %d", math.MaxInt64)
+
+	if o.Offset > offset {
+		return fmt.Errorf("options.offset exceeds the maximum allowed value of %d", offset)
 	}
 
 	return nil
@@ -199,6 +199,14 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			if err != nil {
 				return nil, err
 			}
+		}
+
+		// A window that falls between two consecutive blocks yields fromBlock > toBlock.
+		// logdb drops the upper bound on an inverted range and returns every event from
+		// fromBlock onward (results outside the requested window), so collapse it to
+		// emptyRange instead.
+		if fromHeader.Number() > toHeader.Number() {
+			return &emptyRange, nil
 		}
 
 		return &logdb.Range{

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/api/restutil"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestWrapHandlerFunc(t *testing.T) {
@@ -81,6 +82,52 @@ func TestWrapHandlerFuncWithNilCauseError(t *testing.T) {
 
 	assert.Equal(t, errorStatus, response.Code)
 	assert.Equal(t, "", response.Body.String())
+}
+
+func TestParseBlockRef(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantErr  string
+		wantRef  tx.BlockRef
+		wantBadR bool
+	}{
+		{
+			name:    "valid",
+			input:   "0x0102030405060708",
+			wantRef: tx.BlockRef{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
+		},
+		{
+			name:     "malformed hex",
+			input:    "not-hex",
+			wantErr:  "blockRef: hex string without 0x prefix",
+			wantBadR: true,
+		},
+		{
+			name:     "invalid length",
+			input:    "0x00",
+			wantErr:  "blockRef: invalid length",
+			wantBadR: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ref, err := restutil.ParseBlockRef(tt.input)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantRef, ref)
+				return
+			}
+			assert.EqualError(t, err, tt.wantErr)
+			// Malformed input must be classified as a client (400) error.
+			handler := restutil.WrapHandlerFunc(func(_ http.ResponseWriter, _ *http.Request) error {
+				return err
+			})
+			response := callWrappedFunc(&handler)
+			assert.Equal(t, http.StatusBadRequest, response.Code)
+		})
+	}
 }
 
 func callWrappedFunc(wrapped *http.HandlerFunc) *httptest.ResponseRecorder {

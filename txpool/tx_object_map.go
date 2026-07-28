@@ -39,7 +39,10 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error) error {
+func (m *txObjectMap) Add(
+	txObj *TxObject, executable bool, pricing *txPricing,
+	limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error,
+) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -52,7 +55,6 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer fu
 		metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "account"})
 		return errors.New("account quota exceeded")
 	}
-
 	delegator := txObj.Delegator()
 	if delegator != nil {
 		if m.quota[*delegator] >= limitPerAccount {
@@ -61,21 +63,23 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer fu
 		}
 	}
 
+	if pricing != nil {
+		txObj.setPricing(pricing)
+	}
+	txObj.executable = executable // executable written under the lock
+
 	var (
 		cost  *big.Int
 		payer thor.Address
 	)
-
-	if txObj.Cost() != nil {
+	if executable && txObj.Cost() != nil {
 		payer = *txObj.Payer()
 		pending := m.cost[payer]
-
 		if pending == nil {
 			cost = new(big.Int).Set(txObj.Cost())
 		} else {
 			cost = new(big.Int).Add(pending, txObj.Cost())
 		}
-
 		if err := validatePayer(payer, cost); err != nil {
 			return err
 		}
@@ -85,11 +89,9 @@ func (m *txObjectMap) Add(txObj *TxObject, limitPerAccount int, validatePayer fu
 	if delegator != nil {
 		m.quota[*delegator]++
 	}
-
 	if cost != nil {
 		m.cost[payer] = cost
 	}
-
 	m.mapByHash[hash] = txObj
 	m.mapByID[txObj.ID()] = txObj
 	return nil
@@ -120,13 +122,18 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 			}
 		}
 
-		// update the pending cost of payers
-		if payer := txObj.Payer(); payer != nil {
-			if pending := m.cost[*payer]; pending != nil {
-				if pending.Cmp(txObj.Cost()) <= 0 {
-					delete(m.cost, *payer)
-				} else {
-					m.cost[*payer] = new(big.Int).Sub(pending, txObj.Cost())
+		// only txs actually accounted (executable, with a committed cost) contribute;
+		// gating on executable (written under this lock) pairs add/sub exactly and never
+		// reads a cost that was not counted.
+		if txObj.executable {
+			if cost := txObj.Cost(); cost != nil {
+				payer := *txObj.Payer()
+				if pending := m.cost[payer]; pending != nil {
+					if pending.Cmp(cost) <= 0 {
+						delete(m.cost, payer)
+					} else {
+						m.cost[payer] = new(big.Int).Sub(pending, cost)
+					}
 				}
 			}
 		}
@@ -147,15 +154,29 @@ func (m *txObjectMap) PendingCostOf(payer thor.Address) *big.Int {
 	return new(big.Int)
 }
 
-func (m *txObjectMap) UpdatePendingCost(txObj *TxObject) {
+// promote marks a pooled tx executable and adds its cost to the payer's pending total,
+// but only if the tx is still present (promote-if-present). Returns false if the tx was
+// already removed. Idempotent for an already-executable tx. Requires the pricing to have
+// been published (via setPricing) beforehand.
+func (m *txObjectMap) promote(txObj *TxObject) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-
-	if pending := m.cost[*txObj.Payer()]; pending != nil {
-		m.cost[*txObj.Payer()] = new(big.Int).Add(pending, txObj.Cost())
-	} else {
-		m.cost[*txObj.Payer()] = new(big.Int).Set(txObj.Cost())
+	if _, ok := m.mapByHash[txObj.Hash()]; !ok {
+		return false
 	}
+	if txObj.executable {
+		return true
+	}
+	txObj.executable = true
+	if cost := txObj.Cost(); cost != nil {
+		payer := *txObj.Payer()
+		if pending := m.cost[payer]; pending != nil {
+			m.cost[payer] = new(big.Int).Add(pending, cost)
+		} else {
+			m.cost[payer] = new(big.Int).Set(cost)
+		}
+	}
+	return true
 }
 
 func (m *txObjectMap) ToTxObjects() []*TxObject {
@@ -180,9 +201,11 @@ func (m *txObjectMap) ToTxs() tx.Transactions {
 	return txs
 }
 
-func (m *txObjectMap) Fill(txObjs []*TxObject) {
+func (m *txObjectMap) Fill(txObjs []*TxObject) []*TxObject {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	inserted := make([]*TxObject, 0, len(txObjs))
 	for _, txObj := range txObjs {
 		if _, found := m.mapByHash[txObj.Hash()]; found {
 			continue
@@ -194,8 +217,10 @@ func (m *txObjectMap) Fill(txObjs []*TxObject) {
 		}
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj
+		inserted = append(inserted, txObj)
 		// skip cost check and accumulation
 	}
+	return inserted
 }
 
 func (m *txObjectMap) Len() int {

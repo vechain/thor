@@ -22,15 +22,17 @@ import (
 type Events struct {
 	repo             *chain.Repository
 	db               *logdb.LogDB
-	limit            uint64
+	maxLimit         uint64
+	maxOffset        uint64
 	maxCriteriaCount int
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64, maxCriteriaCount int) *Events {
+func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uint64, maxCriteriaCount int) *Events {
 	return &Events{
 		repo,
 		db,
-		logsLimit,
+		maxLimit,
+		maxOffset,
 		maxCriteriaCount,
 	}
 }
@@ -58,7 +60,7 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	if err := filter.Options.Validate(e.limit); err != nil {
+	if err := filter.Options.Validate(e.maxLimit, e.maxOffset); err != nil {
 		return restutil.Forbidden(err)
 	}
 	if err := filter.Range.Validate(); err != nil {
@@ -83,7 +85,7 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if filter.Options.Limit == nil {
 		// if filter.Options.Limit is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit
-		limit := e.limit + 1
+		limit := e.maxLimit + 1
 		filter.Options.Limit = &limit
 	}
 
@@ -93,8 +95,8 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	}
 
 	// ensure the result size is less than the configured limit
-	if len(fes) > int(e.limit) {
-		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.limit))
+	if len(fes) > int(e.maxLimit) {
+		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.maxLimit))
 	}
 
 	return restutil.WriteJSON(w, fes)

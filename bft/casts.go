@@ -34,15 +34,14 @@ func (engine *Engine) newCasts() error {
 				return err
 			}
 
-			header := sum.Header
-			signer, _ := header.Signer()
+			signer, _ := sum.Header.Signer()
 			if signer == engine.master {
-				st, err := engine.computeState(header)
+				st, err := engine.computeState(sum)
 				if err != nil {
 					return err
 				}
 
-				checkpoint, err := chain.GetBlockID(getCheckPoint(header.Number()))
+				checkpoint, err := chain.GetBlockID(getCheckPoint(sum.Header.Number()))
 				if err != nil {
 					return err
 				}

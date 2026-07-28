@@ -470,7 +470,7 @@ func sealEIP8(msg any, h *encHandshake) ([]byte, error) {
 	}
 	// pad with random amount of data. the amount needs to be at least 100 bytes to make
 	// the message distinguishable from pre-EIP-8 handshakes.
-	pad := padSpace[:mrand.Intn(len(padSpace)-100)+100]
+	pad := padSpace[:mrand.Intn(len(padSpace)-100)+100] //#nosec G404
 	buf.Write(pad)
 	prefix := make([]byte, 2)
 	binary.BigEndian.PutUint16(prefix, uint16(buf.Len()+eciesOverhead))
@@ -588,8 +588,8 @@ func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
 	iv := make([]byte, encc.BlockSize())
 	return &rlpxFrameRW{
 		conn:       conn,
-		enc:        cipher.NewCTR(encc, iv),
-		dec:        cipher.NewCTR(encc, iv),
+		enc:        cipher.NewCTR(encc, iv), //#nosec G407
+		dec:        cipher.NewCTR(encc, iv), //#nosec G407
 		macCipher:  macc,
 		egressMAC:  s.EgressMAC,
 		ingressMAC: s.IngressMAC,

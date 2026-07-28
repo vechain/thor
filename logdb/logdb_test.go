@@ -215,6 +215,12 @@ func TestEvents(t *testing.T) {
 				&EventFilter{Range: &Range{From: 10, To: 20}, Order: DESC},
 				allEvents.Filter(func(ev *Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 }).Reverse(),
 			},
+			{
+				// An inverted range (To < From) must yield no results, not everything from From onward.
+				"query events with inverted range",
+				&EventFilter{Range: &Range{From: 20, To: 10}},
+				nil,
+			},
 			{"query events with limit with desc", &EventFilter{Order: DESC, Options: &Options{Limit: 10}}, allEvents.Reverse()[0:10]},
 			{
 				"query all events with criteria",
@@ -280,6 +286,12 @@ func TestEvents(t *testing.T) {
 				"query transfers with range and desc",
 				&TransferFilter{Range: &Range{From: 10, To: 20}, Order: DESC},
 				allTransfers.Filter(func(tr *Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 }).Reverse(),
+			},
+			{
+				// An inverted range (To < From) must yield no results, not everything from From onward.
+				"query transfers with inverted range",
+				&TransferFilter{Range: &Range{From: 20, To: 10}},
+				nil,
 			},
 			{"query transfers with limit with desc", &TransferFilter{Order: DESC, Options: &Options{Limit: 10}}, allTransfers.Reverse()[0:10]},
 			{

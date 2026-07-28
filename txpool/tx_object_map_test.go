@@ -34,9 +34,9 @@ func TestGetByID(t *testing.T) {
 
 	// Creating a new txObjectMap and adding transactions
 	m := newTxObjectMap()
-	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj2, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj2, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 
 	// Testing GetByID
 	retrievedTxObj1 := m.GetByID(txObj1.ID())
@@ -107,14 +107,14 @@ func TestTxObjMap(t *testing.T) {
 	m := newTxObjectMap()
 	assert.Zero(t, m.Len())
 
-	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }), "should no error if exists")
+	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }), "should no error if exists")
 	assert.Equal(t, 1, m.Len())
 
-	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj2, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj2, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Equal(t, 1, m.Len())
 
-	assert.Nil(t, m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 	assert.Equal(t, 2, m.Len())
 
 	assert.True(t, m.ContainsHash(tx1.Hash()))
@@ -141,13 +141,51 @@ func TestLimitByDelegator(t *testing.T) {
 	txObj3, _ := ResolveTx(tx3, false)
 
 	m := newTxObjectMap()
-	assert.Nil(t, m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
 
 	m = newTxObjectMap()
-	assert.Nil(t, m.Add(txObj2, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Equal(t, errors.New("delegator quota exceeded"), m.Add(txObj3, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj1, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj2, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Equal(t, errors.New("delegator quota exceeded"), m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+}
+
+func TestPromoteIfPresentAndRemove(t *testing.T) {
+	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	assert.Nil(t, err)
+	tchain.MintBlock()
+	repo, stater, forkConfig := tchain.Repo(), tchain.Stater(), tchain.GetForkConfig()
+
+	trx := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	txObj, err := ResolveTx(trx, false)
+	assert.Nil(t, err)
+
+	best := repo.BestBlockSummary()
+	state := stater.NewState(best.Root())
+	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
+	_, pricing, err := txObj.Evaluate(repo.NewBestChain(), state, best.Header, forkConfig, baseFee, false)
+	assert.Nil(t, err)
+	assert.NotNil(t, pricing)
+
+	m := newTxObjectMap()
+
+	// not in the pool yet: promote returns false and does not account
+	txObj.setPricing(pricing)
+	assert.False(t, m.promote(txObj))
+	assert.Nil(t, m.cost[genesis.DevAccounts()[0].Address])
+
+	// added as non-executable, then promote -> accounted
+	assert.Nil(t, m.Add(txObj, false, nil, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.True(t, m.promote(txObj))
+	assert.Equal(t, txObj.Cost(), m.cost[genesis.DevAccounts()[0].Address])
+
+	// idempotent
+	assert.True(t, m.promote(txObj))
+	assert.Equal(t, txObj.Cost(), m.cost[genesis.DevAccounts()[0].Address])
+
+	// drained to zero after removal
+	assert.True(t, m.RemoveByHash(txObj.Hash()))
+	assert.Nil(t, m.cost[genesis.DevAccounts()[0].Address])
 }
 
 func TestPendingCost(t *testing.T) {
@@ -175,24 +213,24 @@ func TestPendingCost(t *testing.T) {
 	state := stater.NewState(best.Root())
 
 	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
-	txObj1.executable, err = txObj1.Executable(chain, state, best.Header, forkConfig, baseFee)
+	exec1, p1, err := txObj1.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
-	assert.True(t, txObj1.executable)
+	assert.True(t, exec1)
 
-	txObj2.executable, err = txObj2.Executable(chain, state, best.Header, forkConfig, baseFee)
+	exec2, p2, err := txObj2.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
-	assert.True(t, txObj2.executable)
+	assert.True(t, exec2)
 
-	txObj3.executable, err = txObj3.Executable(chain, state, best.Header, forkConfig, baseFee)
+	exec3, p3, err := txObj3.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
-	assert.True(t, txObj3.executable)
+	assert.True(t, exec3)
 
 	// Creating a new txObjectMap
 	m := newTxObjectMap()
 
-	m.Add(txObj1, 10, func(_ thor.Address, _ *big.Int) error { return nil })
-	m.Add(txObj2, 10, func(_ thor.Address, _ *big.Int) error { return nil })
-	m.Add(txObj3, 10, func(_ thor.Address, _ *big.Int) error { return nil })
+	assert.Nil(t, m.Add(txObj1, true, p1, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj2, true, p2, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj3, true, p3, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
 
 	assert.Equal(t, txObj1.Cost(), m.cost[genesis.DevAccounts()[0].Address])
 	// No cost for txObj2's origin, should be counted on the delegator

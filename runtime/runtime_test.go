@@ -136,9 +136,6 @@ func TestEVMFunction(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				// forkFromStart has all fork fields = 0 (including INTERSTELLAR = 0),
-				// so block 0 is already past INTERSTELLAR. The CHAINID opcode must
-				// return the configured Ethereum chain ID, not the old genesis big.Int.
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkFromStart).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
