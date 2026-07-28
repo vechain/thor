@@ -370,3 +370,33 @@ func TestRLPDecodeErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestNonce(t *testing.T) {
+	addr := thor.BytesToAddress([]byte("nonce-test"))
+
+	t.Run("default is zero", func(t *testing.T) {
+		st := New(muxdb.NewMem(), trie.Root{})
+		n, err := st.GetNonce(addr)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(0), n)
+	})
+
+	t.Run("set and get roundtrip", func(t *testing.T) {
+		st := New(muxdb.NewMem(), trie.Root{})
+		assert.NoError(t, st.SetNonce(addr, 42))
+		n, err := st.GetNonce(addr)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(42), n)
+	})
+
+	t.Run("zero is stored as nil in account", func(t *testing.T) {
+		st := New(muxdb.NewMem(), trie.Root{})
+		_ = st.SetNonce(addr, 5)
+		_ = st.SetNonce(addr, 0)
+		acc, err := st.getAccountCopy(addr)
+		assert.NoError(t, err)
+		// nonce=0 must encode as nil so zero-nonce accounts are indistinguishable
+		// from pre-INTERSTELLAR accounts and IsEmpty() remains correct.
+		assert.Nil(t, acc.Nonce)
+	})
+}

@@ -78,12 +78,12 @@ func TestTrie(t *testing.T) {
 		"should load an empty account")
 
 	acc1 := Account{
-		big.NewInt(1),
-		big.NewInt(0),
-		0,
-		[]byte("master"),
-		[]byte("code hash"),
-		[]byte("storage root"),
+		Balance:     big.NewInt(1),
+		Energy:      big.NewInt(0),
+		BlockTime:   0,
+		Master:      []byte("master"),
+		CodeHash:    []byte("code hash"),
+		StorageRoot: []byte("storage root"),
 	}
 	meta1 := AccountMetadata{
 		StorageID:       []byte("sid"),
