@@ -52,7 +52,6 @@ type Repository struct {
 
 	genesis *block.Block
 	tag     byte
-	chainID uint64
 
 	bestSummary atomic.Value
 	tick        co.Signal
@@ -89,7 +88,6 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		txIndexer: db.NewStore(txIndexStoreName),
 		genesis:   genesis,
 		tag:       genesisID[31],
-		chainID:   uint64(binary.BigEndian.Uint16(genesisID[30:32])),
 	}
 
 	repo.caches.summaries = newCache(512)
@@ -130,12 +128,6 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 // ChainTag returns chain tag, which is the last byte of genesis id.
 func (r *Repository) ChainTag() byte {
 	return r.tag
-}
-
-// ChainID returns the Ethereum-compatible chain id (uint16 derived from
-// genesis id). Cached at construction so call sites avoid recomputing it.
-func (r *Repository) ChainID() uint64 {
-	return r.chainID
 }
 
 // GenesisBlock returns genesis block.

@@ -23,9 +23,8 @@ var codeSizeCache, _ = lru.New(32 * 1024)
 
 // StateDB implements evm.StateDB, only adapt to evm.
 type StateDB struct {
-	state  *state.State
-	repo   *stackedmap.StackedMap
-	txType tx.Type
+	state *state.State
+	repo  *stackedmap.StackedMap
 }
 
 type (
@@ -43,7 +42,7 @@ type (
 )
 
 // New create a statedb object.
-func New(state *state.State, txType tx.Type) *StateDB {
+func New(state *state.State) *StateDB {
 	getter := func(k any) (any, bool, error) {
 		switch k.(type) {
 		case suicideFlagKey:
@@ -60,9 +59,8 @@ func New(state *state.State, txType tx.Type) *StateDB {
 
 	repo := stackedmap.New(getter)
 	return &StateDB{
-		state:  state,
-		repo:   repo,
-		txType: txType,
+		state,
+		repo,
 	}
 }
 
@@ -138,29 +136,11 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
-// GetNonce returns the Ethereum nonce for the given address.
-// Returns 0 for VeChain-native transactions (nonce is not used).
-func (s *StateDB) GetNonce(addr common.Address) uint64 {
-	if s.txType != tx.TypeEthDynamicFee {
-		return 0
-	}
-	n, err := s.state.GetNonce(thor.Address(addr))
-	if err != nil {
-		panic(err)
-	}
-	return n
-}
+// GetNonce stub.
+func (s *StateDB) GetNonce(_ common.Address) uint64 { return 0 }
 
-// SetNonce sets the Ethereum nonce for the given address.
-// No-op for VeChain-native transactions.
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	if s.txType != tx.TypeEthDynamicFee {
-		return
-	}
-	if err := s.state.SetNonce(thor.Address(addr), nonce); err != nil {
-		panic(err)
-	}
-}
+// SetNonce stub.
+func (s *StateDB) SetNonce(_ common.Address, _ uint64) {}
 
 // GetCodeHash stub.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {

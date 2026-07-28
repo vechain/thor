@@ -158,8 +158,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 	}
 
 	switch {
-	case t.ChainTag() != f.packer.repo.ChainTag() && t.Type() != tx.TypeEthDynamicFee:
-		// Ethereum tx types carry replay protection via chainID; chain tag check is bypassed.
+	case t.ChainTag() != f.packer.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
 	case f.Number() < t.BlockRef().Number():
 		return errTxNotAdoptableNow

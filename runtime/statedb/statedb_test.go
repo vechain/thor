@@ -25,7 +25,6 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	State "github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/trie"
-	"github.com/vechain/thor/v2/tx"
 )
 
 func TestSnapshotRandom(t *testing.T) {
@@ -189,7 +188,7 @@ func (test *snapshotTest) run() bool {
 	var (
 		db           = muxdb.NewMem()
 		state        = State.New(db, trie.Root{})
-		stateDB      = New(state, tx.TypeLegacy)
+		stateDB      = New(state)
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
@@ -204,7 +203,7 @@ func (test *snapshotTest) run() bool {
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
 		state := State.New(db, trie.Root{})
-		checkStateDB := New(state, tx.TypeLegacy)
+		checkStateDB := New(state)
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkStateDB)
 		}
@@ -258,7 +257,7 @@ func TestTransientState(t *testing.T) {
 	db := muxdb.NewMem()
 	state := State.NewStater(db).NewState(trie.Root{})
 
-	stateDB := New(state, tx.TypeLegacy)
+	stateDB := New(state)
 	val := stateDB.GetTransientState(addr, key)
 	assert.Equal(t, common.Hash{}, val)
 
@@ -282,7 +281,7 @@ func TestTransientState(t *testing.T) {
 
 func TestCreateContract(t *testing.T) {
 	addr := common.Address{0x1}
-	stateDB := New(State.New(muxdb.NewMem(), trie.Root{}), tx.TypeLegacy)
+	stateDB := New(State.New(muxdb.NewMem(), trie.Root{}))
 	assert.False(t, stateDB.IsNewContract(addr))
 	stateDB.CreateContract(addr)
 	assert.True(t, stateDB.IsNewContract(addr))
