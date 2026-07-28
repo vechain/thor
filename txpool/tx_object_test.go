@@ -277,7 +277,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txAtLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj, err := ResolveTx(txAtLimit, false)
 	assert.Nil(t, err)
-	exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	exe, _, err := txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
 	assert.True(t, exe)
 	assert.Nil(t, err)
 
@@ -285,7 +285,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txOverLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj, err = ResolveTx(txOverLimit, false)
 	assert.Nil(t, err)
-	exe, err = txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
 	assert.False(t, exe)
 	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
 
@@ -293,7 +293,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txDynOverLimit := newTx(tx.TypeDynamicFee, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj, err = ResolveTx(txDynOverLimit, false)
 	assert.Nil(t, err)
-	exe, err = txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
 	assert.False(t, exe)
 	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
 
@@ -318,7 +318,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txOverLimitPreFork := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj2, err := ResolveTx(txOverLimitPreFork, false)
 	assert.Nil(t, err)
-	exe, err = txObj2.Executable(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2)
+	exe, _, err = txObj2.Evaluate(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2, false)
 	assert.True(t, exe)
 	assert.Nil(t, err)
 }
