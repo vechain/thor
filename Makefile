@@ -16,7 +16,7 @@ MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
 export GO111MODULE=on
 
 .DEFAULT_GOAL := thor
-.PHONY: thor disco all clean test install-hooks
+.PHONY: thor disco all clean test test-race install-hooks
 
 help:
 	@egrep -h '\s#@\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?#@ "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
@@ -63,7 +63,10 @@ clean: #@ Clean the test and build cache and remove binaries
 	@echo "done. build cache and binaries removed."
 
 test:| go_version_check #@ Run the tests
-	@go test -cover $(PACKAGES)
+	@go test -count=1 -cover $(PACKAGES)
+
+test-race:| go_version_check #@ Run the tests with the race detector
+	@go test -count=1 -race $(PACKAGES)
 
 fuzz:| go_version_check #@ Run the fuzz tests
 	@go test -fuzz=FuzzTransactionMarshalling -fuzztime=$(FUZZTIME) $(CURDIR)/tx
@@ -73,8 +76,10 @@ fuzz:| go_version_check #@ Run the fuzz tests
 	@go test -fuzz=FuzzHeaderEncoding -fuzztime=$(FUZZTIME) $(CURDIR)/block
 	@go test -fuzz=FuzzBlockDecoding -fuzztime=$(FUZZTIME) $(CURDIR)/block
 
-test-coverage:| go_version_check #@ Run the tests with coverage
-	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
+test-coverage:| go_version_check #@ Run the tests and write the coverage profile
+	@go test -count=1 -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
+
+test-coverage-html: test-coverage #@ Run the tests with coverage and open the HTML report
 	@go tool cover -html=coverage.out
 
 lint_command_check:
