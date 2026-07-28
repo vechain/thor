@@ -4,6 +4,7 @@ package txpool
 
 import (
 	"math/big"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -124,17 +125,21 @@ func BenchmarkEthPoolCoreReadersDuringSlowPrepare(b *testing.B) {
 	<-writerDone
 }
 
-func BenchmarkEthPoolCoreWashDefaultLimit(b *testing.B) {
-	const (
-		senderCount = 125
-		pendingPer  = 16
-		queuedPer   = 64
-	)
+// benchmarkEthCorePool builds a core holding senderCount senders with pendingPer
+// executable and queuedPer queued transactions each. It populates the indexes
+// directly so setup cost does not depend on the path under benchmark, and hands
+// back a prepare that reads no chain state, isolating in-core work.
+func benchmarkEthCorePool(
+	b *testing.B,
+	senderCount, pendingPer, queuedPer int,
+) (*ethPoolCore, map[thor.Address]uint64, ethPrepare) {
+	b.Helper()
+
 	costs := newCostTracker()
 	core := newEthPoolCore(costs)
 	stateNonces := make(map[thor.Address]uint64, senderCount)
 	origins := make(map[*TxObject]thor.Address, senderCount*(pendingPer+queuedPer))
-	balance := big.NewInt(1_000_000)
+	balance := big.NewInt(1_000_000_000)
 
 	for senderIndex := range senderCount {
 		var origin thor.Address
@@ -173,8 +178,12 @@ func BenchmarkEthPoolCoreWashDefaultLimit(b *testing.B) {
 		}
 		core.senders[origin] = sender
 	}
+
 	prepare := func(txObj *TxObject) ethPreparation {
-		origin := origins[txObj]
+		origin, fabricated := origins[txObj]
+		if !fabricated {
+			origin = txObj.Origin()
+		}
 		return ethPreparation{
 			request: reservationRequest{
 				owner:   ethReservationOwner(origin, txObj.Nonce()),
@@ -182,10 +191,44 @@ func BenchmarkEthPoolCoreWashDefaultLimit(b *testing.B) {
 				cost:    big.NewInt(1),
 				balance: balance,
 			},
-			viable: true,
+			viable:           true,
+			priorityGasPrice: big.NewInt(1),
 		}
 	}
-	options := ethWashOptions{
+	return core, stateNonces, prepare
+}
+
+// BenchmarkEthPoolCoreRevalidateDefaultLimit measures the per-head-change cost:
+// this is the only maintenance path that reads chain state, so it is the one whose
+// cadence matters.
+func BenchmarkEthPoolCoreRevalidateDefaultLimit(b *testing.B) {
+	const (
+		senderCount = 125
+		pendingPer  = 16
+		queuedPer   = 64
+	)
+	core, stateNonces, prepare := benchmarkEthCorePool(b, senderCount, pendingPer, queuedPer)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, _, err := core.revalidate(stateNonces, pendingPer, prepare); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkEthPoolCoreSweepDefaultLimit measures the per-tick cost. Sweeping reads
+// no chain state, so this is the whole cost of a housekeeping tick on a pool whose
+// head has not moved.
+func BenchmarkEthPoolCoreSweepDefaultLimit(b *testing.B) {
+	const (
+		senderCount = 125
+		pendingPer  = 16
+		queuedPer   = 64
+	)
+	core, _, _ := benchmarkEthCorePool(b, senderCount, pendingPer, queuedPer)
+	options := ethSweepOptions{
 		pendingLimit: pendingPer,
 		queueLimit:   queuedPer,
 		globalLimit:  senderCount * (pendingPer + queuedPer),
@@ -194,8 +237,61 @@ func BenchmarkEthPoolCoreWashDefaultLimit(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if _, err := core.wash(stateNonces, options, prepare); err != nil {
+		if _, err := core.sweep(options); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// ethCoreScalingSizes are the pool sizes the single-transaction mutation
+// benchmarks sweep. Cost must stay flat across them: a mutation touches one
+// sender, so nothing it does may be proportional to the pool.
+var ethCoreScalingSizes = []int{100, 1_000, 10_000}
+
+func BenchmarkEthPoolCoreAddScaling(b *testing.B) {
+	const pendingPer = 16
+	for _, poolSize := range ethCoreScalingSizes {
+		b.Run(strconv.Itoa(poolSize), func(b *testing.B) {
+			core, _, prepare := benchmarkEthCorePool(b, poolSize/pendingPer, pendingPer, 0)
+			candidate := benchmarkEthCoreObject(b, 0)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				if _, _, err := core.add(
+					candidate, 0, 0, pendingPer, 64, 10, prepare,
+				); err != nil {
+					b.Fatal(err)
+				}
+				b.StopTimer()
+				core.removeByHash(candidate.Hash())
+				b.StartTimer()
+			}
+		})
+	}
+}
+
+func BenchmarkEthPoolCoreRemoveScaling(b *testing.B) {
+	const pendingPer = 16
+	for _, poolSize := range ethCoreScalingSizes {
+		b.Run(strconv.Itoa(poolSize), func(b *testing.B) {
+			core, _, prepare := benchmarkEthCorePool(b, poolSize/pendingPer, pendingPer, 0)
+			candidate := benchmarkEthCoreObject(b, 0)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				b.StopTimer()
+				if _, _, err := core.add(
+					candidate, 0, 0, pendingPer, 64, 10, prepare,
+				); err != nil {
+					b.Fatal(err)
+				}
+				b.StartTimer()
+				if !core.removeByHash(candidate.Hash()) {
+					b.Fatal("candidate not removed")
+				}
+			}
+		})
 	}
 }

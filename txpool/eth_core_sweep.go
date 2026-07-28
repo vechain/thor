@@ -12,9 +12,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-// Washing reconciles canonical nonces and enforces expiry and capacity limits;
-// it does not fetch chain state or publish transaction events.
-type ethWashOptions struct {
+// Sweeping enforces expiry and capacity. It reads no chain state and prepares
+// nothing, so it can run on a cheap timer independently of the head. It does not
+// publish pool events.
+type ethSweepOptions struct {
 	now          int64
 	maxLifetime  time.Duration
 	pendingLimit int
@@ -22,144 +23,51 @@ type ethWashOptions struct {
 	globalLimit  int
 }
 
-type ethWashResult struct {
-	promoted []*TxObject
-	demoted  []*TxObject
-	removed  int
+type ethSweepResult struct {
+	removed int
+	demoted []*TxObject
 }
 
-// syncHead reconciles affected senders with the canonical head nonce and
-// promotes newly contiguous, affordable queued transactions.
-func (m *ethPoolCore) syncHead(
-	stateNonces map[thor.Address]uint64,
-	pendingLimit int,
-	prepare ethPrepare,
-) ([]*TxObject, error) {
-	promoted, _, err := m.syncHeadWithTransitions(stateNonces, pendingLimit, prepare)
-	return promoted, err
-}
-
-func (m *ethPoolCore) syncHeadWithTransitions(
-	stateNonces map[thor.Address]uint64,
-	pendingLimit int,
-	prepare ethPrepare,
-) ([]*TxObject, []*TxObject, error) {
+// sweep drops expired transactions and trims the pool back inside its per-sender
+// and global limits. It only removes and demotes, never promotes: expiry leaves a
+// nonce gap behind it and limit enforcement leaves the limit full, so nothing it
+// does can make a queued transaction contiguous and affordable.
+func (m *ethPoolCore) sweep(options ethSweepOptions) (ethSweepResult, error) {
 	m.mutationMu.Lock()
 	defer m.mutationMu.Unlock()
-
-	objects := m.syncPreparationObjects(stateNonces, pendingLimit)
-	prepared := prepareEthObjects(objects, prepare)
-
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	wasExecutableObjects := m.executableObjectsLocked()
-
-	origins := sortedEthOrigins(stateNonces)
-	wasExecutable := m.executableHashesLocked(origins)
-	var newlyPromoted []*TxObject
-	for _, origin := range origins {
-		sender := m.senders[origin]
-		if sender == nil {
-			continue
-		}
-
-		if err := m.syncSenderNonceLocked(sender, stateNonces[origin]); err != nil {
-			return nil, nil, err
-		}
-
-		promoted, err := m.promoteLocked(sender, pendingLimit, prepared)
-		if err != nil {
-			return nil, nil, err
-		}
-		newlyPromoted = append(newlyPromoted, filterNewPromotions(promoted, wasExecutable)...)
-		if sender.isEmpty() {
-			delete(m.senders, origin)
-		}
-	}
-	return newlyPromoted, m.retainedDemotionsLocked(wasExecutableObjects), nil
-}
-
-func (m *ethPoolCore) syncSenderNonceLocked(sender *ethSender, stateNonce uint64) error {
-	var releases []reservationOwner
-	for nonce := range sender.pending {
-		if stateNonce < sender.stateNonce || nonce < stateNonce {
-			releases = append(releases, ethReservationOwner(sender.origin, nonce))
-		}
-	}
-	if err := m.costs.release(releases...); err != nil {
-		return err
-	}
-	settled, _ := sender.syncStateNonce(stateNonce)
-	for _, txObj := range settled {
-		delete(m.allByHash, txObj.Hash())
-	}
-	return nil
-}
-
-func (m *ethPoolCore) wash(
-	stateNonces map[thor.Address]uint64,
-	options ethWashOptions,
-	prepare ethPrepare,
-) (ethWashResult, error) {
-	m.mutationMu.Lock()
-	defer m.mutationMu.Unlock()
-
-	objects := m.washPreparationObjects(stateNonces, options)
-	prepared := prepareEthObjects(objects, prepare)
 
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	wasExecutableObjects := m.executableObjectsLocked()
 	origins := m.sortedOriginsLocked()
-	wasExecutable := m.executableHashesLocked(origins)
-	var result ethWashResult
+	wasExecutable := m.executableObjectsLocked(origins)
+	var result ethSweepResult
 	for _, origin := range origins {
 		sender := m.senders[origin]
 		if sender == nil {
 			continue
-		}
-		stateNonce, present := stateNonces[origin]
-		if !present {
-			// A sender admitted after the state snapshot is washed next time.
-			continue
-		}
-		if err := m.syncSenderNonceLocked(sender, stateNonce); err != nil {
-			return ethWashResult{}, err
 		}
 		if err := m.removeExpiredLocked(sender, options, &result); err != nil {
-			return ethWashResult{}, err
+			return ethSweepResult{}, err
 		}
-		if sender.isEmpty() {
-			delete(m.senders, origin)
-			continue
-		}
-
-		promoted, err := m.revalidateSenderLocked(sender, options.pendingLimit, prepared)
-		if err != nil {
-			return ethWashResult{}, err
-		}
-		result.promoted = append(result.promoted, promoted...)
 		if err := m.enforceSenderLimitsLocked(sender, options, &result); err != nil {
-			return ethWashResult{}, err
+			return ethSweepResult{}, err
 		}
 		if sender.isEmpty() {
 			delete(m.senders, origin)
 		}
 	}
-
 	if err := m.enforceGlobalLimitLocked(origins, options.globalLimit, &result); err != nil {
-		return ethWashResult{}, err
+		return ethSweepResult{}, err
 	}
-	result.promoted = m.retainedPromotionsLocked(result.promoted, wasExecutable)
-	result.demoted = m.retainedDemotionsLocked(wasExecutableObjects)
+	result.demoted = m.retainedDemotionsLocked(wasExecutable)
 	return result, nil
 }
 
 func (m *ethPoolCore) removeExpiredLocked(
 	sender *ethSender,
-	options ethWashOptions,
-	result *ethWashResult,
+	options ethSweepOptions,
+	result *ethSweepResult,
 ) error {
 	if options.maxLifetime <= 0 {
 		return nil
@@ -194,7 +102,7 @@ func (m *ethPoolCore) evictPendingFromLocked(
 	sender *ethSender,
 	nonce uint64,
 	target *TxObject,
-	result *ethWashResult,
+	result *ethSweepResult,
 ) error {
 	var releases []reservationOwner
 	for pendingNonce := range sender.pending {
@@ -214,56 +122,10 @@ func (m *ethPoolCore) evictPendingFromLocked(
 	return nil
 }
 
-func (m *ethPoolCore) revalidateSenderLocked(
-	sender *ethSender,
-	pendingLimit int,
-	prepared ethPreparations,
-) ([]*TxObject, error) {
-	pending := make([]*TxObject, 0, len(sender.pending))
-	releases := make([]reservationOwner, 0, len(sender.pending))
-	requests := make([]reservationRequest, 0, len(sender.pending))
-	preparing := true
-	for nonce := sender.stateNonce; nonce < sender.poolNonce(); nonce++ {
-		txObj := sender.pending[nonce]
-		if txObj == nil {
-			break
-		}
-		pending = append(pending, txObj)
-		releases = append(releases, ethReservationOwner(sender.origin, nonce))
-		if preparing {
-			preparation, err := prepared.get(txObj)
-			if err != nil {
-				return nil, err
-			}
-			if preparation.err != nil || !preparation.viable {
-				preparing = false
-			} else {
-				requests = append(requests, preparation.request)
-			}
-		}
-	}
-
-	accepted, err := m.costs.reconcile(releases, requests, acceptAffordablePrefix)
-	if err != nil {
-		return nil, err
-	}
-	for i := range accepted {
-		prepared[pending[i]].apply(pending[i])
-		pending[i].executable = true
-	}
-	if accepted < len(pending) {
-		sender.demoteFrom(pending[accepted].Nonce())
-	}
-	if pendingLimit < 0 {
-		pendingLimit = len(sender.pending) + len(sender.queue)
-	}
-	return m.promoteLocked(sender, pendingLimit, prepared)
-}
-
 func (m *ethPoolCore) enforceSenderLimitsLocked(
 	sender *ethSender,
-	options ethWashOptions,
-	result *ethWashResult,
+	options ethSweepOptions,
+	result *ethSweepResult,
 ) error {
 	if options.pendingLimit >= 0 && len(sender.pending) > options.pendingLimit {
 		cutoff := sender.stateNonce + uint64(options.pendingLimit)
@@ -316,7 +178,7 @@ type pendingTail struct {
 func (m *ethPoolCore) enforceGlobalLimitLocked(
 	origins []thor.Address,
 	limit int,
-	result *ethWashResult,
+	result *ethSweepResult,
 ) error {
 	if limit <= 0 || len(m.allByHash) <= limit {
 		return nil
@@ -347,7 +209,7 @@ func (m *ethPoolCore) queueEvictionCursorsLocked(origins []thor.Address) []queue
 func (m *ethPoolCore) evictQueuedUntilLimitLocked(
 	cursors []queuedEvictionCursor,
 	limit int,
-	result *ethWashResult,
+	result *ethSweepResult,
 ) {
 	for len(m.allByHash) > limit {
 		removed := false
@@ -379,7 +241,7 @@ func (m *ethPoolCore) evictQueuedUntilLimitLocked(
 func (m *ethPoolCore) evictPendingTailsUntilLimitLocked(
 	origins []thor.Address,
 	limit int,
-	result *ethWashResult,
+	result *ethSweepResult,
 ) error {
 	for len(m.allByHash) > limit {
 		tails, releases := m.pendingTailBatchLocked(origins, len(m.allByHash)-limit)

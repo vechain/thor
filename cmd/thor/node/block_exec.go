@@ -369,6 +369,9 @@ side-chain:   %v  %v`,
 		logger.Warn("failed to process fork", "err", err)
 		return
 	}
+	// newTrunk stops at newBlock's parent, so Exclude covers only the arm below it.
+	// The pool relies on Included to settle nonces, so the new block's own
+	// transactions have to be added here.
 	included = append(included, newBlock.Transactions()...)
 
 	includedIDsByTx := make(map[thor.Bytes32]struct{}, len(included))

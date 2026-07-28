@@ -146,7 +146,6 @@ func (m *ethPoolCore) removeByHashWithTransitions(hash thor.Bytes32) (bool, []*T
 
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	wasExecutable := m.executableObjectsLocked()
 
 	txObj := m.allByHash[hash]
 	if txObj == nil {
@@ -157,6 +156,7 @@ func (m *ethPoolCore) removeByHashWithTransitions(hash thor.Bytes32) (bool, []*T
 	if sender == nil {
 		return false, nil
 	}
+	wasExecutable := m.executableObjectsLocked([]thor.Address{origin})
 
 	var releases []reservationOwner
 	switch {
@@ -182,22 +182,6 @@ func (m *ethPoolCore) removeByHashWithTransitions(hash thor.Bytes32) (bool, []*T
 	return true, m.retainedDemotionsLocked(wasExecutable)
 }
 
-func (m *ethPoolCore) retainedPromotionsLocked(
-	promoted []*TxObject,
-	wasExecutable map[thor.Bytes32]struct{},
-) []*TxObject {
-	retained := promoted[:0]
-	for _, txObj := range promoted {
-		if _, existed := wasExecutable[txObj.Hash()]; existed {
-			continue
-		}
-		if m.allByHash[txObj.Hash()] == txObj && txObj.executable {
-			retained = append(retained, txObj)
-		}
-	}
-	return retained
-}
-
 func sortedEthOrigins(stateNonces map[thor.Address]uint64) []thor.Address {
 	origins := make([]thor.Address, 0, len(stateNonces))
 	for origin := range stateNonces {
@@ -209,9 +193,12 @@ func sortedEthOrigins(stateNonces map[thor.Address]uint64) []thor.Address {
 	return origins
 }
 
-// executableHashesLocked snapshots affected executable transactions before reset.
-func (m *ethPoolCore) executableHashesLocked(origins []thor.Address) map[thor.Bytes32]struct{} {
-	hashes := make(map[thor.Bytes32]struct{})
+// executableObjectsLocked snapshots the executable transactions of the given
+// senders so a mutation can report the transitions it caused. Every demotion
+// primitive acts on a single ethSender, so callers pass only the senders they
+// touch and the snapshot stays proportional to the change, not to the pool.
+func (m *ethPoolCore) executableObjectsLocked(origins []thor.Address) map[thor.Bytes32]*TxObject {
+	objects := make(map[thor.Bytes32]*TxObject)
 	for _, origin := range origins {
 		sender := m.senders[origin]
 		if sender == nil {
@@ -219,23 +206,30 @@ func (m *ethPoolCore) executableHashesLocked(origins []thor.Address) map[thor.By
 		}
 		for _, txObj := range sender.pending {
 			if txObj.executable {
-				hashes[txObj.Hash()] = struct{}{}
-			}
-		}
-	}
-	return hashes
-}
-
-func (m *ethPoolCore) executableObjectsLocked() map[thor.Bytes32]*TxObject {
-	objects := make(map[thor.Bytes32]*TxObject)
-	for _, sender := range m.senders {
-		for _, txObj := range sender.pending {
-			if txObj.executable {
 				objects[txObj.Hash()] = txObj
 			}
 		}
 	}
 	return objects
+}
+
+// newPromotionsLocked filters promotions down to transactions that were not
+// already executable in the snapshot and are still live and executable now.
+// It filters in place, so the caller must not reuse promoted afterwards.
+func (m *ethPoolCore) newPromotionsLocked(
+	promoted []*TxObject,
+	wasExecutable map[thor.Bytes32]*TxObject,
+) []*TxObject {
+	retained := promoted[:0]
+	for _, txObj := range promoted {
+		if _, existed := wasExecutable[txObj.Hash()]; existed {
+			continue
+		}
+		if m.allByHash[txObj.Hash()] == txObj && txObj.executable {
+			retained = append(retained, txObj)
+		}
+	}
+	return retained
 }
 
 func (m *ethPoolCore) retainedDemotionsLocked(
@@ -255,19 +249,6 @@ func (m *ethPoolCore) retainedDemotionsLocked(
 		return cmp.Compare(a.Nonce(), b.Nonce())
 	})
 	return demoted
-}
-
-func filterNewPromotions(
-	promoted []*TxObject,
-	wasExecutable map[thor.Bytes32]struct{},
-) []*TxObject {
-	filtered := promoted[:0]
-	for _, txObj := range promoted {
-		if _, alreadyExecutable := wasExecutable[txObj.Hash()]; !alreadyExecutable {
-			filtered = append(filtered, txObj)
-		}
-	}
-	return filtered
 }
 
 // pruneEmptySenders drops senders with no pending or queued txs.

@@ -299,7 +299,7 @@ func TestEthPoolWashEmitsDemotionEvents(t *testing.T) {
 	require.NoError(t, pool.costs.reserve(externalOwner, signer.Address, balance, balance))
 	t.Cleanup(func() { _ = pool.costs.release(externalOwner) })
 
-	require.NoError(t, pool.wash(head))
+	require.NoError(t, pool.revalidate(head))
 
 	for _, demoted := range txs {
 		event := nextTxEvent(t, events)
@@ -375,7 +375,9 @@ func TestEthPoolBlocklistSilentlyDropsAdmission(t *testing.T) {
 	assert.Equal(t, 1, pool.Len())
 }
 
-func TestEthPoolProcessHeadChange(t *testing.T) {
+// A fork with nothing discarded is a plain forward extension, which must settle the
+// newly canonical nonces and promote the queued suffix in place.
+func TestEthPoolReinjectFromForkForwardExtension(t *testing.T) {
 	options := Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
 	}
@@ -400,10 +402,10 @@ func TestEthPoolProcessHeadChange(t *testing.T) {
 	events := make(chan *TxEvent, 1)
 	sub := pool.SubscribeTxEvent(events)
 	defer sub.Unsubscribe()
-	previous := tchain.Repo().BestBlockSummary()
 	require.NoError(t, tchain.MintBlock(nonce0))
-	current := tchain.Repo().BestBlockSummary()
-	require.NoError(t, pool.processHeadChange(previous, current))
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Included: tx.Transactions{nonce0},
+	}))
 
 	assert.Nil(t, pool.GetByHash(nonce0.Hash()))
 	assert.NotNil(t, pool.GetByHash(nonce1.Hash()))
@@ -413,43 +415,47 @@ func TestEthPoolProcessHeadChange(t *testing.T) {
 	require.NotNil(t, event.Executable)
 	assert.True(t, *event.Executable)
 
-	// Process two canonical blocks in one call to exercise catch-up.
+	// Two blocks' worth of inclusions in one call, as the node reports after a
+	// multi-block catch-up.
 	nonce2 := buildEthPoolTx(t, tchain.Repo().ChainID(), 2, fee, big.NewInt(100), signer)
 	require.NoError(t, pool.AddRemote(nonce2))
-	previous = current
 	require.NoError(t, tchain.MintBlock(nonce1))
 	require.NoError(t, tchain.MintBlock(nonce2))
-	current = tchain.Repo().BestBlockSummary()
-	require.NoError(t, pool.processHeadChange(previous, current))
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Included: tx.Transactions{nonce1, nonce2},
+	}))
 	assert.Nil(t, pool.GetByHash(nonce1.Hash()))
 	assert.Nil(t, pool.GetByHash(nonce2.Hash()))
 	assert.Equal(t, uint64(3), pool.PoolNonce(signer.Address))
 }
 
-func TestEthPoolProcessHeadChangeIgnoresNativeOnlyBlocks(t *testing.T) {
+func TestEthPoolReinjectFromForkIgnoresNonEthereumInclusions(t *testing.T) {
 	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
 	})
 	signer := devAccounts[4]
 	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
-	trx := buildEthPoolTx(
-		t,
-		tchain.Repo().ChainID(),
-		0,
-		new(big.Int).Mul(baseFee, big.NewInt(2)),
-		big.NewInt(100),
-		signer,
-	)
+	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	trx := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, big.NewInt(100), signer)
 	require.NoError(t, pool.AddRemote(trx))
 
-	previous := tchain.Repo().BestBlockSummary()
+	native := tx.MustSign(tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(tchain.Repo().ChainTag()).
+		Gas(21_000).
+		MaxFeePerGas(fee).
+		MaxPriorityFeePerGas(big.NewInt(1)).
+		Clause(tx.NewClause(nil)).
+		Build(), signer.PrivateKey)
+
 	require.NoError(t, tchain.MintBlock())
-	require.NoError(t, pool.processHeadChange(previous, tchain.Repo().BestBlockSummary()))
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Included: tx.Transactions{native},
+	}))
 	assert.NotNil(t, pool.GetByHash(trx.Hash()))
 	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address))
 }
 
-func TestEthPoolHousekeepingProcessesHeadChange(t *testing.T) {
+func TestEthPoolHousekeepingRevalidatesOnHeadChange(t *testing.T) {
 	pool, tchain := newEthPoolTest(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
 	})
@@ -471,7 +477,9 @@ func TestEthPoolHousekeepingProcessesHeadChange(t *testing.T) {
 	}, 3*time.Second, 25*time.Millisecond)
 }
 
-func TestEthPoolWashRepricesAndExpires(t *testing.T) {
+// Repricing needs chain state and so belongs to revalidate; expiry needs none and
+// so belongs to sweep.
+func TestEthPoolRevalidateRepricesAndSweepExpires(t *testing.T) {
 	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
 		EthPriceBump: 10, MaxLifetime: time.Hour,
@@ -487,17 +495,17 @@ func TestEthPoolWashRepricesAndExpires(t *testing.T) {
 	require.NotNil(t, txObj)
 	txObj.priorityGasPrice = big.NewInt(-1)
 
-	require.NoError(t, pool.wash(tchain.Repo().BestBlockSummary()))
+	require.NoError(t, pool.revalidate(tchain.Repo().BestBlockSummary()))
 	assert.Positive(t, txObj.priorityGasPrice.Sign())
 	assert.NotNil(t, pool.GetByHash(trx.Hash()))
 
 	txObj.timeAdded = time.Now().Add(-2 * time.Hour).UnixNano()
-	require.NoError(t, pool.wash(tchain.Repo().BestBlockSummary()))
+	require.NoError(t, pool.sweep())
 	assert.Nil(t, pool.GetByHash(trx.Hash()))
 	assert.Zero(t, pool.costs.pendingCost(signer.Address).Sign())
 }
 
-func TestEthPoolWashPromotesAffordableQueue(t *testing.T) {
+func TestEthPoolRevalidatePromotesAffordableQueue(t *testing.T) {
 	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
 		EthPriceBump: 10, MaxLifetime: time.Hour,
@@ -535,7 +543,7 @@ func TestEthPoolWashPromotesAffordableQueue(t *testing.T) {
 	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address))
 	require.NoError(t, pool.costs.release(externalOwner))
 
-	require.NoError(t, pool.wash(head))
+	require.NoError(t, pool.revalidate(head))
 	assert.Equal(t, uint64(2), pool.PoolNonce(signer.Address))
 	event := nextTxEvent(t, events)
 	assert.Equal(t, nonce1.Hash(), event.Tx.Hash())
@@ -543,7 +551,7 @@ func TestEthPoolWashPromotesAffordableQueue(t *testing.T) {
 	assert.True(t, *event.Executable)
 }
 
-func TestEthPoolHousekeepingTickTriggersWash(t *testing.T) {
+func TestEthPoolHousekeepingTickRevalidatesOnlyOnHeadChange(t *testing.T) {
 	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
 		EthPriceBump: 10, MaxLifetime: time.Hour,
@@ -557,23 +565,58 @@ func TestEthPoolHousekeepingTickTriggersWash(t *testing.T) {
 	require.NoError(t, pool.AddRemote(trx))
 	txObj := pool.core.GetByHash(trx.Hash())
 	txObj.priorityGasPrice = big.NewInt(-1)
-	head := tchain.Repo().BestBlockSummary()
+	head := tchain.Repo().BestBlockSummary().Header.ID()
 
-	nextHead, err := pool.runHousekeepingTick(head)
+	// A head not yet revalidated triggers a revalidate, which reprices, and the
+	// head is stamped so the next tick can skip it.
+	revalidated, err := pool.runHousekeepingTick(thor.Bytes32{})
 	require.NoError(t, err)
-	assert.Same(t, head, nextHead)
-	assert.Zero(t, pool.addedAfterWash.Load())
+	assert.Equal(t, head, revalidated)
 	assert.Positive(t, txObj.priorityGasPrice.Sign())
 
-	nonce1 := buildEthPoolTx(
-		t, tchain.Repo().ChainID(), 1,
-		new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), signer,
-	)
-	require.NoError(t, pool.AddRemote(nonce1))
-	pool.options.Limit = 1
-	_, err = pool.runHousekeepingTick(head)
+	// The same head again reads no chain state, so repricing does not repeat.
+	txObj.priorityGasPrice = big.NewInt(-1)
+	revalidated, err = pool.runHousekeepingTick(head)
 	require.NoError(t, err)
+	assert.Equal(t, head, revalidated)
+	assert.Negative(t, txObj.priorityGasPrice.Sign())
+}
+
+// Capacity is enforced by the sweep, which runs every tick whether or not the head
+// moved, because a transaction added since the last tick can push the pool over.
+func TestEthPoolHousekeepingTickSweepsWithoutHeadChange(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
+		EthPriceBump: 10, MaxLifetime: time.Hour,
+	})
+	signer := devAccounts[8]
+	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
+	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	for nonce := range uint64(2) {
+		trx := buildEthPoolTx(t, tchain.Repo().ChainID(), nonce, fee, big.NewInt(100), signer)
+		require.NoError(t, pool.AddRemote(trx))
+	}
+	head := tchain.Repo().BestBlockSummary().Header.ID()
+
+	pool.options.Limit = 1
+	revalidated, err := pool.runHousekeepingTick(head)
+	require.NoError(t, err)
+	assert.Equal(t, head, revalidated)
 	assert.Equal(t, 1, pool.Len())
+}
+
+func TestEthPoolHousekeepingTickSkipsEmptyPool(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
+		EthPriceBump: 10, MaxLifetime: time.Hour,
+	})
+	_ = tchain
+
+	// An empty pool has nothing to sweep and nothing to revalidate, so the head is
+	// left unstamped rather than reporting work that never happened.
+	revalidated, err := pool.runHousekeepingTick(thor.Bytes32{})
+	require.NoError(t, err)
+	assert.Equal(t, thor.Bytes32{}, revalidated)
 }
 
 func TestEthPoolHousekeepingTickDefersWhileUnsynced(t *testing.T) {
@@ -607,11 +650,12 @@ func TestEthPoolHousekeepingTickDefersWhileUnsynced(t *testing.T) {
 		new(big.Int).Mul(baseFee, big.NewInt(2)), big.NewInt(100), devAccounts[9],
 	)
 	require.NoError(t, pool.AddRemote(trx))
-	processedHead := tchain.Repo().BestBlockSummary()
-	nextHead, err := pool.runHousekeepingTick(processedHead)
+
+	// The head is unrevalidated, so a synced chain would revalidate here. Because
+	// the chain is behind, the head is left unstamped and the tick retries later.
+	revalidated, err := pool.runHousekeepingTick(thor.Bytes32{})
 	require.NoError(t, err)
-	assert.Same(t, processedHead, nextHead)
-	assert.Equal(t, uint32(1), pool.addedAfterWash.Load())
+	assert.Equal(t, thor.Bytes32{}, revalidated)
 	assert.NotNil(t, pool.GetByHash(trx.Hash()))
 }
 
@@ -782,7 +826,7 @@ func TestEthPoolStubInterfaceContracts(t *testing.T) {
 	assert.Nil(t, pool.GetByHash(trx.Hash()))
 }
 
-func TestEthPoolWashReconcilesBackwardStateNonce(t *testing.T) {
+func TestEthPoolRevalidateReconcilesBackwardStateNonce(t *testing.T) {
 	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
 		EthPriceBump: 10, MaxLifetime: time.Hour,
@@ -803,7 +847,7 @@ func TestEthPoolWashReconcilesBackwardStateNonce(t *testing.T) {
 	pool.core.senders[signer.Address].stateNonce = 1
 	pool.core.lock.Unlock()
 
-	require.NoError(t, pool.wash(tchain.Repo().BestBlockSummary()))
+	require.NoError(t, pool.revalidate(tchain.Repo().BestBlockSummary()))
 
 	pool.core.lock.RLock()
 	defer pool.core.lock.RUnlock()
@@ -811,7 +855,7 @@ func TestEthPoolWashReconcilesBackwardStateNonce(t *testing.T) {
 	require.NotNil(t, sender)
 	assert.Equal(t, uint64(0), sender.stateNonce)
 	assert.Same(t, pool.core.allByHash[trx.Hash()], sender.pending[0],
-		"wash must revalidate and promote the transaction against the lower canonical nonce")
+		"revalidate must promote the transaction against the lower canonical nonce")
 	assert.Empty(t, sender.queue)
 	assert.True(t, sender.pending[0].executable)
 	assert.Equal(t, uint64(1), sender.poolNonce())
@@ -1038,6 +1082,41 @@ func TestEthPoolReinjectFromForkAndReplacementPolicy(t *testing.T) {
 	}))
 	assert.Nil(t, pool.GetByHash(original.Hash()))
 	assert.Equal(t, replacement, pool.GetByHash(replacement.Hash()))
+}
+
+// A forward extension must sync the sender in place rather than reset and rebuild
+// it. Rebuilding re-runs preparation over the whole pending run, which re-prices
+// every transaction; a sentinel price surviving the call proves it did not happen.
+func TestEthPoolReinjectFromForkForwardExtensionDoesNotRebuild(t *testing.T) {
+	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64, EthPriceBump: 10,
+	})
+	signer := devAccounts[3]
+	fee := new(big.Int).Mul(tchain.Repo().BestBlockSummary().Header.BaseFee(), big.NewInt(2))
+	nonce0 := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, big.NewInt(100), signer)
+	nonce1 := buildEthPoolTx(t, tchain.Repo().ChainID(), 1, fee, big.NewInt(100), signer)
+	require.NoError(t, pool.AddRemote(nonce0))
+	require.NoError(t, pool.AddRemote(nonce1))
+
+	retained := pool.core.GetByHash(nonce1.Hash())
+	require.NotNil(t, retained)
+	retained.priorityGasPrice = big.NewInt(-1)
+
+	require.NoError(t, tchain.MintBlock(nonce0))
+	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+		Included: tx.Transactions{nonce0},
+	}))
+
+	pool.core.lock.RLock()
+	defer pool.core.lock.RUnlock()
+	sender := pool.core.senders[signer.Address]
+	require.NotNil(t, sender)
+	assert.Equal(t, uint64(1), sender.stateNonce)
+	assert.Same(t, retained, sender.pending[1])
+	assert.True(t, retained.executable)
+	assert.Empty(t, sender.queue)
+	assert.Negative(t, retained.priorityGasPrice.Sign(),
+		"forward extension must not re-prepare an already pending transaction")
 }
 
 func TestEthPoolReinjectDuplicateResetsBackwardNonce(t *testing.T) {

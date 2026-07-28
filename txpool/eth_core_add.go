@@ -7,6 +7,8 @@ package txpool
 
 import (
 	"errors"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
 // Addition commits already planned transaction and reservation changes to the
@@ -41,12 +43,13 @@ func (m *ethPoolCore) addWithTransitions(
 	m.mutationMu.Lock()
 	defer m.mutationMu.Unlock()
 
-	objects := m.addPreparationObjects(txObj, stateNonce, pendingLimit, priceBump)
+	objects := m.addPreparationWindow(txObj, stateNonce, pendingLimit)
 	prepared := prepareEthObjects(objects, prepare)
 
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	wasExecutable := m.executableObjectsLocked()
+	// addLocked only ever mutates this transaction's own sender.
+	wasExecutable := m.executableObjectsLocked([]thor.Address{txObj.Origin()})
 	executable, promoted, err := m.addLocked(
 		txObj, stateNonce, globalLimit, pendingLimit, queueLimit, priceBump, prepared,
 	)
@@ -161,14 +164,17 @@ func (m *ethPoolCore) addLocked(
 }
 
 // promoteLocked moves the affordable contiguous queue prefix into pending.
+// pendingLimit is the sender's pending capacity; any value at or below zero means
+// no capacity, which is also what senderWindowSpan assumes.
 func (m *ethPoolCore) promoteLocked(
 	sender *ethSender,
 	pendingLimit int,
 	prepared ethPreparations,
 ) ([]*TxObject, error) {
 	var (
-		promotions []*TxObject
-		requests   []reservationRequest
+		promotions   []*TxObject
+		preparations []ethPreparation
+		requests     []reservationRequest
 	)
 	for len(sender.pending) < pendingLimit {
 		next := sender.poolNonce()
@@ -184,6 +190,7 @@ func (m *ethPoolCore) promoteLocked(
 			break
 		}
 		promotions = append(promotions, queued)
+		preparations = append(preparations, preparation)
 		requests = append(requests, preparation.request)
 		// Temporarily advance the contiguous cursor. Restore before touching the
 		// cost tracker so only the accepted prefix is committed.
@@ -198,8 +205,8 @@ func (m *ethPoolCore) promoteLocked(
 	if err != nil {
 		return nil, err
 	}
-	for _, promoted := range promotions[:accepted] {
-		prepared[promoted].apply(promoted)
+	for i, promoted := range promotions[:accepted] {
+		preparations[i].apply(promoted)
 		promoted.executable = true
 		sender.pending[promoted.Nonce()] = promoted
 		delete(sender.queue, promoted.Nonce())

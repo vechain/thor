@@ -52,15 +52,14 @@ func (m *ethPoolCore) reconcileForkWithTransitions(
 	m.mutationMu.Lock()
 	defer m.mutationMu.Unlock()
 
-	objects := m.forkPreparationObjects(candidates, stateNonces)
+	objects := m.forkPreparationWindow(candidates, stateNonces, pendingLimit)
 	prepared := prepareEthObjects(objects, prepare)
 
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	wasExecutableObjects := m.executableObjectsLocked()
 
 	origins := sortedEthOrigins(stateNonces)
-	wasExecutable := m.executableHashesLocked(origins)
+	wasExecutable := m.executableObjectsLocked(forkScopeOrigins(origins, candidates))
 	if err := m.resetForkSendersLocked(origins, stateNonces); err != nil {
 		return nil, nil, err
 	}
@@ -82,8 +81,30 @@ func (m *ethPoolCore) reconcileForkWithTransitions(
 		return nil, nil, err
 	}
 	results = append(results, candidateResults...)
-	m.pruneForkSendersLocked(origins, candidates)
-	return results, m.retainedDemotionsLocked(wasExecutableObjects), nil
+	m.pruneForkSendersLocked(forkScopeOrigins(origins, candidates))
+	return results, m.retainedDemotionsLocked(wasExecutable), nil
+}
+
+// forkScopeOrigins lists every sender a fork reconcile can mutate: the origins
+// carried by the state snapshot, plus any candidate origin missing from it.
+// Candidate origins normally appear in stateNonces already, but they are
+// included defensively rather than by scanning every sender in the pool.
+func forkScopeOrigins(origins []thor.Address, candidates []ethForkCandidate) []thor.Address {
+	scope := make([]thor.Address, 0, len(origins)+len(candidates))
+	scope = append(scope, origins...)
+	seen := make(map[thor.Address]struct{}, len(origins)+len(candidates))
+	for _, origin := range origins {
+		seen[origin] = struct{}{}
+	}
+	for _, candidate := range candidates {
+		origin := candidate.txObj.Origin()
+		if _, exists := seen[origin]; exists {
+			continue
+		}
+		seen[origin] = struct{}{}
+		scope = append(scope, origin)
+	}
+	return scope
 }
 
 // resetForkSendersLocked releases every stale reservation before promotion.
@@ -109,7 +130,7 @@ func (m *ethPoolCore) resetForkSendersLocked(
 
 func (m *ethPoolCore) promoteForkSendersLocked(
 	origins []thor.Address,
-	wasExecutable map[thor.Bytes32]struct{},
+	wasExecutable map[thor.Bytes32]*TxObject,
 	pendingLimit int,
 	prepared ethPreparations,
 ) ([]ethForkResult, error) {
@@ -123,7 +144,7 @@ func (m *ethPoolCore) promoteForkSendersLocked(
 		if err != nil {
 			return nil, err
 		}
-		for _, txObj := range filterNewPromotions(promoted, wasExecutable) {
+		for _, txObj := range m.newPromotionsLocked(promoted, wasExecutable) {
 			results = append(results, ethForkResult{txObj: txObj, executable: true})
 		}
 	}
@@ -132,7 +153,7 @@ func (m *ethPoolCore) promoteForkSendersLocked(
 
 func (m *ethPoolCore) addForkCandidatesLocked(
 	candidates []ethForkCandidate,
-	wasExecutable map[thor.Bytes32]struct{},
+	wasExecutable map[thor.Bytes32]*TxObject,
 	globalLimit int,
 	pendingLimit int,
 	queueLimit int,
@@ -156,23 +177,15 @@ func (m *ethPoolCore) addForkCandidatesLocked(
 		results = append(results, ethForkResult{
 			txObj:      candidate.txObj,
 			executable: executable,
-			promoted:   filterNewPromotions(promoted, wasExecutable),
+			promoted:   m.newPromotionsLocked(promoted, wasExecutable),
 			err:        err,
 		})
 	}
 	return results, nil
 }
 
-func (m *ethPoolCore) pruneForkSendersLocked(origins []thor.Address, candidates []ethForkCandidate) {
+func (m *ethPoolCore) pruneForkSendersLocked(origins []thor.Address) {
 	for _, origin := range origins {
-		if sender := m.senders[origin]; sender != nil && sender.isEmpty() {
-			delete(m.senders, origin)
-		}
-	}
-	// Candidate origins normally appear in stateNonces, but include them
-	// defensively without scanning every sender in the pool.
-	for _, candidate := range candidates {
-		origin := candidate.txObj.Origin()
 		if sender := m.senders[origin]; sender != nil && sender.isEmpty() {
 			delete(m.senders, origin)
 		}

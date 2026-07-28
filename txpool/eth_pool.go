@@ -12,7 +12,6 @@ import (
 	"errors"
 	"slices"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -45,12 +44,11 @@ type EthPool struct {
 
 	core *ethPoolCore
 
-	addedAfterWash atomic.Uint32
-	ctx            context.Context
-	cancel         func()
-	txFeed         event.Feed
-	scope          event.SubscriptionScope
-	goes           sync.WaitGroup
+	ctx    context.Context
+	cancel func()
+	txFeed event.Feed
+	scope  event.SubscriptionScope
+	goes   sync.WaitGroup
 }
 
 var _ Pool = (*EthPool)(nil)
@@ -108,116 +106,78 @@ func (p *EthPool) housekeeping() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	processedHead := p.repo.BestBlockSummary()
+	revalidatedHead := p.repo.BestBlockSummary().Header.ID()
 	for {
 		select {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			nextHead, err := p.runHousekeepingTick(processedHead)
+			// On failure the head is not stamped, so the next tick retries against
+			// whatever head is current then. Nothing accumulates.
+			nextHead, err := p.runHousekeepingTick(revalidatedHead)
 			if err != nil {
 				logger.Warn("failed to maintain Ethereum pool", "err", err)
 				continue
 			}
-			processedHead = nextHead
+			revalidatedHead = nextHead
 		}
 	}
 }
 
-func (p *EthPool) runHousekeepingTick(processedHead *chain.BlockSummary) (*chain.BlockSummary, error) {
+// runHousekeepingTick sweeps every tick and revalidates only when the head has
+// moved since the last successful revalidate. A transaction admitted at head H was
+// already validated against H, so nothing about its viability can change until the
+// head changes; only expiry and capacity can, and sweeping covers those without
+// touching chain state.
+func (p *EthPool) runHousekeepingTick(revalidatedHead thor.Bytes32) (thor.Bytes32, error) {
+	if p.core.Len() == 0 {
+		return revalidatedHead, nil
+	}
+	if err := p.sweep(); err != nil {
+		return revalidatedHead, err
+	}
+
 	currentHead := p.repo.BestBlockSummary()
-	headChanged := currentHead.Header.ID() != processedHead.Header.ID()
-	poolLen := p.core.Len()
-	overLimit := p.options.Limit > 0 && poolLen > p.options.Limit
-	if !headChanged && !overLimit && p.addedAfterWash.Load() <= 0 {
-		return processedHead, nil
+	if currentHead.Header.ID() == revalidatedHead {
+		return revalidatedHead, nil
 	}
 	if !isChainSynced(uint64(time.Now().Unix()), currentHead.Header.Timestamp()) {
-		return processedHead, nil
+		return revalidatedHead, nil
 	}
-	if headChanged {
-		if err := p.processHeadChange(processedHead, currentHead); err != nil {
-			return processedHead, err
-		}
+	if err := p.revalidate(currentHead); err != nil {
+		return revalidatedHead, err
 	}
-	if err := p.wash(currentHead); err != nil {
-		return processedHead, err
-	}
-	p.addedAfterWash.Store(0)
-	if headChanged {
-		return currentHead, nil
-	}
-	return processedHead, nil
+	return currentHead.Header.ID(), nil
 }
 
-func (p *EthPool) wash(head *chain.BlockSummary) error {
+func (p *EthPool) sweep() error {
+	result, err := p.core.sweep(ethSweepOptions{
+		now:          time.Now().UnixNano(),
+		maxLifetime:  p.options.MaxLifetime,
+		pendingLimit: p.options.EthAccountSlots,
+		queueLimit:   p.options.EthAccountQueue,
+		globalLimit:  p.options.Limit,
+	})
+	if err != nil {
+		return err
+	}
+	p.emitExecutableChanges(result.demoted, false)
+	logger.Trace("Ethereum pool sweep complete", "removed", result.removed)
+	return nil
+}
+
+// revalidate is the safety net behind the block-commit reconcile path: it re-reads
+// every sender's canonical nonce and affordability at the given head. Reconcile
+// keeps the pool correct on its own, so this exists to recover from a reconcile
+// that failed or was never delivered.
+func (p *EthPool) revalidate(head *chain.BlockSummary) error {
 	ctx := p.newAdmissionContextAt(head)
 	for _, origin := range p.core.origins() {
 		if _, err := ctx.stateNonce(origin); err != nil {
 			return err
 		}
 	}
-	result, err := p.core.wash(
-		ctx.stateNonces,
-		ethWashOptions{
-			now:          time.Now().UnixNano(),
-			maxLifetime:  p.options.MaxLifetime,
-			pendingLimit: p.options.EthAccountSlots,
-			queueLimit:   p.options.EthAccountQueue,
-			globalLimit:  p.options.Limit,
-		},
-		ctx.prepare,
-	)
-	if err != nil {
-		return err
-	}
-	p.emitExecutableChanges(result.demoted, false)
-	for _, txObj := range result.promoted {
-		p.emitAdmission(txObj.Transaction, true, nil)
-	}
-	logger.Trace("Ethereum pool wash complete", "removed", result.removed, "promoted", len(result.promoted))
-	return nil
-}
-
-func (p *EthPool) processHeadChange(previous, current *chain.BlockSummary) error {
-	if current.Header.Number() <= previous.Header.Number() {
-		// Reorg arms at the same or a lower height are reconciled synchronously
-		// through ReinjectFromFork.
-		return nil
-	}
-
-	origins := make(map[thor.Address]struct{})
-	canonical := p.repo.NewChain(current.Header.ID())
-	for number := previous.Header.Number() + 1; ; number++ {
-		blk, err := canonical.GetBlock(number)
-		if err != nil {
-			return err
-		}
-		for _, trx := range blk.Transactions() {
-			if !trx.IsEthereumTx() {
-				continue
-			}
-			origin, err := trx.Origin()
-			if err != nil {
-				return err
-			}
-			origins[origin] = struct{}{}
-		}
-		if number == current.Header.Number() {
-			break
-		}
-	}
-	if len(origins) == 0 {
-		return nil
-	}
-
-	ctx := p.newAdmissionContextAt(current)
-	for origin := range origins {
-		if _, err := ctx.stateNonce(origin); err != nil {
-			return err
-		}
-	}
-	promoted, demoted, err := p.core.syncHeadWithTransitions(
+	promoted, demoted, err := p.core.revalidate(
 		ctx.stateNonces,
 		p.options.EthAccountSlots,
 		ctx.prepare,
@@ -229,6 +189,7 @@ func (p *EthPool) processHeadChange(previous, current *chain.BlockSummary) error
 	for _, txObj := range promoted {
 		p.emitAdmission(txObj.Transaction, true, nil)
 	}
+	logger.Trace("Ethereum pool revalidate complete", "promoted", len(promoted))
 	return nil
 }
 
@@ -288,14 +249,54 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 		p.emitExecutableChanges(demoted, false)
 		return txRejectedError{err.Error()}
 	}
-	p.addedAfterWash.Add(1)
 	p.emitAdmission(newTx, executable, promoted)
 	p.emitExecutableChanges(demoted, false)
 	logger.Trace("Ethereum tx added", "id", newTx.ID(), "executable", executable)
 	return nil
 }
 
+// ReinjectFromFork reconciles the pool with a newly canonical head. The node calls
+// it synchronously on every block commit, which makes it the single owner of nonce
+// reconciliation; the housekeeping revalidate is only a safety net behind it.
 func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
+	if len(fork.Discarded) == 0 {
+		// Forward extension, the common case by far: no transaction returned to the
+		// pool, so nonces only moved forward and the affected senders can be synced
+		// in place instead of torn down and rebuilt.
+		return p.syncIncludedOrigins(fork.Included)
+	}
+	return p.reconcileReorg(fork)
+}
+
+// syncIncludedOrigins advances the senders whose transactions just became
+// canonical, and promotes whatever that frees.
+func (p *EthPool) syncIncludedOrigins(included tx.Transactions) error {
+	ctx := p.newAdmissionContext()
+	if err := p.collectIncludedForkNonces(ctx, included); err != nil {
+		return err
+	}
+	if len(ctx.stateNonces) == 0 {
+		return nil
+	}
+
+	promoted, demoted, err := p.core.syncHeadWithTransitions(
+		ctx.stateNonces,
+		p.options.EthAccountSlots,
+		ctx.prepare,
+	)
+	if err != nil {
+		return err
+	}
+	p.emitExecutableChanges(demoted, false)
+	for _, txObj := range promoted {
+		p.emitAdmission(txObj.Transaction, true, nil)
+	}
+	return nil
+}
+
+// reconcileReorg handles a real reorg: transactions are coming back to the pool, so
+// every affected sender is reset to its canonical nonce and rebuilt.
+func (p *EthPool) reconcileReorg(fork ForkReinjection) error {
 	ctx := p.newAdmissionContext()
 	if err := p.collectIncludedForkNonces(ctx, fork.Included); err != nil {
 		return err
