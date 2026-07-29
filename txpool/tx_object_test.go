@@ -259,43 +259,67 @@ func TestExecutable(t *testing.T) {
 	}
 }
 
-func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
-	forkConfig := &thor.ForkConfig{
-		GALACTICA: 2,
-		HAYABUSA:  math.MaxUint32,
+func TestExecutableMaxTxGasLimit(t *testing.T) {
+	acc := genesis.DevAccounts()[0]
+
+	// Test with INTERSTELLAR active (block 0) - genesis gas limit is 40M > MaxTxGasLimit
+	interstellarActive := &thor.SoloFork
+	tchain, err := testchain.NewWithFork(interstellarActive, 180)
+	assert.Nil(t, err)
+	repo := tchain.Repo()
+	db := tchain.Database()
+
+	b0 := repo.GenesisBlock()
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	baseFee := galactica.CalcBaseFee(b0.Header(), interstellarActive)
+
+	// At limit: should pass the EIP-7825 check (block gas limit is 40M, so also passes that)
+	txAtLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj, err := ResolveTx(txAtLimit, false)
+	assert.Nil(t, err)
+	exe, _, err := txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
+	assert.True(t, exe)
+	assert.Nil(t, err)
+
+	// Over limit: should fail with EIP-7825 error (not block gas limit, since 40M > MaxTxGasLimit+1)
+	txOverLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj, err = ResolveTx(txOverLimit, false)
+	assert.Nil(t, err)
+	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
+	assert.False(t, exe)
+	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
+
+	// DynamicFee over limit
+	txDynOverLimit := newTx(tx.TypeDynamicFee, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj, err = ResolveTx(txDynOverLimit, false)
+	assert.Nil(t, err)
+	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
+	assert.False(t, exe)
+	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
+
+	// Test with INTERSTELLAR not active: EIP-7825 check does not apply
+	interstellarInactive := &thor.ForkConfig{
+		INTERSTELLAR: math.MaxUint32,
+		HAYABUSA:     math.MaxUint32,
+		GALACTICA:    0,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
-	dynamicFeeTx := newTx(tx.TypeDynamicFee, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-
-	tchain, _ := testchain.NewWithFork(forkConfig, 180)
-	repo := tchain.Repo()
-	baseFee := galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
-
-	txObj1, err := ResolveTx(dynamicFeeTx, false)
+	tchain2, err := testchain.NewWithFork(interstellarInactive, 180)
 	assert.Nil(t, err)
+	repo2 := tchain2.Repo()
+	db2 := tchain2.Database()
+	b0_2 := repo2.GenesisBlock()
+	st2 := state.New(db2, trie.Root{Hash: b0_2.Header().StateRoot()})
+	baseFee2 := galactica.CalcBaseFee(b0_2.Header(), interstellarInactive)
 
-	st := tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	exe, _, err := txObj1.Evaluate(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, false)
-	assert.False(t, exe)
-	assert.Equal(t, tx.ErrTxTypeNotSupported, err)
-
-	legacyTx := newTx(tx.TypeLegacy, 0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	txObj2, err := ResolveTx(legacyTx, false)
+	// Over MaxTxGasLimit but INTERSTELLAR not active and under block gas limit (40M): should pass
+	txOverLimitPreFork := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+	txObj2, err := ResolveTx(txOverLimitPreFork, false)
 	assert.Nil(t, err)
-
-	exe, _, err = txObj2.Evaluate(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, false)
+	exe, _, err = txObj2.Evaluate(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2, false)
 	assert.True(t, exe)
-	assert.Nil(t, err)
-
-	// add a block 1
-	tchain.MintBlock()
-
-	// recalculate the base fee since new block is added
-	baseFee = galactica.CalcBaseFee(repo.BestBlockSummary().Header, forkConfig)
-	st = tchain.Stater().NewState(repo.BestBlockSummary().Root())
-	_, _, err = txObj1.Evaluate(repo.NewBestChain(), st, repo.BestBlockSummary().Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
 }
 
@@ -332,8 +356,9 @@ func TestEvaluateAndPricingSnapshot(t *testing.T) {
 
 func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
-		VIP191:   2,
-		HAYABUSA: math.MaxUint32,
+		VIP191:       2,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
@@ -449,68 +474,4 @@ func TestBaseFeeRefreshMatchesCanonical(t *testing.T) {
 			assert.NotEqual(t, 0, nonExpiredPGP.Cmp(expiredPGP), "type=%v non-expired and expired legacy pgp must differ", txType)
 		}
 	}
-}
-
-func TestExecutableMaxTxGasLimit(t *testing.T) {
-	acc := genesis.DevAccounts()[0]
-
-	// Test with INTERSTELLAR active (block 0) - genesis gas limit is 40M > MaxTxGasLimit
-	interstellarActive := &thor.SoloFork
-	tchain, err := testchain.NewWithFork(interstellarActive, 180)
-	assert.Nil(t, err)
-	repo := tchain.Repo()
-	db := tchain.Database()
-
-	b0 := repo.GenesisBlock()
-	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
-	baseFee := galactica.CalcBaseFee(b0.Header(), interstellarActive)
-
-	// At limit: should pass the EIP-7825 check (block gas limit is 40M, so also passes that)
-	txAtLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
-	txObj, err := ResolveTx(txAtLimit, false)
-	assert.Nil(t, err)
-	exe, _, err := txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
-	assert.True(t, exe)
-	assert.Nil(t, err)
-
-	// Over limit: should fail with EIP-7825 error (not block gas limit, since 40M > MaxTxGasLimit+1)
-	txOverLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
-	txObj, err = ResolveTx(txOverLimit, false)
-	assert.Nil(t, err)
-	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
-	assert.False(t, exe)
-	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
-
-	// DynamicFee over limit
-	txDynOverLimit := newTx(tx.TypeDynamicFee, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
-	txObj, err = ResolveTx(txDynOverLimit, false)
-	assert.Nil(t, err)
-	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
-	assert.False(t, exe)
-	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
-
-	// Test with INTERSTELLAR not active: EIP-7825 check does not apply
-	interstellarInactive := &thor.ForkConfig{
-		INTERSTELLAR: math.MaxUint32,
-		HAYABUSA:     math.MaxUint32,
-		GALACTICA:    0,
-	}
-	hayabusaTP := uint32(math.MaxUint32)
-	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
-
-	tchain2, err := testchain.NewWithFork(interstellarInactive, 180)
-	assert.Nil(t, err)
-	repo2 := tchain2.Repo()
-	db2 := tchain2.Database()
-	b0_2 := repo2.GenesisBlock()
-	st2 := state.New(db2, trie.Root{Hash: b0_2.Header().StateRoot()})
-	baseFee2 := galactica.CalcBaseFee(b0_2.Header(), interstellarInactive)
-
-	// Over MaxTxGasLimit but INTERSTELLAR not active and under block gas limit (40M): should pass
-	txOverLimitPreFork := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
-	txObj2, err := ResolveTx(txOverLimitPreFork, false)
-	assert.Nil(t, err)
-	exe, _, err = txObj2.Evaluate(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2, false)
-	assert.True(t, exe)
-	assert.Nil(t, err)
 }

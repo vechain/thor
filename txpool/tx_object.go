@@ -130,19 +130,16 @@ func (o *TxObject) Evaluate(
 		return false, nil, errors.New("tx gas exceeds block gas limit")
 	case thor.IsForked(nextBlockNum, forkConfig.INTERSTELLAR) && o.Gas() > thor.MaxTxGasLimit:
 		return false, nil, errors.New("tx gas limit exceeds the maximum allowed")
-	case o.IsExpired(nextBlockNum):
+	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, nil, errors.New("expired")
 	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval()):
 		// reject deferred tx which will be applied after 5mins
 		return false, nil, errors.New("block ref out of schedule")
-	case nextBlockNum < forkConfig.GALACTICA && o.Type() != tx.TypeLegacy:
-		// reject non legacy tx before GALACTICA
-		return false, nil, tx.ErrTxTypeNotSupported
 	}
 
 	// test features on next block
 	var features tx.Features
-	if nextBlockNum >= forkConfig.VIP191 {
+	if thor.IsForked(nextBlockNum, forkConfig.VIP191) {
 		features.SetDelegated(true)
 	}
 	if err := o.TestFeatures(features); err != nil {
