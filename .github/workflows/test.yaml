@@ -32,9 +32,10 @@ jobs:
       - name: Make all
         run: make all
 
+      # GOTESTFLAGS=-count=1 bypasses Go's test result cache
       - name: Make Test
         id: unit-test
-        run: make test
+        run: make test GOTESTFLAGS=-count=1
 
   # Race detection runs on arm64: linux/arm64 is a release target, and its
   # weaker memory model can surface races that amd64 hides.
