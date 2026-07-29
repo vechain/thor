@@ -16,7 +16,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@v10
         with:
           stale-issue-message: 'This issue has been marked as stale due to inactivity. It will be closed if no further activity occurs. Thank you for your contributions.'
           stale-pr-message: 'This pull request has been marked as stale due to inactivity. It will be closed if no further activity occurs. Thank you for your contributions.'

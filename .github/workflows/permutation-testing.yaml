@@ -21,12 +21,12 @@ jobs:
     timeout-minutes: 240 # 4 hours
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version-file: go.mod
 
       - name: Run Permutation Tests
         env:
@@ -37,44 +37,21 @@ jobs:
     name: Notify Slack on Failure
     needs: permutation-test
     if: always() && needs.permutation-test.result != 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify Slack
-        uses: slackapi/slack-github-action@6c661ce58804a1a20f6dc5fbee7f0381b469e001 # v1.25.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          payload: |
-            {
-              "text": ":alert: Permutation Testing Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":alert: *Permutation Testing Failed*\n\nThe weekly permutation tests have failed. Please check the logs for details."
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Repository:*\n${{ github.repository }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Status:*\n${{ needs.permutation-test.result == 'failure' && ':x: Failed' || needs.permutation-test.result == 'cancelled' && ':warning: Cancelled' || ':question: Unknown' }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Branch:*\n${{ github.ref_name }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Workflow:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
-                    }
-                  ]
-                }
-              ]
-            }
+    uses: ./.github/workflows/notify-slack.yaml
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    with:
+      payload: |
+        {
+          "unit-test-status": ":alert: Permutation Test Failure",
+          "docker-publish-status": ":fast_forward: Skipped",
+          "commit-message": ${{ toJSON(github.event.head_commit.message) }},
+          "commit-url": "${{ github.event.head_commit.url }}",
+          "e2e-test-status": ":fast_forward: Skipped",
+          "branch": "${{ github.ref }}",
+          "repository": "${{ github.repository }}",
+          "commit-author": "${{ github.event.head_commit.author.name }}",
+          "lint-status": ":fast_forward: Skipped",
+          "license-check": ":fast_forward: Skipped",
+          "module-check": ":fast_forward: Skipped"
+        }
