@@ -734,6 +734,8 @@ func txMetricType(trx *tx.Transaction) string {
 		return "Legacy"
 	case tx.TypeDynamicFee:
 		return "DynamicFee"
+	case tx.TypeEthDynamicFee:
+		return "EthDynamicFee"
 	default:
 		return "Unknown"
 	}

@@ -7,12 +7,22 @@ package tx
 
 import (
 	"bytes"
+	"errors"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/vechain/thor/v2/thor"
+)
+
+var (
+	// errEthTxRSOutOfRange rejects R/S scalars that don't fit in 32 bytes.
+	errEthTxRSOutOfRange = errors.New("eth tx: R or S value out of range")
+	// errEthTxInvalidYParity rejects non-canonical EIP-1559 y parity values.
+	errEthTxInvalidYParity = errors.New("eth tx: y parity must be 0 or 1")
+	// errEthTxChainIDOverflow rejects chain ids that don't fit in 64 bits.
+	errEthTxChainIDOverflow = errors.New("eth tx: chain id overflows 64 bits")
 )
 
 // AccessListEntry is a single entry in an EIP-2930 / EIP-1559 access list.
@@ -141,9 +151,43 @@ func (t *ethDynamicFeeTransaction) encode(w *bytes.Buffer) error {
 }
 
 // decode parses the rlpBody (without the leading 0x02 byte) from the block body.
-// Only structural parsing happens here. Semantic validation belongs to the caller —
+// Structural parsing plus the minimal bounds needed to keep downstream consumers
+// panic-free. Higher-level semantic validation belongs to the caller —
 // txpool.validateTxBasics (chain ID, low-S), runtime.ResolveTransaction (fee/access
 // list), consensus.validateBlockBody (chain ID, type gating).
 func (t *ethDynamicFeeTransaction) decode(input []byte) error {
-	return rlp.DecodeBytes(input, t)
+	if err := rlp.DecodeBytes(input, t); err != nil {
+		return err
+	}
+
+	// On a successful RLP list decode every scalar field is a non-nil *big.Int
+	// (an empty item decodes to 0), so the BitLen checks below are safe.
+	//
+	// R/S must fit in 32 bytes: signature() reconstructs the 65-byte signature
+	// with big.Int.FillBytes into fixed 32-byte slices, which PANICS when the
+	// value needs more space. RLP places no upper bound on integer size, so an
+	// attacker-supplied 0x02 tx with an oversized R (or S) would otherwise crash
+	// the process on the first Origin()/EnforceSignatureLowS() call. That path is
+	// reachable unauthenticated over WebSocket (rpc/ws) and P2P tx gossip
+	// (comm.handleRPC → txPool.Add), neither of which has a panic-recovery
+	// boundary. Rejecting at decode closes every ingress path (RPC, WS, P2P,
+	// consensus block validation) in one place.
+	if t.R.BitLen() > 256 || t.S.BitLen() > 256 {
+		return errEthTxRSOutOfRange
+	}
+
+	// EIP-1559 y parity is strictly 0 or 1. Match go-ethereum, which rejects
+	// non-canonical values at decode rather than relying on ECDSA recovery to
+	// fail later.
+	if t.YParity > 1 {
+		return errEthTxInvalidYParity
+	}
+
+	// Chain id is compared as a uint64 by validateTxBasics / validateBlockBody;
+	// reject values that don't fit so those comparisons remain meaningful.
+	if t.ChainID.BitLen() > 64 {
+		return errEthTxChainIDOverflow
+	}
+
+	return nil
 }

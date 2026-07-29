@@ -26,7 +26,8 @@ import (
 //   - fee       → runtime.ResolveTransaction
 //   - access    → runtime.ResolveTransaction
 //   - low-S     → tx.Transaction.EnforceSignatureLowS / Origin recovery
-//   - yParity   → ECDSA recovery during Origin (invalid V → recovery error)
+//   - yParity   → ethDynamicFeeTransaction.decode (must be 0 or 1)
+//   - R/S range → ethDynamicFeeTransaction.decode (must fit in 32 bytes)
 //   - canonical → go-ethereum rlp's strict canonical decoder
 // These layers carry their own tests; the cases below focus on the body's
 // own contract: round-trip, hash stability, copy isolation, fee/priority
@@ -394,4 +395,60 @@ func TestEthDynamicFeeTx_DecodePreservesAccessList(t *testing.T) {
 	assert.Equal(t, thor.Address{0x01}, got[0].Address)
 	require.Len(t, got[0].StorageKeys, 1)
 	assert.Equal(t, thor.Bytes32{0x02}, got[0].StorageKeys[0])
+}
+
+// TestEthDynamicFeeTx_DecodeRejectsMalformedSignature is a regression test for an
+// unauthenticated remote-crash: RLP places no upper bound on the R/S integers,
+// and signature() reconstructs them with big.Int.FillBytes into fixed 32-byte
+// buffers, which PANICS on an oversized value. The WebSocket (rpc/ws) and P2P
+// tx-gossip (comm.handleRPC → txPool.Add) ingress paths run the decode→validate
+// chain in goroutines with no panic-recovery boundary, so an oversized R/S (or a
+// non-canonical y parity / chain id) must be rejected at decode — before it can
+// ever reach signature()/Origin().
+func TestEthDynamicFeeTx_DecodeRejectsMalformedSignature(t *testing.T) {
+	// mutate builds a valid signed eth tx, applies fn to its body, and returns the
+	// re-encoded wire bytes. RLP encoding never calls FillBytes, so the marshal of
+	// an oversized field succeeds and produces the attacker-shaped wire form.
+	mutate := func(fn func(b *ethDynamicFeeTransaction)) []byte {
+		signed, err := defaultEthDynamicFeeBuilder().Build(ethTestKey)
+		require.NoError(t, err)
+		fn(signed.body.(*ethDynamicFeeTransaction))
+		raw, err := signed.MarshalBinary()
+		require.NoError(t, err)
+		return raw
+	}
+
+	over256 := new(big.Int).Lsh(big.NewInt(1), 256) // 2^256 → needs 33 bytes
+
+	cases := []struct {
+		name string
+		raw  []byte
+	}{
+		{"oversized R", mutate(func(b *ethDynamicFeeTransaction) { b.R = over256 })},
+		{"oversized S", mutate(func(b *ethDynamicFeeTransaction) { b.S = over256 })},
+		{"y parity 2", mutate(func(b *ethDynamicFeeTransaction) { b.YParity = 2 })},
+		{"y parity 27", mutate(func(b *ethDynamicFeeTransaction) { b.YParity = 27 })},
+		{"chain id overflow", mutate(func(b *ethDynamicFeeTransaction) { b.ChainID = over256 })},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var trx Transaction
+			var err error
+			// The core guarantee: decode returns an error, it never panics.
+			assert.NotPanics(t, func() { err = trx.UnmarshalBinary(tc.raw) })
+			require.Error(t, err)
+		})
+	}
+
+	// Control: an untampered tx still decodes and its origin still recovers,
+	// proving the bounds do not reject well-formed transactions.
+	t.Run("valid still decodes", func(t *testing.T) {
+		raw, err := defaultEthDynamicFeeBuilder().BuildRaw(ethTestKey)
+		require.NoError(t, err)
+		var trx Transaction
+		require.NoError(t, trx.UnmarshalBinary(raw))
+		origin, err := trx.Origin()
+		require.NoError(t, err)
+		assert.Equal(t, testSenderAddress, origin)
+	})
 }

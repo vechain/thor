@@ -31,7 +31,7 @@ jobs:
 
       - name: Make Test
         id: unit-test
-        run: make test
+        run: make clean test
 
   test_coverage:
     runs-on: ubuntu-latest

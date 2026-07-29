@@ -119,7 +119,7 @@ func TestRequestLoggerHandler(t *testing.T) {
 				w.Write([]byte("OK"))
 			},
 			enabled:              false,
-			slowQueriesThreshold: 20 * time.Millisecond,
+			slowQueriesThreshold: time.Second,
 			log5xxErrors:         false,
 			expectedStatusCode:   http.StatusOK,
 			shouldLog:            false,

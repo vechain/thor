@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/vechain/thor/v2/api/doc"
@@ -60,10 +61,17 @@ func HandleAPITimeout(timeout time.Duration) func(http.Handler) http.Handler {
 	}
 }
 
-// middleware to limit request body size.
-func HandleRequestBodyLimit(maxBodySize int64) func(next http.Handler) http.Handler {
+// HandleRequestBodyLimit limits request body size.
+// Paths whose prefix matches any entry in exceptions bypass the limit.
+func HandleRequestBodyLimit(maxBodySize int64, exceptions ...string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for _, exc := range exceptions {
+				if strings.HasPrefix(r.URL.Path, exc) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 			r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 			next.ServeHTTP(w, r)
 		})

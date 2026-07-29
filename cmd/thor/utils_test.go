@@ -45,18 +45,23 @@ func TestPrintStartupMessage1(t *testing.T) {
 }
 
 func TestPrintStartupMessage2(t *testing.T) {
-	gene, _ := genesis.NewDevnet()
-
 	t.Run("all fields", func(t *testing.T) {
-		printStartupMessage2(gene, "http://localhost:8669", "enode://abc@127.0.0.1:11235", "http://localhost:2112", "http://localhost:2113", false)
+		printStartupMessage2(
+			"http://localhost:8669/",
+			"http://localhost:8669/rpc",
+			"enode://abc@127.0.0.1:11235",
+			"http://localhost:2112",
+			"http://localhost:2113",
+			false,
+		)
 	})
 
 	t.Run("minimal fields", func(t *testing.T) {
-		printStartupMessage2(gene, "http://localhost:8669", "", "", "", false)
+		printStartupMessage2("http://localhost:8669/", "http://localhost:8669/rpc", "", "", "", false)
 	})
 
 	t.Run("devnet", func(t *testing.T) {
-		printStartupMessage2(gene, "http://localhost:8669", "", "", "", true)
+		printStartupMessage2("http://localhost:8669/", "http://localhost:8669/rpc", "", "", "", true)
 	})
 }
 

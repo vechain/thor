@@ -30,15 +30,41 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/rpc/jsonrpc"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
+
+	rpcaccounts "github.com/vechain/thor/v2/rpc/accounts"
+	rpcblocks "github.com/vechain/thor/v2/rpc/blocks"
+	rpcchain "github.com/vechain/thor/v2/rpc/chain"
+	rpcfees "github.com/vechain/thor/v2/rpc/fees"
+	rpcfilters "github.com/vechain/thor/v2/rpc/filters"
+	rpclogs "github.com/vechain/thor/v2/rpc/logs"
+	rpcsimulation "github.com/vechain/thor/v2/rpc/simulation"
+	rpctransactions "github.com/vechain/thor/v2/rpc/transactions"
+	rpcws "github.com/vechain/thor/v2/rpc/ws"
 )
 
 var logger = log.WithContext("pkg", "api")
+
+type networkSyncer struct{ nw api.Network }
+
+func (n networkSyncer) Synced() <-chan struct{} { return n.nw.Synced() }
+
+func (n networkSyncer) HighestPeerBlock() uint32 {
+	var max uint32
+	for _, p := range n.nw.PeersStats() {
+		if num := block.Number(p.BestBlockID); num > max {
+			max = num
+		}
+	}
+	return max
+}
 
 const (
 	defaultFeeCacheSize     = 1024
@@ -51,6 +77,7 @@ type APIConfig struct {
 	BacktraceLimit             uint32
 	CallGasLimit               uint64
 	BatchDataMaxSize           uint64
+	ClientVersion              string
 	SkipLogs                   bool
 	AllowCustomTracer          bool
 	EnableReqLogger            *atomic.Bool
@@ -130,9 +157,27 @@ func StartAPIServer(
 	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
 	subs.Mount(router, "/subscriptions")
 
+	// Ethereum JSON-RPC at /rpc — body limit enforced internally by jsonrpc.Server (2 MB via MaxBytesReader)
+	syncer := networkSyncer{nw}
+	rpcSrv := jsonrpc.NewServer()
+	rpcchain.New(repo, config.ClientVersion, syncer).Mount(rpcSrv)
+	rpcblocks.New(repo).Mount(rpcSrv)
+	rpctransactions.New(repo, txPool).Mount(rpcSrv)
+	rpcaccounts.New(repo, stater).Mount(rpcSrv)
+	rpclogs.New(repo, logDB, config.BacktraceLimit, config.LogsLimit).Mount(rpcSrv)
+	rpcfees.New(repo, config.BacktraceLimit, forkConfig).Mount(rpcSrv)
+	rpcsimulation.New(repo, stater, forkConfig, config.CallGasLimit).Mount(rpcSrv)
+	rpcFilters := rpcfilters.New(repo, txPool, config.BacktraceLimit)
+	rpcFilters.Mount(rpcSrv)
+
+	// Wrap rpcSrv with the WebSocket handler: plain HTTP POST goes to rpcSrv,
+	// WebSocket upgrade requests gain eth_subscribe / eth_unsubscribe.
+	rpcWs := rpcws.New(repo, txPool, origins, rpcSrv, syncer)
+	router.PathPrefix("/rpc").Handler(rpcWs)
+
 	// middlewares
-	// body limit and timeout
-	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
+	// /rpc owns its body limit inside jsonrpc.Server; skip the REST 200 KB cap for that path.
+	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit, "/rpc"))
 	if config.Timeout > 0 {
 		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
 	}
@@ -162,6 +207,8 @@ func StartAPIServer(
 	return "http://" + listener.Addr().String() + "/", func() {
 		srv.Close()
 		subs.Close()
+		rpcFilters.Close()
+		rpcWs.Close()
 		goes.Wait()
 	}, nil
 }

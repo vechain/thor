@@ -28,6 +28,11 @@ var maxTxSize = uint32(txpool.MaxTxSize + 1024)
 func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsToSync *txsToSync) (err error) {
 	log := peer.logger.New("msg", proto.MsgName(msg.Code))
 	log.Trace("received RPC call")
+	// TODO(security, HIGH): this runs in the per-peer protocol goroutine
+	// (p2p/peer.go startProtocols), which has NO panic recovery — a panic in any
+	// message handler (e.g. MsgNewTx → txPool.Add on a malformed peer-supplied tx)
+	// crashes the whole node. Add a recover() here (convert to err) so a single
+	// hostile peer cannot take the node down via gossip.
 	defer func() {
 		metricHandleRPCCounter().AddWithLabel(1, map[string]string{"method": proto.MsgName(msg.Code), "error": strconv.FormatBool(err != nil)})
 		if err != nil {

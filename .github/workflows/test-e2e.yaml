@@ -101,6 +101,7 @@ jobs:
           fi
 
   run-interstellar-tests:
+    name: e2e tests (interstellar)
     needs: detect-interstellar
     if: needs.detect-interstellar.outputs.enabled == 'true'
     uses: vechain/interstellar-e2e/.github/workflows/test.yml@main
