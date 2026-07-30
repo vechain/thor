@@ -133,16 +133,6 @@ func (n *Node) executeAndCommitBlock(newBlock *block.Block, stats *blockStats, c
 		return err
 	}
 
-	// let bft engine decide the best block after fork FINALITY
-	if thor.IsForked(newBlock.Header().Number(), n.forkConfig.FINALITY) && thor.IsForked(ctx.prevBest.Number(), n.forkConfig.FINALITY) {
-		ctx.becomeBest, err = n.bft.Select(newBlock.Header())
-		if err != nil {
-			return errors.Wrap(err, "bft select")
-		}
-	} else {
-		ctx.becomeBest = newBlock.Header().BetterThan(ctx.prevBest)
-	}
-
 	if err := n.commitBlock(ctx); err != nil {
 		return err
 	}

@@ -226,14 +226,16 @@ func TestExecutableSetsAccountingSideEffectsOnSuccess(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, txObj.Payer())
 	assert.Nil(t, txObj.Cost())
-	assert.Nil(t, txObj.priorityGasPrice)
+	assert.Nil(t, txObj.priorityGasPrice())
 
-	executable, err := txObj.Executable(
+	executable, err := evaluateAndPublishPricing(
+		txObj,
 		repo.NewChain(best.Header().ID()),
 		st,
 		best.Header(),
 		forkConfig,
 		galacticaBaseFee(best),
+		false,
 	)
 
 	require.NoError(t, err)
@@ -242,23 +244,25 @@ func TestExecutableSetsAccountingSideEffectsOnSuccess(t *testing.T) {
 	assert.Equal(t, acc.Address, *txObj.Payer())
 	require.NotNil(t, txObj.Cost())
 	assert.Positive(t, txObj.Cost().Sign())
-	require.NotNil(t, txObj.priorityGasPrice)
-	assert.GreaterOrEqual(t, txObj.priorityGasPrice.Sign(), 0)
+	require.NotNil(t, txObj.priorityGasPrice())
+	assert.GreaterOrEqual(t, txObj.priorityGasPrice().Sign(), 0)
 
-	payer, cost, priority := txObj.payer, txObj.cost, txObj.priorityGasPrice
+	payer, cost, priority := txObj.Payer(), txObj.Cost(), txObj.priorityGasPrice()
 	txObj.executable = true
-	executable, err = txObj.Executable(
+	executable, err = evaluateAndPublishPricing(
+		txObj,
 		repo.NewChain(best.Header().ID()),
 		st,
 		best.Header(),
 		forkConfig,
 		galacticaBaseFee(best),
+		true,
 	)
 	require.NoError(t, err)
 	require.True(t, executable)
-	assert.Same(t, payer, txObj.payer)
-	assert.Same(t, cost, txObj.cost)
-	assert.Same(t, priority, txObj.priorityGasPrice)
+	assert.Same(t, payer, txObj.Payer())
+	assert.Same(t, cost, txObj.Cost())
+	assert.Same(t, priority, txObj.priorityGasPrice())
 }
 
 func TestEthTxObjectExecutableNonceDecisions(t *testing.T) {
@@ -281,17 +285,18 @@ func TestEthTxObjectExecutableNonceDecisions(t *testing.T) {
 	chainView := repo.NewChain(best.Header().ID())
 	baseFee := galacticaBaseFee(best)
 
-	executable, err := build(0).Executable(chainView, st, best.Header(), forkConfig, baseFee)
+	executable, _, err := build(0).Evaluate(chainView, st, best.Header(), forkConfig, baseFee, false)
 	require.EqualError(t, err, "nonce too low")
 	assert.False(t, executable)
 
-	executable, err = build(2).Executable(chainView, st, best.Header(), forkConfig, baseFee)
+	executable, _, err = build(2).Evaluate(chainView, st, best.Header(), forkConfig, baseFee, false)
 	require.NoError(t, err)
 	assert.False(t, executable, "a nonce gap must remain queued")
 
-	executable, err = build(1).Executable(chainView, st, best.Header(), forkConfig, baseFee)
+	executable, pricing, err := build(1).Evaluate(chainView, st, best.Header(), forkConfig, baseFee, false)
 	require.NoError(t, err)
 	assert.True(t, executable)
+	require.NotNil(t, pricing)
 }
 
 func TestExecutable(t *testing.T) {
@@ -363,7 +368,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txAtLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj, err := ResolveTx(txAtLimit, false)
 	assert.Nil(t, err)
-	exe, err := txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	exe, _, err := txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
 	assert.True(t, exe)
 	assert.Nil(t, err)
 
@@ -371,7 +376,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txOverLimit := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj, err = ResolveTx(txOverLimit, false)
 	assert.Nil(t, err)
-	exe, err = txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
 	assert.False(t, exe)
 	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
 
@@ -379,7 +384,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txDynOverLimit := newTx(tx.TypeDynamicFee, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj, err = ResolveTx(txDynOverLimit, false)
 	assert.Nil(t, err)
-	exe, err = txObj.Executable(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee)
+	exe, _, err = txObj.Evaluate(repo.NewChain(b0.Header().ID()), st, b0.Header(), interstellarActive, baseFee, false)
 	assert.False(t, exe)
 	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
 
@@ -404,7 +409,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	txOverLimitPreFork := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj2, err := ResolveTx(txOverLimitPreFork, false)
 	assert.Nil(t, err)
-	exe, err = txObj2.Executable(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2)
+	exe, _, err = txObj2.Evaluate(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2, false)
 	assert.True(t, exe)
 	assert.Nil(t, err)
 }

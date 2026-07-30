@@ -153,8 +153,7 @@ func TestTxObjectMapCountsTrackMutations(t *testing.T) {
 	assert.Zero(t, executableCount)
 
 	payer := nonExecutable.Origin()
-	nonExecutable.payer = &payer
-	nonExecutable.cost = big.NewInt(1)
+	setTestTxPricing(nonExecutable, &payer, big.NewInt(1), nil)
 	reserved, err := m.ReserveCost(nonExecutable, big.NewInt(1))
 	require.NoError(t, err)
 	require.True(t, reserved)
@@ -206,8 +205,7 @@ func TestTxObjectMapCountsInvariantUnderMixedMutations(t *testing.T) {
 		case 3:
 			if m.GetByHash(txObj.Hash()) == txObj {
 				payer := txObj.Origin()
-				txObj.payer = &payer
-				txObj.cost = big.NewInt(1)
+				setTestTxPricing(txObj, &payer, big.NewInt(1), nil)
 				_, _ = m.ReserveCost(txObj, balance)
 			}
 		case 4:
@@ -324,14 +322,17 @@ func TestPendingCost(t *testing.T) {
 	exec1, p1, err := txObj1.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
 	assert.True(t, exec1)
+	txObj1.setPricing(p1)
 
 	exec2, p2, err := txObj2.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
 	assert.True(t, exec2)
+	txObj2.setPricing(p2)
 
 	exec3, p3, err := txObj3.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
 	assert.True(t, exec3)
+	txObj3.setPricing(p3)
 
 	// Creating a new txObjectMap
 	m := newTxObjectMap(newCostTracker())
@@ -378,8 +379,7 @@ func TestTxObjectMapReserveCostAfterRemoval(t *testing.T) {
 	assert.True(t, m.RemoveByHash(txObj.Hash()))
 
 	payer := txObj.Origin()
-	txObj.payer = &payer
-	txObj.cost = big.NewInt(10)
+	setTestTxPricing(txObj, &payer, big.NewInt(10), nil)
 	reserved, err := m.ReserveCost(txObj, big.NewInt(100))
 
 	assert.NoError(t, err)
@@ -411,7 +411,7 @@ func TestTxObjectMapExecutableSnapshotSkipsMissingPriority(t *testing.T) {
 	assert.Empty(t, snapshot.transactions())
 	assert.Empty(t, *snapshot)
 
-	txObj.priorityGasPrice = big.NewInt(1)
+	setTestPriorityGasPrice(txObj, big.NewInt(1))
 	snapshot = m.executableSnapshot(tx.Transactions{trx})
 	assert.Equal(t, tx.Transactions{trx}, snapshot.transactions())
 	assert.Len(t, *snapshot, 1)

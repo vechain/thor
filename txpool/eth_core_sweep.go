@@ -73,7 +73,7 @@ func (m *ethPoolCore) removeExpiredLocked(
 	}
 	now := time.Now().UnixNano()
 	expired := func(txObj *TxObject) bool {
-		return !txObj.localSubmitted &&
+		return !txObj.localSubmitted() &&
 			now > txObj.timeAdded &&
 			now-txObj.timeAdded > int64(options.MaxLifetime)
 	}

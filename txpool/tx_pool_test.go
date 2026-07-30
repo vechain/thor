@@ -246,20 +246,25 @@ func TestTxPoolMetrics(t *testing.T) {
 		labels := m.GetLabel()
 		source := ""
 		txType := ""
+		status := ""
 		for _, label := range labels {
-			if label.GetName() == "source" {
+			switch label.GetName() {
+			case "source":
 				source = label.GetValue()
-			}
-			if label.GetName() == "type" {
+			case "type":
 				txType = label.GetValue()
+			case "status":
+				status = label.GetValue()
 			}
 		}
 
-		if source == "remote" && txType == "Legacy" {
+		if source == "remote" && txType == "Legacy" && status == "executable" {
 			foundLegacy = true
 			assert.GreaterOrEqual(t, m.GetGauge().GetValue(), float64(1))
 		}
 	}
+
+	assert.True(t, foundLegacy, "should have metric entry for remote Legacy transaction")
 
 	foundBad := false
 	for _, m := range badTxMetrics {
@@ -755,7 +760,7 @@ func TestWashPromoteDrainsPendingCost(t *testing.T) {
 	// Add a batch of txs from distinct accounts so wash promotes and accounts them.
 	for i := range 3 {
 		trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i])
-		assert.Nil(t, pool.Add(trx))
+		assert.Nil(t, pool.AddRemote(trx))
 	}
 
 	// Trigger wash to promote (executable) and account pending cost under the map lock.
@@ -768,7 +773,7 @@ func TestWashPromoteDrainsPendingCost(t *testing.T) {
 	}
 
 	// No orphaned pending cost left behind.
-	assert.Equal(t, 0, len(pool.all.cost), "pending cost accounting must be fully drained")
+	assert.Empty(t, pool.all.costs.reservations, "pending cost accounting must be fully drained")
 }
 
 func TestOrderTxsAfterGalacticaFork(t *testing.T) {
@@ -955,7 +960,7 @@ func TestFillPool(t *testing.T) {
 	assert.Equal(t, len(txs), pool.all.Len(), "Number of transactions in the pool should match the number added")
 
 	// Test executables after wash
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.storeExecutables(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
@@ -1016,7 +1021,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 	assert.Equal(t, len(txs), pool.all.Len(), "Number of transactions in the pool should match the number added")
 
 	// Test executables after wash
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.storeExecutables(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
@@ -1345,7 +1350,7 @@ func TestNonExecutables(t *testing.T) {
 		)
 	}
 
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.storeExecutables(executables)
 
 	// add 1 non-executable
@@ -1366,7 +1371,7 @@ func TestExpiredTxs(t *testing.T) {
 		)
 	}
 
-	executables, _, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
 	pool.storeExecutables(executables)
 
 	// add 1 non-executable
@@ -1540,7 +1545,7 @@ func TestVeChainPoolConcurrentAddWashAndExecutables(t *testing.T) {
 	})
 	wg.Go(func() {
 		for range 16 {
-			_, _, _, _ = pool.wash(pool.repo.BestBlockSummary(), false)
+			_, _, _ = pool.wash(pool.repo.BestBlockSummary(), false)
 		}
 	})
 	wg.Go(func() {
@@ -2577,80 +2582,6 @@ func TestValidateTxBasics_TypeForkWhitelist(t *testing.T) {
 	assert.NoError(t, pool.validateTxBasics(legacyTx))
 }
 
-func TestValidateTxBasics_EthDynamicFeeChainID(t *testing.T) {
-	// INTERSTELLAR = 0 means it activates from block 0; genesis (block 0) is
-	// already past the fork, so nextBlockNum=1 satisfies the >=0 condition.
-	fc := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 0}
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &fc)
-	defer pool.Close()
-
-	// Derive the network chain ID from the genesis — no hardcoded value needed.
-	networkChainID := pool.repo.ChainID()
-
-	buildEth1559 := func(chainID uint64) *tx.Transaction {
-		return tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
-			ChainID(chainID).
-			Gas(21000).
-			MaxFeePerGas(big.NewInt(10e9)).
-			MaxPriorityFeePerGas(big.NewInt(1e9)).
-			Build(),
-			devAccounts[0].PrivateKey)
-	}
-
-	t.Run("correct chain ID accepted", func(t *testing.T) {
-		err := pool.validateTxBasics(buildEth1559(networkChainID))
-		assert.NoError(t, err)
-	})
-
-	t.Run("wrong chain ID rejected", func(t *testing.T) {
-		err := pool.validateTxBasics(buildEth1559(networkChainID + 1))
-		assert.Equal(t, badTxError{fmt.Sprintf("Ethereum chain ID %d does not match network chain ID %d",
-			networkChainID+1, networkChainID)}, err)
-	})
-
-	// Pre-INTERSTELLAR fork: TypeEthDynamicFee is rejected by the type whitelist
-	// regardless of chain ID — eth tx (0x02) needs INTERSTELLAR to be active.
-	t.Run("rejected before INTERSTELLAR", func(t *testing.T) {
-		preFork := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 1<<32 - 1}
-		prePool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &preFork)
-		defer prePool.Close()
-
-		err := prePool.validateTxBasics(buildEth1559(prePool.repo.ChainID()))
-		assert.Equal(t, badTxError{"invalid tx type"}, err)
-	})
-}
-
-// TestValidateTxBasics_TypeForkWhitelist verifies the type-fork rule in
-// validateTxBasics: pre-GALACTICA admits only TypeLegacy; pre-INTERSTELLAR
-// admits TypeLegacy + TypeDynamicFee but not TypeEthDynamicFee.
-func TestValidateTxBasics_TypeForkWhitelist(t *testing.T) {
-	preGalactica := thor.ForkConfig{GALACTICA: 1<<32 - 1, INTERSTELLAR: 1<<32 - 1}
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &preGalactica)
-	defer pool.Close()
-
-	// TypeDynamicFee pre-GALACTICA → rejected
-	dynTx := tx.MustSign(tx.NewBuilder(tx.TypeDynamicFee).
-		ChainTag(pool.repo.ChainTag()).
-		Gas(21000).
-		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
-		MaxPriorityFeePerGas(big.NewInt(0)).
-		Clause(tx.NewClause(nil)).
-		Build(),
-		devAccounts[0].PrivateKey)
-	err := pool.validateTxBasics(dynTx)
-	assert.Equal(t, badTxError{"invalid tx type"}, err)
-
-	// TypeLegacy pre-GALACTICA → accepted
-	legacyTx := tx.MustSign(tx.NewBuilder(tx.TypeLegacy).
-		ChainTag(pool.repo.ChainTag()).
-		Gas(21000).
-		GasPriceCoef(0).
-		Clause(tx.NewClause(nil)).
-		Build(),
-		devAccounts[0].PrivateKey)
-	assert.NoError(t, pool.validateTxBasics(legacyTx))
-}
-
 func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	chain, err := testchain.NewWithFork(&thor.ForkConfig{}, 180)
 	assert.Nil(t, err)
@@ -2752,7 +2683,7 @@ func TestEthDynFee_NonceLinearGrowth(t *testing.T) {
 	assert.NoError(t, pool.AddRemote(exec), "nonce==state.nonce must admit")
 	assert.NoError(t, pool.AddRemote(queued), "nonce>state.nonce must admit (non-executable)")
 
-	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 
 	execIDs := map[thor.Bytes32]bool{}
@@ -2794,7 +2725,7 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 	// Shrink the limit so wash must evict exactly one tx.
 	pool.options.Limit = 1
 
-	_, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	_, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, pool.all.Len(), "exactly one eth-tx remains after eviction")
 }

@@ -75,9 +75,12 @@ func (p ethPreparation) apply(txObj *TxObject) {
 		return
 	}
 	payer := p.request.payer
-	txObj.payer = &payer
-	txObj.cost = p.request.cost
-	if p.priorityGasPrice != nil {
-		txObj.priorityGasPrice = p.priorityGasPrice
+	pricing := &txPricing{
+		payer: &payer,
+		cost:  p.request.cost,
 	}
+	if p.priorityGasPrice != nil {
+		pricing.priorityGasPrice = p.priorityGasPrice
+	}
+	txObj.setPricing(pricing)
 }

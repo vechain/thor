@@ -220,7 +220,7 @@ func (p *VeChainPool) add(newTx *tx.Transaction, rejectNonExecutable bool, local
 		return nil
 	}
 
-	txObj, err := resolveTxWithSource(newTx, source)
+	txObj, err := resolveTxWithSource(newTx, txSource(source))
 	if err != nil {
 		return badTxError{err.Error()}
 	}
@@ -261,8 +261,8 @@ func (p *VeChainPool) isBlocked(newTx *tx.Transaction) bool {
 
 // checkTxPriority checks the new tx against the bottom 10% threshold from the
 // last completed wash. The snapshot is sorted by descending priority.
-func (p *VeChainPool) checkTxPriority(txObj *TxObject, executable bool) bool {
-	if !executable {
+func (p *VeChainPool) checkTxPriority(executable bool, candidatePGP *big.Int) bool {
+	if !executable || candidatePGP == nil {
 		return false
 	}
 
@@ -273,7 +273,8 @@ func (p *VeChainPool) checkTxPriority(txObj *TxObject, executable bool) bool {
 
 	// Get the transaction at the 90th percentile (bottom 10% threshold)
 	thresholdIdx := len(snapshot) * 9 / 10 // 90th percentile, executables are sorted by price desc
-	return txObj.priorityGasPrice.Cmp(snapshot[thresholdIdx].priorityGasPrice) > 0
+	thresholdPGP := snapshot[thresholdIdx].priorityGasPrice
+	return candidatePGP.Cmp(thresholdPGP) > 0
 }
 
 // validateNonExecutableLimit validates that adding a non-executable transaction won't exceed pool limits.
@@ -285,7 +286,7 @@ func (p *VeChainPool) validateNonExecutableLimit(executable bool) error {
 			return txRejectedError{"non executable pool is full"}
 		}
 	}
-	return candidatePGP.Cmp(thresholdPGP) > 0
+	return nil
 }
 
 // addWhenSynced handles transaction addition when the chain is synced.
@@ -324,11 +325,12 @@ func (p *VeChainPool) addWhenSynced(
 		return txRejectedError{"tx is not executable"}
 	}
 
-	// Check non-executable pool limit (20% of total)
-	if !executable {
-		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
-			return txRejectedError{"non executable pool is full"}
-		}
+	if pricing != nil {
+		txObj.setPricing(pricing)
+	}
+
+	if err := p.validateNonExecutableLimit(executable); err != nil {
+		return err
 	}
 
 	txObj.executable = executable
@@ -432,11 +434,7 @@ func (p *VeChainPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 		return false
 	}
 
-	txTypeString := "Legacy"
-	if removedTransaction.Type() == tx.TypeDynamicFee {
-		txTypeString = "DynamicFee"
-	}
-	metricTxPoolGauge().AddWithLabel(-1, map[string]string{"source": "n/a", "type": txTypeString})
+	addTxPoolMetric(removedTransaction, -1)
 	logger.Debug("tx removed", "id", txID)
 	return true
 }
@@ -465,13 +463,11 @@ func (p *VeChainPool) Fill(txs tx.Transactions) {
 			continue
 		}
 		// here we ignore errors
-		if txObj, err := resolveTxWithSource(tx, txSourceFill); err == nil {
+		if txObj, err := ResolveTx(tx, false); err == nil {
 			txObjs = append(txObjs, txObj)
 		}
 	}
-	for _, txObj := range p.all.Fill(txObjs) {
-		addTxPoolMetric(txObj, 1)
-	}
+	p.all.Fill(txObjs)
 }
 
 // Dump dumps all txs in the pool.
@@ -642,7 +638,7 @@ func (p *VeChainPool) wash(
 			payer := *obj.Payer()
 			balance, balanceErr := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
 			if balanceErr != nil {
-				return nil, 0, 0, balanceErr
+				return nil, 0, balanceErr
 			}
 			reserved, err := p.all.ReserveCost(obj, balance)
 			if err != nil {

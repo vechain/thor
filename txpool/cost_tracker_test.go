@@ -194,7 +194,15 @@ func TestCostTrackerMapAddRelease(t *testing.T) {
 	require.NoError(t, err)
 
 	baseFee := galacticaBaseFee(best)
-	ok, err := txObj.Executable(repo.NewChain(best.Header().ID()), st, best.Header(), forkConfig, baseFee)
+	ok, err := evaluateAndPublishPricing(
+		txObj,
+		repo.NewChain(best.Header().ID()),
+		st,
+		best.Header(),
+		forkConfig,
+		baseFee,
+		false,
+	)
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -422,13 +430,21 @@ func TestCostTrackerWashPromotionRespectsSiblingReservation(t *testing.T) {
 	require.NoError(t, err)
 	head := repo.BestBlockSummary()
 	baseFee := poolB.baseFeeCache.Get(head.Header)
-	exec, err := txObj.Executable(repo.NewChain(head.Header.ID()), stater.NewState(head.Root()), head.Header, forkConfig, baseFee)
+	exec, err := evaluateAndPublishPricing(
+		txObj,
+		repo.NewChain(head.Header.ID()),
+		stater.NewState(head.Root()),
+		head.Header,
+		forkConfig,
+		baseFee,
+		false,
+	)
 	require.NoError(t, err)
 	require.True(t, exec)
 	txObj.executable = false
 	poolB.all.Fill([]*TxObject{txObj})
 
-	executables, _, _, err := poolB.wash(head, false)
+	executables, _, err := poolB.wash(head, false)
 	require.NoError(t, err)
 	for _, e := range executables {
 		assert.NotEqual(t, trx.ID(), e.ID(), "tx must not promote when sibling pool holds the budget")

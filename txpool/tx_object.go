@@ -127,19 +127,18 @@ func (o *TxObject) Evaluate(
 
 	switch {
 	case o.Gas() > headBlock.GasLimit():
-		return false, errors.New("tx gas exceeds block gas limit")
+		return false, nil, errors.New("tx gas exceeds block gas limit")
 	case thor.IsForked(nextBlockNum, forkConfig.INTERSTELLAR) && o.Gas() > thor.MaxTxGasLimit:
-		return false, errors.New("tx gas limit exceeds the maximum allowed")
+		return false, nil, errors.New("tx gas limit exceeds the maximum allowed")
 	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, nil, errors.New("expired")
 	case o.BlockRef().Number() > nextBlockNum+uint32(5*60/thor.BlockInterval()):
 		// reject deferred tx which will be applied after 5mins
-		return false, errors.New("block ref out of schedule")
+		return false, nil, errors.New("block ref out of schedule")
 	}
 
 	// test features on next block
 	var features tx.Features
-	if thor.IsForked(nextBlockNum, forkConfig.VIP191) {
 	if thor.IsForked(nextBlockNum, forkConfig.VIP191) {
 		features.SetDelegated(true)
 	}
@@ -168,20 +167,20 @@ func (o *TxObject) Evaluate(
 
 	// Tx is considered executable when the BlockRef has passed in reference to the next block.
 	if o.BlockRef().Number() > nextBlockNum {
-		return false, nil
+		return false, nil, nil
 	}
 
 	// Eth tx requires linear nonce growth: equal → executable, greater → queued, lower → reject.
 	if o.Type() == tx.TypeEthDynamicFee {
 		accNonce, err := state.GetNonce(o.resolved.Origin)
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 		if o.Nonce() < accNonce {
-			return false, errors.New("nonce too low")
+			return false, nil, errors.New("nonce too low")
 		}
 		if o.Nonce() > accNonce {
-			return false, nil
+			return false, nil, nil
 		}
 	}
 

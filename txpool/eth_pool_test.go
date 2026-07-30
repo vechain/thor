@@ -105,12 +105,12 @@ func TestEthAdmissionPreparationIsPureUntilCommit(t *testing.T) {
 	require.True(t, prepared.viable)
 	assert.Nil(t, txObj.Payer())
 	assert.Nil(t, txObj.Cost())
-	assert.Nil(t, txObj.priorityGasPrice)
+	assert.Nil(t, txObj.priorityGasPrice())
 
 	prepared.apply(txObj)
 	assert.NotNil(t, txObj.Payer())
 	assert.NotNil(t, txObj.Cost())
-	assert.NotNil(t, txObj.priorityGasPrice)
+	assert.NotNil(t, txObj.priorityGasPrice())
 }
 
 func TestEthPoolAddRemoteNoncePlacementAndReplacement(t *testing.T) {
@@ -492,10 +492,10 @@ func TestEthPoolRevalidateRepricesAndSweepExpires(t *testing.T) {
 	require.NoError(t, pool.AddRemote(trx))
 	txObj := pool.core.GetByHash(trx.Hash())
 	require.NotNil(t, txObj)
-	txObj.priorityGasPrice = big.NewInt(-1)
+	setTestPriorityGasPrice(txObj, big.NewInt(-1))
 
 	require.NoError(t, pool.revalidate(tchain.Repo().BestBlockSummary()))
-	assert.Positive(t, txObj.priorityGasPrice.Sign())
+	assert.Positive(t, txObj.priorityGasPrice().Sign())
 	assert.NotNil(t, pool.GetByHash(trx.Hash()))
 
 	txObj.timeAdded = time.Now().Add(-2 * time.Hour).UnixNano()
@@ -563,7 +563,7 @@ func TestEthPoolHousekeepingTickRevalidatesOnlyOnHeadChange(t *testing.T) {
 	)
 	require.NoError(t, pool.AddRemote(trx))
 	txObj := pool.core.GetByHash(trx.Hash())
-	txObj.priorityGasPrice = big.NewInt(-1)
+	setTestPriorityGasPrice(txObj, big.NewInt(-1))
 	head := tchain.Repo().BestBlockSummary().Header.ID()
 
 	// A head not yet revalidated triggers a revalidate, which reprices, and the
@@ -571,14 +571,14 @@ func TestEthPoolHousekeepingTickRevalidatesOnlyOnHeadChange(t *testing.T) {
 	revalidated, err := pool.runHousekeepingTick(thor.Bytes32{})
 	require.NoError(t, err)
 	assert.Equal(t, head, revalidated)
-	assert.Positive(t, txObj.priorityGasPrice.Sign())
+	assert.Positive(t, txObj.priorityGasPrice().Sign())
 
 	// The same head again reads no chain state, so repricing does not repeat.
-	txObj.priorityGasPrice = big.NewInt(-1)
+	setTestPriorityGasPrice(txObj, big.NewInt(-1))
 	revalidated, err = pool.runHousekeepingTick(head)
 	require.NoError(t, err)
 	assert.Equal(t, head, revalidated)
-	assert.Negative(t, txObj.priorityGasPrice.Sign())
+	assert.Negative(t, txObj.priorityGasPrice().Sign())
 }
 
 func TestEthPoolHousekeepingTickSkipsEmptyPool(t *testing.T) {
@@ -1080,7 +1080,7 @@ func TestEthPoolReinjectFromForkForwardExtensionDoesNotRebuild(t *testing.T) {
 
 	retained := pool.core.GetByHash(nonce1.Hash())
 	require.NotNil(t, retained)
-	retained.priorityGasPrice = big.NewInt(-1)
+	setTestPriorityGasPrice(retained, big.NewInt(-1))
 
 	require.NoError(t, tchain.MintBlock(nonce0))
 	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
@@ -1095,7 +1095,7 @@ func TestEthPoolReinjectFromForkForwardExtensionDoesNotRebuild(t *testing.T) {
 	assert.Same(t, retained, sender.pending[1])
 	assert.True(t, retained.executable)
 	assert.Empty(t, sender.queue)
-	assert.Negative(t, retained.priorityGasPrice.Sign(),
+	assert.Negative(t, retained.priorityGasPrice().Sign(),
 		"forward extension must not re-prepare an already pending transaction")
 }
 

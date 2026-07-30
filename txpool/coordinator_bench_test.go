@@ -63,12 +63,13 @@ func BenchmarkCoordinatorExecutables(b *testing.B) {
 		origin[0] = byte(senderIndex + 1)
 		sender := newEthSender(origin, 0)
 		for nonce := range perSender {
-			sender.pending[uint64(nonce)] = &TxObject{
-				Transaction:      &tx.Transaction{},
-				priorityGasPrice: big.NewInt(int64(senderCount - senderIndex)),
-				timeAdded:        int64(nonce),
-				executable:       true,
+			txObj := &TxObject{
+				Transaction: &tx.Transaction{},
+				timeAdded:   int64(nonce),
+				executable:  true,
 			}
+			setTestPriorityGasPrice(txObj, big.NewInt(int64(senderCount-senderIndex)))
+			sender.pending[uint64(nonce)] = txObj
 		}
 		ethCore.senders[origin] = sender
 	}
@@ -159,7 +160,7 @@ func BenchmarkVeChainPoolWash(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if _, _, _, err := pool.wash(head, false); err != nil {
+		if _, _, err := pool.wash(head, false); err != nil {
 			b.Fatal(err)
 		}
 	}

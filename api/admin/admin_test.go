@@ -38,7 +38,7 @@ import (
 func TestAdminToggleAffectsNodeAPI(t *testing.T) {
 	chain, err := testchain.NewDefault()
 	require.NoError(t, err)
-	pool := txpool.New(chain.Repo(), chain.Stater(), txpool.Options{
+	pool := txpool.NewCoordinator(chain.Repo(), chain.Stater(), txpool.Options{
 		Limit: 100, LimitPerAccount: 16, MaxLifetime: time.Minute,
 	}, &thor.NoFork)
 	defer pool.Close()

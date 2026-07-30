@@ -165,11 +165,11 @@ func benchmarkEthCorePool(
 				MaxPriorityFeePerGas(big.NewInt(1)).
 				Build()
 			txObj := &TxObject{
-				Transaction:      trx,
-				timeAdded:        time.Now().UnixNano(),
-				priorityGasPrice: big.NewInt(1),
-				executable:       nonce < pendingPer,
+				Transaction: trx,
+				timeAdded:   time.Now().UnixNano(),
+				executable:  nonce < pendingPer,
 			}
+			setTestPriorityGasPrice(txObj, big.NewInt(1))
 			origins[txObj] = origin
 			core.allByHash[txObj.Hash()] = txObj
 			if nonce < pendingPer {

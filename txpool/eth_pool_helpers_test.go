@@ -12,8 +12,49 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
+
+func setTestTxPricing(txObj *TxObject, payer *thor.Address, cost, priorityGasPrice *big.Int) {
+	txObj.setPricing(&txPricing{
+		payer:            payer,
+		cost:             cost,
+		priorityGasPrice: priorityGasPrice,
+	})
+}
+
+func setTestPriorityGasPrice(txObj *TxObject, priorityGasPrice *big.Int) {
+	cur := txObj.pricing.Load()
+	pricing := &txPricing{priorityGasPrice: priorityGasPrice}
+	if cur != nil {
+		*pricing = *cur
+		pricing.priorityGasPrice = priorityGasPrice
+	}
+	txObj.setPricing(pricing)
+}
+
+func evaluateAndPublishPricing(
+	txObj *TxObject,
+	chain *chain.Chain,
+	st *state.State,
+	head *block.Header,
+	forkConfig *thor.ForkConfig,
+	baseFee *big.Int,
+	alreadyExecutable bool,
+) (bool, error) {
+	executable, pricing, err := txObj.Evaluate(chain, st, head, forkConfig, baseFee, alreadyExecutable)
+	if err != nil {
+		return false, err
+	}
+	if pricing != nil {
+		txObj.setPricing(pricing)
+	}
+	return executable, nil
+}
 
 func ethPoolTestOptions() Options {
 	return Options{

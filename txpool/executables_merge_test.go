@@ -20,6 +20,16 @@ func newMergeTestEntry(priority, timeAdded int64) executableTx {
 	}
 }
 
+func newMergeTestTxObject(entry executableTx) *TxObject {
+	txObj := &TxObject{
+		Transaction: entry.tx,
+		timeAdded:   entry.timeAdded,
+		executable:  true,
+	}
+	setTestPriorityGasPrice(txObj, entry.priorityGasPrice)
+	return txObj
+}
+
 func transactionsOf(entries ...executableTx) tx.Transactions {
 	txs := make(tx.Transactions, 0, len(entries))
 	for _, entry := range entries {
@@ -130,25 +140,10 @@ func TestEthPoolExecutables(t *testing.T) {
 	senderBNonce0 := newMergeTestEntry(50, 1)
 
 	senderA := newEthSender(thor.Address{0x01}, 0)
-	senderA.pending[0] = &TxObject{
-		Transaction:      senderANonce0.tx,
-		priorityGasPrice: senderANonce0.priorityGasPrice,
-		timeAdded:        senderANonce0.timeAdded,
-		executable:       true,
-	}
-	senderA.pending[1] = &TxObject{
-		Transaction:      senderANonce1.tx,
-		priorityGasPrice: senderANonce1.priorityGasPrice,
-		timeAdded:        senderANonce1.timeAdded,
-		executable:       true,
-	}
+	senderA.pending[0] = newMergeTestTxObject(senderANonce0)
+	senderA.pending[1] = newMergeTestTxObject(senderANonce1)
 	senderB := newEthSender(thor.Address{0x02}, 0)
-	senderB.pending[0] = &TxObject{
-		Transaction:      senderBNonce0.tx,
-		priorityGasPrice: senderBNonce0.priorityGasPrice,
-		timeAdded:        senderBNonce0.timeAdded,
-		executable:       true,
-	}
+	senderB.pending[0] = newMergeTestTxObject(senderBNonce0)
 	ethCore.senders[senderA.origin] = senderA
 	ethCore.senders[senderB.origin] = senderB
 
@@ -170,18 +165,8 @@ func TestCoordinatorExecutablesMergesFamilies(t *testing.T) {
 
 	ethCore := newEthPoolCore(newCostTracker(), Options{})
 	sender := newEthSender(thor.Address{0x01}, 0)
-	sender.pending[0] = &TxObject{
-		Transaction:      ethNonce0.tx,
-		priorityGasPrice: ethNonce0.priorityGasPrice,
-		timeAdded:        ethNonce0.timeAdded,
-		executable:       true,
-	}
-	sender.pending[1] = &TxObject{
-		Transaction:      ethNonce1.tx,
-		priorityGasPrice: ethNonce1.priorityGasPrice,
-		timeAdded:        ethNonce1.timeAdded,
-		executable:       true,
-	}
+	sender.pending[0] = newMergeTestTxObject(ethNonce0)
+	sender.pending[1] = newMergeTestTxObject(ethNonce1)
 	ethCore.senders[sender.origin] = sender
 
 	coordinator := &TxPoolCoordinator{
@@ -195,12 +180,7 @@ func TestCoordinatorExecutablesHandlesUninitializedVeChainSnapshot(t *testing.T)
 	ethEntry := newMergeTestEntry(10, 1)
 	ethCore := newEthPoolCore(newCostTracker(), Options{})
 	sender := newEthSender(thor.Address{0x01}, 0)
-	sender.pending[0] = &TxObject{
-		Transaction:      ethEntry.tx,
-		priorityGasPrice: ethEntry.priorityGasPrice,
-		timeAdded:        ethEntry.timeAdded,
-		executable:       true,
-	}
+	sender.pending[0] = newMergeTestTxObject(ethEntry)
 	ethCore.senders[sender.origin] = sender
 
 	coordinator := &TxPoolCoordinator{

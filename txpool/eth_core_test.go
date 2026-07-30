@@ -339,8 +339,9 @@ func TestEthExecutableSnapshot(t *testing.T) {
 	queued := newEthCoreTestObject(t, 7, 10, 1)
 	other := newEthCoreTestObject(t, 0, 10, 2)
 
-	first.priorityGasPrice, second.priorityGasPrice = big.NewInt(10), big.NewInt(20)
-	other.priorityGasPrice = big.NewInt(30)
+	setTestPriorityGasPrice(first, big.NewInt(10))
+	setTestPriorityGasPrice(second, big.NewInt(20))
+	setTestPriorityGasPrice(other, big.NewInt(30))
 	first.executable, second.executable, other.executable = true, true, true
 
 	firstOrigin, otherOrigin := first.Origin(), other.Origin()
@@ -369,7 +370,7 @@ func TestEthExecutableSnapshot(t *testing.T) {
 
 	// The snapshot owns its slices and ordering keys after the map changes.
 	delete(firstSender.pending, 5)
-	first.priorityGasPrice = big.NewInt(99)
+	setTestPriorityGasPrice(first, big.NewInt(99))
 	var firstEntry executableTx
 	for _, group := range snapshot {
 		for _, entry := range group {

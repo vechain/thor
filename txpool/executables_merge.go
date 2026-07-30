@@ -24,7 +24,7 @@ type executableTx struct {
 func executableTxFromObject(txObj *TxObject) executableTx {
 	return executableTx{
 		tx:               txObj.Transaction,
-		priorityGasPrice: txObj.priorityGasPrice,
+		priorityGasPrice: txObj.priorityGasPrice(),
 		timeAdded:        txObj.timeAdded,
 	}
 }

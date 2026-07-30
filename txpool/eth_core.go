@@ -125,7 +125,7 @@ func (m *ethPoolCore) executableSnapshot() ethExecutablesSnapshot {
 		group := make([]executableTx, 0, len(sender.pending))
 		for nonce := sender.stateNonce; nonce < sender.poolNonce(); nonce++ {
 			txObj := sender.pending[nonce]
-			if txObj == nil || !txObj.executable || txObj.priorityGasPrice == nil {
+			if txObj == nil || !txObj.executable || txObj.priorityGasPrice() == nil {
 				break
 			}
 			group = append(group, executableTxFromObject(txObj))
