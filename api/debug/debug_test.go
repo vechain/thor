@@ -88,9 +88,10 @@ func TestDebug(t *testing.T) {
 
 	// /storage/range endpoint
 	for name, tt := range map[string]func(*testing.T){
-		"testStorageRangeWithError":     testStorageRangeWithError,
-		"testStorageRange":              testStorageRange,
-		"testStorageRangeDefaultOption": testStorageRangeDefaultOption,
+		"testStorageRangeWithError":              testStorageRangeWithError,
+		"testStorageRangeWithNonExistingBlockID": testStorageRangeWithNonExistingBlockID,
+		"testStorageRange":                       testStorageRange,
+		"testStorageRangeDefaultOption":          testStorageRangeDefaultOption,
 	} {
 		t.Run(name, tt)
 	}
@@ -181,7 +182,7 @@ func testTraceClauseWithNonExistingBlockID(t *testing.T) {
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/x/x", datagen.RandomHash()),
 	}
-	httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 500)
+	httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
 }
 
 func testTraceClauseWithBadTxID(t *testing.T) {
@@ -465,7 +466,7 @@ func testHandleTraceCallWithBadBlockRef(t *testing.T) {
 		BlockRef:   "jh000000000000000",
 	}
 
-	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 500)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 400)
 
 	assert.Equal(t, "blockRef: hex string without 0x prefix", strings.TrimSpace(res))
 }
@@ -485,7 +486,7 @@ func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
 		BlockRef:   "0x00",
 	}
 
-	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 500)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", traceCallOption, 400)
 
 	assert.Equal(t, "blockRef: invalid length", strings.TrimSpace(res))
 }
@@ -501,6 +502,15 @@ func testStorageRangeWithError(t *testing.T) {
 
 	badMaxResult := &api.StorageRangeOption{MaxResult: 1001}
 	httpPostAndCheckResponseStatus(t, "/debug/storage-range", badMaxResult, 400)
+}
+
+func testStorageRangeWithNonExistingBlockID(t *testing.T) {
+	opt := &api.StorageRangeOption{
+		Address: datagen.RandAddress(),
+		Target:  fmt.Sprintf("%s/0/0", datagen.RandomHash()),
+	}
+	res := httpPostAndCheckResponseStatus(t, "/debug/storage-range", opt, 400)
+	assert.Contains(t, res, "target[0]")
 }
 
 func testStorageRange(t *testing.T) {

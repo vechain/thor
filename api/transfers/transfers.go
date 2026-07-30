@@ -22,15 +22,17 @@ import (
 type Transfers struct {
 	repo             *chain.Repository
 	db               *logdb.LogDB
-	limit            uint64
+	maxLimit         uint64
+	maxOffset        uint64
 	maxCriteriaCount int
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64, maxCriteriaCount int) *Transfers {
+func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uint64, maxCriteriaCount int) *Transfers {
 	return &Transfers{
 		repo,
 		db,
-		logsLimit,
+		maxLimit,
+		maxOffset,
 		maxCriteriaCount,
 	}
 }
@@ -66,7 +68,7 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	if err := filter.Options.Validate(t.limit); err != nil {
+	if err := filter.Options.Validate(t.maxLimit, t.maxOffset); err != nil {
 		return restutil.Forbidden(err)
 	}
 	if err := filter.Range.Validate(); err != nil {
@@ -91,7 +93,7 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if filter.Options.Limit == nil {
 		// if filter.Options.Limit is nil, set to the default limit +1
 		// to detect whether there are more logs than the default limit
-		limit := t.limit + 1
+		limit := t.maxLimit + 1
 		filter.Options.Limit = &limit
 	}
 
@@ -101,8 +103,8 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	}
 
 	// ensure the result size is less than the configured limit
-	if len(tLogs) > int(t.limit) {
-		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.limit))
+	if len(tLogs) > int(t.maxLimit) {
+		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.maxLimit))
 	}
 
 	return restutil.WriteJSON(w, tLogs)

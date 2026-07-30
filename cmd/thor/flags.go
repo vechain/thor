@@ -105,6 +105,13 @@ var (
 		Usage:   "limit the number of logs returned by /logs API",
 		Sources: envVar("API_LOGS_LIMIT"),
 	}
+	apiLogsMaxOffsetFlag = &cli.Uint64Flag{
+		Name:    "api-logs-max-offset",
+		Local:   true,
+		Value:   100_000,
+		Usage:   "limit the maximum offset for /logs API",
+		Sources: envVar("API_LOGS_MAX_OFFSET"),
+	}
 	apiEnableDeprecatedFlag = &cli.BoolFlag{
 		Name:    "api-enable-deprecated",
 		Local:   true,
@@ -130,6 +137,15 @@ var (
 		Usage:   "enable creation of additional indexes on startup",
 		Sources: envVar("LOGDB_ADDITIONAL_INDEXES"),
 	}
+	logDbMaxReadConnsFlag = &cli.Uint64Flag{
+		Name:    "logdb-max-read-conns",
+		Local:   true,
+		Hidden:  true,
+		Value:   64,
+		Usage:   "maximum number of read connections for the log database",
+		Sources: envVar("LOGDB_MAX_READ_CONNS"),
+	}
+
 	// priority fees API flags
 	apiPriorityFeesPercentageFlag = &cli.Uint64Flag{
 		Name:    "api-priority-fees-percentage",

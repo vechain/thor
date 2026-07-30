@@ -10,7 +10,7 @@ PACKAGES = `go list ./... | grep -v '/vendor/'`
 FUZZTIME=1m
 
 REQUIRED_GO_MAJOR = 1
-REQUIRED_GO_MINOR = 25
+REQUIRED_GO_MINOR = 26
 MAJOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f1)
 MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
 export GO111MODULE=on
@@ -84,7 +84,7 @@ lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
 	@echo "running golangci-lint..."
 	@golangci-lint run --config .golangci.yml
 	@echo "running modernize..."
-	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.20.0 ./...
+	@go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.21.1 ./...
 	@echo "done."
 
 lint-fix: | go_version_check lint_command_check #@ Attempt to fix linting issues

@@ -354,7 +354,7 @@ func (w *waitControlLoop) hasMinimumWaitPeriod() bool {
 }
 
 func noRegTimeout() time.Duration {
-	e := rand.ExpFloat64()
+	e := rand.ExpFloat64() // #nosec G404
 	e = min(e, 100)
 	return time.Duration(float64(avgnoRegTimeout) * e)
 }

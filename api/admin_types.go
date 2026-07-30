@@ -13,6 +13,14 @@ type LogStatus struct {
 	Enabled bool `json:"enabled"`
 }
 
+// ToggleStatus carries an enabled flag plus an optional TTL after which
+// the flag will automatically be set back to false. A zero TTL means no
+// auto-disable. Used by admin toggles like /admin/pprof and /admin/txpool-api.
+type ToggleStatus struct {
+	Enabled    bool `json:"enabled"`
+	TTLSeconds int  `json:"ttlSeconds,omitempty"`
+}
+
 type HealthStatus struct {
 	Healthy              bool       `json:"healthy"`
 	BestBlockTime        *time.Time `json:"bestBlockTime"`

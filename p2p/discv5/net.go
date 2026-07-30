@@ -422,7 +422,15 @@ loop:
 		case pkt := <-net.read:
 			//fmt.Println("read", pkt.ev)
 			log.Trace("<-net.read")
-			n := net.internNode(&pkt)
+			n := net.nodes[pkt.remoteID]
+			if n == nil {
+				if pkt.ev != pingPacket {
+					log.Trace("dropping non-ping from unknown sender",
+						"ev", pkt.ev, "id", pkt.remoteID[:8], "addr", pkt.remoteAddr)
+					continue
+				}
+				n = net.internNode(&pkt)
+			}
 			prestate := n.state
 			status := "ok"
 			if err := net.handle(n, pkt.ev, &pkt); err != nil {

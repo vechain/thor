@@ -172,12 +172,12 @@ func (tc *testCommitter) Accepts(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-func (tc *testCommitter) Select(header *block.Header) (bool, error) {
+func (tc *testCommitter) Select(_ *block.Header, _ uint32) (bool, error) {
 	// For testing, always select the new block
 	return true, nil
 }
 
-func (tc *testCommitter) CommitBlock(header *block.Header, isPacking bool) error {
+func (tc *testCommitter) CommitBlock(_ *block.Header, _ uint32, _ bool) error {
 	// For testing, no-op
 	return nil
 }

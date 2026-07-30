@@ -10,9 +10,11 @@ import (
 )
 
 var (
-	metricTxPoolGauge            = metrics.LazyLoadGaugeVec("txpool_current_tx_count", []string{"source", "type"})
+	metricTxPoolGauge            = metrics.LazyLoadGaugeVec("txpool_current_tx_count", []string{"source", "type", "status"})
+	metricTxPoolWashedCounter    = metrics.LazyLoadCounterVec("txpool_washed_tx_count", []string{"source", "type"})
 	metricBadTxGauge             = metrics.LazyLoadGaugeVec("bad_tx_count", []string{"source"})
 	metricTxPoolExecutablesGauge = metrics.LazyLoadGauge("txpool_executable_tx_count")
+	metricTxPoolAllGauge         = metrics.LazyLoadGauge("txpool_all_tx_count")
 	metricAccountQuotaExceeded   = metrics.LazyLoadCounterVec("account_quota_exceeded", []string{"type"})
 
 	// Counts commits that had to read chain state under the core lock because

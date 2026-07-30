@@ -7,6 +7,7 @@ package node
 
 import (
 	"net/http"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
@@ -22,10 +23,10 @@ import (
 type Node struct {
 	pool         txpool.Pool
 	nw           api.Network
-	enableTxpool bool
+	enableTxpool *atomic.Bool
 }
 
-func New(nw api.Network, pool txpool.Pool, enableTxpool bool) *Node {
+func New(nw api.Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
 	return &Node{
 		pool,
 		nw,
@@ -95,16 +96,27 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 		Name("GET /node/network/peers").
 		HandlerFunc(restutil.WrapHandlerFunc(n.handleNetwork))
 
-	if n.enableTxpool {
-		sub.Path("/txpool").
-			Methods(http.MethodGet).
-			Name("GET /node/txpool").
-			HandlerFunc(restutil.WrapHandlerFunc(n.handleGetTransactions))
-		sub.Path("/txpool/status").
-			Methods(http.MethodGet).
-			Name("GET /node/txpool/status").
-			HandlerFunc(restutil.WrapHandlerFunc(n.handleGetTxpoolStatus))
-	}
+	txpoolSub := sub.PathPrefix("/txpool").Subrouter()
+	txpoolSub.Use(n.txpoolGate)
+	txpoolSub.Path("").
+		Methods(http.MethodGet).
+		Name("GET /node/txpool").
+		HandlerFunc(restutil.WrapHandlerFunc(n.handleGetTransactions))
+	txpoolSub.Path("/status").
+		Methods(http.MethodGet).
+		Name("GET /node/txpool/status").
+		HandlerFunc(restutil.WrapHandlerFunc(n.handleGetTxpoolStatus))
+}
+
+func (n *Node) txpoolGate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !n.enableTxpool.Load() {
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "txpool API is disabled", http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func filterTransactions(origin thor.Address, allTransactions tx.Transactions) (tx.Transactions, error) {

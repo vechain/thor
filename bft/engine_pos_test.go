@@ -12,9 +12,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/packer"
@@ -59,7 +61,7 @@ func TestFinalizedPos(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	st, err := testBFT.engine.computeState(sum.Header)
+	st, err := testBFT.engine.computeState(sum)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +78,7 @@ func TestFinalizedPos(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	st, err = testBFT.engine.computeState(sum.Header)
+	st, err = testBFT.engine.computeState(sum)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +398,7 @@ func TestJustifierPos(t *testing.T) {
 				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength() - 1 - numBlksNeededForPos)
 
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -418,7 +420,7 @@ func TestJustifierPos(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -438,7 +440,7 @@ func TestJustifierPos(t *testing.T) {
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - numBlksNeededForPos)
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -461,7 +463,7 @@ func TestJustifierPos(t *testing.T) {
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -496,7 +498,7 @@ func TestJustifierPos(t *testing.T) {
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -523,7 +525,7 @@ func TestJustifierPos(t *testing.T) {
 
 				numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
 				testBft.fastForward(thor.EpochLength()*2 - 1 - numBlksNeededForPos)
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -578,7 +580,7 @@ func TestJustifierPos(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -602,7 +604,7 @@ func TestJustifierPos(t *testing.T) {
 				assert.Equal(t, false, vs.votes[master].isCOM)
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs, err = testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
+				vs, err = newJustifierForPending(testBft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -896,7 +898,7 @@ func (test *TestBFT) transitionToPosBlock(parentSummary *chain.BlockSummary, mas
 	}
 
 	if thor.IsForked(b.Header().Number(), test.fc.FINALITY) {
-		if err = test.engine.CommitBlock(b.Header(), false); err != nil {
+		if err = test.engine.CommitBlock(b.Header(), conflicts, false); err != nil {
 			return nil, err
 		}
 	}
@@ -938,4 +940,499 @@ func (test *TestBFT) adoptStakerTx(flow *packer.Flow, privateKey *ecdsa.PrivateK
 	}
 
 	return nil
+}
+
+// TestResyncWithAdvancedFinalized: node restarts with finalized ahead of the first
+// PoS storePoint. Resync's early iterations must not feed findCheckpointByQuality a
+// headID before finalized, or the uint32 range underflows and the lookup fails.
+func TestResyncWithAdvancedFinalized(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
+	if err = testBFT.fastForward(thor.EpochLength()*3 - 1 - numBlksNeededForPos); err != nil {
+		t.Fatal(err)
+	}
+
+	// fastForward advanced finalized past firstPosBlock's storePoint — required for
+	// this regression to bite.
+	firstPosStorePoint := getStorePoint(forkCfg.HAYABUSA + thor.HayabusaTP())
+	finalizedBefore := testBFT.engine.Finalized()
+	assert.Greater(t, block.Number(finalizedBefore), firstPosStorePoint,
+		"test setup precondition: finalized must be past firstPosBlock storePoint")
+
+	// Reset the resync version so Resync() actually runs on this engine.
+	if err := testBFT.engine.data.Delete(resyncVersionKey); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := testBFT.engine.Resync(nil); err != nil {
+		t.Fatalf("Resync returned error: %v", err)
+	}
+
+	// Resync only advances finalized forward, so it must not have regressed.
+	finalizedAfter := testBFT.engine.Finalized()
+	assert.GreaterOrEqual(t, block.Number(finalizedAfter), block.Number(finalizedBefore))
+}
+
+// TestPosThresholdReadsPostHousekeepState pins that newJustifier reads totalWeight
+// from the checkpoint (post-housekeep), not checkpoint-1 — the inverse of the pre-fix
+// off-sync where threshold used W_old while votes summed W_old + W_new.
+//
+// It asserts structural properties (threshold == getTotalWeight(checkpoint)*2/3, PoS
+// branch selected), catching formula regressions and PoS/PoA branch swaps. The stock
+// test chain activates queued validators within 1 block, so no W-difference exists
+// across the checkpoint; the negative assertion against pre-checkpoint weight is thus
+// conditional. See review doc §7.2.
+func TestPosThresholdReadsPostHousekeepState(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Advance just past the first long-epoch checkpoint so it and its predecessor are in repo.
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
+	if err = testBFT.fastForward(thor.EpochLength() + 1 - numBlksNeededForPos); err != nil {
+		t.Fatal(err)
+	}
+
+	checkpointID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength())
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpointSum, err := testBFT.repo.GetBlockSummary(checkpointID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preCheckpointID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength() - 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preCheckpointSum, err := testBFT.repo.GetBlockSummary(preCheckpointID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	postWeight, err := testBFT.engine.getTotalWeight(checkpointSum)
+	if err != nil {
+		t.Fatalf("getTotalWeight at checkpoint: %v", err)
+	}
+
+	js, err := testBFT.engine.newJustifier(checkpointSum)
+	if err != nil {
+		t.Fatalf("newJustifier: %v", err)
+	}
+
+	// Structural pin: thresholdWeight == postWeight*2/3 and PoS branch selected,
+	// regardless of W difference.
+	assert.Equal(t, postWeight*2/3, js.thresholdWeight,
+		"thresholdWeight must come from post-housekeep state at checkpoint")
+	assert.Equal(t, uint64(0), js.thresholdVotes,
+		"PoS path must be selected; nonzero thresholdVotes means PoA was taken from pre-housekeep state")
+
+	// Stronger negative pin: only bites when housekeep changed W across the checkpoint.
+	// The stock chain doesn't, but we attempt it so future chains that do catch regressions.
+	preWeight, preErr := testBFT.engine.getTotalWeight(preCheckpointSum)
+	switch {
+	case preErr != nil:
+		t.Logf("preCheckpoint getTotalWeight returned %v; PoS-branch divergence still pins the contract", preErr)
+	case preWeight == postWeight:
+		t.Logf("WARN: pre==post==%d; W-difference negative pin not exercised (see test docstring)", preWeight)
+	default:
+		assert.NotEqual(t, preWeight*2/3, js.thresholdWeight,
+			"thresholdWeight equals pre-housekeep value — regression in checkpoint state sourcing")
+	}
+}
+
+// TestComputeStateCheckpointPlusOneBuildVsReuseEquivalence pins that at checkpoint+1,
+// reusing the cached checkpoint justifier + one vote equals building fresh and walking
+// back through the checkpoint. Written to check whether the (now-removed)
+// !isCheckPoint(parent) guard was needed; it wasn't. Kept as a regression guard against
+// newJustifier/AddBlock/Summarize changes that would break the equivalence.
+func TestComputeStateCheckpointPlusOneBuildVsReuseEquivalence(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Advance past the first PoS checkpoint so checkpoint and checkpoint+1 are in repo.
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
+	if err = testBFT.fastForward(thor.EpochLength() + 5 - numBlksNeededForPos); err != nil {
+		t.Fatal(err)
+	}
+
+	checkpointID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength())
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpointSum, err := testBFT.repo.GetBlockSummary(checkpointID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plusOneID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength() + 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plusOneSum, err := testBFT.repo.GetBlockSummary(plusOneID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Path A (real): computeState at checkpoint fills the cache; at checkpoint+1 it
+	// reuses that justifier and appends one vote.
+	testBFT.engine.caches.state.Purge()
+	testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+
+	if _, err := testBFT.engine.computeState(checkpointSum); err != nil {
+		t.Fatalf("computeState(checkpoint): %v", err)
+	}
+	stateReal, err := testBFT.engine.computeState(plusOneSum)
+	if err != nil {
+		t.Fatalf("computeState(checkpoint+1): %v", err)
+	}
+
+	// Path B (manual): reset caches, process checkpoint, then apply only checkpoint+1's
+	// vote to its cached justifier — what the loop with end=header.Number() does.
+	testBFT.engine.caches.state.Purge()
+	testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+
+	if _, err := testBFT.engine.computeState(checkpointSum); err != nil {
+		t.Fatalf("re-computeState(checkpoint): %v", err)
+	}
+	entry := testBFT.engine.caches.justifier.Remove(checkpointSum.Header.ID())
+	if entry == nil {
+		t.Fatal("expected checkpoint justifier in cache")
+	}
+	reusedJs := entry.Value.(*justifier)
+
+	// Apply checkpoint+1's vote, mirroring the loop's AddBlock with end=header.Number().
+	signer, _ := plusOneSum.Header.Signer()
+	parentSum, err := testBFT.repo.GetBlockSummary(plusOneSum.Header.ParentID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := testBFT.engine.stater.NewState(parentSum.Root())
+	staker := builtin.Staker.Native(state)
+	posActive, _ := staker.IsPoSActive()
+	var weight uint64
+	if posActive {
+		val, err := staker.GetValidation(signer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if val == nil {
+			t.Fatal("validator not found")
+		}
+		weight = val.Weight
+	}
+	reusedJs.AddBlock(signer, plusOneSum.Header.COM(), weight)
+	stateManual := reusedJs.Summarize()
+
+	// Contract: both paths must produce identical bftState. Divergence means
+	// newJustifier/AddBlock/Summarize broke the "append one vote == loop back" equivalence.
+	assert.Equal(t, *stateReal, *stateManual,
+		"computeState(checkpoint+1) diverges from manual reproduction; "+
+			"vote / threshold / quality semantics changed")
+}
+
+// TestFindCheckpointByQualityRejectsHeadBeforeFinalized pins that
+// findCheckpointByQuality rejects a (headID, finalized) pair with headID before
+// finalized, instead of underflowing the uint32 range. Resync's caller-side epoch
+// guard prevents this in normal flow, so this micro-test calls the function directly.
+func TestFindCheckpointByQualityRejectsHeadBeforeFinalized(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = testBFT.fastForward(thor.EpochLength() * 2); err != nil {
+		t.Fatal(err)
+	}
+
+	finalizedID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength())
+	if err != nil {
+		t.Fatal(err)
+	}
+	headID, err := testBFT.repo.NewBestChain().GetBlockID(thor.EpochLength() - 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = testBFT.engine.findCheckpointByQuality(1, finalizedID, headID)
+	assert.Error(t, err, "headID precedes finalized must be rejected")
+	assert.Contains(t, err.Error(), "headID precedes finalized")
+}
+
+// packStakerTxBlock packs, commits and registers one block signed by p carrying a
+// single staker-contract tx.
+func packStakerTxBlock(t *testing.T, test *TestBFT, p genesis.DevAccount, method string, value *big.Int, args ...any) {
+	t.Helper()
+
+	parent := test.repo.BestBlockSummary()
+	pk := packer.New(test.repo, test.stater, p.Address, &thor.Address{}, test.fc, 0)
+	flow, _, err := pk.Mock(parent, parent.Header.Timestamp()+thor.BlockInterval(), parent.Header.GasLimit())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := test.adoptStakerTx(flow, p.PrivateKey, method, value, args...); err != nil {
+		t.Fatal(err)
+	}
+	conflicts, err := test.repo.ScanConflicts(parent.Header.Number() + 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, stg, receipts, err := flow.Pack(p.PrivateKey, conflicts, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	require.Len(t, receipts, 1)
+	require.False(t, receipts[0].Reverted, "staker tx %s reverted", method)
+	if _, err := stg.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := test.repo.AddBlock(b, receipts, conflicts, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := test.engine.CommitBlock(b.Header(), conflicts, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCheckpointBlockOwnVoteUsesPostHousekeepWeight pins that when the checkpoint
+// block's own signer's weight changes at that block's Housekeep, its vote is weighed
+// by the post-housekeep weight — the same basis as thresholdWeight — not the stale
+// weight from the checkpoint's parent state. The decrease case is the dangerous
+// direction: phantom weight inflates comWeight against a threshold that no longer
+// includes it.
+func TestCheckpointBlockOwnVoteUsesPostHousekeepWeight(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+
+	// The harness fastForward forces EpochLength=1 per block (addBlock's
+	// quickTransition), so validators activate at startBlock and every block is a
+	// potential renewal point, gated only by IsPeriodEnd.
+	startBlock := forkCfg.HAYABUSA + hayabusaTP + 2
+	checkpoint := thor.EpochLength()
+
+	// Renewal points are StartBlock + k*period. Halving the distance to the
+	// checkpoint yields one intermediate renewal point; a change parked after it can
+	// only be applied at the checkpoint itself.
+	period := (checkpoint - startBlock) / 2
+	require.Equal(t, startBlock+2*period, checkpoint, "period must align renewals to the checkpoint")
+	intermediateRenewal := startBlock + period
+
+	cases := []struct {
+		name         string
+		expectedPre  uint64 // P's weight at checkpoint-1 (pre-housekeep)
+		expectedPost uint64 // P's weight at checkpoint (post-housekeep)
+		prepare      func(t *testing.T, test *TestBFT, p genesis.DevAccount)
+	}{
+		{
+			name:         "increase locked at checkpoint housekeep",
+			expectedPre:  validatorStake,
+			expectedPost: validatorStake * 2,
+			prepare: func(t *testing.T, test *TestBFT, p genesis.DevAccount) {
+				// Increase sent past the intermediate renewal locks at the checkpoint.
+				best := test.repo.BestBlockSummary().Header.Number()
+				require.NoError(t, test.fastForward(intermediateRenewal+1-best))
+				packStakerTxBlock(t, test, p, "increaseStake", toWei(validatorStake), p.Address)
+			},
+		},
+		{
+			name:         "decrease (PendingUnlockVET) applied at checkpoint housekeep",
+			expectedPre:  validatorStake * 2,
+			expectedPost: validatorStake,
+			prepare: func(t *testing.T, test *TestBFT, p genesis.DevAccount) {
+				// Lock an increase at the intermediate renewal first (stake must stay
+				// above the minimum), then park a decrease for the checkpoint renewal.
+				packStakerTxBlock(t, test, p, "increaseStake", toWei(validatorStake), p.Address)
+				best := test.repo.BestBlockSummary().Header.Number()
+				require.NoError(t, test.fastForward(intermediateRenewal+1-best))
+				packStakerTxBlock(t, test, p, "decreaseStake", big.NewInt(0), p.Address, toWei(validatorStake))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			origMinStakingPeriod := minStakingPeriod
+			origLow := thor.LowStakingPeriod()
+			minStakingPeriod = period
+			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP, LowStakingPeriod: period})
+			defer func() {
+				minStakingPeriod = origMinStakingPeriod
+				thor.SetConfig(thor.Config{LowStakingPeriod: origLow})
+			}()
+
+			testBFT, err := newTestBftPos(forkCfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// fastForward's round-robin makes devAccounts[0] sign block `checkpoint`.
+			p := devAccounts[0]
+			require.Zero(t, checkpoint%uint32(len(devAccounts)-1))
+
+			require.NoError(t, testBFT.fastForward(startBlock-testBFT.repo.BestBlockSummary().Header.Number()))
+
+			val, err := builtin.Staker.Native(testBFT.stater.NewState(testBFT.repo.BestBlockSummary().Root())).GetValidation(p.Address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.NotNil(t, val)
+			require.Equal(t, startBlock, val.StartBlock, "harness assumption: validator StartBlock")
+			require.Equal(t, period, val.Period, "harness assumption: validator Period")
+
+			tc.prepare(t, testBFT, p)
+
+			require.NoError(t, testBFT.fastForward(checkpoint-testBFT.repo.BestBlockSummary().Header.Number()))
+
+			bestChain := testBFT.repo.NewBestChain()
+			checkpointSum, err := bestChain.GetBlockSummary(checkpoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			signer, err := checkpointSum.Header.Signer()
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, p.Address, signer, "harness assumption: P signs the checkpoint block")
+
+			preSum, err := bestChain.GetBlockSummary(checkpoint - 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			preVal, err := builtin.Staker.Native(testBFT.stater.NewState(preSum.Root())).GetValidation(p.Address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, tc.expectedPre, preVal.Weight, "pre-housekeep weight")
+
+			postVal, err := builtin.Staker.Native(testBFT.stater.NewState(checkpointSum.Root())).GetValidation(p.Address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, tc.expectedPost, postVal.Weight, "post-housekeep weight")
+
+			// Fresh justifier for the checkpoint block (as bft.Select builds it).
+			testBFT.engine.caches.state.Purge()
+			testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+			if _, err := testBFT.engine.computeState(checkpointSum); err != nil {
+				t.Fatal(err)
+			}
+			entry := testBFT.engine.caches.justifier.Remove(checkpointSum.Header.ID())
+			if entry == nil {
+				t.Fatal("expected checkpoint justifier in cache")
+			}
+			js := entry.Value.(*justifier)
+
+			assert.Equal(t, tc.expectedPost, js.votes[p.Address].weight,
+				"checkpoint block's own vote must use post-housekeep weight, matching thresholdWeight's basis")
+			// P is the round's only COM voter so far: comWeight is exactly its weight.
+			assert.Equal(t, tc.expectedPost, js.comWeight, "comWeight must reflect the post-housekeep weight")
+
+			totalWeight, err := testBFT.engine.getTotalWeight(checkpointSum)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, totalWeight*2/3, js.thresholdWeight, "threshold must come from the same checkpoint state")
+
+			// Rebuilding the round from its storePoint (as Resync does) must weigh
+			// P's checkpoint vote identically.
+			storePoint := checkpoint + thor.EpochLength() - 1
+			require.NoError(t, testBFT.fastForward(storePoint-testBFT.repo.BestBlockSummary().Header.Number()))
+			spSum, err := testBFT.repo.NewBestChain().GetBlockSummary(storePoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testBFT.engine.caches.state.Purge()
+			testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+			if _, err := testBFT.engine.computeState(spSum); err != nil {
+				t.Fatal(err)
+			}
+			entry = testBFT.engine.caches.justifier.Remove(spSum.Header.ID())
+			if entry == nil {
+				t.Fatal("expected storePoint justifier in cache")
+			}
+			js = entry.Value.(*justifier)
+			assert.Equal(t, tc.expectedPost, js.votes[p.Address].weight,
+				"rebuilding from the storePoint must use the same post-housekeep weight")
+		})
+	}
+}
+
+// TestComputeStateSignerAbsentFromCommitteeErrors pins that a signer with no
+// validation entry in the round's weight state is an invariant violation and errors
+// — scheduling and proposer validation both run after SyncPOS, so every signer of a
+// PoS round is drawn from its post-housekeep committee; an absent signer means
+// corrupted state, not a zero vote.
+func TestComputeStateSignerAbsentFromCommitteeErrors(t *testing.T) {
+	forkCfg := &thor.ForkConfig{
+		HAYABUSA: 1,
+	}
+	hayabusaTP := uint32(1)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+
+	testBFT, err := newTestBftPos(forkCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	numBlksNeededForPos := forkCfg.HAYABUSA + thor.HayabusaTP() + 1
+	if err = testBFT.fastForward(thor.EpochLength() + 1 - numBlksNeededForPos); err != nil {
+		t.Fatal(err)
+	}
+
+	bestChain := testBFT.repo.NewBestChain()
+	checkpointSum, err := bestChain.GetBlockSummary(thor.EpochLength())
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetSum, err := bestChain.GetBlockSummary(thor.EpochLength() + 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	genesisSum, err := testBFT.repo.GetBlockSummary(testBFT.repo.GenesisBlock().Header().ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Weight state = genesis: no validator registered, every signer is absent.
+	js := newJustifier(0, thor.EpochLength(), 0, 1000)
+	js.posActive = true
+	js.weightRoot = genesisSum.Root()
+
+	testBFT.engine.caches.state.Purge()
+	testBFT.engine.caches.justifier = cache.NewPrioCache(16)
+	testBFT.engine.caches.justifier.Set(checkpointSum.Header.ID(), js, float64(thor.EpochLength()))
+
+	_, err = testBFT.engine.computeState(targetSum)
+	require.Error(t, err, "absent signer must error")
+	assert.Contains(t, err.Error(), "absent from committee")
 }

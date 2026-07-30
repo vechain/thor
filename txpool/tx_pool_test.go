@@ -117,6 +117,87 @@ func newHTTPServer() *httptest.Server {
 	return server
 }
 
+func gatherMetricFamily(t *testing.T, name string) *dto.MetricFamily {
+	t.Helper()
+
+	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
+	metricFamilies, err := gatherers.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range metricFamilies {
+		if mf.GetName() == name {
+			return mf
+		}
+	}
+	return nil
+}
+
+func gaugeValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
+	for _, m := range mf.GetMetric() {
+		matched := true
+		for key, want := range labels {
+			found := false
+			for _, label := range m.GetLabel() {
+				if label.GetName() == key {
+					found = true
+					if label.GetValue() != want {
+						matched = false
+					}
+					break
+				}
+			}
+			if !found {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return m.GetGauge().GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+func counterValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
+	if mf == nil {
+		return 0, false
+	}
+	for _, m := range mf.GetMetric() {
+		matched := true
+		for key, want := range labels {
+			found := false
+			for _, label := range m.GetLabel() {
+				if label.GetName() == key {
+					found = true
+					if label.GetValue() != want {
+						matched = false
+					}
+					break
+				}
+			}
+			if !found {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return m.GetCounter().GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+func hasLabelValue(mf *dto.MetricFamily, name string, value string) bool {
+	for _, m := range mf.GetMetric() {
+		for _, label := range m.GetLabel() {
+			if label.GetName() == name && label.GetValue() == value {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestTxPoolMetrics(t *testing.T) {
 	metrics.InitializePrometheusMetrics()
 
@@ -196,7 +277,6 @@ func TestTxPoolMetrics(t *testing.T) {
 		}
 	}
 
-	assert.True(t, foundLegacy, "should have metric entry for Legacy transaction")
 	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
 }
 
@@ -626,7 +706,7 @@ func TestWashTxs(t *testing.T) {
 	pool := newPool(1, LIMIT_PER_ACCOUNT, &thor.NoFork)
 	defer pool.Close()
 
-	txs, _, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Zero(t, len(txs))
 	assert.Zero(t, len(pool.Executables()))
@@ -634,7 +714,7 @@ func TestWashTxs(t *testing.T) {
 	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 	assert.Nil(t, pool.AddLocal(tx1)) // this tx won't participate in the wash out.
 
-	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, tx.Transactions{tx1}, txs)
 
@@ -650,7 +730,7 @@ func TestWashTxs(t *testing.T) {
 		Build()
 	pool.repo.AddBlock(b1, nil, 0, false)
 
-	txs, _, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, tx.Transactions{tx1}, txs)
 
@@ -662,10 +742,33 @@ func TestWashTxs(t *testing.T) {
 	txObj3, _ := ResolveTx(tx3, false)
 	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT, nil)) // this tx will participate in the wash out.
 
-	txs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	txs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(txs))
-	assert.Equal(t, 1, removedLegacy+removedDynamicFee)
+	assert.Equal(t, 1, washed)
+}
+
+func TestWashPromoteDrainsPendingCost(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	// Add a batch of txs from distinct accounts so wash promotes and accounts them.
+	for i := range 3 {
+		trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i])
+		assert.Nil(t, pool.Add(trx))
+	}
+
+	// Trigger wash to promote (executable) and account pending cost under the map lock.
+	_, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
+	assert.Nil(t, err)
+
+	// Remove every object one by one; removal must drain the accounting exactly.
+	for _, obj := range pool.all.ToTxObjects() {
+		assert.NotPanics(t, func() { pool.all.RemoveByHash(obj.Hash()) })
+	}
+
+	// No orphaned pending cost left behind.
+	assert.Equal(t, 0, len(pool.all.cost), "pending cost accounting must be fully drained")
 }
 
 func TestOrderTxsAfterGalacticaFork(t *testing.T) {
@@ -709,9 +812,9 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 		assert.Nil(t, pool.AddRemote(tx))
 	}
 
-	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	execTxs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
-	assert.Zero(t, removedLegacy+removedDynamicFee)
+	assert.Zero(t, washed)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, poolLimit-2, len(execTxs))
 	for i := 1; i < len(txs); i++ {
@@ -744,9 +847,9 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	assert.Nil(t, pool.AddRemote(firstTx))
 	assert.Nil(t, pool.AddRemote(lastTx))
 
-	execTxs, removedLegacy, removedDynamicFee, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	execTxs, washed, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
-	assert.Zero(t, removedLegacy+removedDynamicFee)
+	assert.Zero(t, washed)
 	assert.Equal(t, poolLimit, len(execTxs))
 	assert.Equal(t, execTxs[0].ID(), firstTx.ID())
 	assert.Equal(t, execTxs[len(execTxs)-1].ID(), lastTx.ID())
@@ -793,9 +896,9 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 		assert.Nil(t, pool.AddRemote(tx))
 	}
 
-	execTxs, removedLegacy, removedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	execTxs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
-	assert.Zero(t, removedLegacy+removedDynamicFee)
+	assert.Zero(t, washed)
 	assert.Equal(t, len(txs), len(execTxs))
 	assert.Equal(t, totalPoolTxs, len(execTxs))
 	for i := 1; i < len(txs); i++ {
@@ -1271,17 +1374,17 @@ func TestExpiredTxs(t *testing.T) {
 		newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2]),
 	))
 
-	executables, washedLegacy, washedDynamicFee, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 90, len(executables))
-	assert.Equal(t, 0, washedLegacy+washedDynamicFee)
+	assert.Equal(t, 0, washed)
 	assert.Equal(t, 91, pool.all.Len())
 
 	time.Sleep(3 * time.Second)
-	executables, washedLegacy, washedDynamicFee, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	executables, washed, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(executables))
-	assert.Equal(t, 91, washedLegacy+washedDynamicFee)
+	assert.Equal(t, 91, washed)
 	assert.Equal(t, 0, pool.all.Len())
 }
 
@@ -1747,23 +1850,30 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 	err := pool.add(trx, false, false)
 	assert.Nil(t, err)
 
-	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
+	_, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.Nil(t, err)
 
 	txObj := pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	assert.NotNil(t, txObj.priorityGasPrice, "priorityGasPrice should be set after initial wash")
-	initialPriorityGasPrice := new(big.Int).Set(txObj.priorityGasPrice)
+	assert.NotNil(t, txObj.priorityGasPrice(), "priorityGasPrice should be set after initial wash")
+	initialPriorityGasPrice := new(big.Int).Set(txObj.priorityGasPrice())
 
 	// Test 1: Wash with headBlockChanged=false should not recompute priorityGasPrice
 	wrongPriorityGasPrice := new(big.Int).Mul(initialPriorityGasPrice, big.NewInt(999))
-	txObj.priorityGasPrice = wrongPriorityGasPrice
+	cur := txObj.pricing.Load()
+	txObj.setPricing(&txPricing{
+		payer:            cur.payer,
+		cost:             cur.cost,
+		priorityGasPrice: wrongPriorityGasPrice,
+		feeCeiling:       cur.feeCeiling,
+		priorityCeiling:  cur.priorityCeiling,
+	})
 
-	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
+	_, _, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	txObj = pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	assert.Equal(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
+	assert.Equal(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice().String(),
 		"priorityGasPrice should NOT be recomputed when headBlockChanged=false")
 
 	// Test 2: headBlockChanged=true with unchanged baseFee should not recompute
@@ -1790,11 +1900,11 @@ func TestWashPriorityGasPriceRecomputation(t *testing.T) {
 	}
 
 	// Test 3: Wash with new block that has different baseFee should recompute priorityGasPrice
-	_, _, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
+	_, _, err = pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.Nil(t, err)
 	txObj = pool.all.GetByID(trx.ID())
 	assert.NotNil(t, txObj)
-	assert.NotEqual(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice.String(),
+	assert.NotEqual(t, wrongPriorityGasPrice.String(), txObj.priorityGasPrice().String(),
 		"priorityGasPrice SHOULD be recomputed when baseFee changes")
 }
 
@@ -2193,7 +2303,7 @@ func TestWashDeferredTxPendingCostEnforcement(t *testing.T) {
 		Build()
 	require.NoError(t, repo.AddBlock(b2, tx.Receipts{}, 0, true))
 
-	executables, _, _, err := pool.wash(repo.BestBlockSummary(), true)
+	executables, _, err := pool.wash(repo.BestBlockSummary(), true)
 	require.NoError(t, err)
 
 	promoted := 0
@@ -2356,6 +2466,33 @@ func TestValidateTxBasics(t *testing.T) {
 			head:        &chain.BlockSummary{},
 			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
 		},
+		{
+			name: "legacy tx gas at max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			expectedErr: nil,
+		},
+		{
+			name: "legacy tx gas exceeds max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit + 1).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
+		},
+		{
+			name: "dyn fee tx gas exceeds max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit + 1).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -2364,6 +2501,80 @@ func TestValidateTxBasics(t *testing.T) {
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}
+}
+
+func TestValidateTxBasics_EthDynamicFeeChainID(t *testing.T) {
+	// INTERSTELLAR = 0 means it activates from block 0; genesis (block 0) is
+	// already past the fork, so nextBlockNum=1 satisfies the >=0 condition.
+	fc := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 0}
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &fc)
+	defer pool.Close()
+
+	// Derive the network chain ID from the genesis — no hardcoded value needed.
+	networkChainID := pool.repo.ChainID()
+
+	buildEth1559 := func(chainID uint64) *tx.Transaction {
+		return tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
+			ChainID(chainID).
+			Gas(21000).
+			MaxFeePerGas(big.NewInt(10e9)).
+			MaxPriorityFeePerGas(big.NewInt(1e9)).
+			Build(),
+			devAccounts[0].PrivateKey)
+	}
+
+	t.Run("correct chain ID accepted", func(t *testing.T) {
+		err := pool.validateTxBasics(buildEth1559(networkChainID))
+		assert.NoError(t, err)
+	})
+
+	t.Run("wrong chain ID rejected", func(t *testing.T) {
+		err := pool.validateTxBasics(buildEth1559(networkChainID + 1))
+		assert.Equal(t, badTxError{fmt.Sprintf("Ethereum chain ID %d does not match network chain ID %d",
+			networkChainID+1, networkChainID)}, err)
+	})
+
+	// Pre-INTERSTELLAR fork: TypeEthDynamicFee is rejected by the type whitelist
+	// regardless of chain ID — eth tx (0x02) needs INTERSTELLAR to be active.
+	t.Run("rejected before INTERSTELLAR", func(t *testing.T) {
+		preFork := thor.ForkConfig{GALACTICA: 0, INTERSTELLAR: 1<<32 - 1}
+		prePool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &preFork)
+		defer prePool.Close()
+
+		err := prePool.validateTxBasics(buildEth1559(prePool.repo.ChainID()))
+		assert.Equal(t, badTxError{"invalid tx type"}, err)
+	})
+}
+
+// TestValidateTxBasics_TypeForkWhitelist verifies the type-fork rule in
+// validateTxBasics: pre-GALACTICA admits only TypeLegacy; pre-INTERSTELLAR
+// admits TypeLegacy + TypeDynamicFee but not TypeEthDynamicFee.
+func TestValidateTxBasics_TypeForkWhitelist(t *testing.T) {
+	preGalactica := thor.ForkConfig{GALACTICA: 1<<32 - 1, INTERSTELLAR: 1<<32 - 1}
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &preGalactica)
+	defer pool.Close()
+
+	// TypeDynamicFee pre-GALACTICA → rejected
+	dynTx := tx.MustSign(tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(pool.repo.ChainTag()).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxPriorityFeePerGas(big.NewInt(0)).
+		Clause(tx.NewClause(nil)).
+		Build(),
+		devAccounts[0].PrivateKey)
+	err := pool.validateTxBasics(dynTx)
+	assert.Equal(t, badTxError{"invalid tx type"}, err)
+
+	// TypeLegacy pre-GALACTICA → accepted
+	legacyTx := tx.MustSign(tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(pool.repo.ChainTag()).
+		Gas(21000).
+		GasPriceCoef(0).
+		Clause(tx.NewClause(nil)).
+		Build(),
+		devAccounts[0].PrivateKey)
+	assert.NoError(t, pool.validateTxBasics(legacyTx))
 }
 
 func TestValidateTxBasics_EthDynamicFeeChainID(t *testing.T) {
@@ -2479,7 +2690,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	// The wash method should keep the 10 highest priority transactions (6-15)
 	// and evict the 5 lowest priority ones (1-5).
 	pool.options.Limit = 10
-	executables, _, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
+	executables, _, err := pool.wash(pool.repo.BestBlockSummary(), true)
 	assert.NoError(t, err)
 
 	for _, tx := range executables {

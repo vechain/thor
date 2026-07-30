@@ -188,6 +188,7 @@ func (m *txObjectMap) removeLocked(txHash thor.Bytes32, txObj *TxObject) {
 	if err := m.costs.release(vechainReservationOwner(txHash)); err != nil {
 		logger.Error("failed to release transaction cost", "hash", txHash, "err", err)
 	}
+	return true
 }
 
 func (m *txObjectMap) ToTxObjects() []*TxObject {
@@ -232,6 +233,8 @@ func (m *txObjectMap) executableSnapshot(txs tx.Transactions) *vechainExecutable
 func (m *txObjectMap) Fill(txObjs []*TxObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	inserted := make([]*TxObject, 0, len(txObjs))
 	for _, txObj := range txObjs {
 		hash := txObj.Hash()
 		if _, found := m.mapByHash[hash]; found {

@@ -262,7 +262,6 @@ func TestGetAfterPrune(t *testing.T) {
 	mux := &MuxDB{
 		engine:      engine,
 		trieBackend: back,
-		done:        make(chan struct{}),
 	}
 
 	key := thor.Blake2b([]byte("key")).Bytes()

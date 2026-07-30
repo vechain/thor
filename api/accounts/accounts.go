@@ -401,15 +401,10 @@ func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx 
 	}
 
 	if len(batchCallData.BlockRef) > 0 {
-		blockRef, err := hexutil.Decode(batchCallData.BlockRef)
+		blkRef, err := restutil.ParseBlockRef(batchCallData.BlockRef)
 		if err != nil {
-			return nil, 0, nil, errors.WithMessage(err, "blockRef")
+			return nil, 0, nil, err
 		}
-		if len(blockRef) != 8 {
-			return nil, 0, nil, errors.New("blockRef: invalid length")
-		}
-		var blkRef tx.BlockRef
-		copy(blkRef[:], blockRef[:])
 		txCtx.BlockRef = blkRef
 	}
 
