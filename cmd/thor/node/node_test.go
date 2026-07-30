@@ -40,7 +40,7 @@ type mockTxPool struct {
 
 	// admitCalls records Pool admit entry points for wiring tests.
 	admitCalls []admitCall
-	forkCalls  []txpool.ForkReinjection
+	forkCalls  []txpool.HeadChangeTxs
 }
 
 type admitCall struct {
@@ -70,7 +70,7 @@ func (m *mockTxPool) AddRemote(newTx *tx.Transaction) error {
 	return nil
 }
 
-func (m *mockTxPool) ReinjectFromFork(fork txpool.ForkReinjection) error {
+func (m *mockTxPool) ReconcileOnHeadChange(fork txpool.HeadChangeTxs) error {
 	m.mu.Lock()
 	m.forkCalls = append(m.forkCalls, fork)
 	m.mu.Unlock()
@@ -80,10 +80,10 @@ func (m *mockTxPool) ReinjectFromFork(fork txpool.ForkReinjection) error {
 	return nil
 }
 
-func (m *mockTxPool) getForkCalls() []txpool.ForkReinjection {
+func (m *mockTxPool) getForkCalls() []txpool.HeadChangeTxs {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := make([]txpool.ForkReinjection, len(m.forkCalls))
+	out := make([]txpool.HeadChangeTxs, len(m.forkCalls))
 	copy(out, m.forkCalls)
 	return out
 }

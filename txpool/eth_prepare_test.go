@@ -71,7 +71,7 @@ func TestEthPreparationsGetWithoutPrepareReportsMissing(t *testing.T) {
 // An empty preparation set must still commit correctly by preparing inline,
 // so a too-narrow preparation window can never reject a valid transaction.
 func TestEthPoolCorePromotesWithoutPrePass(t *testing.T) {
-	m := newEthPoolCore(newCostTracker())
+	m := newEthPoolCore(newCostTracker(), Options{})
 	first := newEthCoreTestObject(t, 0, 10, 0)
 	second := newEthCoreTestObject(t, 1, 10, 0)
 	origin := first.Origin()

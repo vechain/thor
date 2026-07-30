@@ -302,9 +302,9 @@ func TestCostTrackerCrossPoolAdmission(t *testing.T) {
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
 
-	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolA.Close()
-	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolB.Close()
 
 	acc := devAccounts[0]
@@ -322,9 +322,9 @@ func TestCostTrackerCrossPoolAdmissionReverseOrder(t *testing.T) {
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
 
-	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolA.Close()
-	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolB.Close()
 
 	acc := devAccounts[0]
@@ -340,9 +340,9 @@ func TestCostTrackerReleaseAllowsSiblingPoolAdmission(t *testing.T) {
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
 
-	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolA.Close()
-	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolB.Close()
 
 	acc := devAccounts[0]
@@ -363,10 +363,10 @@ func TestEthRemovalReleasesCostForVeChainAdmission(t *testing.T) {
 	repo, stater, forkConfig := limitedEnergyPoolFixture(t)
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
-	vechainPool := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	vechainPool := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer vechainPool.Close()
 
-	ethCore := newEthPoolCore(costs)
+	ethCore := newEthPoolCore(costs, opts)
 	ethTxObj := newEthCoreTestObject(t, 0, 10, 0)
 	origin := ethTxObj.Origin()
 	ethTxObj.executable = true
@@ -408,9 +408,9 @@ func TestCostTrackerWashPromotionRespectsSiblingReservation(t *testing.T) {
 	costs := newCostTracker()
 	opts := Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}
 
-	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolA := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolA.Close()
-	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs)
+	poolB := newVeChainPool(repo, stater, opts, forkConfig, costs, new(blocklist))
 	defer poolB.Close()
 
 	acc := devAccounts[0]
@@ -436,11 +436,326 @@ func TestCostTrackerWashPromotionRespectsSiblingReservation(t *testing.T) {
 	assert.Nil(t, poolB.Get(trx.ID()), "unaffordable promotion must wash the tx out")
 }
 
-func TestCoordinatorSharesCostTracker(t *testing.T) {
-	repo, stater, forkConfig := limitedEnergyPoolFixture(t)
-	coord := NewCoordinator(repo, stater, Options{Limit: LIMIT, LimitPerAccount: LIMIT, MaxLifetime: time.Hour}, forkConfig)
-	defer coord.Close()
+func TestReserveCost(t *testing.T) {
+	payer := thor.BytesToAddress([]byte{0x71})
 
-	require.Same(t, coord.costs, coord.vechain.costs)
-	require.Same(t, coord.costs, coord.eth.costs)
+	tests := []struct {
+		name         string
+		setupPending *big.Int
+		cost         *big.Int
+		balance      *big.Int
+		wantErr      error
+		wantPending  *big.Int
+		wantAbsent   bool
+	}{
+		{
+			name:        "first reservation within balance",
+			cost:        big.NewInt(60),
+			balance:     big.NewInt(100),
+			wantPending: big.NewInt(60),
+		},
+		{
+			name:         "accumulates existing pending",
+			setupPending: big.NewInt(30),
+			cost:         big.NewInt(20),
+			balance:      big.NewInt(100),
+			wantPending:  big.NewInt(50),
+		},
+		{
+			name:         "exact balance succeeds",
+			setupPending: big.NewInt(40),
+			cost:         big.NewInt(60),
+			balance:      big.NewInt(100),
+			wantPending:  big.NewInt(100),
+		},
+		{
+			name:         "zero cost preserves existing pending",
+			setupPending: big.NewInt(40),
+			cost:         new(big.Int),
+			balance:      big.NewInt(100),
+			wantPending:  big.NewInt(40),
+		},
+		{
+			name:       "zero cost on empty pending is no-op",
+			cost:       new(big.Int),
+			balance:    big.NewInt(100),
+			wantAbsent: true,
+		},
+		{
+			name:         "insufficient energy rejects",
+			setupPending: big.NewInt(60),
+			cost:         big.NewInt(50),
+			balance:      big.NewInt(100),
+			wantErr:      errInsufficientEnergy,
+			wantPending:  big.NewInt(60),
+		},
+		{
+			name:       "insufficient energy on first reservation",
+			cost:       big.NewInt(101),
+			balance:    big.NewInt(100),
+			wantErr:    errInsufficientEnergy,
+			wantAbsent: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := newCostTracker()
+			if tc.setupPending != nil {
+				tr.pending[payer] = new(big.Int).Set(tc.setupPending)
+			}
+
+			err := tr.reserveCost(payer, tc.cost, tc.balance)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tc.wantAbsent {
+				assert.NotContains(t, tr.pending, payer)
+				return
+			}
+			assert.Equal(t, tc.wantPending, tr.pending[payer])
+		})
+	}
+}
+
+func TestReleaseCost(t *testing.T) {
+	payer := thor.BytesToAddress([]byte{0x72})
+
+	tests := []struct {
+		name         string
+		setupPending *big.Int
+		cost         *big.Int
+		wantPending  *big.Int
+		wantAbsent   bool
+	}{
+		{
+			name:         "zero cost is no-op",
+			setupPending: big.NewInt(50),
+			cost:         new(big.Int),
+			wantPending:  big.NewInt(50),
+		},
+		{
+			name:         "full release deletes pending entry",
+			setupPending: big.NewInt(100),
+			cost:         big.NewInt(100),
+			wantAbsent:   true,
+		},
+		{
+			name:         "partial release subtracts cost",
+			setupPending: big.NewInt(100),
+			cost:         big.NewInt(40),
+			wantPending:  big.NewInt(60),
+		},
+		{
+			name:         "negative cost increases pending",
+			setupPending: big.NewInt(100),
+			cost:         big.NewInt(-30),
+			wantPending:  big.NewInt(130),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := newCostTracker()
+			tr.pending[payer] = new(big.Int).Set(tc.setupPending)
+
+			tr.releaseCost(payer, tc.cost)
+
+			if tc.wantAbsent {
+				assert.NotContains(t, tr.pending, payer)
+				return
+			}
+			assert.Equal(t, tc.wantPending, tr.pending[payer])
+		})
+	}
+}
+
+func TestAddCost(t *testing.T) {
+	payer := thor.BytesToAddress([]byte{0x73})
+	other := thor.BytesToAddress([]byte{0x74})
+
+	tests := []struct {
+		name  string
+		setup map[thor.Address]*big.Int
+		run   func(costs map[thor.Address]*big.Int)
+		want  map[thor.Address]*big.Int
+	}{
+		{
+			name:  "zero cost is no-op",
+			setup: make(map[thor.Address]*big.Int),
+			run: func(costs map[thor.Address]*big.Int) {
+				addCost(costs, payer, new(big.Int))
+			},
+			want: map[thor.Address]*big.Int{},
+		},
+		{
+			name:  "creates entry for new payer",
+			setup: make(map[thor.Address]*big.Int),
+			run: func(costs map[thor.Address]*big.Int) {
+				addCost(costs, payer, big.NewInt(25))
+			},
+			want: map[thor.Address]*big.Int{payer: big.NewInt(25)},
+		},
+		{
+			name:  "accumulates existing entry",
+			setup: map[thor.Address]*big.Int{payer: big.NewInt(25)},
+			run: func(costs map[thor.Address]*big.Int) {
+				addCost(costs, payer, big.NewInt(10))
+			},
+			want: map[thor.Address]*big.Int{payer: big.NewInt(35)},
+		},
+		{
+			name:  "tracks payers independently",
+			setup: make(map[thor.Address]*big.Int),
+			run: func(costs map[thor.Address]*big.Int) {
+				addCost(costs, payer, big.NewInt(25))
+				addCost(costs, other, big.NewInt(40))
+			},
+			want: map[thor.Address]*big.Int{
+				payer: big.NewInt(25),
+				other: big.NewInt(40),
+			},
+		},
+		{
+			name:  "negative cost subtracts from existing entry",
+			setup: map[thor.Address]*big.Int{payer: big.NewInt(25)},
+			run: func(costs map[thor.Address]*big.Int) {
+				addCost(costs, payer, big.NewInt(-10))
+			},
+			want: map[thor.Address]*big.Int{payer: big.NewInt(15)},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			costs := tc.setup
+			tc.run(costs)
+			assert.Equal(t, tc.want, costs)
+		})
+	}
+}
+
+func TestCostTrackerRollback(t *testing.T) {
+	payer := thor.BytesToAddress([]byte{0x75})
+	oldOwner := vechainReservationOwner(thor.Bytes32{0x75})
+	newOwner1 := vechainReservationOwner(thor.Bytes32{0x76})
+	newOwner2 := vechainReservationOwner(thor.Bytes32{0x77})
+
+	tests := []struct {
+		name             string
+		setup            func(tr *costTracker)
+		old              map[reservationOwner]reservation
+		accepted         []reservationRequest
+		wantPending      *big.Int
+		wantReservations []reservationOwner
+		wantAbsent       []reservationOwner
+	}{
+		{
+			name: "restores prior reservations and pending",
+			setup: func(tr *costTracker) {
+				tr.pending[payer] = big.NewInt(30)
+				tr.reservations[newOwner1] = reservation{payer: payer, cost: big.NewInt(30)}
+			},
+			old: map[reservationOwner]reservation{
+				oldOwner: {payer: payer, cost: big.NewInt(60)},
+			},
+			accepted: []reservationRequest{{
+				owner:   newOwner1,
+				payer:   payer,
+				cost:    big.NewInt(30),
+				balance: big.NewInt(100),
+			}},
+			wantPending:      big.NewInt(60),
+			wantReservations: []reservationOwner{oldOwner},
+			wantAbsent:       []reservationOwner{newOwner1},
+		},
+		{
+			name: "rolls back multiple accepted reservations",
+			setup: func(tr *costTracker) {
+				tr.pending[payer] = big.NewInt(90)
+				tr.reservations[newOwner1] = reservation{payer: payer, cost: big.NewInt(50)}
+				tr.reservations[newOwner2] = reservation{payer: payer, cost: big.NewInt(40)}
+			},
+			old: map[reservationOwner]reservation{
+				oldOwner: {payer: payer, cost: big.NewInt(60)},
+			},
+			accepted: []reservationRequest{
+				{owner: newOwner1, payer: payer, cost: big.NewInt(50), balance: big.NewInt(200)},
+				{owner: newOwner2, payer: payer, cost: big.NewInt(40), balance: big.NewInt(200)},
+			},
+			wantPending:      big.NewInt(60),
+			wantReservations: []reservationOwner{oldOwner},
+			wantAbsent:       []reservationOwner{newOwner1, newOwner2},
+		},
+		{
+			name: "empty rollback is no-op",
+			setup: func(tr *costTracker) {
+				tr.pending[payer] = big.NewInt(60)
+				tr.reservations[oldOwner] = reservation{payer: payer, cost: big.NewInt(60)}
+			},
+			wantPending:      big.NewInt(60),
+			wantReservations: []reservationOwner{oldOwner},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := newCostTracker()
+			if tc.setup != nil {
+				tc.setup(tr)
+			}
+
+			tr.rollback(tc.old, tc.accepted)
+
+			assert.Equal(t, tc.wantPending, tr.pending[payer])
+			for _, owner := range tc.wantReservations {
+				assert.Contains(t, tr.reservations, owner)
+			}
+			for _, owner := range tc.wantAbsent {
+				assert.NotContains(t, tr.reservations, owner)
+			}
+		})
+	}
+}
+
+func TestCostTrackerPendingCost(t *testing.T) {
+	payer := thor.BytesToAddress([]byte{0x76})
+
+	tests := []struct {
+		name         string
+		setupPending *big.Int
+		want         *big.Int
+		mutateCopy   bool
+	}{
+		{
+			name: "returns zero for unknown payer",
+			want: new(big.Int),
+		},
+		{
+			name:         "returns copy of pending amount",
+			setupPending: big.NewInt(42),
+			want:         big.NewInt(42),
+			mutateCopy:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := newCostTracker()
+			if tc.setupPending != nil {
+				tr.pending[payer] = new(big.Int).Set(tc.setupPending)
+			}
+
+			got := tr.pendingCost(payer)
+			assert.Equal(t, tc.want, got)
+
+			if tc.mutateCopy {
+				got.Add(got, big.NewInt(1))
+				assert.Equal(t, tc.setupPending, tr.pending[payer], "caller mutation must not affect tracker state")
+			}
+		})
+	}
 }

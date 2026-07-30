@@ -16,7 +16,6 @@ import (
 // nothing, so it can run on a cheap timer independently of the head. It does not
 // publish pool events.
 type ethSweepOptions struct {
-	now          int64
 	maxLifetime  time.Duration
 	pendingLimit int
 	queueLimit   int
@@ -32,7 +31,7 @@ type ethSweepResult struct {
 // and global limits. It only removes and demotes, never promotes: expiry leaves a
 // nonce gap behind it and limit enforcement leaves the limit full, so nothing it
 // does can make a queued transaction contiguous and affordable.
-func (m *ethPoolCore) sweep(options ethSweepOptions) (ethSweepResult, error) {
+func (m *ethPoolCore) sweep() (ethSweepResult, error) {
 	m.mutationMu.Lock()
 	defer m.mutationMu.Unlock()
 
@@ -47,17 +46,17 @@ func (m *ethPoolCore) sweep(options ethSweepOptions) (ethSweepResult, error) {
 		if sender == nil {
 			continue
 		}
-		if err := m.removeExpiredLocked(sender, options, &result); err != nil {
+		if err := m.removeExpiredLocked(sender, m.options, &result); err != nil {
 			return ethSweepResult{}, err
 		}
-		if err := m.enforceSenderLimitsLocked(sender, options, &result); err != nil {
+		if err := m.enforceSenderLimitsLocked(sender, m.options, &result); err != nil {
 			return ethSweepResult{}, err
 		}
 		if sender.isEmpty() {
 			delete(m.senders, origin)
 		}
 	}
-	if err := m.enforceGlobalLimitLocked(origins, options.globalLimit, &result); err != nil {
+	if err := m.enforceGlobalLimitLocked(origins, m.options.Limit, &result); err != nil {
 		return ethSweepResult{}, err
 	}
 	result.demoted = m.retainedDemotionsLocked(wasExecutable)
@@ -66,16 +65,17 @@ func (m *ethPoolCore) sweep(options ethSweepOptions) (ethSweepResult, error) {
 
 func (m *ethPoolCore) removeExpiredLocked(
 	sender *ethSender,
-	options ethSweepOptions,
+	options Options,
 	result *ethSweepResult,
 ) error {
-	if options.maxLifetime <= 0 {
+	if options.MaxLifetime <= 0 {
 		return nil
 	}
+	now := time.Now().UnixNano()
 	expired := func(txObj *TxObject) bool {
 		return !txObj.localSubmitted &&
-			options.now > txObj.timeAdded &&
-			options.now-txObj.timeAdded > int64(options.maxLifetime)
+			now > txObj.timeAdded &&
+			now-txObj.timeAdded > int64(options.MaxLifetime)
 	}
 
 	for nonce := sender.stateNonce; nonce < sender.poolNonce(); nonce++ {
@@ -124,11 +124,11 @@ func (m *ethPoolCore) evictPendingFromLocked(
 
 func (m *ethPoolCore) enforceSenderLimitsLocked(
 	sender *ethSender,
-	options ethSweepOptions,
+	options Options,
 	result *ethSweepResult,
 ) error {
-	if options.pendingLimit >= 0 && len(sender.pending) > options.pendingLimit {
-		cutoff := sender.stateNonce + uint64(options.pendingLimit)
+	if options.EthAccountSlots >= 0 && len(sender.pending) > options.EthAccountSlots {
+		cutoff := sender.stateNonce + uint64(options.EthAccountSlots)
 		var releases []reservationOwner
 		for nonce := range sender.pending {
 			if nonce >= cutoff {
@@ -140,9 +140,9 @@ func (m *ethPoolCore) enforceSenderLimitsLocked(
 		}
 		sender.demoteFrom(cutoff)
 	}
-	if options.queueLimit >= 0 && len(sender.queue) > options.queueLimit {
+	if options.EthAccountQueue >= 0 && len(sender.queue) > options.EthAccountQueue {
 		nonces := sortedNoncesDesc(sender.queue)
-		excess := len(nonces) - options.queueLimit
+		excess := len(nonces) - options.EthAccountQueue
 		for _, nonce := range nonces[:excess] {
 			txObj := sender.queue[nonce]
 			delete(sender.queue, nonce)

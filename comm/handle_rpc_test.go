@@ -30,7 +30,7 @@ func TestHandleRPC_MsgNewTx(t *testing.T) {
 	require.NoError(t, err)
 	repo := chain.Repo()
 
-	pool := txpool.New(repo, chain.Stater(), txpool.Options{
+	pool := txpool.NewCoordinator(repo, chain.Stater(), txpool.Options{
 		Limit:           10000,
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,

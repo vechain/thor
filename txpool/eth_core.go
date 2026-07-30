@@ -37,13 +37,15 @@ type ethPoolCore struct {
 	allByHash  map[thor.Bytes32]*TxObject
 	senders    map[thor.Address]*ethSender
 	costs      *costTracker
+	options    Options
 }
 
-func newEthPoolCore(costs *costTracker) *ethPoolCore {
+func newEthPoolCore(costs *costTracker, options Options) *ethPoolCore {
 	return &ethPoolCore{
 		allByHash: make(map[thor.Bytes32]*TxObject),
 		senders:   make(map[thor.Address]*ethSender),
 		costs:     costs,
+		options:   options,
 	}
 }
 

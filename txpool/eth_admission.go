@@ -94,45 +94,82 @@ func (ctx *ethAdmissionContext) stateNonce(origin thor.Address) (uint64, error) 
 	return nonce, nil
 }
 
-func (p *EthPool) resolveAdmission(
-	newTx *tx.Transaction,
-	ctx *ethAdmissionContext,
-	duplicateNoop bool,
-) (*TxObject, uint64, bool, error) {
+// resolveAdmissionPrecheck validates properties that need no head/state snapshot.
+// skip is true for silent drops (blocklist).
+func (p *EthPool) resolveAdmissionPrecheck(newTx *tx.Transaction) (*TxObject, bool, error) {
 	if newTx == nil || !newTx.IsEthereumTx() {
-		return nil, 0, false, badTxError{"invalid tx type for Ethereum pool"}
-	}
-	if p.core.GetByHash(newTx.Hash()) != nil {
-		if duplicateNoop {
-			return nil, 0, true, nil
-		}
-		return nil, 0, false, txRejectedError{errEthAlreadyKnown.Error()}
+		return nil, false, badTxError{"invalid tx type for Ethereum pool"}
 	}
 	if err := validateTxBasics(p.repo, p.forkConfig, newTx); err != nil {
-		return nil, 0, false, err
+		return nil, false, err
 	}
 	if p.isBlocked(newTx) {
-		return nil, 0, true, nil
+		return nil, true, nil
 	}
 	txObj, err := ResolveTx(newTx, false)
 	if err != nil {
-		return nil, 0, false, badTxError{err.Error()}
+		return nil, false, badTxError{err.Error()}
 	}
+	return txObj, false, nil
+}
+
+// resolveAdmissionWithContext validates against a fixed head/state snapshot.
+func (p *EthPool) resolveAdmissionWithContext(
+	txObj *TxObject,
+	newTx *tx.Transaction,
+	ctx *ethAdmissionContext,
+) (uint64, error) {
 	if newTx.Gas() > ctx.head.Header.GasLimit() {
-		return nil, 0, false, txRejectedError{"tx gas exceeds block gas limit"}
+		return 0, txRejectedError{"tx gas exceeds block gas limit"}
 	}
 	chainView := p.repo.NewChain(ctx.head.Header.ID())
 	if known, err := chainView.HasTransaction(newTx.ID(), 0); err != nil {
-		return nil, 0, false, err
+		return 0, err
 	} else if known {
-		return nil, 0, false, txRejectedError{"known tx"}
+		return 0, txRejectedError{"known tx"}
 	}
 	stateNonce, err := ctx.stateNonce(txObj.Origin())
 	if err != nil {
-		return nil, 0, false, err
+		return 0, err
 	}
 	if newTx.Nonce() < stateNonce {
-		return nil, 0, false, txRejectedError{errEthNonceTooLow.Error()}
+		return 0, txRejectedError{errEthNonceTooLow.Error()}
+	}
+	return stateNonce, nil
+}
+
+func (p *EthPool) resolveRemoteAdmission(
+	newTx *tx.Transaction,
+) (*TxObject, uint64, bool, *ethAdmissionContext, error) {
+	if p.core.GetByHash(newTx.Hash()) != nil {
+		return nil, 0, false, nil, txRejectedError{errEthAlreadyKnown.Error()}
+	}
+	txObj, skip, err := p.resolveAdmissionPrecheck(newTx)
+	if err != nil || skip {
+		return nil, 0, skip, nil, err
+	}
+	ctx := p.newAdmissionContext()
+	stateNonce, err := p.resolveAdmissionWithContext(txObj, newTx, ctx)
+	if err != nil {
+		return nil, 0, false, nil, err
+	}
+	return txObj, stateNonce, false, ctx, nil
+}
+
+func (p *EthPool) resolveReinjectAdmission(
+	newTx *tx.Transaction,
+	ctx *ethAdmissionContext,
+) (*TxObject, uint64, bool, error) {
+	if p.core.GetByHash(newTx.Hash()) != nil {
+		return nil, 0, true, nil
+	}
+	txObj, skip, err := p.resolveAdmissionPrecheck(newTx)
+	if err != nil || skip {
+		return nil, 0, skip, err
+	}
+	stateNonce, err := p.resolveAdmissionWithContext(txObj, newTx, ctx)
+	if err != nil {
+		return nil, 0, false, err
 	}
 	return txObj, stateNonce, false, nil
 }

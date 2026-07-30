@@ -42,7 +42,7 @@ func (s vechainExecutablesSnapshot) transactions() tx.Transactions {
 type ethExecutablesSnapshot [][]executableTx
 
 func (s ethExecutablesSnapshot) transactions() tx.Transactions {
-	return orderExecutableStreams(s)
+	return orderExecutableStreams(nil, s)
 }
 
 // compareExecutableTx returns a negative value when a sorts before b.
@@ -98,17 +98,11 @@ func (h *executableMergeHeap) Pop() any {
 	return item
 }
 
-func mergePoolExecutables(vechain vechainExecutablesSnapshot, eth ethExecutablesSnapshot) tx.Transactions {
+func orderExecutableStreams(vechain vechainExecutablesSnapshot, eth ethExecutablesSnapshot) tx.Transactions {
 	sources := make([][]executableTx, 0, 1+len(eth))
-	if len(vechain) > 0 {
-		sources = append(sources, vechain)
-	}
+	sources = append(sources, vechain)
 	sources = append(sources, eth...)
 
-	return orderExecutableStreams(sources)
-}
-
-func orderExecutableStreams(sources [][]executableTx) tx.Transactions {
 	total := 0
 	for _, source := range sources {
 		total += len(source)

@@ -50,7 +50,7 @@ func getFlowAndNode(t *testing.T, forkConfig *thor.ForkConfig) (*packer.Flow, *N
 
 	repo, _ := chain.NewRepository(db, b0)
 
-	pool := txpool.New(repo, state.NewStater(db), txpool.Options{
+	pool := txpool.NewCoordinator(repo, state.NewStater(db), txpool.Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT_PER_ACCOUNT,
 		MaxLifetime:     time.Hour,

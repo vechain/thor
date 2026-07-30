@@ -50,11 +50,11 @@ var devAccounts = genesis.DevAccounts()
 
 func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *VeChainPool {
 	tchain, _ := testchain.NewWithFork(forkConfig, 180)
-	return New(tchain.Repo(), tchain.Stater(), Options{
+	return newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           limit,
 		LimitPerAccount: limitPerAccount,
 		MaxLifetime:     time.Hour,
-	}, forkConfig)
+	}, forkConfig, newCostTracker(), new(blocklist))
 }
 
 func newPoolWithParams(
@@ -92,13 +92,13 @@ func newPoolWithMaxLifetime(
 		})
 	b0, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, b0)
-	return New(repo, state.NewStater(db), Options{
+	return newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:                  limit,
 		LimitPerAccount:        limitPerAccount,
 		MaxLifetime:            maxLifetime,
 		BlocklistCacheFilePath: BlocklistCacheFilePath,
 		BlocklistFetchURL:      BlocklistFetchURL,
-	}, forks)
+	}, forks, newCostTracker(), new(blocklist))
 }
 
 func newHTTPServer() *httptest.Server {
@@ -695,11 +695,11 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
 
 	poolLimit := 10_000
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           poolLimit,
 		LimitPerAccount: poolLimit,
 		MaxLifetime:     time.Hour,
-	}, &thor.ForkConfig{GALACTICA: 1})
+	}, &thor.ForkConfig{GALACTICA: 1}, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	txs := make(map[thor.Bytes32]*tx.Transaction)
@@ -779,11 +779,11 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
 
 	totalPoolTxs := 10_000
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           totalPoolTxs,
 		LimitPerAccount: totalPoolTxs,
 		MaxLifetime:     time.Hour,
-	}, &thor.ForkConfig{GALACTICA: 1})
+	}, &thor.ForkConfig{GALACTICA: 1}, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	txs := make(map[thor.Bytes32]*tx.Transaction)
@@ -882,11 +882,11 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT_PER_ACCOUNT,
 		MaxLifetime:     time.Hour,
-	}, &thor.SoloFork)
+	}, &thor.SoloFork, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
@@ -930,11 +930,11 @@ func TestAdd(t *testing.T) {
 	}
 	tchain, err := testchain.NewIntegrationTestChain(config, 180)
 	assert.Nil(t, err)
-	pool := New(tchain.Repo(), tchain.Stater(), Options{
+	pool := newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT_PER_ACCOUNT,
 		MaxLifetime:     time.Hour,
-	}, config.ForkConfig)
+	}, config.ForkConfig, newCostTracker(), new(blocklist))
 
 	defer pool.Close()
 	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
@@ -1066,11 +1066,11 @@ func TestBeforeVIP191Add(t *testing.T) {
 	assert.Nil(t, err)
 	acc := devAccounts[0]
 
-	pool := New(tchain.Repo(), tchain.Stater(), Options{
+	pool := newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           10,
 		LimitPerAccount: 2,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, &thor.NoFork, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	err = pool.StrictlyAdd(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(0), 100, nil, acc, acc))
@@ -1097,11 +1097,11 @@ func TestValidateTxBasicsMaxTxGasLimitForkAware(t *testing.T) {
 	tchain, err := testchain.NewWithFork(&fc, 180)
 	require.NoError(t, err)
 
-	pool := New(tchain.Repo(), tchain.Stater(), Options{
+	pool := newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT_PER_ACCOUNT,
 		MaxLifetime:     time.Hour,
-	}, &fc)
+	}, &fc, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	overLimitLegacyTx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
@@ -1395,7 +1395,7 @@ func TestVeChainPoolReinjectFromForkAndGetByHash(t *testing.T) {
 		devAccounts[4],
 	)
 
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{discarded, invalid},
 		Included:  tx.Transactions{includedOnly},
 	}))
@@ -1978,11 +1978,11 @@ func TestAddOverPendingCost(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT,
 		MaxLifetime:     time.Hour,
-	}, &forkConfig)
+	}, &forkConfig, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// first and second tx should be fine
@@ -2068,11 +2068,11 @@ func TestAddOverPendingCostDynamicFee(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT,
 		MaxLifetime:     time.Hour,
-	}, &thor.ForkConfig{GALACTICA: 0})
+	}, &thor.ForkConfig{GALACTICA: 0}, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// first and second tx should be fine
@@ -2158,11 +2158,11 @@ func TestWashDeferredTxPendingCostEnforcement(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 	require.NoError(t, repo.AddBlock(b1, tx.Receipts{}, 0, true))
 
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           50, // non-executable cap = 50*2/10 = 10, enough for 3 deferred txs
 		LimitPerAccount: 10,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, &thor.NoFork, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// BlockRef=3: deferred while best is b1 (nextBlockNum=2), executable when best is b2 (nextBlockNum=3).
@@ -2443,11 +2443,11 @@ func TestValidateTxBasics_TypeForkWhitelist(t *testing.T) {
 func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	chain, err := testchain.NewWithFork(&thor.ForkConfig{}, 180)
 	assert.Nil(t, err)
-	pool := New(chain.Repo(), chain.Stater(), Options{
+	pool := newVeChainPool(chain.Repo(), chain.Stater(), Options{
 		Limit:           100,
 		LimitPerAccount: 1000,
 		MaxLifetime:     time.Minute * 30,
-	}, chain.GetForkConfig())
+	}, chain.GetForkConfig(), newCostTracker(), new(blocklist))
 	pool.Close() // turn off the background housekeeping
 	require.NoError(t, chain.MintBlock())
 

@@ -66,7 +66,7 @@ func TestSenderWindowSpan(t *testing.T) {
 }
 
 func TestPreparationWindowCoversPendingAndPromotionRoom(t *testing.T) {
-	m := newEthPoolCore(newCostTracker())
+	m := newEthPoolCore(newCostTracker(), Options{})
 	// Pending 0-1, queued 2-3 contiguous, plus a far-future 9.
 	origin, objects := seedEthWindowSender(t, m, 0, 0, []uint64{0, 1}, []uint64{2, 3, 9})
 
@@ -77,7 +77,7 @@ func TestPreparationWindowCoversPendingAndPromotionRoom(t *testing.T) {
 }
 
 func TestPreparationWindowFollowsStateNonce(t *testing.T) {
-	m := newEthPoolCore(newCostTracker())
+	m := newEthPoolCore(newCostTracker(), Options{})
 	origin, objects := seedEthWindowSender(t, m, 0, 0, []uint64{0, 1, 2}, []uint64{3, 4})
 
 	// The head moved two nonces on: 0 and 1 are settled and cannot be revalidated,
@@ -88,7 +88,7 @@ func TestPreparationWindowFollowsStateNonce(t *testing.T) {
 }
 
 func TestPreparationWindowSkipsUnknownAndAbsentSenders(t *testing.T) {
-	m := newEthPoolCore(newCostTracker())
+	m := newEthPoolCore(newCostTracker(), Options{})
 	origin, objects := seedEthWindowSender(t, m, 0, 0, []uint64{0}, nil)
 	// A second sender in the pool but absent from the state snapshot is untouched
 	// by the commit, so it must not be prepared.
@@ -101,7 +101,7 @@ func TestPreparationWindowSkipsUnknownAndAbsentSenders(t *testing.T) {
 
 func TestAddPreparationWindow(t *testing.T) {
 	t.Run("candidate inside the window is prepared", func(t *testing.T) {
-		m := newEthPoolCore(newCostTracker())
+		m := newEthPoolCore(newCostTracker(), Options{})
 		origin, objects := seedEthWindowSender(t, m, 0, 0, []uint64{0}, []uint64{1})
 		candidate := newEthCoreTestObject(t, 2, 10, 0)
 
@@ -112,7 +112,7 @@ func TestAddPreparationWindow(t *testing.T) {
 	})
 
 	t.Run("candidate above the window is not prepared", func(t *testing.T) {
-		m := newEthPoolCore(newCostTracker())
+		m := newEthPoolCore(newCostTracker(), Options{})
 		_, objects := seedEthWindowSender(t, m, 0, 0, []uint64{0}, nil)
 		// Nonce 4 cannot be promoted while the pending limit is 2, so its cost
 		// never needs checking on this path.
@@ -124,7 +124,7 @@ func TestAddPreparationWindow(t *testing.T) {
 	})
 
 	t.Run("candidate below the state nonce is not prepared", func(t *testing.T) {
-		m := newEthPoolCore(newCostTracker())
+		m := newEthPoolCore(newCostTracker(), Options{})
 		seedEthWindowSender(t, m, 0, 3, []uint64{3}, nil)
 		candidate := newEthCoreTestObject(t, 1, 10, 0)
 
@@ -132,14 +132,14 @@ func TestAddPreparationWindow(t *testing.T) {
 	})
 
 	t.Run("unknown sender prepares only the candidate", func(t *testing.T) {
-		m := newEthPoolCore(newCostTracker())
+		m := newEthPoolCore(newCostTracker(), Options{})
 		candidate := newEthCoreTestObject(t, 0, 10, 0)
 
 		assert.Equal(t, []*TxObject{candidate}, m.addPreparationWindow(candidate, 0, 4))
 	})
 
 	t.Run("already known transaction prepares nothing", func(t *testing.T) {
-		m := newEthPoolCore(newCostTracker())
+		m := newEthPoolCore(newCostTracker(), Options{})
 		_, objects := seedEthWindowSender(t, m, 0, 0, []uint64{0}, nil)
 
 		assert.Nil(t, m.addPreparationWindow(objects[0], 0, 4))
@@ -147,7 +147,7 @@ func TestAddPreparationWindow(t *testing.T) {
 }
 
 func TestForkPreparationWindow(t *testing.T) {
-	m := newEthPoolCore(newCostTracker())
+	m := newEthPoolCore(newCostTracker(), Options{})
 	resetOrigin, resetObjects := seedEthWindowSender(t, m, 0, 0, []uint64{0, 1}, nil)
 	// A candidate whose origin is absent from the state snapshot still gets a
 	// window, derived from the nonce carried on the candidate.

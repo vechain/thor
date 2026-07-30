@@ -46,7 +46,7 @@ func benchmarkEthPrepare(txObj *TxObject) ethPreparation {
 
 func benchmarkPopulatedEthCore(b *testing.B) *ethPoolCore {
 	b.Helper()
-	core := newEthPoolCore(newCostTracker())
+	core := newEthPoolCore(newCostTracker(), Options{})
 	for nonce := uint64(1); nonce <= 80; nonce++ {
 		txObj := benchmarkEthCoreObject(b, nonce)
 		if _, _, err := core.add(txObj, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
@@ -92,7 +92,12 @@ func BenchmarkEthPoolCoreAddParallel(b *testing.B) {
 }
 
 func BenchmarkEthPoolCoreReadersDuringSlowPrepare(b *testing.B) {
-	core := newEthPoolCore(newCostTracker())
+	options := Options{
+		EthAccountSlots: 16,
+		EthAccountQueue: 64,
+		Limit:           125,
+	}
+	core := newEthPoolCore(newCostTracker(), options)
 	candidate := benchmarkEthCoreObject(b, 0)
 	stop := make(chan struct{})
 	writerDone := make(chan struct{})
@@ -136,7 +141,12 @@ func benchmarkEthCorePool(
 	b.Helper()
 
 	costs := newCostTracker()
-	core := newEthPoolCore(costs)
+	options := Options{
+		EthAccountSlots: pendingPer,
+		EthAccountQueue: queuedPer,
+		Limit:           senderCount * (pendingPer + queuedPer),
+	}
+	core := newEthPoolCore(costs, options)
 	stateNonces := make(map[thor.Address]uint64, senderCount)
 	origins := make(map[*TxObject]thor.Address, senderCount*(pendingPer+queuedPer))
 	balance := big.NewInt(1_000_000_000)
@@ -228,16 +238,10 @@ func BenchmarkEthPoolCoreSweepDefaultLimit(b *testing.B) {
 		queuedPer   = 64
 	)
 	core, _, _ := benchmarkEthCorePool(b, senderCount, pendingPer, queuedPer)
-	options := ethSweepOptions{
-		pendingLimit: pendingPer,
-		queueLimit:   queuedPer,
-		globalLimit:  senderCount * (pendingPer + queuedPer),
-	}
-
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if _, err := core.sweep(options); err != nil {
+		if _, err := core.sweep(); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -197,7 +197,7 @@ func TestCoordinatorIncludedOnlyFork(t *testing.T) {
 		require.NoError(t, coordinator.AddRemote(ethereum))
 		require.NoError(t, tchain.MintBlock(ethereum))
 
-		require.NoError(t, coordinator.ReinjectFromFork(ForkReinjection{
+		require.NoError(t, coordinator.ReconcileOnHeadChange(HeadChangeTxs{
 			Included: tx.Transactions{ethereum},
 		}))
 
@@ -212,7 +212,7 @@ func TestCoordinatorIncludedOnlyFork(t *testing.T) {
 		native := coordinatorNativeTx(t, tchain, 6)
 		require.NoError(t, coordinator.AddRemote(native))
 
-		require.NoError(t, coordinator.ReinjectFromFork(ForkReinjection{
+		require.NoError(t, coordinator.ReconcileOnHeadChange(HeadChangeTxs{
 			Included: tx.Transactions{native},
 		}))
 

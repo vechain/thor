@@ -34,7 +34,7 @@ func BenchmarkMergeExecutables(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		_ = mergePoolExecutables(nil, eth)
+		_ = orderExecutableStreams(nil, eth)
 	}
 }
 
@@ -57,7 +57,7 @@ func BenchmarkCoordinatorExecutables(b *testing.B) {
 	snapshot := vechainExecutablesSnapshot(vechainEntries)
 	vechain.executables.Store(&snapshot)
 
-	ethCore := newEthPoolCore(newCostTracker())
+	ethCore := newEthPoolCore(newCostTracker(), Options{})
 	for senderIndex := range senderCount {
 		var origin thor.Address
 		origin[0] = byte(senderIndex + 1)
@@ -170,13 +170,13 @@ func BenchmarkEthPoolReinjectFromFork(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	pool := NewEth(tchain.Repo(), tchain.Stater(), Options{
+	pool := newEthPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           1_000,
 		MaxLifetime:     time.Hour,
 		EthAccountSlots: 16,
 		EthAccountQueue: 64,
 		EthPriceBump:    10,
-	}, &thor.SoloFork)
+	}, &thor.SoloFork, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
@@ -195,12 +195,12 @@ func BenchmarkEthPoolReinjectFromFork(b *testing.B) {
 			txs = append(txs, trx)
 		}
 	}
-	fork := ForkReinjection{Discarded: txs}
+	fork := HeadChangeTxs{Discarded: txs}
 
 	b.ReportAllocs()
 	for range b.N {
 		b.StartTimer()
-		if err := pool.ReinjectFromFork(fork); err != nil {
+		if err := pool.ReconcileOnHeadChange(fork); err != nil {
 			b.Fatal(err)
 		}
 		b.StopTimer()

@@ -25,7 +25,6 @@ import (
 type TxPoolCoordinator struct {
 	vechain *VeChainPool
 	eth     *EthPool
-	costs   *costTracker
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -43,9 +42,8 @@ func NewCoordinator(repo *chain.Repository, stater *state.Stater, options Option
 	blocked := new(blocklist)
 	ctx, cancel := context.WithCancel(context.Background())
 	coordinator := &TxPoolCoordinator{
-		costs:   costs,
-		vechain: newVeChainPoolWithBlocklist(repo, stater, options, forkConfig, costs, blocked),
-		eth:     newEthPoolWithBlocklist(repo, stater, options, forkConfig, costs, blocked, false),
+		vechain: newVeChainPool(repo, stater, options, forkConfig, costs, blocked),
+		eth:     newEthPool(repo, stater, options, forkConfig, costs, blocked),
 		ctx:     ctx,
 		cancel:  cancel,
 	}
@@ -103,8 +101,8 @@ func (c *TxPoolCoordinator) AddRemote(newTx *tx.Transaction) error {
 	return c.vechain.AddRemote(newTx)
 }
 
-func (c *TxPoolCoordinator) ReinjectFromFork(fork ForkReinjection) error {
-	var vechainFork, ethFork ForkReinjection
+func (c *TxPoolCoordinator) ReconcileOnHeadChange(fork HeadChangeTxs) error {
+	var vechainFork, ethFork HeadChangeTxs
 	partition := func(src tx.Transactions, vechainDst, ethDst *tx.Transactions) {
 		for _, trx := range src {
 			if trx.IsEthereumTx() {
@@ -117,13 +115,8 @@ func (c *TxPoolCoordinator) ReinjectFromFork(fork ForkReinjection) error {
 	partition(fork.Discarded, &vechainFork.Discarded, &ethFork.Discarded)
 	partition(fork.Included, &vechainFork.Included, &ethFork.Included)
 
-	var vechainErr, ethErr error
-	if len(vechainFork.Discarded) > 0 {
-		vechainErr = c.vechain.ReinjectFromFork(vechainFork)
-	}
-	if len(ethFork.Discarded) > 0 || len(ethFork.Included) > 0 {
-		ethErr = c.eth.ReinjectFromFork(ethFork)
-	}
+	vechainErr := c.vechain.ReconcileOnHeadChange(vechainFork)
+	ethErr := c.eth.ReconcileOnHeadChange(ethFork)
 	return errors.Join(vechainErr, ethErr)
 }
 
@@ -145,9 +138,6 @@ func (c *TxPoolCoordinator) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool 
 func (c *TxPoolCoordinator) Dump() tx.Transactions {
 	vechainTxs := c.vechain.Dump()
 	ethTxs := c.eth.Dump()
-	if len(ethTxs) == 0 {
-		return vechainTxs
-	}
 	out := make(tx.Transactions, 0, len(vechainTxs)+len(ethTxs))
 	out = append(out, vechainTxs...)
 	out = append(out, ethTxs...)
@@ -165,11 +155,11 @@ func (c *TxPoolCoordinator) SubscribeTxEvent(ch chan *TxEvent) event.Subscriptio
 func (c *TxPoolCoordinator) Executables() tx.Transactions {
 	vechain := c.vechain.executableSnapshot()
 	eth := c.eth.executableSnapshot()
-	return mergePoolExecutables(vechain, eth)
+	return orderExecutableStreams(vechain, eth)
 }
 
 func (c *TxPoolCoordinator) Fill(txs tx.Transactions) {
-	// Temporary: all families still live in VeChainPool.
+	// TODO: Fill method not implemented for EthPool.
 	c.vechain.Fill(txs)
 }
 

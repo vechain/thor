@@ -30,7 +30,7 @@ func newSolo() *Solo {
 	logDb, _ := logdb.NewMem()
 	b, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b)
-	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
+	mempool := txpool.NewCoordinator(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
 
 	opts := Options{
 		GasLimit:         0,

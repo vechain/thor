@@ -65,7 +65,7 @@ func (o *OnDemandTxPool) AddRemote(newTx *tx.Transaction) error {
 	return o.AddLocal(newTx)
 }
 
-func (o *OnDemandTxPool) ReinjectFromFork(fork txpool.ForkReinjection) error {
+func (o *OnDemandTxPool) ReconcileOnHeadChange(fork txpool.HeadChangeTxs) error {
 	for _, newTx := range fork.Discarded {
 		if err := o.AddLocal(newTx); err != nil {
 			return err

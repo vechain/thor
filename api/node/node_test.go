@@ -28,7 +28,7 @@ import (
 var (
 	ts      *httptest.Server
 	tclient *thorclient.Client
-	pool    *txpool.VeChainPool
+	pool    txpool.Pool
 )
 
 func TestNode(t *testing.T) {
@@ -52,7 +52,7 @@ func initCommServer(t *testing.T) {
 
 	chainTag := thorChain.Repo().ChainTag()
 
-	pool = txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	pool = txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           10000,
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,
@@ -73,7 +73,7 @@ func initCommServer(t *testing.T) {
 
 	communicator := comm.New(
 		thorChain.Repo(),
-		txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 			Limit:           10000,
 			LimitPerAccount: 128,
 			MaxLifetime:     10 * time.Minute,

@@ -50,7 +50,7 @@ type TxEvent struct {
 	Executable *bool
 }
 
-type ForkReinjection struct {
+type HeadChangeTxs struct {
 	Discarded tx.Transactions
 	Included  tx.Transactions
 }
@@ -60,7 +60,7 @@ type Pool interface {
 	Get(txID thor.Bytes32) *tx.Transaction
 	GetByHash(hash thor.Bytes32) *tx.Transaction
 	AddRemote(newTx *tx.Transaction) error
-	ReinjectFromFork(fork ForkReinjection) error
+	ReconcileOnHeadChange(headChange HeadChangeTxs) error
 	AddLocal(tx *tx.Transaction) error
 	StrictlyAdd(newTx *tx.Transaction) error
 	Remove(txHash thor.Bytes32, txID thor.Bytes32) bool
@@ -97,24 +97,7 @@ type VeChainPool struct {
 // New creates a VeChainPool with its own cost tracker.
 // Shutdown is required to be called at end. Prefer NewCoordinator when both
 // family pools must share one ledger.
-func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *VeChainPool {
-	return newVeChainPool(repo, stater, options, forkConfig, newCostTracker())
-}
-
-// newVeChainPool creates a VeChainPool. costs is required (dependency injection);
-// the coordinator passes a shared tracker so EthPool and VeChainPool reserve
-// against the same per-payer VTHO budget.
 func newVeChainPool(
-	repo *chain.Repository,
-	stater *state.Stater,
-	options Options,
-	forkConfig *thor.ForkConfig,
-	costs *costTracker,
-) *VeChainPool {
-	return newVeChainPoolWithBlocklist(repo, stater, options, forkConfig, costs, new(blocklist))
-}
-
-func newVeChainPoolWithBlocklist(
 	repo *chain.Repository,
 	stater *state.Stater,
 	options Options,
@@ -402,9 +385,9 @@ func (p *VeChainPool) AddRemote(newTx *tx.Transaction) error {
 	return p.add(newTx, false, false)
 }
 
-// ReinjectFromFork re-admits a tx from an orphaned side-chain block after a fork.
+// ReconcileOnHeadChange re-admits a tx from an orphaned side-chain block after a fork.
 // Admission rules match AddRemote (rejectNonExecutable=false, localSubmitted=false).
-func (p *VeChainPool) ReinjectFromFork(fork ForkReinjection) error {
+func (p *VeChainPool) ReconcileOnHeadChange(fork HeadChangeTxs) error {
 	for _, newTx := range fork.Discarded {
 		if err := p.add(newTx, false, false); err != nil {
 			if IsBadTx(err) || IsTxRejected(err) {

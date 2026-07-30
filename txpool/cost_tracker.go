@@ -121,7 +121,7 @@ func (t *costTracker) reconcile(releaseOwners []reservationOwner, desired []rese
 			old[owner] = charge
 			addCost(releasedByPayer, charge.payer, charge.cost)
 		}
-	}
+	} // TODO: is this invariant corruption check necessary?
 	for payer, cost := range releasedByPayer {
 		if pending := t.pending[payer]; pending == nil || pending.Cmp(cost) < 0 {
 			return 0, errCostTrackerState
@@ -159,6 +159,7 @@ func validateReservations(reservations []reservationRequest) error {
 		if charge.balance == nil {
 			return errInsufficientEnergy
 		}
+		// TODO: are duplicates a thing here?
 		if _, duplicate := owners[charge.owner]; duplicate {
 			return errors.New("cost tracker: duplicate reservation owner")
 		}
@@ -207,6 +208,7 @@ func (t *costTracker) rollback(old map[reservationOwner]reservation, accepted []
 }
 
 func addCost(costs map[thor.Address]*big.Int, payer thor.Address, cost *big.Int) {
+	// TODO: do we need this optimization?
 	if cost.Sign() == 0 {
 		return
 	}

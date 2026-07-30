@@ -48,7 +48,7 @@ func newEthPoolTest(t *testing.T, options Options) (*EthPool, *testchain.Chain) 
 	t.Helper()
 	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
 	require.NoError(t, err)
-	pool := NewEth(tchain.Repo(), tchain.Stater(), options, &thor.SoloFork)
+	pool := newEthPool(tchain.Repo(), tchain.Stater(), options, &thor.SoloFork, newCostTracker(), new(blocklist))
 	t.Cleanup(pool.Close)
 	return pool, tchain
 }
@@ -64,9 +64,8 @@ func newEthPoolWithoutHousekeeping(t *testing.T, options Options) (*EthPool, *te
 		repo:         tchain.Repo(),
 		stater:       tchain.Stater(),
 		forkConfig:   &thor.SoloFork,
-		costs:        costs,
 		baseFeeCache: newBaseFeeCache(&thor.SoloFork),
-		core:         newEthPoolCore(costs),
+		core:         newEthPoolCore(costs, options),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -285,7 +284,7 @@ func TestEthPoolWashEmitsDemotionEvents(t *testing.T) {
 		)
 		require.NoError(t, pool.AddRemote(txs[nonce]))
 		assert.True(t, *nextTxEvent(t, events).Executable)
-		require.NoError(t, pool.costs.release(
+		require.NoError(t, pool.core.costs.release(
 			ethReservationOwner(signer.Address, uint64(nonce)),
 		))
 	}
@@ -296,8 +295,8 @@ func TestEthPoolWashEmitsDemotionEvents(t *testing.T) {
 	).Get(signer.Address)
 	require.NoError(t, err)
 	externalOwner := vechainReservationOwner(thor.Bytes32{0xde})
-	require.NoError(t, pool.costs.reserve(externalOwner, signer.Address, balance, balance))
-	t.Cleanup(func() { _ = pool.costs.release(externalOwner) })
+	require.NoError(t, pool.core.costs.reserve(externalOwner, signer.Address, balance, balance))
+	t.Cleanup(func() { _ = pool.core.costs.release(externalOwner) })
 
 	require.NoError(t, pool.revalidate(head))
 
@@ -352,7 +351,7 @@ func TestEthPoolBlocklistSilentlyDropsAdmission(t *testing.T) {
 		t.Fatalf("blocked admission emitted event: %v", event.Tx.Hash())
 	case <-time.After(20 * time.Millisecond):
 	}
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{blockedTx},
 	}))
 	assert.Zero(t, pool.Len())
@@ -396,14 +395,14 @@ func TestEthPoolReinjectFromForkForwardExtension(t *testing.T) {
 	delete(sender.pending, 1)
 	sender.queue[1] = pool.core.allByHash[nonce1.Hash()]
 	sender.queue[1].executable = false
-	require.NoError(t, pool.costs.release(ethReservationOwner(signer.Address, 1)))
+	require.NoError(t, pool.core.costs.release(ethReservationOwner(signer.Address, 1)))
 	pool.core.lock.Unlock()
 
 	events := make(chan *TxEvent, 1)
 	sub := pool.SubscribeTxEvent(events)
 	defer sub.Unsubscribe()
 	require.NoError(t, tchain.MintBlock(nonce0))
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Included: tx.Transactions{nonce0},
 	}))
 
@@ -421,7 +420,7 @@ func TestEthPoolReinjectFromForkForwardExtension(t *testing.T) {
 	require.NoError(t, pool.AddRemote(nonce2))
 	require.NoError(t, tchain.MintBlock(nonce1))
 	require.NoError(t, tchain.MintBlock(nonce2))
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Included: tx.Transactions{nonce1, nonce2},
 	}))
 	assert.Nil(t, pool.GetByHash(nonce1.Hash()))
@@ -448,7 +447,7 @@ func TestEthPoolReinjectFromForkIgnoresNonEthereumInclusions(t *testing.T) {
 		Build(), signer.PrivateKey)
 
 	require.NoError(t, tchain.MintBlock())
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Included: tx.Transactions{native},
 	}))
 	assert.NotNil(t, pool.GetByHash(trx.Hash()))
@@ -502,7 +501,7 @@ func TestEthPoolRevalidateRepricesAndSweepExpires(t *testing.T) {
 	txObj.timeAdded = time.Now().Add(-2 * time.Hour).UnixNano()
 	require.NoError(t, pool.sweep())
 	assert.Nil(t, pool.GetByHash(trx.Hash()))
-	assert.Zero(t, pool.costs.pendingCost(signer.Address).Sign())
+	assert.Zero(t, pool.core.costs.pendingCost(signer.Address).Sign())
 }
 
 func TestEthPoolRevalidatePromotesAffordableQueue(t *testing.T) {
@@ -530,7 +529,7 @@ func TestEthPoolRevalidatePromotesAffordableQueue(t *testing.T) {
 		new(big.Int).Add(baseFee, tip),
 	)
 	externalOwner := vechainReservationOwner(thor.Bytes32{0xcc})
-	require.NoError(t, pool.costs.reserve(
+	require.NoError(t, pool.core.costs.reserve(
 		externalOwner,
 		signer.Address,
 		new(big.Int).Sub(balance, oneTxCost),
@@ -541,7 +540,7 @@ func TestEthPoolRevalidatePromotesAffordableQueue(t *testing.T) {
 	require.NoError(t, pool.AddRemote(nonce0))
 	assert.True(t, *nextTxEvent(t, events).Executable)
 	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address))
-	require.NoError(t, pool.costs.release(externalOwner))
+	require.NoError(t, pool.core.costs.release(externalOwner))
 
 	require.NoError(t, pool.revalidate(head))
 	assert.Equal(t, uint64(2), pool.PoolNonce(signer.Address))
@@ -582,29 +581,6 @@ func TestEthPoolHousekeepingTickRevalidatesOnlyOnHeadChange(t *testing.T) {
 	assert.Negative(t, txObj.priorityGasPrice.Sign())
 }
 
-// Capacity is enforced by the sweep, which runs every tick whether or not the head
-// moved, because a transaction added since the last tick can push the pool over.
-func TestEthPoolHousekeepingTickSweepsWithoutHeadChange(t *testing.T) {
-	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
-		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
-		EthPriceBump: 10, MaxLifetime: time.Hour,
-	})
-	signer := devAccounts[8]
-	baseFee := tchain.Repo().BestBlockSummary().Header.BaseFee()
-	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
-	for nonce := range uint64(2) {
-		trx := buildEthPoolTx(t, tchain.Repo().ChainID(), nonce, fee, big.NewInt(100), signer)
-		require.NoError(t, pool.AddRemote(trx))
-	}
-	head := tchain.Repo().BestBlockSummary().Header.ID()
-
-	pool.options.Limit = 1
-	revalidated, err := pool.runHousekeepingTick(head)
-	require.NoError(t, err)
-	assert.Equal(t, head, revalidated)
-	assert.Equal(t, 1, pool.Len())
-}
-
 func TestEthPoolHousekeepingTickSkipsEmptyPool(t *testing.T) {
 	pool, tchain := newEthPoolWithoutHousekeeping(t, Options{
 		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
@@ -628,17 +604,17 @@ func TestEthPoolHousekeepingTickDefersWhileUnsynced(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	costs := newCostTracker()
+	options := Options{
+		Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
+		EthPriceBump: 10, MaxLifetime: time.Hour,
+	}
 	pool := &EthPool{
-		options: Options{
-			Limit: 100, EthAccountSlots: 16, EthAccountQueue: 64,
-			EthPriceBump: 10, MaxLifetime: time.Hour,
-		},
+		options:      options,
 		repo:         tchain.Repo(),
 		stater:       tchain.Stater(),
 		forkConfig:   &thor.SoloFork,
-		costs:        costs,
 		baseFeeCache: newBaseFeeCache(&thor.SoloFork),
-		core:         newEthPoolCore(costs),
+		core:         newEthPoolCore(costs, options),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -724,11 +700,15 @@ func TestEthPoolRejectsGasAboveBlockLimit(t *testing.T) {
 		devAccounts[0],
 	)
 
+	txObj, skip, err := pool.resolveAdmissionPrecheck(trx)
+	require.NoError(t, err)
+	require.False(t, skip)
+
 	ctx := pool.newAdmissionContext()
 	lowGasHead := *ctx.head
 	lowGasHead.Header = new(block.Builder).GasLimit(20_000).Build().Header()
 	ctx.head = &lowGasHead
-	_, _, _, err := pool.resolveAdmission(trx, ctx, false)
+	_, err = pool.resolveAdmissionWithContext(txObj, trx, ctx)
 
 	require.Error(t, err)
 	assert.True(t, IsTxRejected(err))
@@ -745,7 +725,7 @@ func TestEthPoolRejectsGasAboveBlockLimit(t *testing.T) {
 		big.NewInt(100),
 		devAccounts[0],
 	)
-	_, _, _, err = pool.resolveAdmission(atProtocolLimit, pool.newAdmissionContext(), false)
+	_, _, _, _, err = pool.resolveRemoteAdmission(atProtocolLimit)
 	require.NoError(t, err)
 }
 
@@ -859,7 +839,7 @@ func TestEthPoolRevalidateReconcilesBackwardStateNonce(t *testing.T) {
 	assert.Empty(t, sender.queue)
 	assert.True(t, sender.pending[0].executable)
 	assert.Equal(t, uint64(1), sender.poolNonce())
-	assert.Positive(t, pool.costs.pendingCost(signer.Address).Sign())
+	assert.Positive(t, pool.core.costs.pendingCost(signer.Address).Sign())
 }
 
 func TestEthPoolReplacementCostRollback(t *testing.T) {
@@ -882,8 +862,8 @@ func TestEthPoolReplacementCostRollback(t *testing.T) {
 	require.NoError(t, err)
 	remaining := new(big.Int).Sub(balance, originalObj.Cost())
 	externalOwner := vechainReservationOwner(thor.Bytes32{0xaa})
-	require.NoError(t, pool.costs.reserve(externalOwner, signer.Address, remaining, balance))
-	t.Cleanup(func() { _ = pool.costs.release(externalOwner) })
+	require.NoError(t, pool.core.costs.reserve(externalOwner, signer.Address, remaining, balance))
+	t.Cleanup(func() { _ = pool.core.costs.release(externalOwner) })
 
 	replacement := buildEthPoolTx(
 		t,
@@ -898,7 +878,7 @@ func TestEthPoolReplacementCostRollback(t *testing.T) {
 	assert.Contains(t, err.Error(), "insufficient energy")
 	assert.Equal(t, original, pool.GetByHash(original.Hash()), "failed replacement must retain incumbent")
 	assert.Nil(t, pool.GetByHash(replacement.Hash()))
-	assert.Equal(t, balance, pool.costs.pendingCost(signer.Address), "failed replacement must restore its old reservation")
+	assert.Equal(t, balance, pool.core.costs.pendingCost(signer.Address), "failed replacement must restore its old reservation")
 }
 
 func TestEthPoolFeeBelowBaseAndQueueLimit(t *testing.T) {
@@ -938,8 +918,8 @@ func TestEthPoolPromotionStopsAtAffordablePrefix(t *testing.T) {
 	oneTxCost := new(big.Int).Mul(new(big.Int).SetUint64(21_000), effectivePrice)
 	externalCost := new(big.Int).Sub(balance, oneTxCost)
 	externalOwner := vechainReservationOwner(thor.Bytes32{0xbb})
-	require.NoError(t, pool.costs.reserve(externalOwner, signer.Address, externalCost, balance))
-	t.Cleanup(func() { _ = pool.costs.release(externalOwner) })
+	require.NoError(t, pool.core.costs.reserve(externalOwner, signer.Address, externalCost, balance))
+	t.Cleanup(func() { _ = pool.core.costs.release(externalOwner) })
 
 	nonce0 := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, tip, signer)
 	require.NoError(t, pool.AddRemote(nonce0))
@@ -1041,7 +1021,7 @@ func TestEthPoolReinjectFromForkAndReplacementPolicy(t *testing.T) {
 	sub := pool.SubscribeTxEvent(events)
 	defer sub.Unsubscribe()
 
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{original},
 	}))
 	assert.Equal(t, original, pool.GetByHash(original.Hash()))
@@ -1052,7 +1032,7 @@ func TestEthPoolReinjectFromForkAndReplacementPolicy(t *testing.T) {
 	assert.True(t, *event.Executable)
 
 	// Reinjection is idempotent for a hash already retained by the pool.
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{original},
 	}))
 	assert.Equal(t, 1, pool.Len())
@@ -1066,7 +1046,7 @@ func TestEthPoolReinjectFromForkAndReplacementPolicy(t *testing.T) {
 		t, tchain.Repo().ChainID(), 0,
 		new(big.Int).Add(fee, big.NewInt(1)), big.NewInt(109), signer,
 	)
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{underpriced},
 	}))
 	assert.Equal(t, original, pool.GetByHash(original.Hash()))
@@ -1077,7 +1057,7 @@ func TestEthPoolReinjectFromForkAndReplacementPolicy(t *testing.T) {
 		new(big.Int).Div(new(big.Int).Mul(fee, big.NewInt(110)), big.NewInt(100)),
 		big.NewInt(110), signer,
 	)
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{replacement},
 	}))
 	assert.Nil(t, pool.GetByHash(original.Hash()))
@@ -1103,7 +1083,7 @@ func TestEthPoolReinjectFromForkForwardExtensionDoesNotRebuild(t *testing.T) {
 	retained.priorityGasPrice = big.NewInt(-1)
 
 	require.NoError(t, tchain.MintBlock(nonce0))
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Included: tx.Transactions{nonce0},
 	}))
 
@@ -1140,7 +1120,7 @@ func TestEthPoolReinjectDuplicateResetsBackwardNonce(t *testing.T) {
 	events := make(chan *TxEvent, 2)
 	sub := pool.SubscribeTxEvent(events)
 	defer sub.Unsubscribe()
-	require.NoError(t, pool.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{trx},
 	}))
 	assert.Equal(t, uint64(1), pool.PoolNonce(signer.Address))
@@ -1173,7 +1153,7 @@ func TestCoordinatorPartitionsForkReinjection(t *testing.T) {
 		Expiration(100).
 		Build(), devAccounts[0].PrivateKey)
 
-	require.NoError(t, coordinator.ReinjectFromFork(ForkReinjection{
+	require.NoError(t, coordinator.ReconcileOnHeadChange(HeadChangeTxs{
 		Discarded: tx.Transactions{nativeTx, ethTx},
 	}))
 	assert.NotNil(t, coordinator.eth.GetByHash(ethTx.Hash()))

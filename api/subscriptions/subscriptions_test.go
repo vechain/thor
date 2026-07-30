@@ -235,7 +235,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
-	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	txPool := txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
@@ -287,7 +287,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	thorChain, err := testchain.NewDefault()
 	require.NoError(t, err)
 
-	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	txPool := txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,

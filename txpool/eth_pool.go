@@ -38,7 +38,6 @@ type EthPool struct {
 	repo         *chain.Repository
 	stater       *state.Stater
 	forkConfig   *thor.ForkConfig
-	costs        *costTracker
 	baseFeeCache *baseFeeCache
 	blocklist    *blocklist
 
@@ -55,30 +54,14 @@ var _ Pool = (*EthPool)(nil)
 
 // NewEth creates a new EthPool stub with its own cost tracker.
 // Close must be called at shutdown. Prefer NewCoordinator when both family
-// pools must share one ledger.
-func NewEth(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *EthPool {
-	return newEthPool(repo, stater, options, forkConfig, newCostTracker())
-}
-
-// newEthPool creates an EthPool. costs is required (dependency injection).
+// pools must share one ledger
 func newEthPool(
 	repo *chain.Repository,
 	stater *state.Stater,
 	options Options,
 	forkConfig *thor.ForkConfig,
-	costs *costTracker,
-) *EthPool {
-	return newEthPoolWithBlocklist(repo, stater, options, forkConfig, costs, new(blocklist), true)
-}
-
-func newEthPoolWithBlocklist(
-	repo *chain.Repository,
-	stater *state.Stater,
-	options Options,
-	forkConfig *thor.ForkConfig,
-	costs *costTracker,
+	costTracker *costTracker,
 	blocked *blocklist,
-	manageBlocklist bool,
 ) *EthPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &EthPool{
@@ -86,20 +69,21 @@ func newEthPoolWithBlocklist(
 		repo:         repo,
 		stater:       stater,
 		forkConfig:   forkConfig,
-		costs:        costs,
 		baseFeeCache: newBaseFeeCache(forkConfig),
 		blocklist:    blocked,
-		core:         newEthPoolCore(costs),
+		core:         newEthPoolCore(costTracker, options),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
 	pool.goes.Go(pool.housekeeping)
-	if manageBlocklist {
-		pool.goes.Go(func() {
-			runBlocklistLoop(pool.ctx, pool.options, pool.blocklist)
-		})
-	}
+	pool.goes.Go(pool.fetchBlocklistLoop)
 	return pool
+}
+
+// TODO: do we need to expose an api for the cost tracker?
+
+func (p *EthPool) fetchBlocklistLoop() {
+	runBlocklistLoop(p.ctx, p.options, p.blocklist)
 }
 
 func (p *EthPool) housekeeping() {
@@ -112,8 +96,6 @@ func (p *EthPool) housekeeping() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			// On failure the head is not stamped, so the next tick retries against
-			// whatever head is current then. Nothing accumulates.
 			nextHead, err := p.runHousekeepingTick(revalidatedHead)
 			if err != nil {
 				logger.Warn("failed to maintain Ethereum pool", "err", err)
@@ -151,13 +133,7 @@ func (p *EthPool) runHousekeepingTick(revalidatedHead thor.Bytes32) (thor.Bytes3
 }
 
 func (p *EthPool) sweep() error {
-	result, err := p.core.sweep(ethSweepOptions{
-		now:          time.Now().UnixNano(),
-		maxLifetime:  p.options.MaxLifetime,
-		pendingLimit: p.options.EthAccountSlots,
-		queueLimit:   p.options.EthAccountQueue,
-		globalLimit:  p.options.Limit,
-	})
+	result, err := p.core.sweep()
 	if err != nil {
 		return err
 	}
@@ -170,6 +146,7 @@ func (p *EthPool) sweep() error {
 // every sender's canonical nonce and affordability at the given head. Reconcile
 // keeps the pool correct on its own, so this exists to recover from a reconcile
 // that failed or was never delivered.
+// TODO: should we remove this?
 func (p *EthPool) revalidate(head *chain.BlockSummary) error {
 	ctx := p.newAdmissionContextAt(head)
 	for _, origin := range p.core.origins() {
@@ -204,6 +181,8 @@ func (p *EthPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
 	return nil
 }
 
+// emitAdmission notifies subscribers about every executable-status change caused
+// by the newTx admission.
 func (p *EthPool) emitAdmission(newTx *tx.Transaction, executable bool, promoted []*TxObject) {
 	p.goes.Go(func() {
 		p.txFeed.Send(&TxEvent{Tx: newTx, Executable: &executable})
@@ -227,12 +206,11 @@ func (p *EthPool) emitExecutableChanges(txObjs []*TxObject, executable bool) {
 }
 
 func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
-	ctx := p.newAdmissionContext()
-	txObj, stateNonce, noop, err := p.resolveAdmission(newTx, ctx, false)
+	txObj, stateNonce, skip, ctx, err := p.resolveRemoteAdmission(newTx)
 	if err != nil {
 		return err
 	}
-	if noop {
+	if skip {
 		return nil
 	}
 
@@ -255,17 +233,17 @@ func (p *EthPool) AddRemote(newTx *tx.Transaction) error {
 	return nil
 }
 
-// ReinjectFromFork reconciles the pool with a newly canonical head. The node calls
+// ReconcileOnHeadChange reconciles the pool with a newly canonical head. The node calls
 // it synchronously on every block commit, which makes it the single owner of nonce
 // reconciliation; the housekeeping revalidate is only a safety net behind it.
-func (p *EthPool) ReinjectFromFork(fork ForkReinjection) error {
-	if len(fork.Discarded) == 0 {
+func (p *EthPool) ReconcileOnHeadChange(headChange HeadChangeTxs) error {
+	if len(headChange.Discarded) == 0 {
 		// Forward extension, the common case by far: no transaction returned to the
 		// pool, so nonces only moved forward and the affected senders can be synced
 		// in place instead of torn down and rebuilt.
-		return p.syncIncludedOrigins(fork.Included)
+		return p.syncIncludedOrigins(headChange.Included)
 	}
-	return p.reconcileReorg(fork)
+	return p.reconcileReorg(headChange)
 }
 
 // syncIncludedOrigins advances the senders whose transactions just became
@@ -296,13 +274,13 @@ func (p *EthPool) syncIncludedOrigins(included tx.Transactions) error {
 
 // reconcileReorg handles a real reorg: transactions are coming back to the pool, so
 // every affected sender is reset to its canonical nonce and rebuilt.
-func (p *EthPool) reconcileReorg(fork ForkReinjection) error {
+func (p *EthPool) reconcileReorg(headChange HeadChangeTxs) error {
 	ctx := p.newAdmissionContext()
-	if err := p.collectIncludedForkNonces(ctx, fork.Included); err != nil {
+	if err := p.collectIncludedForkNonces(ctx, headChange.Included); err != nil {
 		return err
 	}
 
-	candidates, err := p.collectForkCandidates(ctx, fork.Discarded)
+	candidates, err := p.collectForkCandidates(ctx, headChange.Discarded)
 	if err != nil {
 		return err
 	}
@@ -359,7 +337,7 @@ func (p *EthPool) collectForkCandidates(
 			}
 		}
 
-		txObj, stateNonce, duplicate, err := p.resolveAdmission(discardedTx, ctx, true)
+		txObj, stateNonce, skip, err := p.resolveReinjectAdmission(discardedTx, ctx)
 		if err != nil {
 			if IsBadTx(err) || IsTxRejected(err) {
 				logger.Debug("failed to reinject Ethereum tx", "err", err, "id", discardedTx.ID())
@@ -367,7 +345,7 @@ func (p *EthPool) collectForkCandidates(
 			}
 			return nil, err
 		}
-		if !duplicate {
+		if !skip {
 			candidates = append(candidates, ethForkCandidate{txObj: txObj, stateNonce: stateNonce})
 		}
 	}

@@ -32,7 +32,7 @@ import (
 func TestPendingTx_Subscribe(t *testing.T) {
 	// Arrange
 	thorChain := initChain(t)
-	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	txPool := txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
@@ -52,7 +52,7 @@ func TestPendingTx_Subscribe(t *testing.T) {
 func TestPendingTx_Unsubscribe(t *testing.T) {
 	// Arrange
 	thorChain := initChain(t)
-	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	txPool := txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
@@ -77,7 +77,7 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	b0, _, _, _ := gene.Build(stater)
 	repo, _ := chain.NewRepository(db, b0)
 
-	txPool := txpool.New(repo, state.NewStater(db), txpool.Options{
+	txPool := txpool.NewCoordinator(repo, state.NewStater(db), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
@@ -148,7 +148,7 @@ func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, 
 func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 	// Arrange
 	thorChain := initChain(t)
-	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	txPool := txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,
@@ -179,7 +179,7 @@ func TestPendingTx_NoWriteAfterUnsubscribe(t *testing.T) {
 func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	// Arrange
 	thorChain := initChain(t)
-	txPool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	txPool := txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           100,
 		LimitPerAccount: 16,
 		MaxLifetime:     time.Hour,

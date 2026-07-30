@@ -387,7 +387,7 @@ side-chain:   %v  %v`,
 	if n.txPool == nil {
 		return
 	}
-	if err := n.txPool.ReinjectFromFork(txpool.ForkReinjection{
+	if err := n.txPool.ReconcileOnHeadChange(txpool.HeadChangeTxs{
 		Discarded: lost,
 		Included:  included,
 	}); err != nil {
