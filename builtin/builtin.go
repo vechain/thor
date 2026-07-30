@@ -39,6 +39,9 @@ var (
 	// History is the EIP-2935 historical-block-hash facade. Its address is
 	// fixed by the EIP (not derived from the contract name) so dApps that
 	// already speak the EIP-2935 calling convention work unchanged on Thor.
+	//
+	// The fallback is non-payable: a value-bearing call reverts here, where
+	// mainnet's reference contract would succeed and strand the funds.
 	History = &historyContract{mustLoadContractAt(
 		"History",
 		thor.MustParseAddress("0x0000F90827F1C53a10cb7A02335B175320002935"),
