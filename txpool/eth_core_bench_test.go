@@ -61,8 +61,8 @@ func BenchmarkEthPoolCoreAdd(b *testing.B) {
 	candidate := benchmarkEthCoreObject(b, 1_000)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		if _, _, err := core.add(candidate, 0, 0, 16, 1_000, 10, benchmarkEthPrepare); err != nil {
 			b.Fatal(err)
 		}
@@ -120,8 +120,8 @@ func BenchmarkEthPoolCoreReadersDuringSlowPrepare(b *testing.B) {
 	}()
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		_ = core.Len()
 		_ = core.executableSnapshot()
 	}
@@ -220,8 +220,8 @@ func BenchmarkEthPoolCoreRevalidateDefaultLimit(b *testing.B) {
 	core, stateNonces, prepare := benchmarkEthCorePool(b, senderCount, pendingPer, queuedPer)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		if _, _, err := core.revalidate(stateNonces, pendingPer, prepare); err != nil {
 			b.Fatal(err)
 		}
@@ -239,8 +239,8 @@ func BenchmarkEthPoolCoreSweepDefaultLimit(b *testing.B) {
 	)
 	core, _, _ := benchmarkEthCorePool(b, senderCount, pendingPer, queuedPer)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		if _, err := core.sweep(); err != nil {
 			b.Fatal(err)
 		}

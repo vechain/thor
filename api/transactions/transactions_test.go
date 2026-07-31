@@ -227,7 +227,7 @@ func sendEthDynamicFeeTx(t *testing.T) {
 	raw, err := trx.MarshalBinary()
 	require.NoError(t, err)
 	require.NotEmpty(t, raw)
-	require.Equal(t, byte(tx.TypeEthDynamicFee), raw[0], "Ethereum tx must use its EIP-2718 typed envelope")
+	require.Equal(t, tx.TypeEthDynamicFee, raw[0], "Ethereum tx must use its EIP-2718 typed envelope")
 
 	res := httpPostAndCheckResponseStatus(t, "/transactions", api.RawTx{Raw: hexutil.Encode(raw)}, http.StatusOK)
 	var submitted api.SendTxResult

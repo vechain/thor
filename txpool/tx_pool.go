@@ -203,7 +203,7 @@ func (p *VeChainPool) add(newTx *tx.Transaction, rejectNonExecutable bool, local
 	}
 	defer func() {
 		if err != nil {
-			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": string(source)})
+			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": source})
 		}
 	}()
 

@@ -117,87 +117,6 @@ func newHTTPServer() *httptest.Server {
 	return server
 }
 
-func gatherMetricFamily(t *testing.T, name string) *dto.MetricFamily {
-	t.Helper()
-
-	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
-	metricFamilies, err := gatherers.Gather()
-	require.NoError(t, err)
-
-	for _, mf := range metricFamilies {
-		if mf.GetName() == name {
-			return mf
-		}
-	}
-	return nil
-}
-
-func gaugeValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
-	for _, m := range mf.GetMetric() {
-		matched := true
-		for key, want := range labels {
-			found := false
-			for _, label := range m.GetLabel() {
-				if label.GetName() == key {
-					found = true
-					if label.GetValue() != want {
-						matched = false
-					}
-					break
-				}
-			}
-			if !found {
-				matched = false
-				break
-			}
-		}
-		if matched {
-			return m.GetGauge().GetValue(), true
-		}
-	}
-	return 0, false
-}
-
-func counterValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
-	if mf == nil {
-		return 0, false
-	}
-	for _, m := range mf.GetMetric() {
-		matched := true
-		for key, want := range labels {
-			found := false
-			for _, label := range m.GetLabel() {
-				if label.GetName() == key {
-					found = true
-					if label.GetValue() != want {
-						matched = false
-					}
-					break
-				}
-			}
-			if !found {
-				matched = false
-				break
-			}
-		}
-		if matched {
-			return m.GetCounter().GetValue(), true
-		}
-	}
-	return 0, false
-}
-
-func hasLabelValue(mf *dto.MetricFamily, name string, value string) bool {
-	for _, m := range mf.GetMetric() {
-		for _, label := range m.GetLabel() {
-			if label.GetName() == name && label.GetValue() == value {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func TestTxPoolMetrics(t *testing.T) {
 	metrics.InitializePrometheusMetrics()
 
@@ -2721,6 +2640,11 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 			t.Fatalf("admit signer %d: %v", i, err)
 		}
 	}
+
+	// Stop background goroutines before mutating options; fetchBlocklistLoop and
+	// housekeeping read p.options concurrently.
+	pool.cancel()
+	pool.goes.Wait()
 
 	// Shrink the limit so wash must evict exactly one tx.
 	pool.options.Limit = 1

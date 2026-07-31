@@ -386,8 +386,16 @@ func TestEthPoolReinjectFromForkForwardExtension(t *testing.T) {
 	fee := new(big.Int).Mul(baseFee, big.NewInt(2))
 	nonce0 := buildEthPoolTx(t, tchain.Repo().ChainID(), 0, fee, big.NewInt(100), signer)
 	nonce1 := buildEthPoolTx(t, tchain.Repo().ChainID(), 1, fee, big.NewInt(100), signer)
+
+	events := make(chan *TxEvent, 4)
+	sub := pool.SubscribeTxEvent(events)
+	defer sub.Unsubscribe()
+
 	require.NoError(t, pool.AddRemote(nonce0))
 	require.NoError(t, pool.AddRemote(nonce1))
+	for range 2 {
+		nextTxEvent(t, events) // drain async admission events before promotion
+	}
 
 	// Simulate a queued suffix so settling nonce 0 must promote nonce 1.
 	pool.core.lock.Lock()
@@ -398,9 +406,6 @@ func TestEthPoolReinjectFromForkForwardExtension(t *testing.T) {
 	require.NoError(t, pool.core.costs.release(ethReservationOwner(signer.Address, 1)))
 	pool.core.lock.Unlock()
 
-	events := make(chan *TxEvent, 1)
-	sub := pool.SubscribeTxEvent(events)
-	defer sub.Unsubscribe()
 	require.NoError(t, tchain.MintBlock(nonce0))
 	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
 		Included: tx.Transactions{nonce0},

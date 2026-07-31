@@ -109,7 +109,13 @@ func TestWebsocketMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	sub := subscriptions.New(thorChain.Repo(), []string{"*"}, 10, txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{}, &thor.NoFork), true)
+	sub := subscriptions.New(
+		thorChain.Repo(),
+		[]string{"*"},
+		10,
+		txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{}, &thor.NoFork),
+		true,
+	)
 	sub.Mount(router, "/subscriptions")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	router.Use(MetricsMiddleware)

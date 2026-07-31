@@ -32,8 +32,8 @@ func BenchmarkMergeExecutables(b *testing.B) {
 	eth := ethExecutablesSnapshot(groups)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		_ = orderExecutableStreams(nil, eth)
 	}
 }
@@ -79,8 +79,8 @@ func BenchmarkCoordinatorExecutables(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		_ = coordinator.Executables()
 	}
 }
@@ -97,8 +97,8 @@ func BenchmarkCostTrackerReconcile(b *testing.B) {
 	}}
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		if _, err := tracker.reconcile([]reservationOwner{owner}, request, requireAllReservations); err != nil {
 			b.Fatal(err)
 		}
@@ -158,8 +158,8 @@ func BenchmarkVeChainPoolWash(b *testing.B) {
 	head := pool.repo.BestBlockSummary()
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		if _, _, err := pool.wash(head, false); err != nil {
 			b.Fatal(err)
 		}
@@ -199,7 +199,7 @@ func BenchmarkEthPoolReinjectFromFork(b *testing.B) {
 	fork := HeadChangeTxs{Discarded: txs}
 
 	b.ReportAllocs()
-	for range b.N {
+	for b.Loop() {
 		b.StartTimer()
 		if err := pool.ReconcileOnHeadChange(fork); err != nil {
 			b.Fatal(err)

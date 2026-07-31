@@ -15,13 +15,6 @@ import (
 // Sweeping enforces expiry and capacity. It reads no chain state and prepares
 // nothing, so it can run on a cheap timer independently of the head. It does not
 // publish pool events.
-type ethSweepOptions struct {
-	maxLifetime  time.Duration
-	pendingLimit int
-	queueLimit   int
-	globalLimit  int
-}
-
 type ethSweepResult struct {
 	removed int
 	demoted []*TxObject

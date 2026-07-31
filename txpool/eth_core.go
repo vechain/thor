@@ -89,10 +89,10 @@ func (m *ethPoolCore) sortedOriginsLocked() []thor.Address {
 	return origins
 }
 
-func (m *ethPoolCore) poolNonce(addr thor.Address) uint64 {
-	nonce, _ := m.poolNonceOK(addr)
-	return nonce
-}
+// func (m *ethPoolCore) poolNonce(addr thor.Address) uint64 {
+// 	nonce, _ := m.poolNonceOK(addr)
+// 	return nonce
+// }
 
 func (m *ethPoolCore) poolNonceOK(addr thor.Address) (uint64, bool) {
 	m.lock.RLock()
