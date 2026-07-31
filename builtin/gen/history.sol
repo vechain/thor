@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: LGPL-3.0
 // Copyright (c) 2026 The VeChainThor developers
- 
+
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
@@ -9,10 +9,12 @@ pragma solidity 0.8.20;
 /// @title History serves historical block hashes via the EIP-2935 calling convention.
 ///
 /// Calldata is exactly 32 bytes — a uint256 block number with no function
-/// selector. Dispatch therefore goes through the fallback function. All
-/// invalid inputs revert with empty returndata (matching the EIP-2935
-/// reference bytecode's `revert(0, 0)`) so dApps written for ETH mainnet
-/// observe identical failure semantics on Thor.
+/// selector, so dispatch goes through the fallback. Every failure path reverts
+/// with empty returndata, matching the reference bytecode's `revert(0, 0)`.
+///
+/// Deliberate divergence: this fallback is non-payable, so a value-bearing call
+/// reverts where the reference contract would succeed and strand the funds.
+/// Consistent with the other Thor builtins; staticcall reads are unaffected.
 contract History {
     uint256 constant HISTORY_SERVE_WINDOW = 8191;
 

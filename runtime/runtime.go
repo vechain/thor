@@ -155,7 +155,10 @@ func New(
 		}
 	}
 
-	// EIP-2935 HISTORY_STORAGE facade. The contract reads historical block
+	// EIP-2935 HISTORY_STORAGE facade. The contract reads historical block IDs
+	// straight from the Extension builtin at call time, so deploying the code is
+	// all that is needed — unlike the ethereum reference contract there is no
+	// storage ring buffer to seed here, and none to maintain per block.
 	if forkConfig.INTERSTELLAR == ctx.Number {
 		if err := state.SetCode(builtin.History.Address, builtin.History.RuntimeBytecodes()); err != nil {
 			panic(err)
