@@ -138,6 +138,8 @@ func (p *EthPool) sweep() error {
 		return err
 	}
 	p.emitExecutableChanges(result.demoted, false)
+	// to clean up empty senders inserted before an early error
+	p.core.pruneEmptySenders()
 	logger.Trace("Ethereum pool sweep complete", "removed", result.removed)
 	return nil
 }
@@ -335,6 +337,10 @@ func (p *EthPool) collectForkCandidates(
 			if _, err := ctx.stateNonce(origin); err != nil {
 				return nil, err
 			}
+		} else {
+			logger.Warn("failed to decode origin of discarded Ethereum tx during reorg",
+				"err", err, "hash", discardedTx.Hash())
+			// resolveReinjectAdmission will handle/skip this tx below
 		}
 
 		txObj, stateNonce, skip, err := p.resolveReinjectAdmission(discardedTx, ctx)

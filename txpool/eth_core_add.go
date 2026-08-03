@@ -157,6 +157,8 @@ func (m *ethPoolCore) addLocked(
 		return false, nil, err
 	}
 
+	// Invariant: pending can never exceed pendingLimit.
+	// addLocked and promoteLocked both enforce this.
 	if len(sender.pending) > pendingLimit {
 		return false, nil, errEthAccountPendingOverflow
 	}

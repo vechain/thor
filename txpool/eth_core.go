@@ -89,11 +89,6 @@ func (m *ethPoolCore) sortedOriginsLocked() []thor.Address {
 	return origins
 }
 
-// func (m *ethPoolCore) poolNonce(addr thor.Address) uint64 {
-// 	nonce, _ := m.poolNonceOK(addr)
-// 	return nonce
-// }
-
 func (m *ethPoolCore) poolNonceOK(addr thor.Address) (uint64, bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
@@ -126,6 +121,16 @@ func (m *ethPoolCore) executableSnapshot() ethExecutablesSnapshot {
 		for nonce := sender.stateNonce; nonce < sender.poolNonce(); nonce++ {
 			txObj := sender.pending[nonce]
 			if txObj == nil || !txObj.executable || txObj.priorityGasPrice() == nil {
+				// Invariant violation: pending chain should be contiguous and fully priced.
+				if txObj == nil {
+					logger.Error("nil txObj in pending at nonce — invariant violated", "origin", sender.origin, "nonce", nonce)
+				} else if !txObj.executable {
+					logger.Error("non-executable txObj in pending — invariant violated", "origin", sender.origin, "nonce", nonce)
+				} else {
+					logger.Error("nil priorityGasPrice in pending txObj — invariant violated", "origin", sender.origin, "nonce", nonce)
+				}
+				// Drop the entire sender group to avoid serving a truncated chain to the packer.
+				group = group[:0]
 				break
 			}
 			group = append(group, executableTxFromObject(txObj))
