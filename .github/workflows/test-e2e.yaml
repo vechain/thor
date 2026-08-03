@@ -88,13 +88,18 @@ jobs:
         with:
           sparse-checkout: thor/fork_config.go
           sparse-checkout-cone-mode: false
-      - name: Check for INTERSTELLAR fork definition
+      - name: Check for INTERSTELLAR_PART1 fork definition
         id: check
         run: |
-          # INTERSTELLAR is considered defined when the SoloFork block in
-          # thor/fork_config.go contains an INTERSTELLAR field, regardless of value.
+          # INTERSTELLAR_PART1 is considered defined when the SoloFork block in
+          # thor/fork_config.go contains an INTERSTELLAR_PART1 field, regardless of value.
           # Its presence indicates the fork has been implemented and is ready for e2e testing.
-          if awk '/var SoloFork/,/^}/' thor/fork_config.go | grep -q 'INTERSTELLAR'; then
+          # The field name must match the AddField key in interstellar-e2e's
+          # network/setup/network.go: that key becomes a forkConfig entry in the
+          # generated genesis, and thor parses genesis with DisallowUnknownFields.
+          # Matching the exact name here means branches using the old name skip
+          # e2e instead of failing with an unexplained node startup error.
+          if awk '/var SoloFork/,/^}/' thor/fork_config.go | grep -q 'INTERSTELLAR_PART1'; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"

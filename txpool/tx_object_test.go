@@ -262,7 +262,7 @@ func TestExecutable(t *testing.T) {
 func TestExecutableMaxTxGasLimit(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 
-	// Test with INTERSTELLAR active (block 0) - genesis gas limit is 40M > MaxTxGasLimit
+	// Test with INTERSTELLAR_PART1 active (block 0) - genesis gas limit is 40M > MaxTxGasLimit
 	interstellarActive := &thor.SoloFork
 	tchain, err := testchain.NewWithFork(interstellarActive, 180)
 	assert.Nil(t, err)
@@ -297,11 +297,11 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	assert.False(t, exe)
 	assert.Equal(t, "tx gas limit exceeds the maximum allowed", err.Error())
 
-	// Test with INTERSTELLAR not active: EIP-7825 check does not apply
+	// Test with INTERSTELLAR_PART1 not active: EIP-7825 check does not apply
 	interstellarInactive := &thor.ForkConfig{
-		INTERSTELLAR: math.MaxUint32,
-		HAYABUSA:     math.MaxUint32,
-		GALACTICA:    0,
+		INTERSTELLAR_PART1: math.MaxUint32,
+		HAYABUSA:           math.MaxUint32,
+		GALACTICA:          0,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
@@ -314,7 +314,7 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	st2 := state.New(db2, trie.Root{Hash: b0_2.Header().StateRoot()})
 	baseFee2 := galactica.CalcBaseFee(b0_2.Header(), interstellarInactive)
 
-	// Over MaxTxGasLimit but INTERSTELLAR not active and under block gas limit (40M): should pass
+	// Over MaxTxGasLimit but INTERSTELLAR_PART1 not active and under block gas limit (40M): should pass
 	txOverLimitPreFork := newTx(tx.TypeLegacy, 0, nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 	txObj2, err := ResolveTx(txOverLimitPreFork, false)
 	assert.Nil(t, err)
@@ -325,9 +325,9 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 
 func TestExecutableRejectNonLegacyBeforeGalactica(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
-		GALACTICA:    2,
-		HAYABUSA:     math.MaxUint32,
-		INTERSTELLAR: math.MaxUint32,
+		GALACTICA:          2,
+		HAYABUSA:           math.MaxUint32,
+		INTERSTELLAR_PART1: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
@@ -397,9 +397,9 @@ func TestEvaluateAndPricingSnapshot(t *testing.T) {
 
 func TestExecutableRejectUnsupportedFeatures(t *testing.T) {
 	forkConfig := &thor.ForkConfig{
-		VIP191:       2,
-		HAYABUSA:     math.MaxUint32,
-		INTERSTELLAR: math.MaxUint32,
+		VIP191:             2,
+		HAYABUSA:           math.MaxUint32,
+		INTERSTELLAR_PART1: math.MaxUint32,
 	}
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})

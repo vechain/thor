@@ -683,7 +683,7 @@ func TestEVMFunction(t *testing.T) {
 			testFunc: func(ctx *context, t *testing.T) {
 				// Contract at `target` was pre-set by the test runner via ctx.state.SetCode,
 				// not deployed through the EVM CREATE path — so IsNewContract(target) = false
-				// in any fresh statedb. With EIP-6780 active (INTERSTELLAR=0 in forkFromStart),
+				// in any fresh statedb. With EIP-6780 active (INTERSTELLAR_PART1=0 in forkFromStart),
 				// opSuicide6780 sees shouldDestruct=false and skips Suicide().
 
 				head, _ := ctx.chain.GetBlockSummary(0)
@@ -703,7 +703,7 @@ func TestEVMFunction(t *testing.T) {
 
 				origin := genesis.DevAccounts()[0].Address
 
-				// forkFromStart has INTERSTELLAR=0 → osakaInstructionSet → EIP-6780 (opSuicide6780)
+				// forkFromStart has INTERSTELLAR_PART1=0 → osakaInstructionSet → EIP-6780 (opSuicide6780)
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Time: time}, forkFromStart).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
 				out, _, err := exec()
@@ -812,7 +812,7 @@ func TestEVMFunction(t *testing.T) {
 		{
 			name: "Precompile p256Verify",
 			// Compiled with solc 0.8.24 --evm-version shanghai (no MCOPY).
-			// Uses assembly to ensure equal gas paths before/after INTERSTELLAR:
+			// Uses assembly to ensure equal gas paths before/after INTERSTELLAR_PART1:
 			// pragma solidity >=0.8.20 <0.9.0;
 			// contract P256Verify {
 			//   function p256VerifyBytes(bytes memory input) public view returns (uint256 ret) {
@@ -843,7 +843,7 @@ func TestEVMFunction(t *testing.T) {
 				forkConfig.ETH_IST = 0
 				forkConfig.GALACTICA = 0
 
-				// Pre-INTERSTELLAR: 0x0100 is not a precompile
+				// Pre-INTERSTELLAR_PART1: 0x0100 is not a precompile
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, &forkConfig).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
@@ -852,8 +852,8 @@ func TestEVMFunction(t *testing.T) {
 
 				gasBefore := math.MaxUint64 - out.LeftOverGas
 
-				// Post-INTERSTELLAR: 0x0100 is p256Verify precompile
-				forkConfig.INTERSTELLAR = 0
+				// Post-INTERSTELLAR_PART1: 0x0100 is p256Verify precompile
+				forkConfig.INTERSTELLAR_PART1 = 0
 				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, &forkConfig).
 					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err = exec()
@@ -1467,7 +1467,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 	assert.Nil(t, err)
 	repo, _ := chain.NewRepository(db, b0)
 
-	t.Run("reject tx over MaxTxGasLimit after INTERSTELLAR", func(t *testing.T) {
+	t.Run("reject tx over MaxTxGasLimit after INTERSTELLAR_PART1", func(t *testing.T) {
 		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 		trx := tx.NewBuilder(tx.TypeLegacy).
@@ -1486,7 +1486,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 		assert.ErrorContains(t, err, "tx gas limit exceeds the maximum allowed")
 	})
 
-	t.Run("accept tx at MaxTxGasLimit after INTERSTELLAR", func(t *testing.T) {
+	t.Run("accept tx at MaxTxGasLimit after INTERSTELLAR_PART1", func(t *testing.T) {
 		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 		trx := tx.NewBuilder(tx.TypeLegacy).
@@ -1507,11 +1507,11 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 		assert.NotNil(t, receipt)
 	})
 
-	t.Run("allow over MaxTxGasLimit before INTERSTELLAR", func(t *testing.T) {
+	t.Run("allow over MaxTxGasLimit before INTERSTELLAR_PART1", func(t *testing.T) {
 		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 		fcPreInterstellar := thor.SoloFork
-		fcPreInterstellar.INTERSTELLAR = math.MaxUint32
+		fcPreInterstellar.INTERSTELLAR_PART1 = math.MaxUint32
 		fcPreInterstellar.HAYABUSA = math.MaxUint32
 
 		trx := tx.NewBuilder(tx.TypeLegacy).
@@ -1534,7 +1534,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 		}
 	})
 
-	t.Run("reject dyn fee tx over MaxTxGasLimit after INTERSTELLAR", func(t *testing.T) {
+	t.Run("reject dyn fee tx over MaxTxGasLimit after INTERSTELLAR_PART1", func(t *testing.T) {
 		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 		trx := tx.NewBuilder(tx.TypeDynamicFee).

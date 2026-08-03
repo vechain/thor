@@ -128,7 +128,7 @@ func (o *TxObject) Evaluate(
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, nil, errors.New("tx gas exceeds block gas limit")
-	case nextBlockNum >= forkConfig.INTERSTELLAR && o.Gas() > thor.MaxTxGasLimit:
+	case nextBlockNum >= forkConfig.INTERSTELLAR_PART1 && o.Gas() > thor.MaxTxGasLimit:
 		return false, nil, errors.New("tx gas limit exceeds the maximum allowed")
 	case o.IsExpired(nextBlockNum): // Check tx expiration on top of next block
 		return false, nil, errors.New("expired")

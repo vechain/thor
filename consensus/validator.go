@@ -171,7 +171,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	header := blk.Header()
 
-	if thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && uint64(blk.Size()) > thor.MaxRLPBlockSize {
+	if thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR_PART1) && uint64(blk.Size()) > thor.MaxRLPBlockSize {
 		return consensusError(fmt.Sprintf("block RLP-encoded size exceeds maximum: size %v, limit %v", blk.Size(), thor.MaxRLPBlockSize))
 	}
 

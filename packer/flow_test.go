@@ -169,12 +169,12 @@ func TestAdoptTypedTxs(t *testing.T) {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
-	// INTERSTELLAR active: over-limit tx should be rejected by EIP-7825.
+	// INTERSTELLAR_PART1 active: over-limit tx should be rejected by EIP-7825.
 	txOverLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit+1, 3, nil, clause, tx.NewBlockRef(0))
 	err = flow.Adopt(txOverLimit)
 	assert.Equal(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
 
-	// INTERSTELLAR active: at-limit tx should not fail for EIP-7825.
+	// INTERSTELLAR_PART1 active: at-limit tx should not fail for EIP-7825.
 	txAtLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit, 4, nil, clause, tx.NewBlockRef(0))
 	err = flow.Adopt(txAtLimit)
 	if err != nil {
@@ -357,7 +357,7 @@ func TestAdoptErr(t *testing.T) {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
-	// INTERSTELLAR inactive: over-limit tx should not return EIP-7825 error.
+	// INTERSTELLAR_PART1 inactive: over-limit tx should not return EIP-7825 error.
 	txOverLimitPreFork := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 10, thor.MaxTxGasLimit+1, 2, nil, clause, tx.NewBlockRef(0))
 	err := flow.Adopt(txOverLimitPreFork)
 	if err != nil {
@@ -366,7 +366,7 @@ func TestAdoptErr(t *testing.T) {
 }
 
 func TestAdoptErrorAfterGalactica(t *testing.T) {
-	forks := thor.ForkConfig{GALACTICA: 2, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32}
+	forks := thor.ForkConfig{GALACTICA: 2, HAYABUSA: math.MaxUint32, INTERSTELLAR_PART1: math.MaxUint32}
 	chain, err := testchain.NewWithFork(&forks, 180)
 	assert.NoError(t, err)
 
@@ -428,7 +428,7 @@ func TestAdoptErrorAfterGalactica(t *testing.T) {
 }
 
 func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
-	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32}, 180)
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR_PART1: math.MaxUint32}, 180)
 	assert.NoError(t, err)
 
 	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
@@ -457,7 +457,7 @@ func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
 
 func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
 	config := genesis.DevConfig{
-		ForkConfig:   &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32},
+		ForkConfig:   &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR_PART1: math.MaxUint32},
 		BaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
 	}
 	chain, err := testchain.NewIntegrationTestChain(config, 180)
@@ -548,7 +548,7 @@ func TestAdoptBlockSizeLimit(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	proposer := genesis.DevAccounts()[0]
 
-	t.Run("large tx rejected by block size limit after INTERSTELLAR", func(t *testing.T) {
+	t.Run("large tx rejected by block size limit after INTERSTELLAR_PART1", func(t *testing.T) {
 		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
 		sum, err := repo.GetBlockSummary(b.Header().ID())
 		assert.NoError(t, err)
@@ -564,9 +564,9 @@ func TestAdoptBlockSizeLimit(t *testing.T) {
 		assert.True(t, packer.IsBlockSizeLimitReached(err))
 	})
 
-	t.Run("large tx accepted before INTERSTELLAR (no block size limit)", func(t *testing.T) {
+	t.Run("large tx accepted before INTERSTELLAR_PART1 (no block size limit)", func(t *testing.T) {
 		preForkConfig := fc
-		preForkConfig.INTERSTELLAR = math.MaxUint32
+		preForkConfig.INTERSTELLAR_PART1 = math.MaxUint32
 
 		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &preForkConfig, 0)
 		sum, err := repo.GetBlockSummary(b.Header().ID())
@@ -583,7 +583,7 @@ func TestAdoptBlockSizeLimit(t *testing.T) {
 		assert.False(t, packer.IsBlockSizeLimitReached(err))
 	})
 
-	t.Run("normal tx accepted after INTERSTELLAR", func(t *testing.T) {
+	t.Run("normal tx accepted after INTERSTELLAR_PART1", func(t *testing.T) {
 		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
 		sum, err := repo.GetBlockSummary(b.Header().ID())
 		assert.NoError(t, err)

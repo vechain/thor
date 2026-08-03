@@ -173,7 +173,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		return errGasLimitReached
 	}
 
-	if thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) && !f.txFitsBlockSize(t) {
+	if thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR_PART1) && !f.txFitsBlockSize(t) {
 		return errBlockSizeLimitReached
 	}
 

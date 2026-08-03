@@ -106,37 +106,37 @@ func TestValidateBlockBody_EIP7934(t *testing.T) {
 	repo, err := chain.NewRepository(db, parent)
 	assert.NoError(t, err)
 
-	t.Run("oversized block rejected after INTERSTELLAR fork", func(t *testing.T) {
+	t.Run("oversized block rejected after INTERSTELLAR_PART1 fork", func(t *testing.T) {
 		largeData := make([]byte, thor.MaxRLPBlockSize)
 		clause := tx.NewClause(nil).WithData(largeData)
 		tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Clause(clause).Expiration(10).Build()
 		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 		blk := new(block.Builder).Transaction(tr).Build()
 
-		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 0})
+		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR_PART1: 0})
 		err := c.validateBlockBody(blk)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "block RLP-encoded size exceeds maximum")
 	})
 
-	t.Run("oversized block accepted before INTERSTELLAR fork", func(t *testing.T) {
+	t.Run("oversized block accepted before INTERSTELLAR_PART1 fork", func(t *testing.T) {
 		largeData := make([]byte, thor.MaxRLPBlockSize)
 		clause := tx.NewClause(nil).WithData(largeData)
 		tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Clause(clause).Expiration(10).Build()
 		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 		blk := new(block.Builder).Transaction(tr).Build()
 
-		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 10})
+		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR_PART1: 10})
 		err := c.validateBlockBody(blk)
 		assert.NoError(t, err)
 	})
 
-	t.Run("normal block accepted after INTERSTELLAR fork", func(t *testing.T) {
+	t.Run("normal block accepted after INTERSTELLAR_PART1 fork", func(t *testing.T) {
 		tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Expiration(10).Build()
 		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 		blk := new(block.Builder).Transaction(tr).Build()
 
-		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 0})
+		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR_PART1: 0})
 		err := c.validateBlockBody(blk)
 		assert.NoError(t, err)
 	})

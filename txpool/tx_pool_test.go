@@ -1098,7 +1098,7 @@ func TestStrictlyAddMaxTxGasLimit(t *testing.T) {
 
 func TestValidateTxBasicsMaxTxGasLimitForkAware(t *testing.T) {
 	fc := thor.NoFork
-	fc.INTERSTELLAR = 2
+	fc.INTERSTELLAR_PART1 = 2
 
 	tchain, err := testchain.NewWithFork(&fc, 180)
 	require.NoError(t, err)

@@ -111,7 +111,7 @@ func New(
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
 	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
-	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
+	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR_PART1))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
@@ -119,7 +119,7 @@ func New(
 
 	// allocate precompiled contracts
 	var precompiled map[common.Address]vm.PrecompiledContract
-	if forkConfig.INTERSTELLAR == ctx.Number {
+	if forkConfig.INTERSTELLAR_PART1 == ctx.Number {
 		precompiled = vm.PrecompiledContractsOsaka
 	} else if forkConfig.GALACTICA == ctx.Number {
 		precompiled = vm.PrecompiledContractsShanghai
@@ -159,7 +159,7 @@ func New(
 	// straight from the Extension builtin at call time, so deploying the code is
 	// all that is needed — unlike the ethereum reference contract there is no
 	// storage ring buffer to seed here, and none to maintain per block.
-	if forkConfig.INTERSTELLAR == ctx.Number {
+	if forkConfig.INTERSTELLAR_PART1 == ctx.Number {
 		if err := state.SetCode(builtin.History.Address, builtin.History.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
@@ -464,7 +464,7 @@ func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor
 		return nil, errors.New("tx gas exceeds block gas limit")
 	}
 
-	if rt.ctx.Number >= rt.forkConfig.INTERSTELLAR && trx.Gas() > thor.MaxTxGasLimit {
+	if rt.ctx.Number >= rt.forkConfig.INTERSTELLAR_PART1 && trx.Gas() > thor.MaxTxGasLimit {
 		return nil, errors.New("tx gas limit exceeds the maximum allowed")
 	}
 

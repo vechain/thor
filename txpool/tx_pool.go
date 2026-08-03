@@ -690,7 +690,7 @@ func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
 	}
 
 	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
-	if nextBlockNum >= p.forkConfig.INTERSTELLAR {
+	if nextBlockNum >= p.forkConfig.INTERSTELLAR_PART1 {
 		if trx.Gas() > thor.MaxTxGasLimit {
 			return badTxError{"tx gas limit exceeds the maximum allowed"}
 		}

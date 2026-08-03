@@ -66,7 +66,7 @@ func callHistory(t *testing.T, chain *testchain.Chain, num uint32) *testchain.Cl
 }
 
 func TestHistory_ForkActivation(t *testing.T) {
-	chain := newChain(t, nil) // SoloFork: INTERSTELLAR = 1
+	chain := newChain(t, nil) // SoloFork: INTERSTELLAR_PART1 = 1
 	require.NoError(t, chain.MintBlock())
 
 	st := chain.State()
@@ -191,18 +191,18 @@ func TestHistory_RejectsValue(t *testing.T) {
 
 // TestHistory_NotDeployedBeforeFork is the negative half of
 // TestHistory_ForkActivation: runtime.New only deploys the facade on the block
-// that equals forkConfig.INTERSTELLAR, so with the fork disabled the address
+// that equals forkConfig.INTERSTELLAR_PART1, so with the fork disabled the address
 // must stay bare.
 func TestHistory_NotDeployedBeforeFork(t *testing.T) {
 	fc := thor.SoloFork
-	fc.INTERSTELLAR = math.MaxUint32 // never activates
+	fc.INTERSTELLAR_PART1 = math.MaxUint32 // never activates
 	chain := newChain(t, &fc)
 	require.NoError(t, chain.MintBlock())
 	require.NoError(t, chain.MintBlock())
 
 	code, err := chain.State().GetCode(builtin.History.Address)
 	require.NoError(t, err)
-	require.Empty(t, code, "History must not be deployed before INTERSTELLAR")
+	require.Empty(t, code, "History must not be deployed before INTERSTELLAR_PART1")
 
 	// Worth pinning because it is a trap for integrators: calling a codeless
 	// address is a plain transfer, so a pre-fork chain answers with success and
