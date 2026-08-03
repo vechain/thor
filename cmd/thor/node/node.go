@@ -192,6 +192,11 @@ func (n *Node) txStashLoop(ctx context.Context, stash *txStash) {
 			if txEv.Executable != nil && *txEv.Executable {
 				continue
 			}
+			// Remote Ethereum transactions are rediscovered through P2P. Do not
+			// make future-nonce queue entries durable across node restarts.
+			if txEv.Tx.IsEthereumTx() {
+				continue
+			}
 			// only stash non-executable txs
 			if err := stash.Save(txEv.Tx); err != nil {
 				logger.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)

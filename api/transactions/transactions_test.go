@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -53,6 +54,7 @@ func TestTransaction(t *testing.T) {
 		"sendTxWithBadFormat":                      sendTxWithBadFormat,
 		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
 		"sendDynamicFeeTx":                         sendDynamicFeeTx,
+		"sendEthDynamicFeeTx":                      sendEthDynamicFeeTx,
 		"sendNullTx":                               sendNullTx,
 	} {
 		t.Run(name, tt)
@@ -205,6 +207,61 @@ func sendDynamicFeeTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, trx.ID().String(), txObj["id"], "should be the same transaction id")
+}
+
+func sendEthDynamicFeeTx(t *testing.T) {
+	baseFee := thorChain.Repo().BestBlockSummary().Header.BaseFee()
+	recipient := genesis.DevAccounts()[1].Address
+	trx := tx.MustSign(
+		tx.NewBuilder(tx.TypeEthDynamicFee).
+			ChainID(thorChain.Repo().ChainID()).
+			Nonce(0).
+			MaxFeePerGas(new(big.Int).Mul(baseFee, big.NewInt(2))).
+			MaxPriorityFeePerGas(big.NewInt(100)).
+			Gas(21_000).
+			To(&recipient).
+			Value(big.NewInt(1)).
+			Build(),
+		genesis.DevAccounts()[2].PrivateKey,
+	)
+	raw, err := trx.MarshalBinary()
+	require.NoError(t, err)
+	require.NotEmpty(t, raw)
+	require.Equal(t, tx.TypeEthDynamicFee, raw[0], "Ethereum tx must use its EIP-2718 typed envelope")
+
+	res := httpPostAndCheckResponseStatus(t, "/transactions", api.RawTx{Raw: hexutil.Encode(raw)}, http.StatusOK)
+	var submitted api.SendTxResult
+	require.NoError(t, json.Unmarshal(res, &submitted))
+	require.NotNil(t, submitted.ID)
+	assert.Equal(t, trx.ID(), *submitted.ID)
+
+	res = httpGetAndCheckResponseStatus(t, "/transactions/"+trx.ID().String()+"?pending=true", http.StatusOK)
+	var pending *transactions.Transaction
+	require.NoError(t, json.Unmarshal(res, &pending))
+	require.NotNil(t, pending, "HTTP submission must reach the coordinator's Ethereum sub-pool")
+	checkMatchingTx(t, trx, pending)
+
+	res = httpGetAndCheckResponseStatus(
+		t,
+		"/transactions/"+trx.ID().String()+"?raw=true&pending=true",
+		http.StatusOK,
+	)
+	var pendingRaw api.RawTransaction
+	require.NoError(t, json.Unmarshal(res, &pendingRaw))
+	assert.Equal(t, hexutil.Encode(raw), pendingRaw.Raw,
+		"pending lookup must preserve the EIP-2718 wire envelope")
+
+	res = httpPostAndCheckResponseStatus(t, "/transactions", api.RawTx{Raw: hexutil.Encode(raw)}, http.StatusForbidden)
+	assert.Contains(t, string(res), "already known",
+		"AddLocal must expose the delegated AddRemote duplicate policy")
+
+	require.NoError(t, thorChain.MintBlock(trx))
+	res = httpGetAndCheckResponseStatus(t, "/transactions/"+trx.ID().String()+"/receipt", http.StatusOK)
+	var receipt *api.Receipt
+	require.NoError(t, json.Unmarshal(res, &receipt))
+	require.NotNil(t, receipt)
+	assert.Equal(t, tx.TypeEthDynamicFee, receipt.Type)
+	assert.False(t, receipt.Reverted)
 }
 
 func sendImpossibleBlockRefExpiryTx(t *testing.T) {
@@ -414,7 +471,20 @@ func initTransactionServer(t *testing.T) {
 
 	require.NoError(t, thorChain.MintBlock(dynFeeTx))
 
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &forkConfig)
+	mempool := txpool.NewCoordinator(
+		thorChain.Repo(),
+		thorChain.Stater(),
+		txpool.Options{
+			Limit:           10000,
+			LimitPerAccount: 16,
+			MaxLifetime:     10 * time.Minute,
+			EthAccountSlots: 16,
+			EthAccountQueue: 64,
+			EthPriceBump:    10,
+		},
+		&forkConfig,
+	)
+	t.Cleanup(mempool.Close)
 
 	mempoolTx = tx.NewBuilder(tx.TypeDynamicFee).
 		ChainTag(chainTag).
@@ -427,7 +497,7 @@ func initTransactionServer(t *testing.T) {
 	mempoolTx = tx.MustSign(mempoolTx, genesis.DevAccounts()[0].PrivateKey)
 
 	// Add a tx to the mempool to have both pending and non-pending transactions
-	e := mempool.Add(mempoolTx)
+	e := mempool.AddRemote(mempoolTx)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -456,7 +526,7 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 		assert.Equal(t, expectedTx.GasPriceCoef(), *actualTx.GasPriceCoef)
 		assert.Empty(t, actualTx.MaxFeePerGas)
 		assert.Empty(t, actualTx.MaxPriorityFeePerGas)
-	case tx.TypeDynamicFee:
+	case tx.TypeDynamicFee, tx.TypeEthDynamicFee:
 		assert.Nil(t, actualTx.GasPriceCoef)
 		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxFeePerGas()), actualTx.MaxFeePerGas)
 		assert.Equal(t, (*math.HexOrDecimal256)(expectedTx.MaxPriorityFeePerGas()), actualTx.MaxPriorityFeePerGas)

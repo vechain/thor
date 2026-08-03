@@ -45,8 +45,33 @@ func (o *OnDemandTxPool) Get(txID thor.Bytes32) *tx.Transaction {
 	return o.txsByID[txID]
 }
 
-func (o *OnDemandTxPool) Add(newTx *tx.Transaction) error {
+func (o *OnDemandTxPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	for _, trx := range o.txsByID {
+		if trx.Hash() == hash {
+			return trx
+		}
+	}
+	return nil
+}
+
+func (o *OnDemandTxPool) PoolNonce(_ thor.Address) uint64 {
+	return 0
+}
+
+func (o *OnDemandTxPool) AddRemote(newTx *tx.Transaction) error {
 	return o.AddLocal(newTx)
+}
+
+func (o *OnDemandTxPool) ReconcileOnHeadChange(fork txpool.HeadChangeTxs) error {
+	for _, newTx := range fork.Discarded {
+		if err := o.AddLocal(newTx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (o *OnDemandTxPool) AddLocal(newTx *tx.Transaction) error {
@@ -140,5 +165,5 @@ func (o *OnDemandTxPool) Close() {}
 func (o *OnDemandTxPool) Fill(txs tx.Transactions) {}
 
 func (o *OnDemandTxPool) StrictlyAdd(newTx *tx.Transaction) error {
-	return o.Add(newTx)
+	return o.AddLocal(newTx)
 }

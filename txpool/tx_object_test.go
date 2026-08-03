@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -208,6 +209,96 @@ func TestResolve(t *testing.T) {
 	assert.Equal(t, acc.Address, txObj.Origin())
 }
 
+func TestExecutableSetsAccountingSideEffectsOnSuccess(t *testing.T) {
+	acc, repo, best, st, forkConfig := SetupTest()
+	trx := newTx(
+		tx.TypeDynamicFee,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		acc,
+	)
+	txObj, err := ResolveTx(trx, false)
+	require.NoError(t, err)
+	assert.Nil(t, txObj.Payer())
+	assert.Nil(t, txObj.Cost())
+	assert.Nil(t, txObj.priorityGasPrice())
+
+	executable, err := evaluateAndPublishPricing(
+		txObj,
+		repo.NewChain(best.Header().ID()),
+		st,
+		best.Header(),
+		forkConfig,
+		galacticaBaseFee(best),
+		false,
+	)
+
+	require.NoError(t, err)
+	require.True(t, executable)
+	require.NotNil(t, txObj.Payer())
+	assert.Equal(t, acc.Address, *txObj.Payer())
+	require.NotNil(t, txObj.Cost())
+	assert.Positive(t, txObj.Cost().Sign())
+	require.NotNil(t, txObj.priorityGasPrice())
+	assert.GreaterOrEqual(t, txObj.priorityGasPrice().Sign(), 0)
+
+	payer, cost, priority := txObj.Payer(), txObj.Cost(), txObj.priorityGasPrice()
+	txObj.executable = true
+	executable, err = evaluateAndPublishPricing(
+		txObj,
+		repo.NewChain(best.Header().ID()),
+		st,
+		best.Header(),
+		forkConfig,
+		galacticaBaseFee(best),
+		true,
+	)
+	require.NoError(t, err)
+	require.True(t, executable)
+	assert.Same(t, payer, txObj.Payer())
+	assert.Same(t, cost, txObj.Cost())
+	assert.Same(t, priority, txObj.priorityGasPrice())
+}
+
+func TestEthTxObjectExecutableNonceDecisions(t *testing.T) {
+	acc, repo, best, st, forkConfig := SetupTest()
+	require.NoError(t, st.SetNonce(acc.Address, 1))
+	to := genesis.DevAccounts()[1].Address
+	build := func(nonce uint64) *TxObject {
+		trx := tx.MustSign(tx.NewBuilder(tx.TypeEthDynamicFee).
+			ChainID(repo.ChainID()).
+			Nonce(nonce).
+			Gas(21_000).
+			MaxFeePerGas(new(big.Int).Mul(galacticaBaseFee(best), big.NewInt(2))).
+			MaxPriorityFeePerGas(big.NewInt(100)).
+			To(&to).
+			Build(), acc.PrivateKey)
+		txObj, err := ResolveTx(trx, false)
+		require.NoError(t, err)
+		return txObj
+	}
+	chainView := repo.NewChain(best.Header().ID())
+	baseFee := galacticaBaseFee(best)
+
+	executable, _, err := build(0).Evaluate(chainView, st, best.Header(), forkConfig, baseFee, false)
+	require.EqualError(t, err, "nonce too low")
+	assert.False(t, executable)
+
+	executable, _, err = build(2).Evaluate(chainView, st, best.Header(), forkConfig, baseFee, false)
+	require.NoError(t, err)
+	assert.False(t, executable, "a nonce gap must remain queued")
+
+	executable, pricing, err := build(1).Evaluate(chainView, st, best.Header(), forkConfig, baseFee, false)
+	require.NoError(t, err)
+	assert.True(t, executable)
+	require.NotNil(t, pricing)
+}
+
 func TestExecutable(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 
@@ -321,37 +412,6 @@ func TestExecutableMaxTxGasLimit(t *testing.T) {
 	exe, _, err = txObj2.Evaluate(repo2.NewChain(b0_2.Header().ID()), st2, b0_2.Header(), interstellarInactive, baseFee2, false)
 	assert.True(t, exe)
 	assert.Nil(t, err)
-}
-
-func TestEvaluateAndPricingSnapshot(t *testing.T) {
-	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
-	assert.Nil(t, err)
-	tchain.MintBlock()
-	repo, stater, forkConfig := tchain.Repo(), tchain.Stater(), tchain.GetForkConfig()
-
-	trx := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	txObj, err := ResolveTx(trx, false)
-	assert.Nil(t, err)
-
-	best := repo.BestBlockSummary()
-	state := stater.NewState(best.Root())
-	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
-
-	executable, pricing, err := txObj.Evaluate(repo.NewBestChain(), state, best.Header, forkConfig, baseFee, false)
-	assert.Nil(t, err)
-	assert.True(t, executable)
-	assert.NotNil(t, pricing)
-
-	// Evaluate did not publish, so accessors still return nil
-	assert.Nil(t, txObj.Cost())
-	assert.Nil(t, txObj.Payer())
-	assert.Nil(t, txObj.priorityGasPrice())
-
-	// after publishing, accessors read the snapshot
-	txObj.setPricing(pricing)
-	assert.Equal(t, pricing.cost, txObj.Cost())
-	assert.Equal(t, pricing.payer, txObj.Payer())
-	assert.Equal(t, pricing.priorityGasPrice, txObj.priorityGasPrice())
 }
 
 func TestExecutableRejectUnsupportedFeatures(t *testing.T) {

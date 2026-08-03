@@ -166,7 +166,12 @@ func BenchmarkFetchTx_RandomSigners_OneClausePerTx(b *testing.B) {
 }
 
 func benchmarkGetTransaction(b *testing.B, thorChain *testchain.Chain, randTxs tx.Transactions) {
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
+	mempool := txpool.NewCoordinator(
+		thorChain.Repo(),
+		thorChain.Stater(),
+		txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute},
+		&thor.NoFork,
+	)
 	transactionAPI := New(thorChain.Repo(), mempool)
 	head := thorChain.Repo().BestBlockSummary().Header.ID()
 	var err error
@@ -186,7 +191,12 @@ func benchmarkGetTransaction(b *testing.B, thorChain *testchain.Chain, randTxs t
 }
 
 func benchmarkGetReceipt(b *testing.B, thorChain *testchain.Chain, randTxs tx.Transactions) {
-	mempool := txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute}, &thor.NoFork)
+	mempool := txpool.NewCoordinator(
+		thorChain.Repo(),
+		thorChain.Stater(),
+		txpool.Options{Limit: 10, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute},
+		&thor.NoFork,
+	)
 	transactionAPI := New(thorChain.Repo(), mempool)
 	head := thorChain.Repo().BestBlockSummary().Header.ID()
 	var err error

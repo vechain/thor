@@ -16,4 +16,9 @@ var (
 	metricTxPoolExecutablesGauge = metrics.LazyLoadGauge("txpool_executable_tx_count")
 	metricTxPoolAllGauge         = metrics.LazyLoadGauge("txpool_all_tx_count")
 	metricAccountQuotaExceeded   = metrics.LazyLoadCounterVec("account_quota_exceeded", []string{"type"})
+
+	// Counts commits that had to read chain state under the core lock because
+	// the preparation pre-pass did not cover a transaction. Expected to stay at
+	// zero; a non-zero value means the preparation window is too narrow.
+	metricEthPreparationFallback = metrics.LazyLoadCounter("txpool_eth_preparation_fallback")
 )

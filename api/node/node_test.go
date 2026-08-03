@@ -30,7 +30,7 @@ import (
 var (
 	ts            *httptest.Server
 	tclient       *thorclient.Client
-	pool          *txpool.TxPool
+	pool          txpool.Pool
 	txpoolEnabled *atomic.Bool
 )
 
@@ -56,7 +56,7 @@ func initCommServer(t *testing.T) {
 
 	chainTag := thorChain.Repo().ChainTag()
 
-	pool = txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+	pool = txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 		Limit:           10000,
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,
@@ -71,13 +71,13 @@ func initCommServer(t *testing.T) {
 			Nonce(uint64(i)).
 			Build()
 		transaction = tx.MustSign(transaction, genesis.DevAccounts()[0].PrivateKey)
-		err := pool.Add(transaction)
+		err := pool.AddRemote(transaction)
 		require.NoError(t, err)
 	}
 
 	communicator := comm.New(
 		thorChain.Repo(),
-		txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{
+		txpool.NewCoordinator(thorChain.Repo(), thorChain.Stater(), txpool.Options{
 			Limit:           10000,
 			LimitPerAccount: 128,
 			MaxLifetime:     10 * time.Minute,

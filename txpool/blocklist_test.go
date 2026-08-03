@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/thor"
 )
@@ -166,4 +167,59 @@ func TestFetch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetchNotModifiedPreservesBlocklist(t *testing.T) {
+	existing := thor.Address{0x01}
+	bl := blocklist{list: map[thor.Address]bool{existing: true}}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "some-etag", r.Header.Get("if-none-match"))
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer server.Close()
+	eTag := "some-etag"
+
+	require.NoError(t, bl.Fetch(context.Background(), server.URL, &eTag))
+
+	assert.Equal(t, "some-etag", eTag)
+	assert.True(t, bl.Contains(existing))
+	assert.Equal(t, 1, bl.Len())
+}
+
+func TestFetchFailuresDoNotReplaceBlocklist(t *testing.T) {
+	existing := thor.Address{0x01}
+	bl := blocklist{list: map[thor.Address]bool{existing: true}}
+
+	t.Run("non-2xx response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+
+		eTag := "old-etag"
+		err := bl.Fetch(context.Background(), server.URL, &eTag)
+
+		require.EqualError(t, err, "status 503 Service Unavailable")
+		assert.Equal(t, "old-etag", eTag)
+		assert.True(t, bl.Contains(existing))
+		assert.Equal(t, 1, bl.Len())
+	})
+
+	t.Run("network error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		server.Close()
+
+		err := bl.Fetch(context.Background(), server.URL, nil)
+
+		require.Error(t, err)
+		assert.True(t, bl.Contains(existing))
+		assert.Equal(t, 1, bl.Len())
+	})
+}
+
+func TestBlocklistContainsBeforeLoad(t *testing.T) {
+	var bl blocklist
+
+	assert.False(t, bl.Contains(thor.Address{0xff}))
+	assert.Zero(t, bl.Len())
 }

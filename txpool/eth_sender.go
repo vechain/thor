@@ -1,0 +1,172 @@
+// Copyright (c) 2026 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package txpool
+
+import (
+	"math"
+	"math/big"
+
+	"github.com/vechain/thor/v2/thor"
+)
+
+// ethSender tracks one account's nonce, pending, and queue state. It owns no
+// locks, global policy, or reservation state; live senders are mutated only
+// while ethPoolCore.lock is held for writing.
+type ethSender struct {
+	origin     thor.Address
+	stateNonce uint64
+	pending    map[uint64]*TxObject
+	queue      map[uint64]*TxObject
+}
+
+func newEthSender(origin thor.Address, stateNonce uint64) *ethSender {
+	return &ethSender{
+		origin:     origin,
+		stateNonce: stateNonce,
+		pending:    make(map[uint64]*TxObject),
+		queue:      make(map[uint64]*TxObject),
+	}
+}
+
+// poolNonce returns the next expected nonce (stateNonce + contiguous pending).
+func (s *ethSender) poolNonce() uint64 {
+	return s.stateNonce + uint64(len(s.pending))
+}
+
+func (s *ethSender) isEmpty() bool {
+	return len(s.pending) == 0 && len(s.queue) == 0
+}
+
+func (s *ethSender) get(nonce uint64) *TxObject {
+	if txObj := s.pending[nonce]; txObj != nil {
+		return txObj
+	}
+	return s.queue[nonce]
+}
+
+func (s *ethSender) isPending(nonce uint64) bool {
+	return s.pending[nonce] != nil
+}
+
+func (s *ethSender) pendingCountFrom(nonce uint64) int {
+	count := 0
+	for pendingNonce := range s.pending {
+		if pendingNonce >= nonce {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *ethSender) demoteFrom(nonce uint64) []reservationOwner {
+	var releases []reservationOwner
+	for pendingNonce, txObj := range s.pending {
+		if pendingNonce < nonce {
+			continue
+		}
+		txObj.executable = false
+		s.queue[pendingNonce] = txObj
+		delete(s.pending, pendingNonce)
+		releases = append(releases, ethReservationOwner(s.origin, pendingNonce))
+	}
+	return releases
+}
+
+// dropNonce removes a pending transaction and demotes its higher-nonce suffix
+// so pending remains contiguous from stateNonce.
+func (s *ethSender) dropNonce(nonce uint64) ([]reservationOwner, bool) {
+	txObj := s.pending[nonce]
+	if txObj == nil {
+		return nil, false
+	}
+	txObj.executable = false
+	delete(s.pending, nonce)
+
+	releases := []reservationOwner{ethReservationOwner(s.origin, nonce)}
+	if nonce < math.MaxUint64 {
+		releases = append(releases, s.demoteFrom(nonce+1)...)
+	}
+	return releases, true
+}
+
+// resetStateNonce forces all nonce-ready transactions through fresh payer,
+// balance and base-fee validation after a canonical head change.
+func (s *ethSender) resetStateNonce(stateNonce uint64) ([]*TxObject, []reservationOwner) {
+	var settled []*TxObject
+	var releases []reservationOwner
+	for nonce, txObj := range s.pending {
+		releases = append(releases, ethReservationOwner(s.origin, nonce))
+		delete(s.pending, nonce)
+		if nonce < stateNonce {
+			settled = append(settled, txObj)
+			continue
+		}
+		txObj.executable = false
+		s.queue[nonce] = txObj
+	}
+	for nonce, txObj := range s.queue {
+		if nonce < stateNonce {
+			settled = append(settled, txObj)
+			delete(s.queue, nonce)
+		}
+	}
+	s.stateNonce = stateNonce
+	return settled, releases
+}
+
+// syncStateNonce reconciles the sender with the canonical account nonce. It
+// returns transactions which became settled and reservation owners which must
+// be released. A backwards move (reorg) conservatively queues all transactions
+// until the newly-created nonce gap is filled.
+func (s *ethSender) syncStateNonce(stateNonce uint64) ([]*TxObject, []reservationOwner) {
+	var settled []*TxObject
+	var releases []reservationOwner
+	if stateNonce < s.stateNonce {
+		for nonce, txObj := range s.pending {
+			txObj.executable = false
+			s.queue[nonce] = txObj
+			delete(s.pending, nonce)
+			releases = append(releases, ethReservationOwner(s.origin, nonce))
+		}
+		s.stateNonce = stateNonce
+		return settled, releases
+	}
+	if stateNonce == s.stateNonce {
+		return nil, nil
+	}
+	for nonce, txObj := range s.pending {
+		if nonce < stateNonce {
+			settled = append(settled, txObj)
+			delete(s.pending, nonce)
+			releases = append(releases, ethReservationOwner(s.origin, nonce))
+		}
+	}
+	for nonce, txObj := range s.queue {
+		if nonce < stateNonce {
+			settled = append(settled, txObj)
+			delete(s.queue, nonce)
+		}
+	}
+	s.stateNonce = stateNonce
+	return settled, releases
+}
+
+func isFeeBumpSufficient(incumbent, candidate *TxObject, priceBump uint64) bool {
+	if incumbent == nil {
+		return true
+	}
+	return feeBumped(incumbent.MaxFeePerGas(), candidate.MaxFeePerGas(), priceBump) &&
+		feeBumped(incumbent.MaxPriorityFeePerGas(), candidate.MaxPriorityFeePerGas(), priceBump)
+}
+
+func feeBumped(old, candidate *big.Int, priceBump uint64) bool {
+	if candidate.Cmp(old) <= 0 {
+		return false
+	}
+	threshold := new(big.Int).Mul(old, new(big.Int).SetUint64(100+priceBump))
+	threshold.Div(threshold, new(big.Int).SetUint64(100))
+	return candidate.Cmp(threshold) >= 0
+}

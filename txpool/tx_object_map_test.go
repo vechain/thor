@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
 	"github.com/vechain/thor/v2/genesis"
@@ -33,10 +34,10 @@ func TestGetByID(t *testing.T) {
 	txObj3, _ := ResolveTx(tx3, false)
 
 	// Creating a new txObjectMap and adding transactions
-	m := newTxObjectMap()
-	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj2, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	m := newTxObjectMap(newCostTracker())
+	assert.Nil(t, m.Add(txObj1, 1, nil))
+	assert.Nil(t, m.Add(txObj2, 1, nil))
+	assert.Nil(t, m.Add(txObj3, 1, nil))
 
 	// Testing GetByID
 	retrievedTxObj1 := m.GetByID(txObj1.ID())
@@ -68,7 +69,7 @@ func TestFill(t *testing.T) {
 	txObj3, _ := ResolveTx(tx3, false)
 
 	// Creating a new txObjectMap
-	m := newTxObjectMap()
+	m := newTxObjectMap(newCostTracker())
 
 	// Filling the map with transactions
 	m.Fill([]*TxObject{txObj1, txObj2, txObj1, txObj3})
@@ -93,6 +94,149 @@ func TestFill(t *testing.T) {
 	assert.Equal(t, 1, m.quota[genesis.DevAccounts()[4].Address], "Delegator quota should be 1 for account 4")
 }
 
+func TestTxObjectMapCountsTrackMutations(t *testing.T) {
+	repo := newChainRepo()
+	nonExecutableTx := newTx(
+		tx.TypeLegacy,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[0],
+	)
+	executableTx := newTx(
+		tx.TypeLegacy,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		101,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[1],
+	)
+	filledTx := newTx(
+		tx.TypeLegacy,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		102,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[2],
+	)
+
+	nonExecutable, err := ResolveTx(nonExecutableTx, false)
+	require.NoError(t, err)
+	executable, err := ResolveTx(executableTx, false)
+	require.NoError(t, err)
+	executable.executable = true
+	filled, err := ResolveTx(filledTx, false)
+	require.NoError(t, err)
+	filled.executable = true
+
+	m := newTxObjectMap(newCostTracker())
+	require.NoError(t, m.Add(nonExecutable, 10, nil))
+	require.NoError(t, m.Add(executable, 10, nil))
+	require.NoError(t, m.Add(executable, 10, nil))
+	total, executableCount := m.Counts()
+	assert.Equal(t, 2, total)
+	assert.Equal(t, 1, executableCount)
+
+	require.True(t, m.RemoveByHash(executable.Hash()))
+	total, executableCount = m.Counts()
+	assert.Equal(t, 1, total)
+	assert.Zero(t, executableCount)
+
+	payer := nonExecutable.Origin()
+	setTestTxPricing(nonExecutable, &payer, big.NewInt(1), nil)
+	reserved, err := m.ReserveCost(nonExecutable, big.NewInt(1))
+	require.NoError(t, err)
+	require.True(t, reserved)
+	total, executableCount = m.Counts()
+	assert.Equal(t, 1, total)
+	assert.Equal(t, 1, executableCount)
+
+	m.Fill([]*TxObject{filled, filled})
+	total, executableCount = m.Counts()
+	assert.Equal(t, 2, total)
+	assert.Equal(t, 2, executableCount)
+}
+
+func TestTxObjectMapCountsInvariantUnderMixedMutations(t *testing.T) {
+	repo := newChainRepo()
+	txObjs := make([]*TxObject, 32)
+	for i := range txObjs {
+		trx := newTx(
+			tx.TypeLegacy,
+			repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			uint32(100+i),
+			nil,
+			tx.Features(0),
+			genesis.DevAccounts()[i%len(genesis.DevAccounts())],
+		)
+		txObj, err := ResolveTx(trx, false)
+		require.NoError(t, err)
+		txObjs[i] = txObj
+	}
+
+	m := newTxObjectMap(newCostTracker())
+	balance := big.NewInt(1_000_000)
+	var sequence uint64 = 1
+	for range 5_000 {
+		sequence = sequence*6364136223846793005 + 1442695040888963407
+		index := int(sequence % uint64(len(txObjs)))
+		txObj := txObjs[index]
+
+		switch (sequence >> 32) % 6 {
+		case 0:
+			_ = m.Add(txObj, len(txObjs), balance)
+		case 1:
+			m.RemoveByHash(txObj.Hash())
+		case 2:
+			m.Fill([]*TxObject{txObj, txObj})
+		case 3:
+			if m.GetByHash(txObj.Hash()) == txObj {
+				payer := txObj.Origin()
+				setTestTxPricing(txObj, &payer, big.NewInt(1), nil)
+				_, _ = m.ReserveCost(txObj, balance)
+			}
+		case 4:
+			other := txObjs[(index+1)%len(txObjs)]
+			m.RemoveByHashAndID(txObj.Hash(), other.ID())
+		case 5:
+			m.RemoveByHashAndID(txObj.Hash(), txObj.ID())
+		}
+
+		assertTxObjectMapCountsInvariant(t, m)
+	}
+}
+
+func assertTxObjectMapCountsInvariant(t *testing.T, m *txObjectMap) {
+	t.Helper()
+
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	executableCount := 0
+	for _, txObj := range m.mapByHash {
+		if txObj.executable {
+			executableCount++
+		}
+	}
+	assert.Equal(t, len(m.mapByHash), len(m.mapByID))
+	assert.Equal(t, executableCount, m.executableCount)
+	assert.GreaterOrEqual(t, m.executableCount, 0)
+	assert.LessOrEqual(t, m.executableCount, len(m.mapByHash))
+}
+
 func TestTxObjMap(t *testing.T) {
 	repo := newChainRepo()
 
@@ -104,17 +248,17 @@ func TestTxObjMap(t *testing.T) {
 	txObj2, _ := ResolveTx(tx2, false)
 	txObj3, _ := ResolveTx(tx3, false)
 
-	m := newTxObjectMap()
+	m := newTxObjectMap(newCostTracker())
 	assert.Zero(t, m.Len())
 
-	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }), "should no error if exists")
+	assert.Nil(t, m.Add(txObj1, 1, nil))
+	assert.Nil(t, m.Add(txObj1, 1, nil), "should no error if exists")
 	assert.Equal(t, 1, m.Len())
 
-	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj2, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj2, 1, nil))
 	assert.Equal(t, 1, m.Len())
 
-	assert.Nil(t, m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	assert.Nil(t, m.Add(txObj3, 1, nil))
 	assert.Equal(t, 2, m.Len())
 
 	assert.True(t, m.ContainsHash(tx1.Hash()))
@@ -140,52 +284,14 @@ func TestLimitByDelegator(t *testing.T) {
 	txObj2, _ := ResolveTx(tx2, false)
 	txObj3, _ := ResolveTx(tx3, false)
 
-	m := newTxObjectMap()
-	assert.Nil(t, m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
+	m := newTxObjectMap(newCostTracker())
+	assert.Nil(t, m.Add(txObj1, 1, nil))
+	assert.Nil(t, m.Add(txObj3, 1, nil))
 
-	m = newTxObjectMap()
-	assert.Nil(t, m.Add(txObj2, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Equal(t, errors.New("delegator quota exceeded"), m.Add(txObj3, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj1, false, nil, 1, func(_ thor.Address, _ *big.Int) error { return nil }))
-}
-
-func TestPromoteIfPresentAndRemove(t *testing.T) {
-	tchain, err := testchain.NewWithFork(&thor.SoloFork, 180)
-	assert.Nil(t, err)
-	tchain.MintBlock()
-	repo, stater, forkConfig := tchain.Repo(), tchain.Stater(), tchain.GetForkConfig()
-
-	trx := newTx(tx.TypeLegacy, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	txObj, err := ResolveTx(trx, false)
-	assert.Nil(t, err)
-
-	best := repo.BestBlockSummary()
-	state := stater.NewState(best.Root())
-	baseFee := galactica.CalcBaseFee(best.Header, forkConfig)
-	_, pricing, err := txObj.Evaluate(repo.NewBestChain(), state, best.Header, forkConfig, baseFee, false)
-	assert.Nil(t, err)
-	assert.NotNil(t, pricing)
-
-	m := newTxObjectMap()
-
-	// not in the pool yet: promote returns false and does not account
-	txObj.setPricing(pricing)
-	assert.False(t, m.promote(txObj))
-	assert.Nil(t, m.cost[genesis.DevAccounts()[0].Address])
-
-	// added as non-executable, then promote -> accounted
-	assert.Nil(t, m.Add(txObj, false, nil, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.True(t, m.promote(txObj))
-	assert.Equal(t, txObj.Cost(), m.cost[genesis.DevAccounts()[0].Address])
-
-	// idempotent
-	assert.True(t, m.promote(txObj))
-	assert.Equal(t, txObj.Cost(), m.cost[genesis.DevAccounts()[0].Address])
-
-	// drained to zero after removal
-	assert.True(t, m.RemoveByHash(txObj.Hash()))
-	assert.Nil(t, m.cost[genesis.DevAccounts()[0].Address])
+	m = newTxObjectMap(newCostTracker())
+	assert.Nil(t, m.Add(txObj2, 1, nil))
+	assert.Equal(t, errors.New("delegator quota exceeded"), m.Add(txObj3, 1, nil))
+	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj1, 1, nil))
 }
 
 func TestPendingCost(t *testing.T) {
@@ -216,33 +322,98 @@ func TestPendingCost(t *testing.T) {
 	exec1, p1, err := txObj1.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
 	assert.True(t, exec1)
+	txObj1.setPricing(p1)
 
 	exec2, p2, err := txObj2.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
 	assert.True(t, exec2)
+	txObj2.setPricing(p2)
 
 	exec3, p3, err := txObj3.Evaluate(chain, state, best.Header, forkConfig, baseFee, false)
 	assert.Nil(t, err)
 	assert.True(t, exec3)
+	txObj3.setPricing(p3)
 
 	// Creating a new txObjectMap
-	m := newTxObjectMap()
+	m := newTxObjectMap(newCostTracker())
+	balance := new(big.Int).Lsh(big.NewInt(1), 256)
 
-	assert.Nil(t, m.Add(txObj1, true, p1, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj2, true, p2, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
-	assert.Nil(t, m.Add(txObj3, true, p3, 10, func(_ thor.Address, _ *big.Int) error { return nil }))
+	m.Add(txObj1, 10, balance)
+	m.Add(txObj2, 10, balance)
+	m.Add(txObj3, 10, balance)
 
-	assert.Equal(t, txObj1.Cost(), m.cost[genesis.DevAccounts()[0].Address])
+	assert.Equal(t, txObj1.Cost(), m.costs.pendingCost(genesis.DevAccounts()[0].Address))
 	// No cost for txObj2's origin, should be counted on the delegator
-	assert.Nil(t, m.cost[genesis.DevAccounts()[1].Address])
-	assert.Equal(t, new(big.Int).Add(txObj2.Cost(), txObj3.Cost()), m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, 0, m.costs.pendingCost(genesis.DevAccounts()[1].Address).Sign())
+	assert.Equal(t, new(big.Int).Add(txObj2.Cost(), txObj3.Cost()), m.costs.pendingCost(genesis.DevAccounts()[2].Address))
 
 	m.RemoveByHash(txObj1.Hash())
-	assert.Nil(t, m.cost[genesis.DevAccounts()[0].Address])
+	assert.Equal(t, 0, m.costs.pendingCost(genesis.DevAccounts()[0].Address).Sign())
 	m.RemoveByHash(txObj2.Hash())
-	assert.Equal(t, txObj3.Cost(), m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, txObj3.Cost(), m.costs.pendingCost(genesis.DevAccounts()[2].Address))
 	m.RemoveByHash(txObj2.Hash())
-	assert.Equal(t, txObj3.Cost(), m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, txObj3.Cost(), m.costs.pendingCost(genesis.DevAccounts()[2].Address))
 	m.RemoveByHash(txObj3.Hash())
-	assert.Nil(t, m.cost[genesis.DevAccounts()[2].Address])
+	assert.Equal(t, 0, m.costs.pendingCost(genesis.DevAccounts()[2].Address).Sign())
+}
+
+func TestTxObjectMapReserveCostAfterRemoval(t *testing.T) {
+	repo := newChainRepo()
+	trx := newTx(
+		tx.TypeDynamicFee,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[0],
+	)
+	txObj, err := ResolveTx(trx, false)
+	assert.NoError(t, err)
+
+	costs := newCostTracker()
+	m := newTxObjectMap(costs)
+	assert.NoError(t, m.Add(txObj, 1, nil))
+	assert.True(t, m.RemoveByHash(txObj.Hash()))
+
+	payer := txObj.Origin()
+	setTestTxPricing(txObj, &payer, big.NewInt(10), nil)
+	reserved, err := m.ReserveCost(txObj, big.NewInt(100))
+
+	assert.NoError(t, err)
+	assert.False(t, reserved)
+	assert.Zero(t, costs.pendingCost(payer).Sign())
+	assert.Empty(t, costs.reservations)
+}
+
+func TestTxObjectMapExecutableSnapshotSkipsMissingPriority(t *testing.T) {
+	repo := newChainRepo()
+	trx := newTx(
+		tx.TypeDynamicFee,
+		repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		genesis.DevAccounts()[0],
+	)
+	txObj, err := ResolveTx(trx, false)
+	assert.NoError(t, err)
+
+	m := newTxObjectMap(newCostTracker())
+	assert.NoError(t, m.Add(txObj, 1, nil))
+
+	snapshot := m.executableSnapshot(tx.Transactions{trx})
+	assert.Empty(t, snapshot.transactions())
+	assert.Empty(t, *snapshot)
+
+	setTestPriorityGasPrice(txObj, big.NewInt(1))
+	snapshot = m.executableSnapshot(tx.Transactions{trx})
+	assert.Equal(t, tx.Transactions{trx}, snapshot.transactions())
+	assert.Len(t, *snapshot, 1)
+	assert.Same(t, trx, (*snapshot)[0].tx)
 }

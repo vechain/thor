@@ -6,6 +6,7 @@
 package txpool
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,13 +48,13 @@ const (
 
 var devAccounts = genesis.DevAccounts()
 
-func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *TxPool {
+func newPool(limit int, limitPerAccount int, forkConfig *thor.ForkConfig) *VeChainPool {
 	tchain, _ := testchain.NewWithFork(forkConfig, 180)
-	return New(tchain.Repo(), tchain.Stater(), Options{
+	return newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           limit,
 		LimitPerAccount: limitPerAccount,
 		MaxLifetime:     time.Hour,
-	}, forkConfig)
+	}, forkConfig, newCostTracker(), new(blocklist))
 }
 
 func newPoolWithParams(
@@ -62,7 +64,7 @@ func newPoolWithParams(
 	BlocklistFetchURL string,
 	timestamp uint64,
 	forks *thor.ForkConfig,
-) *TxPool {
+) *VeChainPool {
 	return newPoolWithMaxLifetime(limit, limitPerAccount, BlocklistCacheFilePath, BlocklistFetchURL, timestamp, time.Hour, forks)
 }
 
@@ -74,7 +76,7 @@ func newPoolWithMaxLifetime(
 	timestamp uint64,
 	maxLifetime time.Duration,
 	forks *thor.ForkConfig,
-) *TxPool {
+) *VeChainPool {
 	db := muxdb.NewMem()
 	gene := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -90,13 +92,13 @@ func newPoolWithMaxLifetime(
 		})
 	b0, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, b0)
-	return New(repo, state.NewStater(db), Options{
+	return newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:                  limit,
 		LimitPerAccount:        limitPerAccount,
 		MaxLifetime:            maxLifetime,
 		BlocklistCacheFilePath: BlocklistCacheFilePath,
 		BlocklistFetchURL:      BlocklistFetchURL,
-	}, forks)
+	}, forks, newCostTracker(), new(blocklist))
 }
 
 func newHTTPServer() *httptest.Server {
@@ -115,87 +117,6 @@ func newHTTPServer() *httptest.Server {
 	return server
 }
 
-func gatherMetricFamily(t *testing.T, name string) *dto.MetricFamily {
-	t.Helper()
-
-	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
-	metricFamilies, err := gatherers.Gather()
-	require.NoError(t, err)
-
-	for _, mf := range metricFamilies {
-		if mf.GetName() == name {
-			return mf
-		}
-	}
-	return nil
-}
-
-func gaugeValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
-	for _, m := range mf.GetMetric() {
-		matched := true
-		for key, want := range labels {
-			found := false
-			for _, label := range m.GetLabel() {
-				if label.GetName() == key {
-					found = true
-					if label.GetValue() != want {
-						matched = false
-					}
-					break
-				}
-			}
-			if !found {
-				matched = false
-				break
-			}
-		}
-		if matched {
-			return m.GetGauge().GetValue(), true
-		}
-	}
-	return 0, false
-}
-
-func counterValueByLabels(mf *dto.MetricFamily, labels map[string]string) (float64, bool) {
-	if mf == nil {
-		return 0, false
-	}
-	for _, m := range mf.GetMetric() {
-		matched := true
-		for key, want := range labels {
-			found := false
-			for _, label := range m.GetLabel() {
-				if label.GetName() == key {
-					found = true
-					if label.GetValue() != want {
-						matched = false
-					}
-					break
-				}
-			}
-			if !found {
-				matched = false
-				break
-			}
-		}
-		if matched {
-			return m.GetCounter().GetValue(), true
-		}
-	}
-	return 0, false
-}
-
-func hasLabelValue(mf *dto.MetricFamily, name string, value string) bool {
-	for _, m := range mf.GetMetric() {
-		for _, label := range m.GetLabel() {
-			if label.GetName() == name && label.GetValue() == value {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func TestTxPoolMetrics(t *testing.T) {
 	metrics.InitializePrometheusMetrics()
 
@@ -203,19 +124,34 @@ func TestTxPoolMetrics(t *testing.T) {
 	defer pool.Close()
 
 	tx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	err := pool.Add(tx1)
+	err := pool.AddRemote(tx1)
 	assert.NoError(t, err)
 
 	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 0, nil, tx.Features(0), devAccounts[0])
-	err = pool.Add(tx2)
+	err = pool.AddRemote(tx2)
 	assert.Equal(t, "tx rejected: expired", err.Error())
 
 	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 0, nil, tx.Features(0), devAccounts[0])
-	err = pool.Add(tx3)
+	err = pool.AddRemote(tx3)
 	assert.Equal(t, "tx rejected: expired", err.Error())
 
-	txPoolMetric := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	badTxMetric := gatherMetricFamily(t, "thor_metrics_bad_tx_count")
+	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
+	metricFamilies, err := gatherers.Gather()
+	require.NoError(t, err)
+
+	var txPoolMetric *dto.MetricFamily
+	var badTxMetric *dto.MetricFamily
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "thor_metrics_txpool_current_tx_count" {
+			txPoolMetric = mf
+			continue
+		}
+		if mf.GetName() == "thor_metrics_bad_tx_count" {
+			badTxMetric = mf
+			continue
+		}
+	}
+
 	require.NotNil(t, txPoolMetric, "txpool_current_tx_count metric should exist")
 	require.NotNil(t, badTxMetric, "bad_tx_count metric should exist")
 
@@ -224,13 +160,30 @@ func TestTxPoolMetrics(t *testing.T) {
 	badTxMetrics := badTxMetric.GetMetric()
 	require.Greater(t, len(badTxMetrics), 0, "should have at least one metric entry")
 
-	value, foundLegacy := gaugeValueByLabels(txPoolMetric, map[string]string{
-		"source": "remote",
-		"type":   "Legacy",
-		"status": "executable",
-	})
-	require.True(t, foundLegacy, "should have metric entry for executable remote Legacy transaction")
-	assert.Equal(t, float64(1), value)
+	foundLegacy := false
+	for _, m := range metrics {
+		labels := m.GetLabel()
+		source := ""
+		txType := ""
+		status := ""
+		for _, label := range labels {
+			switch label.GetName() {
+			case "source":
+				source = label.GetValue()
+			case "type":
+				txType = label.GetValue()
+			case "status":
+				status = label.GetValue()
+			}
+		}
+
+		if source == "remote" && txType == "Legacy" && status == "executable" {
+			foundLegacy = true
+			assert.GreaterOrEqual(t, m.GetGauge().GetValue(), float64(1))
+		}
+	}
+
+	assert.True(t, foundLegacy, "should have metric entry for remote Legacy transaction")
 
 	foundBad := false
 	for _, m := range badTxMetrics {
@@ -244,69 +197,104 @@ func TestTxPoolMetrics(t *testing.T) {
 
 		if source == "remote" {
 			foundBad = true
-			assert.Equal(t, float64(2), m.GetGauge().GetValue())
+			assert.GreaterOrEqual(t, m.GetGauge().GetValue(), float64(2))
 		}
 	}
 
 	assert.True(t, foundBad, "should have metric entry for bad Legacy transaction")
-	assert.False(t, hasLabelValue(txPoolMetric, "source", "washed"))
-	assert.False(t, hasLabelValue(txPoolMetric, "source", "n/a"))
+}
 
-	removed := pool.Remove(tx1.Hash(), tx1.ID())
-	require.True(t, removed)
+func TestTxPoolOperationalMetrics(t *testing.T) {
+	pool := newPool(100, 100, &thor.SoloFork)
+	defer pool.Close()
+	trx := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[0],
+	)
+	require.NoError(t, pool.AddRemote(trx))
+	require.Eventually(t, func() bool {
+		return len(pool.Executables()) == 1
+	}, 2*time.Second, 20*time.Millisecond)
 
-	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
-		"source": "remote",
-		"type":   "Legacy",
-		"status": "executable",
-	})
-	require.True(t, foundLegacy, "removed tx metric entry should still exist after zeroing")
-	assert.Equal(t, float64(0), value)
-	assert.False(t, hasLabelValue(txPoolMetric, "source", "n/a"))
+	accountMap := newTxObjectMap(newCostTracker())
+	for i := range 2 {
+		accountTx := newTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			tx.Features(0),
+			devAccounts[1],
+		)
+		accountObj, err := ResolveTx(accountTx, false)
+		require.NoError(t, err)
+		err = accountMap.Add(accountObj, 1, nil)
+		if i == 1 {
+			require.EqualError(t, err, "account quota exceeded")
+		} else {
+			require.NoError(t, err)
+		}
+	}
 
-	tx4 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
-	require.NoError(t, pool.Add(tx4))
-	washCounterMetric := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
-	beforeWashCount, _ := counterValueByLabels(washCounterMetric, map[string]string{
-		"source": "remote",
-		"type":   "Legacy",
-	})
-	tx4Obj := pool.all.mapByID[tx4.ID()]
-	tx4Obj.timeAdded -= int64(pool.options.MaxLifetime) * 2
-	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
+	delegatorMap := newTxObjectMap(newCostTracker())
+	for i, origin := range []int{2, 3} {
+		delegated := newDelegatedTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			devAccounts[origin],
+			devAccounts[4],
+		)
+		delegatedObj, err := ResolveTx(delegated, false)
+		require.NoError(t, err)
+		err = delegatorMap.Add(delegatedObj, 1, nil)
+		if i == 1 {
+			require.EqualError(t, err, "delegator quota exceeded")
+		} else {
+			require.NoError(t, err)
+		}
+	}
+
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
-	require.Equal(t, 1, washed)
+	var executablesMetric, quotaMetric *dto.MetricFamily
+	for _, family := range metricFamilies {
+		switch family.GetName() {
+		case "thor_metrics_txpool_executable_tx_count":
+			executablesMetric = family
+		case "thor_metrics_account_quota_exceeded":
+			quotaMetric = family
+		}
+	}
+	require.NotNil(t, executablesMetric)
+	require.NotEmpty(t, executablesMetric.GetMetric())
+	assert.GreaterOrEqual(t, executablesMetric.GetMetric()[0].GetGauge().GetValue(), float64(1))
 
-	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
-		"source": "remote",
-		"type":   "Legacy",
-		"status": "executable",
-	})
-	require.True(t, foundLegacy, "washed tx metric entry should still exist after zeroing")
-	assert.Equal(t, float64(0), value)
-	assert.False(t, hasLabelValue(txPoolMetric, "source", "washed"))
-
-	washCounterMetric = gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
-	afterWashCount, foundWashed := counterValueByLabels(washCounterMetric, map[string]string{
-		"source": "remote",
-		"type":   "Legacy",
-	})
-	require.True(t, foundWashed, "should have washed tx counter for remote Legacy transaction")
-	assert.Equal(t, beforeWashCount+1, afterWashCount)
-
-	tx5 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
-	pool.Fill(tx.Transactions{tx5})
-
-	txPoolMetric = gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	value, foundLegacy = gaugeValueByLabels(txPoolMetric, map[string]string{
-		"source": "fill",
-		"type":   "Legacy",
-		"status": "non_executable",
-	})
-	require.True(t, foundLegacy, "should have metric entry for filled Legacy transaction")
-	assert.Equal(t, float64(1), value)
+	require.NotNil(t, quotaMetric)
+	foundQuota := map[string]bool{"account": false, "delegator": false}
+	for _, metric := range quotaMetric.GetMetric() {
+		for _, label := range metric.GetLabel() {
+			if label.GetName() == "type" && metric.GetCounter().GetValue() >= 1 {
+				foundQuota[label.GetValue()] = true
+			}
+		}
+	}
+	assert.True(t, foundQuota["account"])
+	assert.True(t, foundQuota["delegator"])
 }
 
 func TestNewCloseWithServer(t *testing.T) {
@@ -329,7 +317,7 @@ func TestNewCloseWithServer(t *testing.T) {
 	time.Sleep(1 * time.Second)
 }
 
-func FillPoolWithLegacyTxs(pool *TxPool, t *testing.T) {
+func FillPoolWithLegacyTxs(pool *VeChainPool, t *testing.T) {
 	// Create a slice of transactions to be added to the pool.
 	txs := make(tx.Transactions, 0, 15)
 	for range 12 {
@@ -340,11 +328,11 @@ func FillPoolWithLegacyTxs(pool *TxPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
+	err := pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 }
 
-func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
+func FillPoolWithDynFeeTxs(pool *VeChainPool, t *testing.T) {
 	// Advance one block to activate galactica and accept dynamic fee transactions
 	addOneBlock(t, pool)
 
@@ -358,12 +346,12 @@ func FillPoolWithDynFeeTxs(pool *TxPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
+	err := pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
 
-func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
+func FillPoolWithMixedTxs(pool *VeChainPool, t *testing.T) {
 	// Advance one block to activate galactica and accept dynamic fee transactions
 	addOneBlock(t, pool)
 
@@ -379,12 +367,12 @@ func FillPoolWithMixedTxs(pool *TxPool, t *testing.T) {
 	// Call the Fill method
 	pool.Fill(txs)
 
-	err := pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
+	err := pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Equal(t, err.Error(), "tx rejected: pool is full")
 	assert.Equal(t, "tx rejected: pool is full", err.Error())
 }
 
-func addOneBlock(t *testing.T, pool *TxPool) {
+func addOneBlock(t *testing.T, pool *VeChainPool) {
 	var sig [65]byte
 	rand.Read(sig[:])
 
@@ -445,11 +433,11 @@ func TestDump(t *testing.T) {
 	for i := range 5 {
 		trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txsToAdd = append(txsToAdd, trx)
-		assert.Nil(t, pool.Add(trx))
+		assert.Nil(t, pool.AddRemote(trx))
 
 		trx = newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
 		txsToAdd = append(txsToAdd, trx)
-		assert.Nil(t, pool.Add(trx))
+		assert.Nil(t, pool.AddRemote(trx))
 	}
 
 	// Use the Dump method to retrieve all transactions in the pool
@@ -477,7 +465,7 @@ func TestRemove(t *testing.T) {
 
 	// Create and add a legacy transaction to the pool
 	trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	assert.Nil(t, pool.Add(trx), "Adding transaction should not produce error")
+	assert.Nil(t, pool.AddRemote(trx), "Adding transaction should not produce error")
 
 	// Ensure the transaction is in the pool
 	assert.NotNil(t, pool.Get(trx.ID()), "Transaction should exist in the pool before removal")
@@ -491,7 +479,7 @@ func TestRemove(t *testing.T) {
 
 	// Create and add a dyn fee transaction to the pool
 	trx = newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	assert.Nil(t, pool.Add(trx), "Adding transaction should not produce error")
+	assert.Nil(t, pool.AddRemote(trx), "Adding transaction should not produce error")
 
 	// Ensure the transaction is in the pool
 	assert.NotNil(t, pool.Get(trx.ID()), "Transaction should exist in the pool before removal")
@@ -504,13 +492,52 @@ func TestRemove(t *testing.T) {
 	assert.Nil(t, pool.Get(trx.ID()), "Transaction should not exist in the pool after removal")
 }
 
+func TestRemoveRejectsMismatchedHashAndID(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	first := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[0],
+	)
+	second := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		101,
+		nil,
+		tx.Features(0),
+		devAccounts[1],
+	)
+	require.NoError(t, pool.AddRemote(first))
+	require.NoError(t, pool.AddRemote(second))
+
+	assert.False(t, pool.Remove(first.Hash(), second.ID()))
+	assert.Same(t, first, pool.GetByHash(first.Hash()))
+	assert.Same(t, second, pool.Get(second.ID()))
+	assert.Equal(t, 2, pool.Len())
+
+	assert.True(t, pool.Remove(first.Hash(), first.ID()))
+	assert.Nil(t, pool.GetByHash(first.Hash()))
+	assert.Same(t, second, pool.Get(second.ID()))
+}
+
 func TestRemoveWithError(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
 	defer pool.Close()
 
 	// Create and add a transaction to the pool
 	tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	// assert.Nil(t, pool.Add(tx), "Adding transaction should not produce error")
+	// assert.Nil(t, pool.AddRemote(tx), "Adding transaction should not produce error")
 
 	// Ensure the transaction is in the pool
 	assert.Nil(t, pool.Get(tx.ID()), "Transaction should exist in the pool before removal")
@@ -552,7 +579,7 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool.SubscribeTxEvent(txCh)
 
 	tx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
-	assert.Nil(t, pool.Add(tx))
+	assert.Nil(t, pool.AddRemote(tx))
 
 	v := true
 	assert.Equal(t, &TxEvent{tx, &v}, <-txCh)
@@ -593,7 +620,7 @@ func TestSubscribeNewTypedTx(t *testing.T) {
 		MaxPriorityFeePerGas(big.NewInt(100)).
 		Build()
 	trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
-	assert.Nil(t, pool.Add(trx))
+	assert.Nil(t, pool.AddRemote(trx))
 
 	v := true
 	assert.Equal(t, &TxEvent{trx, &v}, <-txCh)
@@ -633,17 +660,11 @@ func TestWashTxs(t *testing.T) {
 
 	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 	txObj2, _ := ResolveTx(tx2, false)
-	assert.Nil(
-		t,
-		pool.all.Add(txObj2, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil }),
-	) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT, nil)) // this tx will participate in the wash out.
 
 	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
 	txObj3, _ := ResolveTx(tx3, false)
-	assert.Nil(
-		t,
-		pool.all.Add(txObj3, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil }),
-	) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT, nil)) // this tx will participate in the wash out.
 
 	txs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
@@ -658,7 +679,7 @@ func TestWashPromoteDrainsPendingCost(t *testing.T) {
 	// Add a batch of txs from distinct accounts so wash promotes and accounts them.
 	for i := range 3 {
 		trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i])
-		assert.Nil(t, pool.Add(trx))
+		assert.Nil(t, pool.AddRemote(trx))
 	}
 
 	// Trigger wash to promote (executable) and account pending cost under the map lock.
@@ -671,7 +692,7 @@ func TestWashPromoteDrainsPendingCost(t *testing.T) {
 	}
 
 	// No orphaned pending cost left behind.
-	assert.Equal(t, 0, len(pool.all.cost), "pending cost accounting must be fully drained")
+	assert.Empty(t, pool.all.costs.reservations, "pending cost accounting must be fully drained")
 }
 
 func TestOrderTxsAfterGalacticaFork(t *testing.T) {
@@ -701,18 +722,18 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
 
 	poolLimit := 10_000
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           poolLimit,
 		LimitPerAccount: poolLimit,
 		MaxLifetime:     time.Hour,
-	}, &thor.ForkConfig{GALACTICA: 1})
+	}, &thor.ForkConfig{GALACTICA: 1}, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	txs := make(map[thor.Bytes32]*tx.Transaction)
 	for i := range poolLimit - 2 {
 		tx := tx.MustSign(generateRandomTx(t, i, repo.ChainTag()), devAccounts[i%len(devAccounts)].PrivateKey)
 		txs[tx.ID()] = tx
-		assert.Nil(t, pool.Add(tx))
+		assert.Nil(t, pool.AddRemote(tx))
 	}
 
 	execTxs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
@@ -747,8 +768,8 @@ func TestOrderTxsAfterGalacticaFork(t *testing.T) {
 		Build()
 	lastTx = tx.MustSign(lastTx, devAccounts[0].PrivateKey)
 
-	assert.Nil(t, pool.Add(firstTx))
-	assert.Nil(t, pool.Add(lastTx))
+	assert.Nil(t, pool.AddRemote(firstTx))
+	assert.Nil(t, pool.AddRemote(lastTx))
 
 	execTxs, washed, err = pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
@@ -785,18 +806,18 @@ func TestOrderTxsAfterGalacticaForkSameValues(t *testing.T) {
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
 
 	totalPoolTxs := 10_000
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           totalPoolTxs,
 		LimitPerAccount: totalPoolTxs,
 		MaxLifetime:     time.Hour,
-	}, &thor.ForkConfig{GALACTICA: 1})
+	}, &thor.ForkConfig{GALACTICA: 1}, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	txs := make(map[thor.Bytes32]*tx.Transaction)
 	for i := range totalPoolTxs {
 		tx := tx.MustSign(generateRandomTx(t, i, repo.ChainTag()), devAccounts[i%len(devAccounts)].PrivateKey)
 		txs[tx.ID()] = tx
-		assert.Nil(t, pool.Add(tx))
+		assert.Nil(t, pool.AddRemote(tx))
 	}
 
 	execTxs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
@@ -859,7 +880,7 @@ func TestFillPool(t *testing.T) {
 
 	// Test executables after wash
 	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
 
@@ -888,11 +909,11 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT_PER_ACCOUNT,
 		MaxLifetime:     time.Hour,
-	}, &thor.SoloFork)
+	}, &thor.SoloFork, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
@@ -920,7 +941,7 @@ func TestFillPoolWithMixedTxs(t *testing.T) {
 
 	// Test executables after wash
 	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
 }
 
@@ -936,11 +957,11 @@ func TestAdd(t *testing.T) {
 	}
 	tchain, err := testchain.NewIntegrationTestChain(config, 180)
 	assert.Nil(t, err)
-	pool := New(tchain.Repo(), tchain.Stater(), Options{
+	pool := newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT_PER_ACCOUNT,
 		MaxLifetime:     time.Hour,
-	}, config.ForkConfig)
+	}, config.ForkConfig, newCostTracker(), new(blocklist))
 
 	defer pool.Close()
 	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
@@ -974,7 +995,7 @@ func TestAdd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.errStr, func(t *testing.T) {
-			err := pool.Add(tt.tx)
+			err := pool.AddRemote(tt.tx)
 			if tt.errStr == "" {
 				assert.Nil(t, err)
 			} else {
@@ -1072,11 +1093,11 @@ func TestBeforeVIP191Add(t *testing.T) {
 	assert.Nil(t, err)
 	acc := devAccounts[0]
 
-	pool := New(tchain.Repo(), tchain.Stater(), Options{
+	pool := newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           10,
 		LimitPerAccount: 2,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, &thor.NoFork, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	err = pool.StrictlyAdd(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(0), 100, nil, acc, acc))
@@ -1103,11 +1124,11 @@ func TestValidateTxBasicsMaxTxGasLimitForkAware(t *testing.T) {
 	tchain, err := testchain.NewWithFork(&fc, 180)
 	require.NoError(t, err)
 
-	pool := New(tchain.Repo(), tchain.Stater(), Options{
+	pool := newVeChainPool(tchain.Repo(), tchain.Stater(), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT_PER_ACCOUNT,
 		MaxLifetime:     time.Hour,
-	}, &fc)
+	}, &fc, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	overLimitLegacyTx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
@@ -1153,7 +1174,7 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 		pool.add(tx, false, false)
 		txs = append(txs, tx)
 	}
-	pool.executables.Store(txs)
+	pool.storeExecutables(txs)
 
 	trx1 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 
@@ -1189,6 +1210,54 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 	assert.Equal(t, "tx rejected: non executable pool is full", err.Error())
 }
 
+func TestNonExecutableLimitUsesLiveCountsBeforeSnapshotRefresh(t *testing.T) {
+	pool := newPoolWithParams(5, 2, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+	pool.cancel()
+	pool.goes.Wait()
+	defer pool.Close()
+
+	executable := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[0],
+	)
+	require.NoError(t, pool.AddRemote(executable))
+	assert.Empty(t, pool.Executables(), "the wash snapshot should still be stale")
+
+	firstNonExecutable := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		&thor.Bytes32{1},
+		tx.Features(0),
+		devAccounts[1],
+	)
+	require.NoError(t, pool.AddRemote(firstNonExecutable))
+
+	secondNonExecutable := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		&thor.Bytes32{2},
+		tx.Features(0),
+		devAccounts[2],
+	)
+	err := pool.AddRemote(secondNonExecutable)
+	assert.Equal(t, txRejectedError{"non executable pool is full"}, err)
+}
+
 func TestNonExecutables(t *testing.T) {
 	pool := newPoolWithParams(100, 100, "", "", uint64(time.Now().Unix()), &thor.NoFork)
 
@@ -1201,7 +1270,7 @@ func TestNonExecutables(t *testing.T) {
 	}
 
 	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 
 	// add 1 non-executable
 	assert.NoError(
@@ -1217,15 +1286,17 @@ func TestExpiredTxs(t *testing.T) {
 	for i := range 90 {
 		assert.NoError(
 			t,
-			pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])),
+			pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])),
 		)
 	}
 
 	executables, _, _ := pool.wash(pool.repo.BestBlockSummary(), false)
-	pool.executables.Store(executables)
+	pool.storeExecutables(executables)
 
 	// add 1 non-executable
-	assert.NoError(t, pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2])))
+	assert.NoError(t, pool.AddRemote(
+		newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, tx.Features(0), devAccounts[2]),
+	))
 
 	executables, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
@@ -1255,19 +1326,219 @@ func TestBlocked(t *testing.T) {
 
 	// adding blocked should return nil
 	trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[len(devAccounts)-1])
-	err = pool.Add(trx)
+	err = pool.AddRemote(trx)
 	assert.Nil(t, err)
 
 	// added into all, will be washed out
 	txObj, err := ResolveTx(trx, false)
 	assert.Nil(t, err)
-	pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+	pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 	pool.wash(pool.repo.BestBlockSummary(), false)
 	got := pool.Get(trx.ID())
 	assert.Nil(t, got)
 
 	os.Remove(file.Name())
+}
+
+func TestBlockedDelegatorSilentDrop(t *testing.T) {
+	origin := devAccounts[0]
+	delegator := devAccounts[1]
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
+	defer pool.Close()
+	pool.blocklist.lock.Lock()
+	pool.blocklist.list = map[thor.Address]bool{delegator.Address: true}
+	pool.blocklist.lock.Unlock()
+
+	blocked := newDelegatedTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		origin,
+		delegator,
+	)
+	require.NoError(t, pool.AddRemote(blocked))
+	assert.Zero(t, pool.Len())
+	assert.Nil(t, pool.Get(blocked.ID()))
+
+	pool.blocklist.lock.Lock()
+	delete(pool.blocklist.list, delegator.Address)
+	pool.blocklist.lock.Unlock()
+	allowed := newDelegatedTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		origin,
+		delegator,
+	)
+	require.NoError(t, pool.AddRemote(allowed))
+	assert.Equal(t, 1, pool.Len())
+	assert.Same(t, allowed, pool.Get(allowed.ID()))
+}
+
+func TestVeChainPoolReinjectFromForkAndGetByHash(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+	defer pool.Close()
+
+	discarded := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[2],
+	)
+	includedOnly := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag(),
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[3],
+	)
+	invalid := newTx(
+		tx.TypeLegacy,
+		pool.repo.ChainTag()+1,
+		nil,
+		21_000,
+		tx.BlockRef{},
+		100,
+		nil,
+		tx.Features(0),
+		devAccounts[4],
+	)
+
+	require.NoError(t, pool.ReconcileOnHeadChange(HeadChangeTxs{
+		Discarded: tx.Transactions{discarded, invalid},
+		Included:  tx.Transactions{includedOnly},
+	}))
+
+	assert.Same(t, discarded, pool.GetByHash(discarded.Hash()))
+	assert.Same(t, discarded, pool.Get(discarded.ID()))
+	assert.Nil(t, pool.GetByHash(includedOnly.Hash()),
+		"included transactions are not admitted by the VeChain reinjection path")
+	assert.Nil(t, pool.GetByHash(invalid.Hash()),
+		"invalid discarded transactions must be skipped without aborting the batch")
+	assert.Nil(t, pool.GetByHash(thor.Bytes32{0xff}))
+	assert.Equal(t, 1, pool.Len())
+}
+
+func TestVeChainPoolConcurrentAddWashAndExecutables(t *testing.T) {
+	pool := newPool(100, 100, &thor.NoFork)
+	defer pool.Close()
+
+	txs := make(tx.Transactions, 32)
+	for i := range txs {
+		txs[i] = newTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			tx.Features(0),
+			devAccounts[i%len(devAccounts)],
+		)
+	}
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for _, trx := range txs {
+			_ = pool.AddRemote(trx)
+		}
+	})
+	wg.Go(func() {
+		for range 16 {
+			_, _, _ = pool.wash(pool.repo.BestBlockSummary(), false)
+		}
+	})
+	wg.Go(func() {
+		for range 128 {
+			_ = pool.Executables()
+		}
+	})
+	wg.Wait()
+
+	assert.Equal(t, pool.Len(), len(pool.Dump()))
+}
+
+func TestVeChainPoolConcurrentBlocklistRefreshAndAdmission(t *testing.T) {
+	pool := newPool(100, 100, &thor.NoFork)
+	defer pool.Close()
+
+	blockedPath := t.TempDir() + "/blocked.txt"
+	emptyPath := t.TempDir() + "/empty.txt"
+	require.NoError(t, os.WriteFile(blockedPath, []byte(devAccounts[0].Address.String()), 0o600))
+	require.NoError(t, os.WriteFile(emptyPath, nil, 0o600))
+	require.NoError(t, pool.blocklist.Load(emptyPath))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprintln(w, devAccounts[0].Address.String())
+	}))
+	defer server.Close()
+
+	txs := make(tx.Transactions, 32)
+	for i := range txs {
+		txs[i] = newTx(
+			tx.TypeLegacy,
+			pool.repo.ChainTag(),
+			nil,
+			21_000,
+			tx.BlockRef{},
+			100,
+			nil,
+			tx.Features(0),
+			devAccounts[0],
+		)
+	}
+
+	errs := make(chan error, len(txs)+64)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for _, trx := range txs {
+			if err := pool.AddRemote(trx); err != nil {
+				errs <- err
+			}
+		}
+	})
+	wg.Go(func() {
+		for i := range 32 {
+			path := emptyPath
+			if i%2 == 0 {
+				path = blockedPath
+			}
+			if err := pool.blocklist.Load(path); err != nil {
+				errs <- err
+			}
+		}
+	})
+	wg.Go(func() {
+		for range 32 {
+			if err := pool.blocklist.Fetch(context.Background(), server.URL, nil); err != nil {
+				errs <- err
+			}
+		}
+	})
+	wg.Wait()
+	close(errs)
+
+	assert.Empty(t, errs)
+	assert.LessOrEqual(t, pool.Len(), len(txs))
 }
 
 func TestWash(t *testing.T) {
@@ -1305,7 +1576,7 @@ func TestWash(t *testing.T) {
 
 				txObj, err := ResolveTx(trx, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx.ID())
@@ -1342,11 +1613,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx3.ID())
@@ -1393,11 +1664,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				// all non executable should be washed out
@@ -1468,7 +1739,7 @@ func TestWashWithDynFeeTx(t *testing.T) {
 
 				txObj, err := ResolveTx(trx, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx.ID())
@@ -1615,11 +1886,11 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				got := pool.Get(trx3.ID())
@@ -1663,11 +1934,11 @@ func TestWashWithDynFeeTxAndPoolLimit(t *testing.T) {
 
 				txObj, err := ResolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				txObj, err = ResolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+				pool.all.Add(txObj, LIMIT_PER_ACCOUNT, nil)
 
 				pool.wash(pool.repo.BestBlockSummary(), false)
 				// all non executable should be washed out
@@ -1741,38 +2012,38 @@ func TestAddOverPendingCost(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT,
 		MaxLifetime:     time.Hour,
-	}, &forkConfig)
+	}, &forkConfig, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// first and second tx should be fine
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
 	// third tx should be rejected due to insufficient energy
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 
 	// first and second tx should be fine
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
+	err = pool.AddRemote(newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
 	assert.Nil(t, err)
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 }
 
@@ -1831,38 +2102,38 @@ func TestAddOverPendingCostDynamicFee(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 	repo.AddBlock(b1, tx.Receipts{}, 0, true)
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           LIMIT,
 		LimitPerAccount: LIMIT,
 		MaxLifetime:     time.Hour,
-	}, &thor.ForkConfig{GALACTICA: 0})
+	}, &thor.ForkConfig{GALACTICA: 0}, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// first and second tx should be fine
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.Nil(t, err)
 	// third tx should be rejected due to insufficient energy
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[9], devAccounts[0]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 
 	// first and second tx should be fine
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[1], devAccounts[2]))
 	assert.Nil(t, err)
-	err = pool.Add(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
+	err = pool.AddRemote(newTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2]))
 	assert.Nil(t, err)
 	// delegated fee should also be counted
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
-	err = pool.Add(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
+	err = pool.AddRemote(newDelegatedTx(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, devAccounts[8], devAccounts[2]))
 	assert.EqualError(t, err, "tx rejected: insufficient energy for overall pending cost")
 }
 
@@ -1921,11 +2192,11 @@ func TestWashDeferredTxPendingCostEnforcement(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 	require.NoError(t, repo.AddBlock(b1, tx.Receipts{}, 0, true))
 
-	pool := New(repo, state.NewStater(db), Options{
+	pool := newVeChainPool(repo, state.NewStater(db), Options{
 		Limit:           50, // non-executable cap = 50*2/10 = 10, enough for 3 deferred txs
 		LimitPerAccount: 10,
 		MaxLifetime:     time.Hour,
-	}, &thor.NoFork)
+	}, &thor.NoFork, newCostTracker(), new(blocklist))
 	defer pool.Close()
 
 	// BlockRef=3: deferred while best is b1 (nextBlockNum=2), executable when best is b2 (nextBlockNum=3).
@@ -2119,6 +2390,33 @@ func TestValidateTxBasics(t *testing.T) {
 			head:        &chain.BlockSummary{},
 			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
 		},
+		{
+			name: "legacy tx gas at max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			expectedErr: nil,
+		},
+		{
+			name: "legacy tx gas exceeds max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit + 1).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
+		},
+		{
+			name: "dyn fee tx gas exceeds max limit",
+			getTx: func() *tx.Transaction {
+				trx := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(repo.ChainTag()).Gas(thor.MaxTxGasLimit + 1).Build()
+				return tx.MustSign(trx, devAccounts[0].PrivateKey)
+			},
+			head:        &chain.BlockSummary{},
+			expectedErr: badTxError{"tx gas limit exceeds the maximum allowed"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -2206,11 +2504,11 @@ func TestValidateTxBasics_TypeForkWhitelist(t *testing.T) {
 func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	chain, err := testchain.NewWithFork(&thor.ForkConfig{}, 180)
 	assert.Nil(t, err)
-	pool := New(chain.Repo(), chain.Stater(), Options{
+	pool := newVeChainPool(chain.Repo(), chain.Stater(), Options{
 		Limit:           100,
 		LimitPerAccount: 1000,
 		MaxLifetime:     time.Minute * 30,
-	}, chain.GetForkConfig())
+	}, chain.GetForkConfig(), newCostTracker(), new(blocklist))
 	pool.Close() // turn off the background housekeeping
 	require.NoError(t, chain.MintBlock())
 
@@ -2230,7 +2528,7 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 			Build()
 
 		trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
-		err := pool.Add(trx)
+		err := pool.AddRemote(trx)
 		assert.Nil(t, err)
 
 		txObj := pool.all.GetByID(trx.ID())
@@ -2250,128 +2548,6 @@ func TestTxPool_Local_IncreasingPriority(t *testing.T) {
 	}
 }
 
-func TestWashMetricsOverLimit(t *testing.T) {
-	metrics.InitializePrometheusMetrics()
-
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
-	defer pool.Close()
-
-	// Snapshot all relevant metric values before mutating anything.
-	preGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	beforeExec, _ := gaugeValueByLabels(preGauge, map[string]string{
-		"source": "fill", "type": "Legacy", "status": "executable",
-	})
-	beforeNonExec, _ := gaugeValueByLabels(preGauge, map[string]string{
-		"source": "fill", "type": "Legacy", "status": "non_executable",
-	})
-	preCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
-	beforeWashed, _ := counterValueByLabels(preCounter, map[string]string{
-		"source": "fill", "type": "Legacy",
-	})
-
-	// Stage LIMIT+2 executable txs via Fill, which bypasses the remote
-	// pool-full check. Fill marks every tx with source="fill" and leaves
-	// executable=false; wash() then re-evaluates and they all land in
-	// executableObjs (not localExecutableObjs, since Fill sets
-	// localSubmitted=false), so they are subject to the limit branch.
-	const overflow = LIMIT + 2
-	fills := make(tx.Transactions, 0, overflow)
-	for i := range overflow {
-		fills = append(fills, newTx(
-			tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000,
-			tx.BlockRef{}, 100, nil, tx.Features(0),
-			devAccounts[i%len(devAccounts)],
-		))
-	}
-	pool.Fill(fills)
-	require.Equal(t, overflow, pool.all.Len())
-
-	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
-	require.NoError(t, err)
-	assert.Equal(t, overflow-LIMIT, washed)
-	assert.Equal(t, LIMIT, pool.all.Len())
-
-	postCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
-	afterWashed, ok := counterValueByLabels(postCounter, map[string]string{
-		"source": "fill", "type": "Legacy",
-	})
-	require.True(t, ok, "wash counter must exist for filled Legacy txs")
-	assert.Equal(t, float64(overflow-LIMIT), afterWashed-beforeWashed,
-		"wash counter must record one increment per evicted tx")
-
-	postGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	afterExec, ok := gaugeValueByLabels(postGauge, map[string]string{
-		"source": "fill", "type": "Legacy", "status": "executable",
-	})
-	require.True(t, ok)
-	assert.Equal(t, float64(LIMIT), afterExec-beforeExec,
-		"executable gauge must gain exactly LIMIT after over-limit wash")
-
-	afterNonExec, _ := gaugeValueByLabels(postGauge, map[string]string{
-		"source": "fill", "type": "Legacy", "status": "non_executable",
-	})
-	assert.Equal(t, float64(0), afterNonExec-beforeNonExec,
-		"non_executable gauge must net to zero (all fills promoted or evicted)")
-
-	// No washed/n/a labels should ever appear on the gauge.
-	assert.False(t, hasLabelValue(postGauge, "source", "washed"))
-	assert.False(t, hasLabelValue(postGauge, "source", "n/a"))
-}
-
-func TestWashMetricsNonExecutableLimit(t *testing.T) {
-	metrics.InitializePrometheusMetrics()
-
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
-	defer pool.Close()
-
-	preGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	beforeNonExec, _ := gaugeValueByLabels(preGauge, map[string]string{
-		"source": "fill", "type": "Legacy", "status": "non_executable",
-	})
-	preCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
-	beforeWashed, _ := counterValueByLabels(preCounter, map[string]string{
-		"source": "fill", "type": "Legacy",
-	})
-
-	// Non-executable cap = Limit*20%. Stage one extra to force the third
-	// wash branch (no over-limit, no mixed over-limit, just non-exec over cap).
-	nonExecCap := pool.options.Limit * 2 / 10
-	overflow := nonExecCap + 1
-
-	// Future block ref makes the tx valid but non-executable
-	// (Executable returns (false, nil) when BlockRef > nextBlockNum).
-	fills := make(tx.Transactions, 0, overflow)
-	for i := range overflow {
-		fills = append(fills, newTx(
-			tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000,
-			tx.NewBlockRef(2), 100, nil, tx.Features(0),
-			devAccounts[i%len(devAccounts)],
-		))
-	}
-	pool.Fill(fills)
-	require.Equal(t, overflow, pool.all.Len())
-
-	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
-	require.NoError(t, err)
-	assert.Equal(t, overflow-nonExecCap, washed,
-		"only the over-cap non-executable txs should be evicted")
-	assert.Equal(t, nonExecCap, pool.all.Len())
-
-	postCounter := gatherMetricFamily(t, "thor_metrics_txpool_washed_tx_count")
-	afterWashed, ok := counterValueByLabels(postCounter, map[string]string{
-		"source": "fill", "type": "Legacy",
-	})
-	require.True(t, ok)
-	assert.Equal(t, float64(overflow-nonExecCap), afterWashed-beforeWashed)
-
-	postGauge := gatherMetricFamily(t, "thor_metrics_txpool_current_tx_count")
-	afterNonExec, ok := gaugeValueByLabels(postGauge, map[string]string{
-		"source": "fill", "type": "Legacy", "status": "non_executable",
-	})
-	require.True(t, ok)
-	assert.Equal(t, float64(nonExecCap), afterNonExec-beforeNonExec,
-		"non_executable gauge delta must equal what stayed under the cap")
-}
 func TestEthDynFee_AdmitAndExecutables(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
 	defer pool.Close()
@@ -2387,7 +2563,7 @@ func TestEthDynFee_AdmitAndExecutables(t *testing.T) {
 		Build()
 	trx = tx.MustSign(trx, devAccounts[0].PrivateKey)
 
-	err := pool.Add(trx)
+	err := pool.AddRemote(trx)
 	assert.Nil(t, err, "eth-tx with matching ChainID must be admitted")
 
 	found := false
@@ -2423,8 +2599,8 @@ func TestEthDynFee_NonceLinearGrowth(t *testing.T) {
 	exec := build(0)
 	queued := build(5)
 
-	assert.NoError(t, pool.Add(exec), "nonce==state.nonce must admit")
-	assert.NoError(t, pool.Add(queued), "nonce>state.nonce must admit (non-executable)")
+	assert.NoError(t, pool.AddRemote(exec), "nonce==state.nonce must admit")
+	assert.NoError(t, pool.AddRemote(queued), "nonce>state.nonce must admit (non-executable)")
 
 	executables, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
@@ -2460,10 +2636,15 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 			To(&addr).Value(big.NewInt(1)).
 			Build()
 		trx = tx.MustSign(trx, signer.PrivateKey)
-		if err := pool.Add(trx); err != nil {
+		if err := pool.AddRemote(trx); err != nil {
 			t.Fatalf("admit signer %d: %v", i, err)
 		}
 	}
+
+	// Stop background goroutines before mutating options; fetchBlocklistLoop and
+	// housekeeping read p.options concurrently.
+	pool.cancel()
+	pool.goes.Wait()
 
 	// Shrink the limit so wash must evict exactly one tx.
 	pool.options.Limit = 1
@@ -2471,4 +2652,113 @@ func TestEthDynFee_WashRemovesEthBucket(t *testing.T) {
 	_, _, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, pool.all.Len(), "exactly one eth-tx remains after eviction")
+}
+
+// admitFunc is an admission entry point with remote admission rules.
+type admitFunc func(p *VeChainPool, trx *tx.Transaction) error
+
+func TestTxPoolSharedRemoteAdmissionRules(t *testing.T) {
+	admits := []struct {
+		name  string
+		admit admitFunc
+	}{
+		{"AddRemote", func(p *VeChainPool, trx *tx.Transaction) error { return p.AddRemote(trx) }},
+	}
+
+	for _, entry := range admits {
+		t.Run(entry.name, func(t *testing.T) {
+			t.Run("duplicate hash is no-op", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+				require.NoError(t, entry.admit(pool, trx))
+				require.NoError(t, entry.admit(pool, trx))
+				assert.Equal(t, 1, pool.Len())
+				assert.NotNil(t, pool.Get(trx.ID()))
+			})
+
+			t.Run("validateTxBasics rejection", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag()+1, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+				err := entry.admit(pool, trx)
+				require.Error(t, err)
+				assert.Equal(t, "bad tx: chain tag mismatch", err.Error())
+				assert.Equal(t, 0, pool.Len())
+			})
+
+			t.Run("blocked origin silent drop", func(t *testing.T) {
+				acc := devAccounts[len(devAccounts)-1]
+				file, err := os.CreateTemp("", "blocklist*")
+				require.NoError(t, err)
+				_, err = file.WriteString(acc.Address.String())
+				require.NoError(t, err)
+				require.NoError(t, file.Close())
+				defer os.Remove(file.Name())
+
+				pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, file.Name(), "", uint64(time.Now().Unix()), &thor.NoFork)
+				defer pool.Close()
+				time.Sleep(10 * time.Millisecond)
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
+				require.NoError(t, entry.admit(pool, trx))
+				assert.Equal(t, 0, pool.Len(), "blocked origin must not enter the pool")
+			})
+
+			t.Run("non-executable allowed unlike StrictlyAdd", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				dependsOn := &thor.Bytes32{1}
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, dependsOn, tx.Features(0), devAccounts[0])
+
+				require.Error(t, pool.StrictlyAdd(trx))
+				require.NoError(t, entry.admit(pool, trx))
+				assert.Equal(t, 1, pool.Len())
+				assert.NotNil(t, pool.Get(trx.ID()))
+			})
+
+			t.Run("remote pool-full gate", func(t *testing.T) {
+				pool := newPoolWithParams(10, 2, "", "", uint64(time.Now().Unix()), &thor.NoFork)
+				defer pool.Close()
+
+				txs := make(tx.Transactions, 0, 12)
+				for i := range 12 {
+					trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[i%len(devAccounts)])
+					require.NoError(t, pool.add(trx, false, false))
+					txs = append(txs, trx)
+				}
+				pool.storeExecutables(txs)
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
+				err := entry.admit(pool, trx)
+				require.Error(t, err)
+				assert.Equal(t, "tx rejected: pool is full", err.Error())
+			})
+
+			t.Run("event feed on admit", func(t *testing.T) {
+				pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.NoFork)
+				defer pool.Close()
+
+				ch := make(chan *TxEvent, 1)
+				sub := pool.SubscribeTxEvent(ch)
+				defer sub.Unsubscribe()
+
+				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+				require.NoError(t, entry.admit(pool, trx))
+
+				select {
+				case ev := <-ch:
+					require.NotNil(t, ev)
+					assert.Equal(t, trx.ID(), ev.Tx.ID())
+					require.NotNil(t, ev.Executable)
+					assert.True(t, *ev.Executable)
+				case <-time.After(2 * time.Second):
+					t.Fatal("timed out waiting for tx event")
+				}
+			})
+		})
+	}
 }

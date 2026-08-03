@@ -61,7 +61,7 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 				}
 				acc := devAccounts[(workerIdx+i)%len(devAccounts)]
 				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
-				_ = pool.Add(trx)
+				_ = pool.AddRemote(trx)
 				pool.Remove(trx.Hash(), trx.ID())
 				i++
 			}
@@ -88,7 +88,7 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 	wg.Wait()
 
 	pool.all.lock.RLock()
-	remaining := len(pool.all.cost)
+	remaining := len(pool.all.costs.reservations)
 	pool.all.lock.RUnlock()
 	assert.Zero(t, remaining, "pending cost map should be drained after all txs removed")
 }

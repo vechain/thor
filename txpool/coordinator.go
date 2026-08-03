@@ -1,0 +1,176 @@
+// Copyright (c) 2026 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package txpool
+
+import (
+	"context"
+	"errors"
+	"sync"
+
+	"github.com/ethereum/go-ethereum/event"
+
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+)
+
+// TxPoolCoordinator is the façade over VeChainPool and EthPool. It routes
+// families, owns shared cross-pool dependencies, relays events, and merges
+// snapshots without mutating or inspecting sub-pool storage.
+// Callers should depend on the Pool interface backed by this type.
+type TxPoolCoordinator struct {
+	vechain *VeChainPool
+	eth     *EthPool
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	txFeed event.Feed
+	scope  event.SubscriptionScope
+	goes   sync.WaitGroup
+}
+
+var _ Pool = (*TxPoolCoordinator)(nil)
+
+// NewCoordinator creates both sub-pools sharing one cost tracker.
+// Close must be called at shutdown.
+func NewCoordinator(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPoolCoordinator {
+	costs := newCostTracker()
+	blocked := new(blocklist)
+	ctx, cancel := context.WithCancel(context.Background())
+	coordinator := &TxPoolCoordinator{
+		vechain: newVeChainPool(repo, stater, options, forkConfig, costs, blocked),
+		eth:     newEthPool(repo, stater, options, forkConfig, costs, blocked),
+		ctx:     ctx,
+		cancel:  cancel,
+	}
+	coordinator.startEventRelay(coordinator.vechain)
+	coordinator.startEventRelay(coordinator.eth)
+	return coordinator
+}
+
+func (c *TxPoolCoordinator) startEventRelay(pool Pool) {
+	ch := make(chan *TxEvent, 16)
+	sub := pool.SubscribeTxEvent(ch)
+	c.goes.Go(func() {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-sub.Err():
+				return
+			case ev := <-ch:
+				c.txFeed.Send(ev)
+			}
+		}
+	})
+}
+
+func (c *TxPoolCoordinator) route(newTx *tx.Transaction) Pool {
+	if newTx != nil && newTx.IsEthereumTx() {
+		return c.eth
+	}
+	return c.vechain
+}
+
+func (c *TxPoolCoordinator) Get(txID thor.Bytes32) *tx.Transaction {
+	if trx := c.vechain.Get(txID); trx != nil {
+		return trx
+	}
+	return c.eth.Get(txID)
+}
+
+func (c *TxPoolCoordinator) GetByHash(hash thor.Bytes32) *tx.Transaction {
+	if trx := c.vechain.GetByHash(hash); trx != nil {
+		return trx
+	}
+	return c.eth.GetByHash(hash)
+}
+
+func (c *TxPoolCoordinator) AddRemote(newTx *tx.Transaction) error {
+	if newTx == nil {
+		return badTxError{"nil transaction"}
+	}
+	if newTx.IsEthereumTx() {
+		return c.eth.AddRemote(newTx)
+	}
+	return c.vechain.AddRemote(newTx)
+}
+
+func (c *TxPoolCoordinator) ReconcileOnHeadChange(fork HeadChangeTxs) error {
+	var vechainFork, ethFork HeadChangeTxs
+	partition := func(src tx.Transactions, vechainDst, ethDst *tx.Transactions) {
+		for _, trx := range src {
+			if trx.IsEthereumTx() {
+				*ethDst = append(*ethDst, trx)
+			} else {
+				*vechainDst = append(*vechainDst, trx)
+			}
+		}
+	}
+	partition(fork.Discarded, &vechainFork.Discarded, &ethFork.Discarded)
+	partition(fork.Included, &vechainFork.Included, &ethFork.Included)
+
+	vechainErr := c.vechain.ReconcileOnHeadChange(vechainFork)
+	ethErr := c.eth.ReconcileOnHeadChange(ethFork)
+	return errors.Join(vechainErr, ethErr)
+}
+
+func (c *TxPoolCoordinator) AddLocal(newTx *tx.Transaction) error {
+	return c.route(newTx).AddLocal(newTx)
+}
+
+func (c *TxPoolCoordinator) StrictlyAdd(newTx *tx.Transaction) error {
+	return c.route(newTx).StrictlyAdd(newTx)
+}
+
+func (c *TxPoolCoordinator) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
+	if c.vechain.Remove(txHash, txID) {
+		return true
+	}
+	return c.eth.Remove(txHash, txID)
+}
+
+func (c *TxPoolCoordinator) Dump() tx.Transactions {
+	vechainTxs := c.vechain.Dump()
+	ethTxs := c.eth.Dump()
+	out := make(tx.Transactions, 0, len(vechainTxs)+len(ethTxs))
+	out = append(out, vechainTxs...)
+	out = append(out, ethTxs...)
+	return out
+}
+
+func (c *TxPoolCoordinator) Len() int {
+	return c.vechain.Len() + c.eth.Len()
+}
+
+func (c *TxPoolCoordinator) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
+	return c.scope.Track(c.txFeed.Subscribe(ch))
+}
+
+func (c *TxPoolCoordinator) Executables() tx.Transactions {
+	vechain := c.vechain.executableSnapshot()
+	eth := c.eth.executableSnapshot()
+	return orderExecutableStreams(vechain, eth)
+}
+
+func (c *TxPoolCoordinator) Fill(txs tx.Transactions) {
+	// TODO: Fill method not implemented for EthPool.
+	c.vechain.Fill(txs)
+}
+
+func (c *TxPoolCoordinator) PoolNonce(addr thor.Address) uint64 {
+	return c.eth.PoolNonce(addr)
+}
+
+func (c *TxPoolCoordinator) Close() {
+	c.cancel()
+	c.scope.Close()
+	c.vechain.Close()
+	c.eth.Close()
+	c.goes.Wait()
+}

@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -40,4 +42,33 @@ func TestCacheBaseFee(t *testing.T) {
 	val, _, ok := cache.cache.Get(repo.BestBlockSummary().Header.ID())
 	assert.True(t, ok)
 	assert.Equal(t, big.NewInt(thor.InitialBaseFee), val.(*big.Int))
+}
+
+func TestBaseFeeCacheEvictsOldestAtCapacity(t *testing.T) {
+	forkConfig := thor.NoFork
+	forkConfig.GALACTICA = 0
+	cache := newBaseFeeCache(&forkConfig)
+
+	parentID := thor.Bytes32{}
+	var firstID, newestID thor.Bytes32
+	for i := range 33 {
+		header := new(block.Builder).
+			ParentID(parentID).
+			GasLimit(40_000_000).
+			BaseFee(big.NewInt(thor.InitialBaseFee + int64(i))).
+			Build().
+			Header()
+		require.NotNil(t, cache.Get(header))
+		if i == 0 {
+			firstID = header.ID()
+		}
+		newestID = header.ID()
+		parentID = header.ID()
+	}
+
+	_, _, firstPresent := cache.cache.Get(firstID)
+	_, _, newestPresent := cache.cache.Get(newestID)
+	assert.False(t, firstPresent)
+	assert.True(t, newestPresent)
+	assert.Equal(t, 32, cache.cache.Len())
 }

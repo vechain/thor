@@ -242,9 +242,12 @@ func (o *TxObject) refreshPriorityGasPrice(baseFee, legacyTxBaseGasPrice *big.In
 		return
 	}
 	// legacy proved-work expiry is a block-number event, independent of baseFee.
-	if o.Type() == tx.TypeLegacy && nextBlockNum-o.BlockRef().Number() > thor.MaxTxWorkDelay {
-		noWork := o.OverallGasPrice(legacyTxBaseGasPrice, new(big.Int)) // provedWork = 0, no chain access
-		feeCeiling, priorityCeiling = noWork, noWork
+	if o.Type() == tx.TypeLegacy {
+		blockRef := o.BlockRef().Number()
+		if nextBlockNum > blockRef && nextBlockNum-blockRef > thor.MaxTxWorkDelay {
+			noWork := o.OverallGasPrice(legacyTxBaseGasPrice, new(big.Int)) // provedWork = 0, no chain access
+			feeCeiling, priorityCeiling = noWork, noWork
+		}
 	}
 	pgp := new(big.Int).Sub(feeCeiling, baseFee)
 	if pgp.Cmp(priorityCeiling) > 0 {
@@ -261,12 +264,6 @@ func (o *TxObject) refreshPriorityGasPrice(baseFee, legacyTxBaseGasPrice *big.In
 
 func sortTxObjsByPriorityGasPriceDesc(txObjs []*TxObject) {
 	slices.SortFunc(txObjs, func(a, b *TxObject) int {
-		if cmp := b.priorityGasPrice().Cmp(a.priorityGasPrice()); cmp != 0 {
-			return cmp
-		}
-		if a.timeAdded < b.timeAdded {
-			return 1
-		}
-		return -1
+		return compareExecutableTx(executableTxFromObject(a), executableTxFromObject(b))
 	})
 }

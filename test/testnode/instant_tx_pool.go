@@ -42,8 +42,33 @@ func (m *instantMintPool) Get(txID thor.Bytes32) *tx.Transaction {
 	return nil
 }
 
-func (m *instantMintPool) Add(newTx *tx.Transaction) error {
+func (m *instantMintPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	for _, trx := range m.txs {
+		if trx.Hash() == hash {
+			return trx
+		}
+	}
+	return nil
+}
+
+func (m *instantMintPool) PoolNonce(_ thor.Address) uint64 {
+	return 0
+}
+
+func (m *instantMintPool) AddRemote(newTx *tx.Transaction) error {
 	return m.AddLocal(newTx)
+}
+
+func (m *instantMintPool) ReconcileOnHeadChange(fork txpool.HeadChangeTxs) error {
+	for _, newTx := range fork.Discarded {
+		if err := m.AddLocal(newTx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
@@ -63,7 +88,7 @@ func (m *instantMintPool) AddLocal(trx *tx.Transaction) error {
 }
 
 func (m *instantMintPool) StrictlyAdd(newTx *tx.Transaction) error {
-	return m.Add(newTx)
+	return m.AddLocal(newTx)
 }
 
 func (m *instantMintPool) Dump() tx.Transactions {

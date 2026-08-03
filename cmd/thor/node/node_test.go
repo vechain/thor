@@ -37,13 +37,55 @@ type mockTxPool struct {
 	txpoolChan chan *txpool.TxEvent
 	txFeed     event.Feed
 	mu         sync.Mutex
+
+	// admitCalls records Pool admit entry points for wiring tests.
+	admitCalls []admitCall
+	forkCalls  []txpool.HeadChangeTxs
+}
+
+type admitCall struct {
+	method string
+	txID   thor.Bytes32
 }
 
 func (m *mockTxPool) Fill(txs tx.Transactions) {
 }
 
-func (m *mockTxPool) Add(newTx *tx.Transaction) error {
+func (m *mockTxPool) recordAdmit(method string, newTx *tx.Transaction) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.admitCalls = append(m.admitCalls, admitCall{method: method, txID: newTx.ID()})
+}
+
+func (m *mockTxPool) getAdmitCalls() []admitCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]admitCall, len(m.admitCalls))
+	copy(out, m.admitCalls)
+	return out
+}
+
+func (m *mockTxPool) AddRemote(newTx *tx.Transaction) error {
+	m.recordAdmit("AddRemote", newTx)
 	return nil
+}
+
+func (m *mockTxPool) ReconcileOnHeadChange(fork txpool.HeadChangeTxs) error {
+	m.mu.Lock()
+	m.forkCalls = append(m.forkCalls, fork)
+	m.mu.Unlock()
+	for _, newTx := range fork.Discarded {
+		m.recordAdmit("ReinjectFromFork", newTx)
+	}
+	return nil
+}
+
+func (m *mockTxPool) getForkCalls() []txpool.HeadChangeTxs {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]txpool.HeadChangeTxs, len(m.forkCalls))
+	copy(out, m.forkCalls)
+	return out
 }
 
 func (m *mockTxPool) SubscribeTxEvent(ch chan *txpool.TxEvent) event.Subscription {
@@ -77,6 +119,10 @@ func (m *mockTxPool) Get(id thor.Bytes32) *tx.Transaction {
 	return nil
 }
 
+func (m *mockTxPool) GetByHash(hash thor.Bytes32) *tx.Transaction {
+	return nil
+}
+
 func (m *mockTxPool) StrictlyAdd(newTx *tx.Transaction) error {
 	return nil
 }
@@ -86,6 +132,10 @@ func (m *mockTxPool) Dump() tx.Transactions {
 }
 
 func (m *mockTxPool) Len() int {
+	return 0
+}
+
+func (m *mockTxPool) PoolNonce(_ thor.Address) uint64 {
 	return 0
 }
 
@@ -398,6 +448,37 @@ func TestNode_TxStashLoop_UnexecutableTx_Processing(t *testing.T) {
 	stashedTxs := stash.LoadAll()
 	assert.Equal(t, 1, len(stashedTxs), "Unexecutable transactions should be stashed")
 	assert.Equal(t, txEvent.Tx.ID(), stashedTxs[0].ID(), "Stashed transaction should match the unexecutable transaction sent")
+}
+
+func TestNode_TxStashLoop_SkipsEthereumTx(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	require.NoError(t, err)
+	defer db.Close()
+
+	node, stash, pool := setupTestNodeForTxstashLoop(db)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		node.txStashLoop(ctx, stash)
+	}()
+
+	var txChan chan *txpool.TxEvent
+	require.Eventually(t, func() bool {
+		txChan = pool.getTxChannel()
+		return txChan != nil
+	}, time.Second, 10*time.Millisecond)
+
+	executable := false
+	txChan <- &txpool.TxEvent{Tx: newTx(tx.TypeEthDynamicFee), Executable: &executable}
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("tx stash loop did not stop")
+	}
+	assert.Empty(t, stash.LoadAll())
 }
 
 func TestNode_TxStashLoop_StashErrorHandling(t *testing.T) {

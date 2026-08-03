@@ -1,0 +1,192 @@
+// Copyright (c) 2026 The VeChainThor developers
+
+package txpool
+
+import (
+	"math/big"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+)
+
+func newMergeTestEntry(priority, timeAdded int64) executableTx {
+	return executableTx{
+		tx:               &tx.Transaction{},
+		priorityGasPrice: big.NewInt(priority),
+		timeAdded:        timeAdded,
+	}
+}
+
+func newMergeTestTxObject(entry executableTx) *TxObject {
+	txObj := &TxObject{
+		Transaction: entry.tx,
+		timeAdded:   entry.timeAdded,
+		executable:  true,
+	}
+	setTestPriorityGasPrice(txObj, entry.priorityGasPrice)
+	return txObj
+}
+
+func transactionsOf(entries ...executableTx) tx.Transactions {
+	txs := make(tx.Transactions, 0, len(entries))
+	for _, entry := range entries {
+		txs = append(txs, entry.tx)
+	}
+	return txs
+}
+
+func TestMergePoolExecutables(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		assert.Nil(t, orderExecutableStreams(nil, ethExecutablesSnapshot{}))
+	})
+
+	t.Run("one source", func(t *testing.T) {
+		first := newMergeTestEntry(20, 1)
+		second := newMergeTestEntry(10, 1)
+		assert.Equal(t, transactionsOf(first, second), orderExecutableStreams(
+			vechainExecutablesSnapshot{first, second},
+			ethExecutablesSnapshot{},
+		))
+	})
+
+	t.Run("priority merge preserves each Ethereum source order", func(t *testing.T) {
+		vechainHigh := newMergeTestEntry(100, 1)
+		vechainLow := newMergeTestEntry(30, 1)
+		senderANonce0 := newMergeTestEntry(10, 1)
+		senderANonce1 := newMergeTestEntry(1_000, 1)
+		senderBNonce0 := newMergeTestEntry(50, 1)
+		senderBNonce1 := newMergeTestEntry(5, 1)
+
+		eth := ethExecutablesSnapshot{
+			{senderANonce0, senderANonce1},
+			{senderBNonce0, senderBNonce1},
+		}
+		actual := orderExecutableStreams(vechainExecutablesSnapshot{vechainHigh, vechainLow}, eth)
+
+		assert.Equal(t, transactionsOf(
+			vechainHigh,
+			senderBNonce0,
+			vechainLow,
+			senderANonce0,
+			senderANonce1,
+			senderBNonce1,
+		), actual)
+	})
+
+	t.Run("newer transaction wins equal priority", func(t *testing.T) {
+		older := newMergeTestEntry(10, 1)
+		newer := newMergeTestEntry(10, 2)
+		actual := orderExecutableStreams(
+			vechainExecutablesSnapshot{older},
+			ethExecutablesSnapshot{{newer}},
+		)
+		assert.Equal(t, transactionsOf(newer, older), actual)
+	})
+}
+
+func TestMergePoolExecutablesManySourcesAndEmptyGroups(t *testing.T) {
+	const senderCount = 64
+	groups := make([][]executableTx, 0, senderCount*2)
+	expectedEntries := make([]executableTx, 0, senderCount)
+	for i := range senderCount {
+		entry := newMergeTestEntry(int64(senderCount-i), int64(i))
+		expectedEntries = append(expectedEntries, entry)
+		groups = append(groups, nil, []executableTx{entry})
+	}
+
+	actual := orderExecutableStreams(nil, ethExecutablesSnapshot(groups))
+
+	assert.Equal(t, transactionsOf(expectedEntries...), actual)
+
+	vechainOnly := vechainExecutablesSnapshot{
+		newMergeTestEntry(20, 2),
+		newMergeTestEntry(10, 1),
+	}
+	assert.Equal(t, transactionsOf(vechainOnly...), orderExecutableStreams(
+		vechainOnly,
+		ethExecutablesSnapshot{nil, {}},
+	))
+}
+
+func TestMergePoolExecutablesExactTieUsesSourceOrder(t *testing.T) {
+	vechain := newMergeTestEntry(10, 5)
+	firstEthSender := newMergeTestEntry(10, 5)
+	secondEthSender := newMergeTestEntry(10, 5)
+	eth := ethExecutablesSnapshot{
+		{firstEthSender},
+		{},
+		{secondEthSender},
+	}
+
+	for range 10 {
+		assert.Equal(t, transactionsOf(
+			vechain,
+			firstEthSender,
+			secondEthSender,
+		), orderExecutableStreams(vechainExecutablesSnapshot{vechain}, eth))
+	}
+}
+
+func TestEthPoolExecutables(t *testing.T) {
+	ethCore := newEthPoolCore(newCostTracker(), Options{})
+	pool := &EthPool{core: ethCore}
+	assert.Nil(t, pool.Executables())
+
+	senderANonce0 := newMergeTestEntry(10, 1)
+	senderANonce1 := newMergeTestEntry(1_000, 1)
+	senderBNonce0 := newMergeTestEntry(50, 1)
+
+	senderA := newEthSender(thor.Address{0x01}, 0)
+	senderA.pending[0] = newMergeTestTxObject(senderANonce0)
+	senderA.pending[1] = newMergeTestTxObject(senderANonce1)
+	senderB := newEthSender(thor.Address{0x02}, 0)
+	senderB.pending[0] = newMergeTestTxObject(senderBNonce0)
+	ethCore.senders[senderA.origin] = senderA
+	ethCore.senders[senderB.origin] = senderB
+
+	assert.Equal(t, transactionsOf(
+		senderBNonce0,
+		senderANonce0,
+		senderANonce1,
+	), pool.Executables())
+}
+
+func TestCoordinatorExecutablesMergesFamilies(t *testing.T) {
+	vechainEntry := newMergeTestEntry(50, 1)
+	ethNonce0 := newMergeTestEntry(10, 1)
+	ethNonce1 := newMergeTestEntry(100, 1)
+
+	vechain := &VeChainPool{}
+	snapshot := vechainExecutablesSnapshot{vechainEntry}
+	vechain.executables.Store(&snapshot)
+
+	ethCore := newEthPoolCore(newCostTracker(), Options{})
+	sender := newEthSender(thor.Address{0x01}, 0)
+	sender.pending[0] = newMergeTestTxObject(ethNonce0)
+	sender.pending[1] = newMergeTestTxObject(ethNonce1)
+	ethCore.senders[sender.origin] = sender
+
+	coordinator := &TxPoolCoordinator{
+		vechain: vechain,
+		eth:     &EthPool{core: ethCore},
+	}
+	assert.Equal(t, transactionsOf(vechainEntry, ethNonce0, ethNonce1), coordinator.Executables())
+}
+
+func TestCoordinatorExecutablesHandlesUninitializedVeChainSnapshot(t *testing.T) {
+	ethEntry := newMergeTestEntry(10, 1)
+	ethCore := newEthPoolCore(newCostTracker(), Options{})
+	sender := newEthSender(thor.Address{0x01}, 0)
+	sender.pending[0] = newMergeTestTxObject(ethEntry)
+	ethCore.senders[sender.origin] = sender
+
+	coordinator := &TxPoolCoordinator{
+		vechain: &VeChainPool{},
+		eth:     &EthPool{core: ethCore},
+	}
+
+	assert.Equal(t, transactionsOf(ethEntry), coordinator.Executables())
+}

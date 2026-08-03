@@ -164,6 +164,7 @@ func TestEthDynamicFeeTx_Properties(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, TypeEthDynamicFee, trx.Type())
+	assert.True(t, trx.IsEthereumTx())
 
 	origin, err := trx.Origin()
 	require.NoError(t, err)
@@ -338,9 +339,11 @@ func TestTransaction_ChainID(t *testing.T) {
 
 	legacy := NewBuilder(TypeLegacy).Build()
 	assert.Nil(t, legacy.ChainID(), "TypeLegacy must return nil")
+	assert.False(t, legacy.IsEthereumTx())
 
 	dynFee := NewBuilder(TypeDynamicFee).Build()
 	assert.Nil(t, dynFee.ChainID(), "TypeDynamicFee must return nil")
+	assert.False(t, dynFee.IsEthereumTx())
 }
 
 // maxUint32 mirrors math.MaxUint32 for use in assertions without an import.

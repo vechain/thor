@@ -31,7 +31,7 @@ var logger = log.WithContext("pkg", "comm")
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
 	repo           *chain.Repository
-	txPool         *txpool.TxPool
+	txPool         txpool.Pool
 	ctx            context.Context
 	cancel         context.CancelFunc
 	peerSet        *PeerSet
@@ -44,7 +44,7 @@ type Communicator struct {
 }
 
 // New create a new Communicator instance.
-func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
+func New(repo *chain.Repository, txPool txpool.Pool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
 		repo:           repo,

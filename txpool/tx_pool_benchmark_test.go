@@ -17,14 +17,14 @@ import (
 // newBenchPool creates a pool with generous limits so that Add is never
 // rejected due to quota/pool-full; the benchmark only measures the
 // concurrent read/write overhead of Add/Remove(+wash).
-func newBenchPool() *TxPool {
+func newBenchPool() *VeChainPool {
 	return newPool(1_000_000, 1_000_000, &thor.NoFork)
 }
 
 // genBenchTxs pre-signs a batch of transactions with distinct hashes (newTx
 // uses a random nonce, so even the same account yields distinct hashes).
 // Signing is ECDSA and expensive, so it must happen outside the timed region.
-func genBenchTxs(pool *TxPool, n, workerIdx int) []*tx.Transaction {
+func genBenchTxs(pool *VeChainPool, n, workerIdx int) []*tx.Transaction {
 	txs := make([]*tx.Transaction, n)
 	for i := range n {
 		from := devAccounts[(workerIdx+i)%len(devAccounts)]
@@ -68,7 +68,7 @@ func benchAddRemove(b *testing.B, workers, perWorker int, withWash bool) {
 			defer wg.Done()
 			for i := range per {
 				trx := set[i%len(set)]
-				_ = pool.Add(trx)                 // publishes pricing snapshot (atomic Store) + bookkeeping (map lock)
+				_ = pool.AddRemote(trx)           // publishes pricing snapshot (atomic Store) + bookkeeping (map lock)
 				pool.Remove(trx.Hash(), trx.ID()) // reads Cost()/Payer() (atomic Load) + bookkeeping (map lock)
 			}
 		}(sets[w])
