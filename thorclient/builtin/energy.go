@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 
 	"github.com/vechain/thor/v2/api/dto"
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -28,7 +28,7 @@ type Energy struct {
 }
 
 func NewEnergy(client *thorclient.Client) (*Energy, error) {
-	contract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Energy.Address)
+	contract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Energy.Address)
 	if err != nil {
 		return nil, err
 	}

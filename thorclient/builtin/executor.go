@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/vechain/thor/v2/api/dto"
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -23,7 +23,7 @@ type Executor struct {
 }
 
 func NewExecutor(client *thorclient.Client) (*Executor, error) {
-	contract, err := bind.NewContract(client, builtin.Executor.RawABI(), &builtin.Executor.Address)
+	contract, err := bind.NewContract(client, contracts.Executor.RawABI(), &contracts.Executor.Address)
 	if err != nil {
 		return nil, err
 	}

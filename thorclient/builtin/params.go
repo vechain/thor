@@ -14,7 +14,7 @@ import (
 	"github.com/vechain/thor/v2/abi"
 
 	"github.com/vechain/thor/v2/api/dto"
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -26,7 +26,7 @@ type Params struct {
 }
 
 func NewParams(client *thorclient.Client) (*Params, error) {
-	contract, err := bind.NewContract(client, builtin.Params.RawABI(), &builtin.Params.Address)
+	contract, err := bind.NewContract(client, contracts.Params.RawABI(), &contracts.Params.Address)
 	if err != nil {
 		return nil, err
 	}

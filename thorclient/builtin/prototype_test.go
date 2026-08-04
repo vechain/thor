@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/api/dto"
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/thor"
@@ -68,7 +68,7 @@ func TestPrototype(t *testing.T) {
 	require.Equal(t, acc.Address(), master)
 
 	// IsUser
-	receipt, _, err = prototype.SetMaster(builtin.Authority.Address, builtin.Authority.Address).
+	receipt, _, err = prototype.SetMaster(contracts.Authority.Address, contracts.Authority.Address).
 		Send().
 		WithSigner(acc).
 		WithOptions(txOpts()).SubmitAndConfirm(txContext(t))
@@ -86,12 +86,12 @@ func TestPrototype(t *testing.T) {
 	require.Equal(t, 1, energy.Sign())
 
 	// HasCode
-	hasCode, err := prototype.HasCode(builtin.Authority.Address)
+	hasCode, err := prototype.HasCode(contracts.Authority.Address)
 	require.NoError(t, err)
 	require.True(t, hasCode)
 
 	// StorageFor
-	storage, err := prototype.StorageFor(builtin.Authority.Address, thor.Bytes32{})
+	storage, err := prototype.StorageFor(contracts.Authority.Address, thor.Bytes32{})
 	require.NoError(t, err)
 	require.Equal(t, thor.Bytes32{}, storage)
 
@@ -104,7 +104,7 @@ func TestPrototype(t *testing.T) {
 	require.False(t, receipt.Reverted)
 
 	// CreditPlan
-	_, _, err = prototype.CreditPlan(builtin.Authority.Address)
+	_, _, err = prototype.CreditPlan(contracts.Authority.Address)
 	require.NoError(t, err)
 
 	// AddUser
@@ -187,7 +187,7 @@ func TestPrototype_RawContract(t *testing.T) {
 
 	raw := p.Raw()
 	require.NotNil(t, raw)
-	require.Equal(t, builtin.Prototype.Address, *raw.Address())
+	require.Equal(t, contracts.Prototype.Address, *raw.Address())
 	_, ok := raw.ABI().Methods["master"]
 	require.True(t, ok, "expected method 'master' in ABI")
 }
@@ -262,11 +262,11 @@ func TestPrototype_MethodNotFound_WithBadABI(t *testing.T) {
 	node, client := newTestNode(t, false)
 	defer node.Stop()
 
-	badContract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Prototype.Address)
+	badContract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Prototype.Address)
 	require.NoError(t, err)
 	bad := &Prototype{contract: badContract}
 
-	_, err = bad.Master(builtin.Authority.Address)
+	_, err = bad.Master(contracts.Authority.Address)
 	require.Error(t, err)
 }
 
@@ -334,11 +334,11 @@ func TestPrototype_NegativeMatrix(t *testing.T) {
 	defer node.Stop()
 
 	// Wrong ABI to trigger method-not-found for reads and clauses
-	badContract, err := bind.NewContract(client, builtin.Energy.RawABI(), &builtin.Prototype.Address)
+	badContract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Prototype.Address)
 	require.NoError(t, err)
 	bad := &Prototype{contract: badContract}
 
-	self := builtin.Authority.Address
+	self := contracts.Authority.Address
 	user := genesis.DevAccounts()[1].Address
 	key := thor.Bytes32{}
 
