@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 )
 
 func newRegistryRouter(gates map[string]bool) (*mux.Router, *Registry, map[string]*atomic.Bool) {
@@ -76,7 +76,7 @@ func TestRegistryGetOne(t *testing.T) {
 	router.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/features/a", nil))
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp api.ToggleStatus
+	var resp dto.ToggleStatus
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 	assert.True(t, resp.Enabled)
 }
@@ -90,7 +90,7 @@ func TestRegistryGetUnknown(t *testing.T) {
 
 func TestRegistryPostFlip(t *testing.T) {
 	router, _, flags := newRegistryRouter(map[string]bool{"a": false})
-	body, _ := json.Marshal(api.ToggleStatus{Enabled: true})
+	body, _ := json.Marshal(dto.ToggleStatus{Enabled: true})
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/admin/features/a", bytes.NewReader(body)))
 	assert.Equal(t, http.StatusOK, rr.Code)
@@ -145,7 +145,7 @@ func TestLegacyAlias(t *testing.T) {
 	reg.Add(New("a", b, nil))
 	reg.MountLegacyAlias(router, "/admin/a", "a")
 
-	body, _ := json.Marshal(api.ToggleStatus{Enabled: true})
+	body, _ := json.Marshal(dto.ToggleStatus{Enabled: true})
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/admin/a", bytes.NewReader(body)))
 	assert.Equal(t, http.StatusOK, rr.Code)

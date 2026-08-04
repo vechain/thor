@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package dto
 
 import (
 	"time"
@@ -13,9 +13,7 @@ type LogStatus struct {
 	Enabled bool `json:"enabled"`
 }
 
-// ToggleStatus carries an enabled flag plus an optional TTL after which
-// the flag will automatically be set back to false. A zero TTL means no
-// auto-disable. Used by admin toggles like /admin/pprof and /admin/txpool-api.
+// ToggleStatus carries an enabled flag plus an optional TTL in seconds after which the flag auto-resets to false (0 = never).
 type ToggleStatus struct {
 	Enabled    bool `json:"enabled"`
 	TTLSeconds int  `json:"ttlSeconds,omitempty"`

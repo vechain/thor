@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api_test
+package dto_test
 
 import (
 	"encoding/json"
@@ -17,13 +17,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/thor"
 )
 
-// golden marshals v and compares it against api/testdata/<name>.json. Missing
+// golden marshals v and compares it against testdata/<name>.json. Missing
 // baselines are generated on first run and must be spot-checked against
 // api/doc/thor.yaml before being committed.
 func golden(t *testing.T, name string, v any) {
@@ -34,7 +32,7 @@ func golden(t *testing.T, name string, v any) {
 	want, rerr := os.ReadFile(path)
 	if os.IsNotExist(rerr) {
 		require.NoError(t, os.MkdirAll("testdata", 0o755))
-		require.NoError(t, os.WriteFile(path, data, 0o644))
+		require.NoError(t, os.WriteFile(path, data, 0o600))
 		t.Fatalf("golden %s generated; verify against api/doc/thor.yaml then re-run", path)
 	}
 	require.NoError(t, rerr)
@@ -44,7 +42,7 @@ func golden(t *testing.T, name string, v any) {
 // ---- account ----
 
 func TestGoldenAccount(t *testing.T) {
-	golden(t, "account", &api.Account{
+	golden(t, "account", &dto.Account{
 		Balance: (*math.HexOrDecimal256)(big.NewInt(100)),
 		Energy:  (*math.HexOrDecimal256)(big.NewInt(200)),
 		HasCode: true,
@@ -52,26 +50,26 @@ func TestGoldenAccount(t *testing.T) {
 }
 
 func TestGoldenGetCodeResult(t *testing.T) {
-	golden(t, "get_code_result", &api.GetCodeResult{Code: "0x616263"})
+	golden(t, "get_code_result", &dto.GetCodeResult{Code: "0x616263"})
 }
 
 func TestGoldenGetStorageResult(t *testing.T) {
-	golden(t, "get_storage_result", &api.GetStorageResult{Value: "0x616263"})
+	golden(t, "get_storage_result", &dto.GetStorageResult{Value: "0x616263"})
 }
 
-func TestGoldenGetRawStorageResponse(t *testing.T) {
-	golden(t, "get_raw_storage_response", &api.GetRawStorageResponse{Value: "0x616263"})
+func TestGoldenGetRawStorageResult(t *testing.T) {
+	golden(t, "get_raw_storage_response", &dto.GetRawStorageResult{Value: "0x616263"})
 }
 
 func TestGoldenCallResult(t *testing.T) {
-	golden(t, "call_result", &api.CallResult{
+	golden(t, "call_result", &dto.CallResult{
 		Data: "0x616263",
-		Events: []*api.Event{{
+		Events: []*dto.Event{{
 			Address: thor.BytesToAddress([]byte{1}),
 			Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte{2})},
 			Data:    "0x616263",
 		}},
-		Transfers: []*api.Transfer{{
+		Transfers: []*dto.Transfer{{
 			Sender:    thor.BytesToAddress([]byte{3}),
 			Recipient: thor.BytesToAddress([]byte{4}),
 			Amount:    (*math.HexOrDecimal256)(big.NewInt(500)),
@@ -83,15 +81,15 @@ func TestGoldenCallResult(t *testing.T) {
 }
 
 func TestGoldenBatchCallResults(t *testing.T) {
-	golden(t, "batch_call_results", &api.BatchCallResults{
+	golden(t, "batch_call_results", &dto.BatchCallResults{
 		{
 			Data: "0x616263",
-			Events: []*api.Event{{
+			Events: []*dto.Event{{
 				Address: thor.BytesToAddress([]byte{1}),
 				Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte{2})},
 				Data:    "0x616263",
 			}},
-			Transfers: []*api.Transfer{{
+			Transfers: []*dto.Transfer{{
 				Sender:    thor.BytesToAddress([]byte{3}),
 				Recipient: thor.BytesToAddress([]byte{4}),
 				Amount:    (*math.HexOrDecimal256)(big.NewInt(500)),
@@ -106,19 +104,19 @@ func TestGoldenBatchCallResults(t *testing.T) {
 // ---- admin ----
 
 func TestGoldenLogStatus(t *testing.T) {
-	golden(t, "log_status", &api.LogStatus{Enabled: true})
+	golden(t, "log_status", &dto.LogStatus{Enabled: true})
 }
 
 func TestGoldenToggleStatus(t *testing.T) {
-	golden(t, "toggle_status", &api.ToggleStatus{Enabled: true, TTLSeconds: 30})
-	golden(t, "toggle_status_min", &api.ToggleStatus{})
+	golden(t, "toggle_status", &dto.ToggleStatus{Enabled: true, TTLSeconds: 30})
+	golden(t, "toggle_status_min", &dto.ToggleStatus{})
 }
 
 func TestGoldenHealthStatus(t *testing.T) {
 	bestBlockTime := time.Unix(1700000000, 0).UTC()
 	nodeMaster := "0x0000000000000000000000000000000000000001"
 	beneficiary := "0x0000000000000000000000000000000000000002"
-	golden(t, "health_status", &api.HealthStatus{
+	golden(t, "health_status", &dto.HealthStatus{
 		Healthy:              true,
 		BestBlockTime:        &bestBlockTime,
 		PeerCount:            5,
@@ -129,13 +127,13 @@ func TestGoldenHealthStatus(t *testing.T) {
 }
 
 func TestGoldenLogLevelResponse(t *testing.T) {
-	golden(t, "log_level_response", &api.LogLevelResponse{CurrentLevel: "debug"})
+	golden(t, "log_level_response", &dto.LogLevelResponse{CurrentLevel: "debug"})
 }
 
 // ---- blocks ----
 
-func fullBlockSummary() *api.JSONBlockSummary {
-	return &api.JSONBlockSummary{
+func fullBlockSummary() *dto.BlockSummary {
+	return &dto.BlockSummary{
 		Number:        1,
 		ID:            thor.BytesToBytes32([]byte{1}),
 		Size:          2,
@@ -157,16 +155,16 @@ func fullBlockSummary() *api.JSONBlockSummary {
 	}
 }
 
-func fullJSONOutput() *api.JSONOutput {
+func fullOutput() *dto.Output {
 	addr := thor.BytesToAddress([]byte{20})
-	return &api.JSONOutput{
+	return &dto.Output{
 		ContractAddress: &addr,
-		Events: []*api.JSONEvent{{
+		Events: []*dto.Event{{
 			Address: thor.BytesToAddress([]byte{21}),
 			Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte{22})},
 			Data:    "0x616263",
 		}},
-		Transfers: []*api.JSONTransfer{{
+		Transfers: []*dto.Transfer{{
 			Sender:    thor.BytesToAddress([]byte{23}),
 			Recipient: thor.BytesToAddress([]byte{24}),
 			Amount:    (*math.HexOrDecimal256)(big.NewInt(25)),
@@ -174,18 +172,19 @@ func fullJSONOutput() *api.JSONOutput {
 	}
 }
 
-func fullEmbeddedTx() *api.JSONEmbeddedTx {
+// Fixtures are shape-only for omitempty coverage; they fill mutually-exclusive fee fields no real converter emits together.
+func fullEmbeddedTx() *dto.EmbeddedTx {
 	coef := uint8(1)
 	delegator := thor.BytesToAddress([]byte{30})
 	dependsOn := thor.BytesToBytes32([]byte{31})
 	to := thor.BytesToAddress([]byte{32})
-	return &api.JSONEmbeddedTx{
+	return &dto.EmbeddedTx{
 		ID:                   thor.BytesToBytes32([]byte{33}),
 		Type:                 1,
 		ChainTag:             2,
 		BlockRef:             "0x0000000000000003",
 		Expiration:           4,
-		Clauses:              api.Clauses{{To: &to, Value: (*math.HexOrDecimal256)(big.NewInt(5)), Data: "0x616263"}},
+		Clauses:              dto.Clauses{{To: &to, Value: (*math.HexOrDecimal256)(big.NewInt(5)), Data: "0x616263"}},
 		GasPriceCoef:         &coef,
 		MaxFeePerGas:         (*math.HexOrDecimal256)(big.NewInt(6)),
 		MaxPriorityFeePerGas: (*math.HexOrDecimal256)(big.NewInt(7)),
@@ -200,44 +199,44 @@ func fullEmbeddedTx() *api.JSONEmbeddedTx {
 		Paid:                 (*math.HexOrDecimal256)(big.NewInt(12)),
 		Reward:               (*math.HexOrDecimal256)(big.NewInt(13)),
 		Reverted:             true,
-		Outputs:              []*api.JSONOutput{fullJSONOutput()},
+		Outputs:              []*dto.Output{fullOutput()},
 	}
 }
 
-func TestGoldenJSONBlockSummary(t *testing.T) {
+func TestGoldenBlockSummary(t *testing.T) {
 	golden(t, "block_summary", fullBlockSummary())
-	golden(t, "block_summary_min", &api.JSONBlockSummary{})
+	golden(t, "block_summary_min", &dto.BlockSummary{})
 }
 
-func TestGoldenJSONRawBlockSummary(t *testing.T) {
-	golden(t, "raw_block_summary", &api.JSONRawBlockSummary{Raw: "0x616263"})
+func TestGoldenRawBlockSummary(t *testing.T) {
+	golden(t, "raw_block_summary", &dto.RawBlockSummary{Raw: "0x616263"})
 }
 
-func TestGoldenJSONCollapsedBlock(t *testing.T) {
-	golden(t, "collapsed_block", &api.JSONCollapsedBlock{
-		JSONBlockSummary: fullBlockSummary(),
-		Transactions:     []thor.Bytes32{thor.BytesToBytes32([]byte{15})},
+func TestGoldenCollapsedBlock(t *testing.T) {
+	golden(t, "collapsed_block", &dto.CollapsedBlock{
+		BlockSummary: fullBlockSummary(),
+		Transactions: []thor.Bytes32{thor.BytesToBytes32([]byte{15})},
 	})
-	golden(t, "collapsed_block_min", &api.JSONCollapsedBlock{})
+	golden(t, "collapsed_block_min", &dto.CollapsedBlock{})
 }
 
-func TestGoldenJSONEmbeddedTx(t *testing.T) {
+func TestGoldenEmbeddedTx(t *testing.T) {
 	golden(t, "embedded_tx", fullEmbeddedTx())
-	golden(t, "embedded_tx_min", &api.JSONEmbeddedTx{})
+	golden(t, "embedded_tx_min", &dto.EmbeddedTx{})
 }
 
-func TestGoldenJSONExpandedBlock(t *testing.T) {
-	golden(t, "expanded_block", &api.JSONExpandedBlock{
-		JSONBlockSummary: fullBlockSummary(),
-		Transactions:     []*api.JSONEmbeddedTx{fullEmbeddedTx()},
+func TestGoldenExpandedBlock(t *testing.T) {
+	golden(t, "expanded_block", &dto.ExpandedBlock{
+		BlockSummary: fullBlockSummary(),
+		Transactions: []*dto.EmbeddedTx{fullEmbeddedTx()},
 	})
-	golden(t, "expanded_block_min", &api.JSONExpandedBlock{})
+	golden(t, "expanded_block_min", &dto.ExpandedBlock{})
 }
 
 // ---- common ----
 
 func TestGoldenEvent(t *testing.T) {
-	golden(t, "event", &api.Event{
+	golden(t, "event", &dto.Event{
 		Address: thor.BytesToAddress([]byte{1}),
 		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte{2})},
 		Data:    "0x616263",
@@ -245,7 +244,7 @@ func TestGoldenEvent(t *testing.T) {
 }
 
 func TestGoldenTransfer(t *testing.T) {
-	golden(t, "transfer", &api.Transfer{
+	golden(t, "transfer", &dto.Transfer{
 		Sender:    thor.BytesToAddress([]byte{1}),
 		Recipient: thor.BytesToAddress([]byte{2}),
 		Amount:    (*math.HexOrDecimal256)(big.NewInt(3)),
@@ -254,7 +253,7 @@ func TestGoldenTransfer(t *testing.T) {
 
 func TestGoldenClause(t *testing.T) {
 	to := thor.BytesToAddress([]byte{1})
-	golden(t, "clause", &api.Clause{
+	golden(t, "clause", &dto.Clause{
 		To:    &to,
 		Value: (*math.HexOrDecimal256)(big.NewInt(2)),
 		Data:  "0x616263",
@@ -263,7 +262,7 @@ func TestGoldenClause(t *testing.T) {
 
 func TestGoldenLogMeta(t *testing.T) {
 	ti, li := uint32(7), uint32(8)
-	golden(t, "log_meta", &api.LogMeta{
+	golden(t, "log_meta", &dto.LogMeta{
 		BlockID:        thor.BytesToBytes32([]byte{1}),
 		BlockNumber:    2,
 		BlockTimestamp: 3,
@@ -273,7 +272,7 @@ func TestGoldenLogMeta(t *testing.T) {
 		TxIndex:        &ti,
 		LogIndex:       &li,
 	})
-	golden(t, "log_meta_min", &api.LogMeta{})
+	golden(t, "log_meta_min", &dto.LogMeta{})
 }
 
 // ---- debug ----
@@ -282,9 +281,9 @@ func TestGoldenStorageRangeResult(t *testing.T) {
 	key := thor.BytesToBytes32([]byte{1})
 	value := thor.BytesToBytes32([]byte{2})
 	nextKey := thor.BytesToBytes32([]byte{3})
-	golden(t, "storage_range_result", &api.StorageRangeResult{
-		Storage: api.StorageMap{
-			"0x01": api.StorageEntry{Key: &key, Value: &value},
+	golden(t, "storage_range_result", &dto.StorageRangeResult{
+		Storage: dto.StorageMap{
+			"0x01": dto.StorageEntry{Key: &key, Value: &value},
 		},
 		NextKey: &nextKey,
 	})
@@ -295,11 +294,11 @@ func TestGoldenStorageRangeResult(t *testing.T) {
 func TestGoldenFilteredEvent(t *testing.T) {
 	ti, li := uint32(7), uint32(8)
 	topic := thor.BytesToBytes32([]byte{2})
-	golden(t, "filtered_event", &api.FilteredEvent{
+	golden(t, "filtered_event", &dto.FilteredEvent{
 		Address: thor.BytesToAddress([]byte{1}),
 		Topics:  []*thor.Bytes32{&topic},
 		Data:    "0x616263",
-		Meta: api.LogMeta{
+		Meta: dto.LogMeta{
 			BlockID:        thor.BytesToBytes32([]byte{3}),
 			BlockNumber:    4,
 			BlockTimestamp: 5,
@@ -310,23 +309,23 @@ func TestGoldenFilteredEvent(t *testing.T) {
 			LogIndex:       &li,
 		},
 	})
-	golden(t, "filtered_event_min", &api.FilteredEvent{})
+	golden(t, "filtered_event_min", &dto.FilteredEvent{})
 }
 
 // ---- fees ----
 
 func TestGoldenFeesHistory(t *testing.T) {
-	golden(t, "fees_history", &api.FeesHistory{
+	golden(t, "fees_history", &dto.FeesHistory{
 		OldestBlock:   thor.BytesToBytes32([]byte{1}),
 		BaseFeePerGas: []*hexutil.Big{(*hexutil.Big)(big.NewInt(2))},
 		GasUsedRatio:  []float64{0.5},
 		Reward:        [][]*hexutil.Big{{(*hexutil.Big)(big.NewInt(3))}},
 	})
-	golden(t, "fees_history_min", &api.FeesHistory{})
+	golden(t, "fees_history_min", &dto.FeesHistory{})
 }
 
 func TestGoldenFeesPriority(t *testing.T) {
-	golden(t, "fees_priority", &api.FeesPriority{
+	golden(t, "fees_priority", &dto.FeesPriority{
 		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(1)),
 	})
 }
@@ -334,11 +333,11 @@ func TestGoldenFeesPriority(t *testing.T) {
 // ---- node ----
 
 func TestGoldenNodeStatus(t *testing.T) {
-	golden(t, "node_status", &api.Status{Amount: 1})
+	golden(t, "node_status", &dto.TxPoolStatus{Amount: 1})
 }
 
 func TestGoldenPeerStats(t *testing.T) {
-	golden(t, "peer_stats", &api.PeerStats{
+	golden(t, "peer_stats", &dto.PeerStats{
 		Name:        "peer1",
 		BestBlockID: thor.BytesToBytes32([]byte{1}),
 		TotalScore:  2,
@@ -352,7 +351,7 @@ func TestGoldenPeerStats(t *testing.T) {
 // ---- subscriptions ----
 
 func TestGoldenBlockMessage(t *testing.T) {
-	golden(t, "block_message", &api.BlockMessage{
+	golden(t, "block_message", &dto.BlockMessage{
 		Number:        1,
 		ID:            thor.BytesToBytes32([]byte{2}),
 		Size:          3,
@@ -372,16 +371,16 @@ func TestGoldenBlockMessage(t *testing.T) {
 		Transactions:  []thor.Bytes32{thor.BytesToBytes32([]byte{16})},
 		Obsolete:      true,
 	})
-	golden(t, "block_message_min", &api.BlockMessage{})
+	golden(t, "block_message_min", &dto.BlockMessage{})
 }
 
 func TestGoldenTransferMessage(t *testing.T) {
 	ti, li := uint32(1), uint32(2)
-	golden(t, "transfer_message", &api.TransferMessage{
+	golden(t, "transfer_message", &dto.TransferMessage{
 		Sender:    thor.BytesToAddress([]byte{1}),
 		Recipient: thor.BytesToAddress([]byte{2}),
 		Amount:    (*math.HexOrDecimal256)(big.NewInt(3)),
-		Meta: api.LogMeta{
+		Meta: dto.LogMeta{
 			BlockID:        thor.BytesToBytes32([]byte{4}),
 			BlockNumber:    5,
 			BlockTimestamp: 6,
@@ -393,16 +392,16 @@ func TestGoldenTransferMessage(t *testing.T) {
 		},
 		Obsolete: true,
 	})
-	golden(t, "transfer_message_min", &api.TransferMessage{})
+	golden(t, "transfer_message_min", &dto.TransferMessage{})
 }
 
 func TestGoldenEventMessage(t *testing.T) {
 	ti, li := uint32(1), uint32(2)
-	golden(t, "event_message", &api.EventMessage{
+	golden(t, "event_message", &dto.EventMessage{
 		Address: thor.BytesToAddress([]byte{1}),
 		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte{2})},
 		Data:    "0x616263",
-		Meta: api.LogMeta{
+		Meta: dto.LogMeta{
 			BlockID:        thor.BytesToBytes32([]byte{3}),
 			BlockNumber:    4,
 			BlockTimestamp: 5,
@@ -414,11 +413,11 @@ func TestGoldenEventMessage(t *testing.T) {
 		},
 		Obsolete: true,
 	})
-	golden(t, "event_message_min", &api.EventMessage{})
+	golden(t, "event_message_min", &dto.EventMessage{})
 }
 
 func TestGoldenBeatMessage(t *testing.T) {
-	golden(t, "beat_message", &api.BeatMessage{
+	golden(t, "beat_message", &dto.BeatMessage{
 		Number:      1,
 		ID:          thor.BytesToBytes32([]byte{2}),
 		ParentID:    thor.BytesToBytes32([]byte{3}),
@@ -431,7 +430,7 @@ func TestGoldenBeatMessage(t *testing.T) {
 }
 
 func TestGoldenBeat2Message(t *testing.T) {
-	golden(t, "beat2_message", &api.Beat2Message{
+	golden(t, "beat2_message", &dto.Beat2Message{
 		Number:        1,
 		ID:            thor.BytesToBytes32([]byte{2}),
 		ParentID:      thor.BytesToBytes32([]byte{3}),
@@ -443,11 +442,11 @@ func TestGoldenBeat2Message(t *testing.T) {
 		K:             8,
 		Obsolete:      true,
 	})
-	golden(t, "beat2_message_min", &api.Beat2Message{})
+	golden(t, "beat2_message_min", &dto.Beat2Message{})
 }
 
 func TestGoldenPendingTxIDMessage(t *testing.T) {
-	golden(t, "pending_txid_message", &api.PendingTxIDMessage{ID: thor.BytesToBytes32([]byte{1})})
+	golden(t, "pending_txid_message", &dto.PendingTxIDMessage{ID: thor.BytesToBytes32([]byte{1})})
 }
 
 // ---- transactions ----
@@ -457,13 +456,13 @@ func TestGoldenTransaction(t *testing.T) {
 	delegator := thor.BytesToAddress([]byte{2})
 	dependsOn := thor.BytesToBytes32([]byte{3})
 	to := thor.BytesToAddress([]byte{4})
-	golden(t, "transaction", &transactions.Transaction{
+	golden(t, "transaction", &dto.Transaction{
 		ID:                   thor.BytesToBytes32([]byte{5}),
 		Type:                 1,
 		ChainTag:             2,
 		BlockRef:             "0x0000000000000003",
 		Expiration:           6,
-		Clauses:              api.Clauses{{To: &to, Value: (*math.HexOrDecimal256)(big.NewInt(7)), Data: "0x616263"}},
+		Clauses:              dto.Clauses{{To: &to, Value: (*math.HexOrDecimal256)(big.NewInt(7)), Data: "0x616263"}},
 		GasPriceCoef:         &coef,
 		Gas:                  8,
 		MaxFeePerGas:         (*math.HexOrDecimal256)(big.NewInt(9)),
@@ -473,19 +472,19 @@ func TestGoldenTransaction(t *testing.T) {
 		Nonce:                math.HexOrDecimal64(12),
 		DependsOn:            &dependsOn,
 		Size:                 13,
-		Meta: &api.TxMeta{
+		Meta: &dto.TxMeta{
 			BlockID:        thor.BytesToBytes32([]byte{14}),
 			BlockNumber:    15,
 			BlockTimestamp: 16,
 		},
 	})
-	golden(t, "transaction_min", &transactions.Transaction{})
+	golden(t, "transaction_min", &dto.Transaction{})
 }
 
 func TestGoldenRawTransaction(t *testing.T) {
-	golden(t, "raw_transaction", &api.RawTransaction{
-		RawTx: api.RawTx{Raw: "0x616263"},
-		Meta: &api.TxMeta{
+	golden(t, "raw_transaction", &dto.RawTransaction{
+		RawTx: dto.RawTx{Raw: "0x616263"},
+		Meta: &dto.TxMeta{
 			BlockID:        thor.BytesToBytes32([]byte{1}),
 			BlockNumber:    2,
 			BlockTimestamp: 3,
@@ -494,7 +493,7 @@ func TestGoldenRawTransaction(t *testing.T) {
 }
 
 func TestGoldenTxMeta(t *testing.T) {
-	golden(t, "tx_meta", &api.TxMeta{
+	golden(t, "tx_meta", &dto.TxMeta{
 		BlockID:        thor.BytesToBytes32([]byte{1}),
 		BlockNumber:    2,
 		BlockTimestamp: 3,
@@ -502,7 +501,7 @@ func TestGoldenTxMeta(t *testing.T) {
 }
 
 func TestGoldenReceiptMeta(t *testing.T) {
-	golden(t, "receipt_meta", &api.ReceiptMeta{
+	golden(t, "receipt_meta", &dto.ReceiptMeta{
 		BlockID:        thor.BytesToBytes32([]byte{1}),
 		BlockNumber:    2,
 		BlockTimestamp: 3,
@@ -513,47 +512,47 @@ func TestGoldenReceiptMeta(t *testing.T) {
 
 func TestGoldenReceipt(t *testing.T) {
 	contractAddr := thor.BytesToAddress([]byte{1})
-	golden(t, "receipt", &api.Receipt{
+	golden(t, "receipt", &dto.Receipt{
 		Type:     1,
 		GasUsed:  2,
 		GasPayer: thor.BytesToAddress([]byte{3}),
 		Paid:     (*math.HexOrDecimal256)(big.NewInt(4)),
 		Reward:   (*math.HexOrDecimal256)(big.NewInt(5)),
 		Reverted: true,
-		Meta: api.ReceiptMeta{
+		Meta: dto.ReceiptMeta{
 			BlockID:        thor.BytesToBytes32([]byte{6}),
 			BlockNumber:    7,
 			BlockTimestamp: 8,
 			TxID:           thor.BytesToBytes32([]byte{9}),
 			TxOrigin:       thor.BytesToAddress([]byte{10}),
 		},
-		Outputs: []*api.Output{{
+		Outputs: []*dto.Output{{
 			ContractAddress: &contractAddr,
-			Events: []*api.Event{{
+			Events: []*dto.Event{{
 				Address: thor.BytesToAddress([]byte{11}),
 				Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte{12})},
 				Data:    "0x616263",
 			}},
-			Transfers: []*api.Transfer{{
+			Transfers: []*dto.Transfer{{
 				Sender:    thor.BytesToAddress([]byte{13}),
 				Recipient: thor.BytesToAddress([]byte{14}),
 				Amount:    (*math.HexOrDecimal256)(big.NewInt(15)),
 			}},
 		}},
 	})
-	golden(t, "receipt_min", &api.Receipt{})
+	golden(t, "receipt_min", &dto.Receipt{})
 }
 
 func TestGoldenOutput(t *testing.T) {
 	contractAddr := thor.BytesToAddress([]byte{1})
-	golden(t, "output", &api.Output{
+	golden(t, "output", &dto.Output{
 		ContractAddress: &contractAddr,
-		Events: []*api.Event{{
+		Events: []*dto.Event{{
 			Address: thor.BytesToAddress([]byte{2}),
 			Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte{3})},
 			Data:    "0x616263",
 		}},
-		Transfers: []*api.Transfer{{
+		Transfers: []*dto.Transfer{{
 			Sender:    thor.BytesToAddress([]byte{4}),
 			Recipient: thor.BytesToAddress([]byte{5}),
 			Amount:    (*math.HexOrDecimal256)(big.NewInt(6)),
@@ -563,18 +562,18 @@ func TestGoldenOutput(t *testing.T) {
 
 func TestGoldenSendTxResult(t *testing.T) {
 	id := thor.BytesToBytes32([]byte{1})
-	golden(t, "send_tx_result", &api.SendTxResult{ID: &id})
+	golden(t, "send_tx_result", &dto.SendTxResult{ID: &id})
 }
 
 // ---- transfers ----
 
 func TestGoldenFilteredTransfer(t *testing.T) {
 	ti, li := uint32(7), uint32(8)
-	golden(t, "filtered_transfer", &api.FilteredTransfer{
+	golden(t, "filtered_transfer", &dto.FilteredTransfer{
 		Sender:    thor.BytesToAddress([]byte{1}),
 		Recipient: thor.BytesToAddress([]byte{2}),
 		Amount:    (*math.HexOrDecimal256)(big.NewInt(3)),
-		Meta: api.LogMeta{
+		Meta: dto.LogMeta{
 			BlockID:        thor.BytesToBytes32([]byte{4}),
 			BlockNumber:    5,
 			BlockTimestamp: 6,
@@ -585,7 +584,7 @@ func TestGoldenFilteredTransfer(t *testing.T) {
 			LogIndex:       &li,
 		},
 	})
-	golden(t, "filtered_transfer_min", &api.FilteredTransfer{})
+	golden(t, "filtered_transfer_min", &dto.FilteredTransfer{})
 }
 
 // ---- request-type unmarshal regression (R4 guardrail) ----
@@ -595,10 +594,24 @@ func TestTransferCriteriaUnmarshalCasing(t *testing.T) {
 		`{"txOrigin":"0x0000000000000000000000000000000000000001","sender":"0x0000000000000000000000000000000000000002","recipient":"0x0000000000000000000000000000000000000003"}`,
 		`{"TxOrigin":"0x0000000000000000000000000000000000000001","Sender":"0x0000000000000000000000000000000000000002","Recipient":"0x0000000000000000000000000000000000000003"}`,
 	} {
-		var c logdb.TransferCriteria
+		var c dto.TransferCriteria
 		require.NoError(t, json.Unmarshal([]byte(in), &c))
 		require.Equal(t, thor.BytesToAddress([]byte{1}), *c.TxOrigin)
 		require.Equal(t, thor.BytesToAddress([]byte{2}), *c.Sender)
 		require.Equal(t, thor.BytesToAddress([]byte{3}), *c.Recipient)
+	}
+}
+
+func TestStorageRangeOptionUnmarshalCasing(t *testing.T) {
+	for _, in := range []string{
+		`{"address":"0x0000000000000000000000000000000000000001","keyStart":"0x00","maxResult":10,"target":"t"}`,
+		`{"Address":"0x0000000000000000000000000000000000000001","KeyStart":"0x00","MaxResult":10,"Target":"t"}`,
+	} {
+		var o dto.StorageRangeOption
+		require.NoError(t, json.Unmarshal([]byte(in), &o))
+		require.Equal(t, thor.BytesToAddress([]byte{1}), o.Address)
+		require.Equal(t, "0x00", o.KeyStart)
+		require.Equal(t, 10, o.MaxResult)
+		require.Equal(t, "t", o.Target)
 	}
 }

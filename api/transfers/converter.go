@@ -3,36 +3,22 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package transfers
 
 import (
 	"github.com/ethereum/go-ethereum/common/math"
 
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/thor"
 )
 
-type FilteredTransfer struct {
-	Sender    thor.Address          `json:"sender"`
-	Recipient thor.Address          `json:"recipient"`
-	Amount    *math.HexOrDecimal256 `json:"amount"`
-	Meta      LogMeta               `json:"meta"`
-}
-
-type TransferFilter struct {
-	CriteriaSet []*logdb.TransferCriteria `json:"criteriaSet,omitempty"`
-	Range       *Range                    `json:"range,omitempty"`
-	Options     *Options                  `json:"options,omitempty"`
-	Order       logdb.Order               `json:"order,omitempty"`
-}
-
-func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {
+func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *dto.FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Amount)
-	ft := &FilteredTransfer{
+	ft := &dto.FilteredTransfer{
 		Sender:    transfer.Sender,
 		Recipient: transfer.Recipient,
 		Amount:    &v,
-		Meta: LogMeta{
+		Meta: dto.LogMeta{
 			BlockID:        transfer.BlockID,
 			BlockNumber:    transfer.BlockNumber,
 			BlockTimestamp: transfer.BlockTime,

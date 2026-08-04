@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/eventcontract"
@@ -84,7 +84,7 @@ func testHandleSubjectWithBlock(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	var blockMsg *api.BlockMessage
+	var blockMsg *dto.BlockMessage
 	if err := json.Unmarshal(msg, &blockMsg); err != nil {
 		t.Fatal(err)
 	} else {
@@ -113,7 +113,7 @@ func testHandleSubjectWithEvent(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	var eventMsg *api.EventMessage
+	var eventMsg *dto.EventMessage
 	if err := json.Unmarshal(msg, &eventMsg); err != nil {
 		t.Fatal(err)
 	} else {
@@ -141,7 +141,7 @@ func testHandleSubjectWithTransfer(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	var transferMsg *api.TransferMessage
+	var transferMsg *dto.TransferMessage
 	if err := json.Unmarshal(msg, &transferMsg); err != nil {
 		t.Fatal(err)
 	} else {
@@ -169,7 +169,7 @@ func testHandleSubjectWithBeat(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	var beatMsg *api.BeatMessage
+	var beatMsg *dto.BeatMessage
 	if err := json.Unmarshal(msg, &beatMsg); err != nil {
 		t.Fatal(err)
 	} else {
@@ -198,7 +198,7 @@ func testHandleSubjectWithBeat2(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	var beatMsg *api.Beat2Message
+	var beatMsg *dto.Beat2Message
 	if err := json.Unmarshal(msg, &beatMsg); err != nil {
 		t.Fatal(err)
 	} else {

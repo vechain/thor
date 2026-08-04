@@ -13,7 +13,7 @@ import (
 
 	"github.com/vechain/thor/v2/abi"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -62,7 +62,7 @@ func (p *Params) Get(key thor.Bytes32) (*big.Int, error) {
 type SetEvent struct {
 	Key   thor.Bytes32
 	Value *big.Int
-	Log   api.FilteredEvent
+	Log   dto.FilteredEvent
 }
 
 func (p *Params) FilterSet(opts ...bind.FilterOption) ([]SetEvent, error) {

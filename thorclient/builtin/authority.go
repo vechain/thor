@@ -12,7 +12,7 @@ import (
 
 	"github.com/vechain/thor/v2/abi"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -116,7 +116,7 @@ func (a *Authority) Revoke(nodeMaster thor.Address) *bind.MethodBuilder {
 type CandidateEvent struct {
 	NodeMaster thor.Address
 	Action     thor.Bytes32
-	Log        api.FilteredEvent
+	Log        dto.FilteredEvent
 }
 
 // FilterCandidate filters Candidate events within the given block range

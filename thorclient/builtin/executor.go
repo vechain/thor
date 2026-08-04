@@ -10,7 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -138,7 +138,7 @@ func (e *Executor) DetachVotingContract(votingContract thor.Address) *bind.Metho
 type ProposalEvent struct {
 	ProposalID thor.Bytes32
 	Action     string
-	Log        api.FilteredEvent
+	Log        dto.FilteredEvent
 }
 
 func (e *Executor) FilterProposals(opts ...bind.FilterOption) ([]ProposalEvent, error) {

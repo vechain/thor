@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
@@ -40,9 +40,9 @@ func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uin
 // Filter query events with option. Rows are returned in their logdb form; the
 // conversion to the response shape hex-expands Data to roughly twice its size and
 // is deferred to the response writer so only one converted event exists at a time.
-func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*logdb.Event, error) {
+func (e *Events) filter(ctx context.Context, ef *dto.EventFilter) ([]*logdb.Event, error) {
 	chain := e.repo.NewBestChain()
-	filter, err := api.ConvertEventFilter(chain, ef)
+	filter, err := ConvertEventFilter(chain, ef)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*logdb.Even
 }
 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
-	var filter api.EventFilter
+	var filter dto.EventFilter
 	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -74,7 +74,7 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 		)
 	}
 	if filter.Options == nil {
-		filter.Options = &api.Options{}
+		filter.Options = &dto.Options{}
 	}
 	if filter.Options.Limit == nil {
 		// if filter.Options.Limit is nil, set to the default limit +1
@@ -93,8 +93,8 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.maxLimit))
 	}
 
-	return restutil.WriteJSONArray(w, len(events), func(i int) *api.FilteredEvent {
-		return api.ConvertEvent(events[i], filter.Options.IncludeIndexes)
+	return restutil.WriteJSONArray(w, len(events), func(i int) *dto.FilteredEvent {
+		return ConvertEvent(events[i], filter.Options.IncludeIndexes)
 	})
 }
 

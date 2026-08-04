@@ -21,7 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/log"
 )
@@ -77,7 +77,7 @@ func (g *Gate) Middleware(next http.Handler) http.Handler {
 // Set atomically toggles the gate, replaces any pending TTL timer, and
 // records audit metrics. ttlSeconds is clamped to [0, maxTTLSeconds]; a
 // non-zero TTL only takes effect when enabled is true.
-func (g *Gate) Set(enabled bool, ttlSeconds int) api.ToggleStatus {
+func (g *Gate) Set(enabled bool, ttlSeconds int) dto.ToggleStatus {
 	g.mu.Lock()
 
 	if ttlSeconds < 0 {
@@ -114,12 +114,12 @@ func (g *Gate) Set(enabled bool, ttlSeconds int) api.ToggleStatus {
 	// stall other callers.
 	g.record(enabled)
 	log.Info(g.name+" toggled", "pkg", "featuregate", "enabled", enabled, "ttlSeconds", ttlSeconds)
-	return api.ToggleStatus{Enabled: g.enabled.Load(), TTLSeconds: ttlSeconds}
+	return dto.ToggleStatus{Enabled: g.enabled.Load(), TTLSeconds: ttlSeconds}
 }
 
 // Status returns the current enabled state without TTL info.
-func (g *Gate) Status() api.ToggleStatus {
-	return api.ToggleStatus{Enabled: g.enabled.Load()}
+func (g *Gate) Status() dto.ToggleStatus {
+	return dto.ToggleStatus{Enabled: g.enabled.Load()}
 }
 
 // Registry catalogs named Gates.
@@ -157,7 +157,7 @@ func (r *Registry) Get(name string) (*Gate, bool) {
 //
 //	GET  pathPrefix         -> list all
 //	GET  pathPrefix/{name}  -> single gate status
-//	POST pathPrefix/{name}  -> toggle (body: api.ToggleStatus)
+//	POST pathPrefix/{name}  -> toggle (body: dto.ToggleStatus)
 func (r *Registry) MountAPI(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("").
@@ -234,7 +234,7 @@ func (r *Registry) resolve(req *http.Request) (*Gate, error) {
 }
 
 func handleSetGate(w http.ResponseWriter, req *http.Request, g *Gate) error {
-	var body api.ToggleStatus
+	var body dto.ToggleStatus
 	if err := restutil.ParseJSON(req.Body, &body); err != nil {
 		return restutil.BadRequest(err)
 	}

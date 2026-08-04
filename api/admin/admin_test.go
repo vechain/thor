@@ -21,9 +21,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/admin"
 	healthAPI "github.com/vechain/thor/v2/api/admin/health"
+	"github.com/vechain/thor/v2/api/dto"
 	apinode "github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/comm"
@@ -71,7 +71,7 @@ func TestAdminToggleAffectsNodeAPI(t *testing.T) {
 	require.Equal(t, http.StatusOK, getStatus(t, nodeTS.URL+"/node/txpool"))
 
 	// Toggle off via admin
-	body, _ := json.Marshal(api.ToggleStatus{Enabled: false})
+	body, _ := json.Marshal(dto.ToggleStatus{Enabled: false})
 	resp, err := http.Post(adminTS.URL+"/admin/features/txpool-api", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -81,7 +81,7 @@ func TestAdminToggleAffectsNodeAPI(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, getStatus(t, nodeTS.URL+"/node/txpool"))
 
 	// Toggle back on via admin
-	body, _ = json.Marshal(api.ToggleStatus{Enabled: true})
+	body, _ = json.Marshal(dto.ToggleStatus{Enabled: true})
 	resp, err = http.Post(adminTS.URL+"/admin/features/txpool-api", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer resp.Body.Close()

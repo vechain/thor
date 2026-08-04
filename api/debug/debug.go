@@ -20,7 +20,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -192,7 +192,7 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 }
 
 func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) error {
-	var opt api.TraceClauseOption
+	var opt dto.TraceClauseOption
 	if err := restutil.ParseJSON(req.Body, &opt); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -214,7 +214,7 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 }
 
 func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error {
-	var opt api.TraceCallOption
+	var opt dto.TraceCallOption
 	if err := restutil.ParseJSON(req.Body, &opt); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -342,7 +342,7 @@ func (d *Debug) debugStorage(
 	clauseIndex uint32,
 	keyStart []byte,
 	maxResult int,
-) (*api.StorageRangeResult, error) {
+) (*dto.StorageRangeResult, error) {
 	rt, _, _, err := d.prepareClauseEnv(ctx, block, txID, clauseIndex)
 	if err != nil {
 		return nil, err
@@ -354,16 +354,16 @@ func (d *Debug) debugStorage(
 	return storageRangeAt(storageTrie, keyStart, maxResult)
 }
 
-func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*api.StorageRangeResult, error) {
+func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*dto.StorageRangeResult, error) {
 	it := trie.NewIterator(t.NodeIterator(start, 0))
-	result := api.StorageRangeResult{Storage: api.StorageMap{}}
+	result := dto.StorageRangeResult{Storage: dto.StorageMap{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
 		_, content, _, err := rlp.Split(it.Value)
 		if err != nil {
 			return nil, err
 		}
 		v := thor.BytesToBytes32(content)
-		e := api.StorageEntry{Value: &v}
+		e := dto.StorageEntry{Value: &v}
 		preimage := thor.BytesToBytes32(it.Meta)
 		e.Key = &preimage
 		result.Storage[thor.BytesToBytes32(it.Key).String()] = e
@@ -376,7 +376,7 @@ func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*api.StorageRan
 }
 
 func (d *Debug) handleDebugStorage(w http.ResponseWriter, req *http.Request) error {
-	var opt api.StorageRangeOption
+	var opt dto.StorageRangeOption
 	if err := restutil.ParseJSON(req.Body, &opt); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -482,7 +482,7 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 	return
 }
 
-func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
+func (d *Debug) handleTraceCallOption(opt *dto.TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
 	gas := opt.Gas
 	if opt.Gas > d.callGasLimit {
 		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))

@@ -2,14 +2,13 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+// Package dto defines the wire models of the REST API.
+package dto
 
 import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
 )
 
 // Common types used across multiple API modules
@@ -48,13 +47,4 @@ type LogMeta struct {
 	ClauseIndex    uint32       `json:"clauseIndex"`
 	TxIndex        *uint32      `json:"txIndex,omitempty"`
 	LogIndex       *uint32      `json:"logIndex,omitempty"`
-}
-
-// ConvertClause convert a raw clause into a json format clause
-func ConvertClause(c *tx.Clause) Clause {
-	return Clause{
-		To:    c.To(),
-		Value: (*math.HexOrDecimal256)(c.Value()),
-		Data:  hexutil.Encode(c.Data()),
-	}
 }

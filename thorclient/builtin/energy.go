@@ -14,7 +14,7 @@ import (
 
 	"github.com/vechain/thor/v2/abi"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -137,7 +137,7 @@ type TransferEvent struct {
 	From  thor.Address
 	To    thor.Address
 	Value *big.Int
-	Log   api.FilteredEvent
+	Log   dto.FilteredEvent
 }
 
 // FilterTransfer filters Transfer events for the specified range and options.
@@ -186,7 +186,7 @@ type ApprovalEvent struct {
 	Owner   thor.Address
 	Spender thor.Address
 	Value   *big.Int
-	Log     api.FilteredEvent
+	Log     dto.FilteredEvent
 }
 
 // FilterApproval filters Approval events for the specified range and options.

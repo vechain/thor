@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package convert
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -24,8 +24,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func newRange(unit RangeType, from uint64, to uint64) *Range {
-	return &Range{
+func newRange(unit dto.RangeType, from uint64, to uint64) *dto.Range {
+	return &dto.Range{
 		Unit: unit,
 		From: &from,
 		To:   &to,
@@ -54,7 +54,7 @@ func testConvertRangeWithTimeRangeLessThanGenesisGreaterThanBest(t *testing.T, c
 	genesis := chain.GenesisBlock().Header()
 	bestBlock := chain.Repo().BestBlockSummary()
 
-	rng := newRange(TimeRangeType, genesis.Timestamp()-1_000, bestBlock.Header.Timestamp()+1_000)
+	rng := newRange(dto.TimeRangeType, genesis.Timestamp()-1_000, bestBlock.Header.Timestamp()+1_000)
 	expectedRange := &logdb.Range{
 		From: genesis.Number(),
 		To:   bestBlock.Header.Number(),
@@ -72,7 +72,7 @@ func testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo(t *testing.T, chain 
 
 	// Swapped timestamps (from later than to) describe an empty window, so the
 	// converted range must be empty rather than an inverted range.
-	rng := newRange(TimeRangeType, bestBlock.Header.Timestamp(), genesis.Timestamp())
+	rng := newRange(dto.TimeRangeType, bestBlock.Header.Timestamp(), genesis.Timestamp())
 
 	convRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
@@ -81,7 +81,7 @@ func testConvertRangeWithTimeRangeTypeWithSwitchedFromAndTo(t *testing.T, chain 
 }
 
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
-	rng := newRange(BlockRangeType, 1, 2)
+	rng := newRange(dto.BlockRangeType, 1, 2)
 
 	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
@@ -91,7 +91,7 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *testchain.Chain) {
 }
 
 func testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber(t *testing.T, chain *testchain.Chain) {
-	rng := newRange(BlockRangeType, logdb.MaxBlockNumber+1, logdb.MaxBlockNumber+2)
+	rng := newRange(dto.BlockRangeType, logdb.MaxBlockNumber+1, logdb.MaxBlockNumber+2)
 
 	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
@@ -100,7 +100,7 @@ func testConvertRangeWithBlockRangeTypeMoreThanMaxBlockNumber(t *testing.T, chai
 }
 
 func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain *testchain.Chain) {
-	rng := newRange(BlockRangeType, logdb.MaxBlockNumber, 0)
+	rng := newRange(dto.BlockRangeType, logdb.MaxBlockNumber, 0)
 
 	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
@@ -110,7 +110,7 @@ func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
-	rng := newRange(TimeRangeType, chain.GenesisBlock().Header().Timestamp()-1000, chain.GenesisBlock().Header().Timestamp()-100)
+	rng := newRange(dto.TimeRangeType, chain.GenesisBlock().Header().Timestamp()-1000, chain.GenesisBlock().Header().Timestamp()-100)
 	expectedEmptyRange := &logdb.Range{
 		From: logdb.MaxBlockNumber,
 		To:   logdb.MaxBlockNumber,
@@ -125,7 +125,7 @@ func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testc
 func testConvertRangeWithTimeRangeType(t *testing.T, chain *testchain.Chain) {
 	genesis := chain.GenesisBlock().Header()
 
-	rng := newRange(TimeRangeType, 1, genesis.Timestamp())
+	rng := newRange(dto.TimeRangeType, 1, genesis.Timestamp())
 	expectedZeroRange := &logdb.Range{
 		From: 0,
 		To:   0,
@@ -140,7 +140,7 @@ func testConvertRangeWithTimeRangeType(t *testing.T, chain *testchain.Chain) {
 func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *testchain.Chain) {
 	genesis := chain.GenesisBlock().Header()
 
-	rng := newRange(TimeRangeType, genesis.Timestamp()+1_000, genesis.Timestamp()+10_000)
+	rng := newRange(dto.TimeRangeType, genesis.Timestamp()+1_000, genesis.Timestamp()+10_000)
 	expectedEmptyRange := &logdb.Range{
 		From: logdb.MaxBlockNumber,
 		To:   logdb.MaxBlockNumber,
@@ -239,9 +239,9 @@ func TestConvertRange_Matrix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var rng *Range
+			var rng *dto.Range
 			if tt.json != "null" {
-				rng = &Range{}
+				rng = &dto.Range{}
 				err := json.Unmarshal([]byte(tt.json), rng)
 				require.NoError(t, err, "failed to unmarshal JSON: %s", tt.json)
 			}
@@ -277,52 +277,10 @@ func TestConvertRange_TimeWindowBetweenBlocks(t *testing.T) {
 	to := genesis.Timestamp() + thor.BlockInterval() - 1
 	require.Less(t, from, to, "test requires a non-empty, valid time window")
 
-	result, err := ConvertRange(bestChain, newRange(TimeRangeType, from, to))
+	result, err := ConvertRange(bestChain, newRange(dto.TimeRangeType, from, to))
 	require.NoError(t, err)
 	assert.Equal(t, &emptyRange, result,
 		"a time window between two blocks must convert to an empty range, not an inverted one")
-}
-
-func TestConvertEvent(t *testing.T) {
-	event := &logdb.Event{
-		Address:     thor.Address{0x01},
-		Data:        []byte{0x02, 0x03},
-		BlockID:     thor.Bytes32{0x04},
-		BlockNumber: 5,
-		BlockTime:   6,
-		TxID:        thor.Bytes32{0x07},
-		TxIndex:     8,
-		LogIndex:    9,
-		TxOrigin:    thor.Address{0x0A},
-		ClauseIndex: 10,
-		Topics: [5]*thor.Bytes32{
-			{0x0B},
-			{0x0C},
-			nil,
-			nil,
-			nil,
-		},
-	}
-
-	expectedTopics := []*thor.Bytes32{
-		{0x0B},
-		{0x0C},
-	}
-	expectedData := hexutil.Encode(event.Data)
-
-	result := ConvertEvent(event, true)
-
-	assert.Equal(t, event.Address, result.Address)
-	assert.Equal(t, expectedData, result.Data)
-	assert.Equal(t, event.BlockID, result.Meta.BlockID)
-	assert.Equal(t, event.BlockNumber, result.Meta.BlockNumber)
-	assert.Equal(t, event.BlockTime, result.Meta.BlockTimestamp)
-	assert.Equal(t, event.TxID, result.Meta.TxID)
-	assert.Equal(t, event.TxIndex, *result.Meta.TxIndex)
-	assert.Equal(t, event.LogIndex, *result.Meta.LogIndex)
-	assert.Equal(t, event.TxOrigin, result.Meta.TxOrigin)
-	assert.Equal(t, event.ClauseIndex, result.Meta.ClauseIndex)
-	assert.Equal(t, expectedTopics, result.Topics)
 }
 
 // TestConvertRange_WithEvents exercises ConvertRange end-to-end against a chain
@@ -419,7 +377,7 @@ func TestConvertRange_WithEvents(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rng := &Range{}
+			rng := &dto.Range{}
 			require.NoError(t, json.Unmarshal([]byte(tt.json), rng), "failed to unmarshal JSON: %s", tt.json)
 
 			convertedRange, err := ConvertRange(bestChain, rng)

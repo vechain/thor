@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -25,13 +25,13 @@ func TestBeat2Reader_Read(t *testing.T) {
 	newBlock := allBlocks[1]
 
 	// Act
-	beatReader := newBeat2Reader(thorChain.Repo(), genesisBlk.Header().ID(), newMessageCache[api.Beat2Message](10))
+	beatReader := newBeat2Reader(thorChain.Repo(), genesisBlk.Header().ID(), newMessageCache[dto.Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	if beatMsg, ok := res[0].(api.Beat2Message); !ok {
+	if beatMsg, ok := res[0].(dto.Beat2Message); !ok {
 		t.Fatal("unexpected type")
 	} else {
 		assert.Equal(t, newBlock.Header().Number(), beatMsg.Number)
@@ -53,7 +53,7 @@ func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 	bestBlk := allBlocks[len(allBlocks)-1]
 
 	// Act
-	beatReader := newBeat2Reader(thorChain.Repo(), bestBlk.Header().ID(), newMessageCache[api.Beat2Message](10))
+	beatReader := newBeat2Reader(thorChain.Repo(), bestBlk.Header().ID(), newMessageCache[dto.Beat2Message](10))
 	res, ok, err := beatReader.Read()
 
 	// Assert
@@ -70,7 +70,7 @@ func TestBeat2Reader_Read_ErrorWhenReadingBlocks(t *testing.T) {
 	beatReader := newBeat2Reader(
 		thorChain.Repo(),
 		thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-		newMessageCache[api.Beat2Message](10),
+		newMessageCache[dto.Beat2Message](10),
 	)
 	res, ok, err := beatReader.Read()
 

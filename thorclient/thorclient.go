@@ -37,8 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/thorclient/wsclient"
@@ -275,7 +274,7 @@ func (c *Client) RawWSClient() *wsclient.Client {
 //   - opts: Optional parameters (Revision)
 //
 // Returns:
-//   - *api.Account: Account information including balance, energy, and contract status
+//   - *dto.Account: Account information including balance, energy, and contract status
 //   - error: Error if the request fails or the address is invalid
 //
 // Example:
@@ -285,7 +284,7 @@ func (c *Client) RawWSClient() *wsclient.Client {
 //
 //	// Get account state at specific block
 //	account, err := client.Account(addr, thorclient.Revision("1000000"))
-func (c *Client) Account(addr *thor.Address, opts ...Option) (*api.Account, error) {
+func (c *Client) Account(addr *thor.Address, opts ...Option) (*dto.Account, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccount(addr, options.revision)
 }
@@ -315,14 +314,14 @@ func (c *Client) Account(addr *thor.Address, opts ...Option) (*api.Account, erro
 //   - opts: Optional parameters (Revision - use "next" for gas estimation)
 //
 // Returns:
-//   - []*api.CallResult: Results for each clause including data, events, transfers, and gas usage
+//   - []*dto.CallResult: Results for each clause including data, events, transfers, and gas usage
 //   - error: Error if the request fails or call data is invalid
 //
 // Example:
 //
 //	// Simulate a contract call
-//	callData := &api.BatchCallData{
-//		Clauses: api.Clauses{{
+//	callData := &dto.BatchCallData{
+//		Clauses: dto.Clauses{{
 //			To:    &contractAddr,
 //			Data:  "0x...", // encoded function call
 //			Value: (*math.HexOrDecimal256)(big.NewInt(0)),
@@ -330,7 +329,7 @@ func (c *Client) Account(addr *thor.Address, opts ...Option) (*api.Account, erro
 //		Caller: &callerAddr,
 //	}
 //	results, err := client.InspectClauses(callData, thorclient.Revision("next"))
-func (c *Client) InspectClauses(calldata *api.BatchCallData, opts ...Option) ([]*api.CallResult, error) {
+func (c *Client) InspectClauses(calldata *dto.BatchCallData, opts ...Option) ([]*dto.CallResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.InspectClauses(calldata, options.revision)
 }
@@ -356,7 +355,7 @@ func (c *Client) InspectClauses(calldata *api.BatchCallData, opts ...Option) ([]
 //   - opts: Optional parameters (Revision - use "next" for gas estimation)
 //
 // Returns:
-//   - []*api.CallResult: Results for each clause in the transaction
+//   - []*dto.CallResult: Results for each clause in the transaction
 //   - error: Error if inspection fails or transaction is malformed
 //
 // Example:
@@ -370,7 +369,7 @@ func (c *Client) InspectClauses(calldata *api.BatchCallData, opts ...Option) ([]
 //		}
 //		fmt.Printf("Clause %d gas usage: %d\n", i, result.GasUsed)
 //	}
-func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, opts ...Option) ([]*api.CallResult, error) {
+func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, opts ...Option) ([]*dto.CallResult, error) {
 	clauses := convertToBatchCallData(tx, senderAddr)
 	return c.InspectClauses(clauses, opts...)
 }
@@ -393,7 +392,7 @@ func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, 
 //   - opts: Optional parameters (Revision)
 //
 // Returns:
-//   - *api.GetCodeResult: Contains the contract bytecode as a hex string
+//   - *dto.GetCodeResult: Contains the contract bytecode as a hex string
 //   - error: Error if the request fails or address is invalid
 //
 // Example:
@@ -408,7 +407,7 @@ func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address, 
 //	} else {
 //		fmt.Printf("Contract bytecode: %s\n", codeResult.Code)
 //	}
-func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*api.GetCodeResult, error) {
+func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*dto.GetCodeResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccountCode(addr, options.revision)
 }
@@ -437,7 +436,7 @@ func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*api.GetCodeRe
 //   - opts: Optional parameters (Revision)
 //
 // Returns:
-//   - *api.GetStorageResult: Contains the 32-byte storage value as a hex string
+//   - *dto.GetStorageResult: Contains the 32-byte storage value as a hex string
 //   - error: Error if the request fails or parameters are invalid
 //
 // Example:
@@ -449,7 +448,7 @@ func (c *Client) AccountCode(addr *thor.Address, opts ...Option) (*api.GetCodeRe
 //		return err
 //	}
 //	fmt.Printf("Storage value: %s\n", storageResult.Value)
-func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*api.GetStorageResult, error) {
+func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*dto.GetStorageResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetAccountStorage(addr, key, options.revision)
 }
@@ -478,7 +477,7 @@ func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...O
 //   - opts: Optional parameters (Revision)
 //
 // Returns:
-//   - *api.GetRawStorageResponse: Contains the 32-byte storage value as a hex string
+//   - *dto.GetRawStorageResult: Contains the 32-byte storage value as a hex string
 //   - error: Error if the request fails or parameters are invalid
 //
 // Example:
@@ -490,7 +489,7 @@ func (c *Client) AccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...O
 //		return err
 //	}
 //	fmt.Printf("Storage value: %s\n", storageResult.Value)
-func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*api.GetRawStorageResponse, error) {
+func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts ...Option) (*dto.GetRawStorageResult, error) {
 	options := applyOptions(opts)
 	return c.httpConn.GetRawAccountStorage(addr, key, options.revision)
 }
@@ -516,7 +515,7 @@ func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts .
 //   - opts: Optional parameters (Pending)
 //
 // Returns:
-//   - *transactions.Transaction: Complete transaction information with metadata
+//   - *dto.Transaction: Complete transaction information with metadata
 //   - error: Error if the request fails, transaction ID is invalid, or transaction not found
 //
 // Example:
@@ -529,7 +528,7 @@ func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts .
 //	if tx != nil && tx.Meta == nil {
 //		fmt.Println("Transaction is pending")
 //	}
-func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error) {
+func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*dto.Transaction, error) {
 	options := applyHeadOptions(opts)
 	return c.httpConn.GetTransaction(id, options.revision, options.pending)
 }
@@ -552,7 +551,7 @@ func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Tr
 //   - opts: Optional parameters (Pending)
 //
 // Returns:
-//   - *api.RawTransaction: Transaction in RLP-encoded hexadecimal format
+//   - *dto.RawTransaction: Transaction in RLP-encoded hexadecimal format
 //   - error: Error if the request fails, transaction ID is invalid, or transaction not found
 //
 // Example:
@@ -563,7 +562,7 @@ func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Tr
 //		return err
 //	}
 //	fmt.Printf("Raw transaction: %s\n", rawTx.Raw)
-func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*api.RawTransaction, error) {
+func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*dto.RawTransaction, error) {
 	options := applyHeadOptions(opts)
 	return c.httpConn.GetRawTransaction(id, options.revision, options.pending)
 }
@@ -595,7 +594,7 @@ func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*api.RawTrans
 //   - opts: Optional parameters (revision via head parameter)
 //
 // Returns:
-//   - *api.Receipt: Complete transaction receipt with execution results
+//   - *dto.Receipt: Complete transaction receipt with execution results
 //   - error: Error if the request fails, transaction ID is invalid, or httpclient.ErrNotFound if receipt not found
 //
 // Example:
@@ -614,7 +613,7 @@ func (c *Client) RawTransaction(id *thor.Bytes32, opts ...Option) (*api.RawTrans
 //	} else {
 //		fmt.Printf("Transaction succeeded, gas used: %d\n", receipt.GasUsed)
 //	}
-func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*api.Receipt, error) {
+func (c *Client) TransactionReceipt(id *thor.Bytes32, opts ...Option) (*dto.Receipt, error) {
 	options := applyHeadOptions(opts)
 	return c.httpConn.GetTransactionReceipt(id, options.revision)
 }
@@ -680,7 +679,7 @@ func (c *Client) DebugRevertedTransaction(tx *thor.Bytes32) (hexutil.Bytes, erro
 //   - tx: The signed VeChainThor transaction to submit
 //
 // Returns:
-//   - *api.SendTxResult: Contains the transaction ID upon successful submission
+//   - *dto.SendTxResult: Contains the transaction ID upon successful submission
 //   - error: Error if submission fails (insufficient balance, invalid signature, etc.)
 //
 // Common errors:
@@ -697,7 +696,7 @@ func (c *Client) DebugRevertedTransaction(tx *thor.Bytes32) (hexutil.Bytes, erro
 //		return fmt.Errorf("failed to send transaction: %v", err)
 //	}
 //	fmt.Printf("Transaction sent with ID: %s\n", result.ID)
-func (c *Client) SendTransaction(tx *tx.Transaction) (*api.SendTxResult, error) {
+func (c *Client) SendTransaction(tx *tx.Transaction) (*dto.SendTxResult, error) {
 	rlpTx, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("unable to encode transaction - %w", err)
@@ -723,7 +722,7 @@ func (c *Client) SendTransaction(tx *tx.Transaction) (*api.SendTxResult, error) 
 //   - rlpTx: The RLP-encoded transaction bytes
 //
 // Returns:
-//   - *api.SendTxResult: Contains the transaction ID upon successful submission
+//   - *dto.SendTxResult: Contains the transaction ID upon successful submission
 //   - error: Error if submission fails or RLP data is invalid
 //
 // Example:
@@ -735,8 +734,8 @@ func (c *Client) SendTransaction(tx *tx.Transaction) (*api.SendTxResult, error) 
 //		return fmt.Errorf("failed to send raw transaction: %v", err)
 //	}
 //	fmt.Printf("Transaction sent with ID: %s\n", result.ID)
-func (c *Client) SendRawTransaction(rlpTx []byte) (*api.SendTxResult, error) {
-	return c.httpConn.SendTransaction(&api.RawTx{Raw: hexutil.Encode(rlpTx)})
+func (c *Client) SendRawTransaction(rlpTx []byte) (*dto.SendTxResult, error) {
+	return c.httpConn.SendTransaction(&dto.RawTx{Raw: hexutil.Encode(rlpTx)})
 }
 
 // Block retrieves block information by its revision in collapsed format.
@@ -759,7 +758,7 @@ func (c *Client) SendRawTransaction(rlpTx []byte) (*api.SendTxResult, error) {
 //   - revision: Block identifier - "best", "justified", "finalized", block number, or block ID
 //
 // Returns:
-//   - *api.JSONCollapsedBlock: Block information with transaction ID list
+//   - *dto.CollapsedBlock: Block information with transaction ID list
 //   - error: Error if the request fails, revision is invalid, or httpclient.ErrNotFound if block not found
 //
 // Example:
@@ -779,7 +778,7 @@ func (c *Client) SendRawTransaction(rlpTx []byte) (*api.SendTxResult, error) {
 //
 //	// Get a specific block by ID
 //	block, err := client.Block("0x00...")
-func (c *Client) Block(revision string) (blocks *api.JSONCollapsedBlock, err error) {
+func (c *Client) Block(revision string) (blocks *dto.CollapsedBlock, err error) {
 	return c.httpConn.GetBlock(revision)
 }
 
@@ -805,7 +804,7 @@ func (c *Client) Block(revision string) (blocks *api.JSONCollapsedBlock, err err
 //   - revision: Block identifier - "best", "justified", "finalized", block number, or block ID
 //
 // Returns:
-//   - *api.JSONExpandedBlock: Complete block information with full transaction details
+//   - *dto.ExpandedBlock: Complete block information with full transaction details
 //   - error: Error if the request fails, revision is invalid, or httpclient.ErrNotFound if block not found
 //
 // Example:
@@ -818,7 +817,7 @@ func (c *Client) Block(revision string) (blocks *api.JSONCollapsedBlock, err err
 //	for i, tx := range block.Transactions {
 //		fmt.Printf("Transaction %d: %s, Gas Used: %d\n", i, tx.ID, tx.GasUsed)
 //	}
-func (c *Client) ExpandedBlock(revision string) (blocks *api.JSONExpandedBlock, err error) {
+func (c *Client) ExpandedBlock(revision string) (blocks *dto.ExpandedBlock, err error) {
 	return c.httpConn.GetExpandedBlock(revision)
 }
 
@@ -849,24 +848,24 @@ func (c *Client) ExpandedBlock(revision string) (blocks *api.JSONExpandedBlock, 
 //   - req: Event filter request containing criteria, range, and options
 //
 // Returns:
-//   - []api.FilteredEvent: Array of matching events with metadata
+//   - []dto.FilteredEvent: Array of matching events with metadata
 //   - error: Error if the request fails or filter criteria are invalid
 //
 // Example:
 //
 //	// Filter Transfer events from VTHO contract
-//	filter := &api.EventFilter{
-//		CriteriaSet: []api.EventCriteria{{
+//	filter := &dto.EventFilter{
+//		CriteriaSet: []dto.EventCriteria{{
 //			Address: &vthoContractAddr,
 //			Topic0:  &transferEventSignature,
 //		}},
-//		Range: &api.FilterRange{
+//		Range: &dto.FilterRange{
 //			From: 1000000,
 //			To:   1001000,
 //		},
 //	}
 //	events, err := client.FilterEvents(filter)
-func (c *Client) FilterEvents(req *api.EventFilter) ([]api.FilteredEvent, error) {
+func (c *Client) FilterEvents(req *dto.EventFilter) ([]dto.FilteredEvent, error) {
 	return c.httpConn.FilterEvents(req)
 }
 
@@ -899,23 +898,23 @@ func (c *Client) FilterEvents(req *api.EventFilter) ([]api.FilteredEvent, error)
 //   - req: Transfer filter request containing criteria, range, and options
 //
 // Returns:
-//   - []*api.FilteredTransfer: Array of matching VET transfers with metadata
+//   - []*dto.FilteredTransfer: Array of matching VET transfers with metadata
 //   - error: Error if the request fails or filter criteria are invalid
 //
 // Example:
 //
 //	// Filter transfers to a specific address
-//	filter := &api.TransferFilter{
-//		CriteriaSet: []api.TransferCriteria{{
+//	filter := &dto.TransferFilter{
+//		CriteriaSet: []dto.TransferCriteria{{
 //			Recipient: &targetAddr,
 //		}},
-//		Range: &api.FilterRange{
+//		Range: &dto.FilterRange{
 //			From: 1000000,
 //			To:   1001000,
 //		},
 //	}
 //	transfers, err := client.FilterTransfers(filter)
-func (c *Client) FilterTransfers(req *api.TransferFilter) ([]*api.FilteredTransfer, error) {
+func (c *Client) FilterTransfers(req *dto.TransferFilter) ([]*dto.FilteredTransfer, error) {
 	return c.httpConn.FilterTransfers(req)
 }
 
@@ -940,7 +939,7 @@ func (c *Client) FilterTransfers(req *api.TransferFilter) ([]*api.FilteredTransf
 // peer-to-peer network and can help assess network health and connectivity.
 //
 // Returns:
-//   - []*api.PeerStats: Array of peer connection statistics
+//   - []*dto.PeerStats: Array of peer connection statistics
 //   - error: Error if the request fails or node information is unavailable
 //
 // Example:
@@ -953,7 +952,7 @@ func (c *Client) FilterTransfers(req *api.TransferFilter) ([]*api.FilteredTransf
 //	for _, peer := range peers {
 //		fmt.Printf("Peer: %s at %s (score: %d)\n", peer.Name, peer.NetAddr, peer.TotalScore)
 //	}
-func (c *Client) Peers() ([]*api.PeerStats, error) {
+func (c *Client) Peers() ([]*dto.PeerStats, error) {
 	return c.httpConn.GetPeers()
 }
 
@@ -1041,7 +1040,7 @@ func (c *Client) ChainTag() (byte, error) {
 //   - rewardPercentiles: Optional percentiles for reward analysis (e.g., []float64{25, 50, 75})
 //
 // Returns:
-//   - *api.FeesHistory: Historical fee data including base fees and gas usage ratios
+//   - *dto.FeesHistory: Historical fee data including base fees and gas usage ratios
 //   - error: Error if the request fails or parameters are invalid
 //
 // Example:
@@ -1054,7 +1053,7 @@ func (c *Client) ChainTag() (byte, error) {
 //	}
 //	fmt.Printf("Average gas used ratio: %.2f\n",
 //			history.GasUsedRatio[len(history.GasUsedRatio)-1])
-func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (feesHistory *api.FeesHistory, err error) {
+func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercentiles []float64) (feesHistory *dto.FeesHistory, err error) {
 	return c.httpConn.GetFeesHistory(blockCount, newestBlock, rewardPercentiles)
 }
 
@@ -1078,7 +1077,7 @@ func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercen
 // The total fee per gas will be baseFeePerGas + maxPriorityFeePerGas.
 //
 // Returns:
-//   - *api.FeesPriority: Contains the suggested maxPriorityFeePerGas as hex string
+//   - *dto.FeesPriority: Contains the suggested maxPriorityFeePerGas as hex string
 //   - error: Error if the request fails or fee estimation is unavailable
 //
 // Example:
@@ -1092,7 +1091,7 @@ func (c *Client) FeesHistory(blockCount uint32, newestBlock string, rewardPercen
 //
 //	// Use in transaction
 //	// tx.MaxPriorityFeePerGas = priority.MaxPriorityFeePerGas
-func (c *Client) FeesPriority() (feesPriority *api.FeesPriority, err error) {
+func (c *Client) FeesPriority() (feesPriority *dto.FeesPriority, err error) {
 	return c.httpConn.GetFeesPriority()
 }
 
@@ -1123,7 +1122,7 @@ func (c *Client) FeesPriority() (feesPriority *api.FeesPriority, err error) {
 //   - pos: Block ID to resume from, or empty string for latest block
 //
 // Returns:
-//   - *wsclient.Subscription[*api.BlockMessage]: Active block subscription with EventChan and Unsubscribe
+//   - *wsclient.Subscription[*dto.BlockMessage]: Active block subscription with EventChan and Unsubscribe
 //   - error: Error if WebSocket client unavailable or connection fails
 //
 // Note: Returns error if client was created without WebSocket support (using New()).
@@ -1150,7 +1149,7 @@ func (c *Client) FeesPriority() (feesPriority *api.FeesPriority, err error) {
 //		fmt.Printf("New block: %d with %d transactions\n",
 //			block.Number, len(block.Transactions))
 //	}
-func (c *Client) SubscribeBlocks(pos string) (*wsclient.Subscription[*api.BlockMessage], error) {
+func (c *Client) SubscribeBlocks(pos string) (*wsclient.Subscription[*dto.BlockMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -1188,13 +1187,13 @@ func (c *Client) SubscribeBlocks(pos string) (*wsclient.Subscription[*api.BlockM
 //   - filter: Event filtering criteria (address, topics)
 //
 // Returns:
-//   - *wsclient.Subscription[*api.EventMessage]: Active event subscription with EventChan and Unsubscribe
+//   - *wsclient.Subscription[*dto.EventMessage]: Active event subscription with EventChan and Unsubscribe
 //   - error: Error if WebSocket client unavailable or connection fails
 //
 // Example:
 //
 //	// Subscribe to Transfer events from VTHO contract
-//	filter := &api.SubscriptionEventFilter{
+//	filter := &dto.SubscriptionEventFilter{
 //		Addr:   &vthoContractAddr,
 //		Topic0: &transferEventSignature,
 //	}
@@ -1215,7 +1214,7 @@ func (c *Client) SubscribeBlocks(pos string) (*wsclient.Subscription[*api.BlockM
 //		event := wrapper.Data
 //		fmt.Printf("Transfer event: %s\n", event.Address)
 //	}
-func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*wsclient.Subscription[*api.EventMessage], error) {
+func (c *Client) SubscribeEvents(pos string, filter *dto.SubscriptionEventFilter) (*wsclient.Subscription[*dto.EventMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -1254,13 +1253,13 @@ func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter
 //   - filter: Transfer filtering criteria (sender, recipient, txOrigin)
 //
 // Returns:
-//   - *wsclient.Subscription[*api.TransferMessage]: Active transfer subscription with EventChan and Unsubscribe
+//   - *wsclient.Subscription[*dto.TransferMessage]: Active transfer subscription with EventChan and Unsubscribe
 //   - error: Error if WebSocket client unavailable or connection fails
 //
 // Example:
 //
 //	// Subscribe to transfers to a specific address
-//	filter := &api.SubscriptionTransferFilter{
+//	filter := &dto.SubscriptionTransferFilter{
 //		Recipient: &walletAddr,
 //	}
 //	sub, err := client.SubscribeTransfers("", filter)
@@ -1280,7 +1279,7 @@ func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter
 //		transfer := wrapper.Data
 //		fmt.Printf("Incoming VET: %s from %s\n", transfer.Amount, transfer.Sender)
 //	}
-func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*wsclient.Subscription[*api.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(pos string, filter *dto.SubscriptionTransferFilter) (*wsclient.Subscription[*dto.TransferMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -1316,7 +1315,7 @@ func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransfer
 //   - pos: Block ID to resume from, or empty string for latest block
 //
 // Returns:
-//   - *wsclient.Subscription[*api.Beat2Message]: Active beat2 subscription with EventChan and Unsubscribe
+//   - *wsclient.Subscription[*dto.Beat2Message]: Active beat2 subscription with EventChan and Unsubscribe
 //   - error: Error if WebSocket client unavailable or connection fails
 //
 // Example:
@@ -1340,7 +1339,7 @@ func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransfer
 //		fmt.Printf("New block %d, gas limit: %d, base fee: %s\n",
 //			beat.Number, beat.GasLimit, beat.BaseFeePerGas)
 //	}
-func (c *Client) SubscribeBeats2(pos string) (*wsclient.Subscription[*api.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(pos string) (*wsclient.Subscription[*dto.Beat2Message], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -1373,7 +1372,7 @@ func (c *Client) SubscribeBeats2(pos string) (*wsclient.Subscription[*api.Beat2M
 //   - txID: Transaction ID filter (may be nil for all transactions)
 //
 // Returns:
-//   - *wsclient.Subscription[*api.PendingTxIDMessage]: Active txpool subscription with EventChan and Unsubscribe
+//   - *wsclient.Subscription[*dto.PendingTxIDMessage]: Active txpool subscription with EventChan and Unsubscribe
 //   - error: Error if WebSocket client unavailable or connection fails
 //
 // Example:
@@ -1396,7 +1395,7 @@ func (c *Client) SubscribeBeats2(pos string) (*wsclient.Subscription[*api.Beat2M
 //		msg := wrapper.Data
 //		fmt.Printf("New pending transaction: %s\n", msg.ID)
 //	}
-func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*wsclient.Subscription[*api.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*wsclient.Subscription[*dto.PendingTxIDMessage], error) {
 	if c.wsConn == nil {
 		return nil, fmt.Errorf("not a websocket typed client")
 	}
@@ -1411,18 +1410,18 @@ func (c *Client) PoolTransactionIDs(origin *thor.Address) ([]*thor.Bytes32, erro
 
 // PoolTransactions retrieves expanded transactions from the transaction pool.
 // If origin is provided, filters transactions by sender address.
-func (c *Client) PoolTransactions(origin *thor.Address) ([]*transactions.Transaction, error) {
+func (c *Client) PoolTransactions(origin *thor.Address) ([]*dto.Transaction, error) {
 	return c.httpConn.GetExpandedTxPool(origin)
 }
 
 // TxPoolStatus retrieves the current status of the transaction pool.
-func (c *Client) TxPoolStatus() (*api.Status, error) {
+func (c *Client) TxPoolStatus() (*dto.TxPoolStatus, error) {
 	return c.httpConn.GetTxPoolStatus()
 }
 
 // convertToBatchCallData converts a transaction and sender address to batch call data format.
-func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *api.BatchCallData {
-	cls := make(api.Clauses, len(tx.Clauses()))
+func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *dto.BatchCallData {
+	cls := make(dto.Clauses, len(tx.Clauses()))
 	for i, c := range tx.Clauses() {
 		cls[i] = convertClauseAccounts(c)
 	}
@@ -1430,7 +1429,7 @@ func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *api.BatchCa
 	blockRef := tx.BlockRef()
 	encodedBlockRef := hexutil.Encode(blockRef[:])
 
-	return &api.BatchCallData{
+	return &dto.BatchCallData{
 		Clauses:    cls,
 		Gas:        tx.Gas(),
 		ProvedWork: nil, // todo hook this field
@@ -1442,9 +1441,9 @@ func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *api.BatchCa
 	}
 }
 
-func convertClauseAccounts(c *tx.Clause) *api.Clause {
+func convertClauseAccounts(c *tx.Clause) *dto.Clause {
 	value := math.HexOrDecimal256(*c.Value())
-	return &api.Clause{
+	return &dto.Clause{
 		To:    c.To(),
 		Value: &value,
 		Data:  hexutil.Encode(c.Data()),

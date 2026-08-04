@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package dto
 
 import (
 	"encoding/json"
@@ -35,10 +35,10 @@ type TraceCallOption struct {
 }
 
 type StorageRangeOption struct {
-	Address   thor.Address
-	KeyStart  string
-	MaxResult int
-	Target    string
+	Address   thor.Address `json:"address"`
+	KeyStart  string       `json:"keyStart"`
+	MaxResult int          `json:"maxResult"`
+	Target    string       `json:"target"`
 }
 
 type StorageRangeResult struct {

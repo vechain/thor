@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -189,14 +189,14 @@ func testAccountEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) 
 		c := New(ts.URL)
 		// Define the payload for the batch call
 		value := math.HexOrDecimal256(*big.NewInt(1))
-		payload := &api.BatchCallData{
-			Clauses: api.Clauses{
-				&api.Clause{
+		payload := &dto.BatchCallData{
+			Clauses: dto.Clauses{
+				&dto.Clause{
 					To:    &address1,
 					Value: nil,
 					Data:  "0x",
 				},
-				&api.Clause{
+				&dto.Clause{
 					To:    &address2,
 					Value: &value,
 					Data:  "0x",
@@ -406,17 +406,17 @@ func testEventsEndpoint(t *testing.T, _ *testchain.Chain, ts *httptest.Server) {
 	t.Run("FilterEvents", func(t *testing.T) {
 		// Define the payload for filtering events
 		limit := uint64(10)
-		payload := &api.EventFilter{
-			CriteriaSet: []*api.EventCriteria{
+		payload := &dto.EventFilter{
+			CriteriaSet: []*dto.EventCriteria{
 				{
 					Address: &address,
-					TopicSet: api.TopicSet{
+					TopicSet: dto.TopicSet{
 						Topic0: &topic,
 					},
 				},
 			},
 			Range: nil,
-			Options: &api.Options{
+			Options: &dto.Options{
 				Offset: 0,
 				Limit:  &limit,
 			},
@@ -492,7 +492,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 
 		expectedOldestBlock, err := testchain.Repo().NewBestChain().GetBlockID(2)
 		require.NoError(t, err)
-		expectedFeesHistory := &api.FeesHistory{
+		expectedFeesHistory := &dto.FeesHistory{
 			OldestBlock: expectedOldestBlock,
 			BaseFeePerGas: []*hexutil.Big{
 				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
@@ -511,7 +511,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 
 		expectedOldestBlock, err = testchain.Repo().NewBestChain().GetBlockID(2)
 		require.NoError(t, err)
-		expectedFeesHistory = &api.FeesHistory{
+		expectedFeesHistory = &dto.FeesHistory{
 			OldestBlock: expectedOldestBlock,
 			BaseFeePerGas: []*hexutil.Big{
 				(*hexutil.Big)(big.NewInt(thor.InitialBaseFee)),
@@ -549,7 +549,7 @@ func testFeesEndpoint(t *testing.T, testchain *testchain.Chain, ts *httptest.Ser
 		require.NoError(t, err)
 		require.NotNil(t, feesPriority)
 
-		expectedFeesPriority := &api.FeesPriority{
+		expectedFeesPriority := &dto.FeesPriority{
 			MaxPriorityFeePerGas: (*hexutil.Big)(
 				new(big.Int).Div(new(big.Int).Mul(big.NewInt(thor.InitialBaseFee), big.NewInt(5)), big.NewInt(100)),
 			),
