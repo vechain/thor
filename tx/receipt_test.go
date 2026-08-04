@@ -208,9 +208,9 @@ func TestDerivableReceipts_EncodeIndex_PanicsOnMarshalError(t *testing.T) {
 // receipt-root hashes are reproducible after reading receipts back from storage.
 func TestReceiptRootHashRoundtrip(t *testing.T) {
 	originals := Receipts{
-		ptr(getMockReceipt(TypeLegacy)),
-		ptr(getMockReceipt(TypeDynamicFee)),
-		ptr(getMockReceipt(TypeEthDynamicFee)),
+		new(getMockReceipt(TypeLegacy)),
+		new(getMockReceipt(TypeDynamicFee)),
+		new(getMockReceipt(TypeEthDynamicFee)),
 	}
 	originalRoot := originals.RootHash()
 
@@ -229,5 +229,3 @@ func TestReceiptRootHashRoundtrip(t *testing.T) {
 	assert.Equal(t, originalRoot, decoded.RootHash(),
 		"RootHash must be identical before and after MarshalBinary/UnmarshalBinary round-trip")
 }
-
-func ptr(r Receipt) *Receipt { return &r }
