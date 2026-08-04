@@ -2372,6 +2372,7 @@ func TestWashMetricsNonExecutableLimit(t *testing.T) {
 	assert.Equal(t, float64(nonExecCap), afterNonExec-beforeNonExec,
 		"non_executable gauge delta must equal what stayed under the cap")
 }
+
 func TestEthDynFee_AdmitAndExecutables(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT, &thor.SoloFork)
 	defer pool.Close()
