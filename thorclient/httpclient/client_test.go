@@ -150,7 +150,7 @@ func TestClient_FilterEvents(t *testing.T) {
 	req := &dto.EventFilter{}
 	expectedEvents := []dto.FilteredEvent{{
 		Address: thor.Address{0x01},
-		Topics:  []*thor.Bytes32{{0x01}},
+		Topics:  []thor.Bytes32{{0x01}},
 		Data:    "data",
 		Meta:    dto.LogMeta{},
 	}}
@@ -284,13 +284,15 @@ func TestClient_GetBlock(t *testing.T) {
 	blockID := "123"
 	expectedBlock := &dto.CollapsedBlock{
 		BlockSummary: &dto.BlockSummary{
-			Number:      123456,
-			ID:          thor.Bytes32{0x01},
-			GasLimit:    1000,
-			Beneficiary: thor.Address{0x01},
-			GasUsed:     100,
-			TxsRoot:     thor.Bytes32{0x03},
-			TxsFeatures: 1,
+			BlockBase: dto.BlockBase{
+				Number:      123456,
+				ID:          thor.Bytes32{0x01},
+				GasLimit:    1000,
+				Beneficiary: thor.Address{0x01},
+				GasUsed:     100,
+				TxsRoot:     thor.Bytes32{0x03},
+				TxsFeatures: 1,
+			},
 			IsFinalized: false,
 		},
 		Transactions: nil,
@@ -331,7 +333,7 @@ func TestClient_GetNilBlock(t *testing.T) {
 
 func TestClient_GetTransaction(t *testing.T) {
 	txID := thor.Bytes32{0x01}
-	expectedTx := &dto.Transaction{ID: txID}
+	expectedTx := &dto.Transaction{TransactionBase: dto.TransactionBase{ID: txID}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/transactions/"+txID.String(), r.URL.Path)
@@ -555,8 +557,8 @@ func TestClient_GetTxPool(t *testing.T) {
 
 	t.Run("GetTxPoolWithExpandedTransactions", func(t *testing.T) {
 		expectedTxs := []*dto.Transaction{
-			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
-			{ID: thor.Bytes32{0x04, 0x05, 0x06}},
+			{TransactionBase: dto.TransactionBase{ID: thor.Bytes32{0x01, 0x02, 0x03}}},
+			{TransactionBase: dto.TransactionBase{ID: thor.Bytes32{0x04, 0x05, 0x06}}},
 		}
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -600,7 +602,7 @@ func TestClient_GetTxPool(t *testing.T) {
 	t.Run("GetTxPoolWithExpandedAndOrigin", func(t *testing.T) {
 		origin := thor.Address{0x01, 0x02, 0x03}
 		expectedTxs := []*dto.Transaction{
-			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
+			{TransactionBase: dto.TransactionBase{ID: thor.Bytes32{0x01, 0x02, 0x03}}},
 		}
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

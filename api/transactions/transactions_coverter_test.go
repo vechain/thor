@@ -16,11 +16,19 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/api/convert"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
+
+func convertClause(c *tx.Clause) dto.Clause {
+	return dto.Clause{
+		To:    c.To(),
+		Value: (*math.HexOrDecimal256)(c.Value()),
+		Data:  hexutil.Encode(c.Data()),
+	}
+}
 
 func TestConvertLegacyTransaction_Success(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
@@ -42,8 +50,8 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 
 	result := ConvertTransaction(transaction, header)
 	// Common fields
-	clause := convert.ConvertClause(cla)
-	clause2 := convert.ConvertClause(cla2)
+	clause := convertClause(cla)
+	clause2 := convertClause(cla2)
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
@@ -85,8 +93,8 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 
 	result := ConvertTransaction(transaction, header)
 	// Common fields
-	clause := convert.ConvertClause(cla)
-	clause2 := convert.ConvertClause(cla2)
+	clause := convertClause(cla)
+	clause2 := convertClause(cla2)
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)

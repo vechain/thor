@@ -21,10 +21,10 @@ const (
 
 // FilteredEvent only comes from one contract
 type FilteredEvent struct {
-	Address thor.Address    `json:"address"`
-	Topics  []*thor.Bytes32 `json:"topics"`
-	Data    string          `json:"data"`
-	Meta    LogMeta         `json:"meta"`
+	Address thor.Address   `json:"address"`
+	Topics  []thor.Bytes32 `json:"topics"`
+	Data    string         `json:"data"`
+	Meta    LogMeta        `json:"meta"`
 }
 
 type TopicSet struct {

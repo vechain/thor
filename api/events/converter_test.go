@@ -36,7 +36,7 @@ func TestConvertEvent(t *testing.T) {
 		},
 	}
 
-	expectedTopics := []*thor.Bytes32{
+	expectedTopics := []thor.Bytes32{
 		{0x0B},
 		{0x0C},
 	}

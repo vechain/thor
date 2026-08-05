@@ -154,7 +154,7 @@ func (e *Executor) FilterProposals(opts ...bind.FilterOption) ([]ProposalEvent, 
 	out := make([]ProposalEvent, len(raw))
 	for i, v := range raw {
 		out[i] = ProposalEvent{
-			ProposalID: *v.Topics[1],
+			ProposalID: v.Topics[1],
 			Action:     v.Data,
 			Log:        v,
 		}

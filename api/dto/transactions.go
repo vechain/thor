@@ -41,7 +41,7 @@ type TxMeta struct {
 	BlockTimestamp uint64       `json:"blockTimestamp"`
 }
 
-type Transaction struct {
+type TransactionBase struct {
 	ID                   thor.Bytes32          `json:"id"`
 	Type                 uint8                 `json:"type"`
 	ChainTag             byte                  `json:"chainTag"`
@@ -57,7 +57,11 @@ type Transaction struct {
 	Nonce                math.HexOrDecimal64   `json:"nonce"`
 	DependsOn            *thor.Bytes32         `json:"dependsOn"`
 	Size                 uint32                `json:"size"`
-	Meta                 *TxMeta               `json:"meta"`
+}
+
+type Transaction struct {
+	TransactionBase
+	Meta *TxMeta `json:"meta"`
 }
 
 type ReceiptMeta struct {

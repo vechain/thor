@@ -11,7 +11,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type BlockSummary struct {
+type BlockBase struct {
 	Number        uint32                `json:"number"`
 	ID            thor.Bytes32          `json:"id"`
 	Size          uint32                `json:"size"`
@@ -20,6 +20,7 @@ type BlockSummary struct {
 	GasLimit      uint64                `json:"gasLimit"`
 	Beneficiary   thor.Address          `json:"beneficiary"`
 	GasUsed       uint64                `json:"gasUsed"`
+	BaseFeePerGas *math.HexOrDecimal256 `json:"baseFeePerGas,omitempty"`
 	TotalScore    uint64                `json:"totalScore"`
 	TxsRoot       thor.Bytes32          `json:"txsRoot"`
 	TxsFeatures   uint32                `json:"txsFeatures"`
@@ -27,9 +28,12 @@ type BlockSummary struct {
 	ReceiptsRoot  thor.Bytes32          `json:"receiptsRoot"`
 	COM           bool                  `json:"com"`
 	Signer        thor.Address          `json:"signer"`
-	IsTrunk       bool                  `json:"isTrunk"`
-	IsFinalized   bool                  `json:"isFinalized"`
-	BaseFeePerGas *math.HexOrDecimal256 `json:"baseFeePerGas,omitempty"`
+}
+
+type BlockSummary struct {
+	BlockBase
+	IsTrunk     bool `json:"isTrunk"`
+	IsFinalized bool `json:"isFinalized"`
 }
 
 type RawBlockSummary struct {
@@ -42,21 +46,7 @@ type CollapsedBlock struct {
 }
 
 type EmbeddedTx struct {
-	ID                   thor.Bytes32          `json:"id"`
-	Type                 uint8                 `json:"type"`
-	ChainTag             byte                  `json:"chainTag"`
-	BlockRef             string                `json:"blockRef"`
-	Expiration           uint32                `json:"expiration"`
-	Clauses              Clauses               `json:"clauses"`
-	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
-	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
-	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
-	Gas                  uint64                `json:"gas"`
-	Origin               thor.Address          `json:"origin"`
-	Delegator            *thor.Address         `json:"delegator"`
-	Nonce                math.HexOrDecimal64   `json:"nonce"`
-	DependsOn            *thor.Bytes32         `json:"dependsOn"`
-	Size                 uint32                `json:"size"`
+	TransactionBase
 
 	// receipt part
 	GasUsed  uint64                `json:"gasUsed"`

@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -20,24 +21,9 @@ func ConvertBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalized 
 	signer, _ := header.Signer()
 
 	return &dto.BlockSummary{
-		Number:        header.Number(),
-		ID:            header.ID(),
-		ParentID:      header.ParentID(),
-		Timestamp:     header.Timestamp(),
-		TotalScore:    header.TotalScore(),
-		GasLimit:      header.GasLimit(),
-		GasUsed:       header.GasUsed(),
-		Beneficiary:   header.Beneficiary(),
-		Signer:        signer,
-		Size:          uint32(summary.Size),
-		StateRoot:     header.StateRoot(),
-		ReceiptsRoot:  header.ReceiptsRoot(),
-		TxsRoot:       header.TxsRoot(),
-		TxsFeatures:   uint32(header.TxsFeatures()),
-		COM:           header.COM(),
-		IsTrunk:       isTrunk,
-		IsFinalized:   isFinalized,
-		BaseFeePerGas: (*math.HexOrDecimal256)(summary.Header.BaseFee()),
+		BlockBase:   convert.ConvertBlockBase(header, uint32(summary.Size), signer),
+		IsTrunk:     isTrunk,
+		IsFinalized: isFinalized,
 	}
 }
 
@@ -72,39 +58,17 @@ func ConvertEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*dto.Embedd
 	jTxs := make([]*dto.EmbeddedTx, 0, len(txs))
 	for itx, trx := range txs {
 		receipt := receipts[itx]
-
 		clauses := trx.Clauses()
-		blockRef := trx.BlockRef()
-		origin, _ := trx.Origin()
-		delegator, _ := trx.Delegator()
 
-		jcs := make([]*dto.Clause, 0, len(clauses))
 		jos := make([]*dto.Output, 0, len(receipt.Outputs))
-
-		for i, c := range clauses {
-			jcs = append(jcs, &dto.Clause{
-				To:    c.To(),
-				Value: (*math.HexOrDecimal256)(c.Value()),
-				Data:  hexutil.Encode(c.Data()),
-			})
-			if !receipt.Reverted {
+		if !receipt.Reverted {
+			for i, c := range clauses {
 				jos = append(jos, convertOutput(trx.ID(), uint32(i), c, receipt.Outputs[i]))
 			}
 		}
 
 		embedTx := &dto.EmbeddedTx{
-			ID:         trx.ID(),
-			Type:       trx.Type(),
-			ChainTag:   trx.ChainTag(),
-			BlockRef:   hexutil.Encode(blockRef[:]),
-			Expiration: trx.Expiration(),
-			Clauses:    jcs,
-			Gas:        trx.Gas(),
-			Origin:     origin,
-			Delegator:  delegator,
-			Nonce:      math.HexOrDecimal64(trx.Nonce()),
-			DependsOn:  trx.DependsOn(),
-			Size:       uint32(trx.Size()),
+			TransactionBase: convert.ConvertTransactionBase(trx),
 
 			GasUsed:  receipt.GasUsed,
 			GasPayer: receipt.GasPayer,
@@ -112,13 +76,6 @@ func ConvertEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*dto.Embedd
 			Reward:   (*math.HexOrDecimal256)(receipt.Reward),
 			Reverted: receipt.Reverted,
 			Outputs:  jos,
-		}
-		if trx.Type() == tx.TypeLegacy {
-			coef := trx.GasPriceCoef()
-			embedTx.GasPriceCoef = &coef
-		} else {
-			embedTx.MaxFeePerGas = (*math.HexOrDecimal256)(trx.MaxFeePerGas())
-			embedTx.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(trx.MaxPriorityFeePerGas())
 		}
 		jTxs = append(jTxs, embedTx)
 	}

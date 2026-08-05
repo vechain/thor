@@ -98,7 +98,9 @@ func TestRevision(t *testing.T) {
 
 func TestGetTransaction(t *testing.T) {
 	expectedTx := &dto.Transaction{
-		ID: thor.BytesToBytes32([]byte("txid1")),
+		TransactionBase: dto.TransactionBase{
+			ID: thor.BytesToBytes32([]byte("txid1")),
+		},
 	}
 
 	for _, tc := range []struct {
@@ -210,14 +212,16 @@ func TestClient_DebugReverted_VMError(t *testing.T) {
 
 func TestClient_SanitizeURL(t *testing.T) {
 	expectedTx := &dto.Transaction{
-		ID:       thor.BytesToBytes32([]byte("txid12345678901234567890123456789012")),
-		Type:     tx.TypeLegacy,
-		ChainTag: 0x27,
-		Clauses:  make(dto.Clauses, 0),
-		Gas:      21000,
-		Origin:   thor.Address{},
-		Nonce:    0,
-		Size:     100,
+		TransactionBase: dto.TransactionBase{
+			ID:       thor.BytesToBytes32([]byte("txid12345678901234567890123456789012")),
+			Type:     tx.TypeLegacy,
+			ChainTag: 0x27,
+			Clauses:  make(dto.Clauses, 0),
+			Gas:      21000,
+			Origin:   thor.Address{},
+			Nonce:    0,
+			Size:     100,
+		},
 	}
 
 	for _, tc := range []struct {

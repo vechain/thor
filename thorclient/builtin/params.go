@@ -94,7 +94,7 @@ func (p *Params) FilterSet(opts ...bind.FilterOption) ([]SetEvent, error) {
 		}
 
 		out[i] = SetEvent{
-			Key:   *key,
+			Key:   key,
 			Value: *(data[0].(**big.Int)),
 			Log:   log,
 		}
