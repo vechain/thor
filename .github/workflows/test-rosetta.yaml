@@ -46,8 +46,9 @@ jobs:
             fi
           fi
 
-          # Verify if branch exists
-          if ! git ls-remote --heads https://github.com/vechain/rosetta.git $REF; then
+          # Verify the branch exists. ls-remote exits 0 with empty output when the
+          # ref is absent, so test the output rather than the exit code.
+          if [ -z "$(git ls-remote --heads https://github.com/vechain/rosetta.git "$REF")" ]; then
             echo "Branch does not exist, using default branch"
             echo "ref=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
           else
