@@ -40,8 +40,9 @@ jobs:
             fi
           fi
 
-          # Verify if branch exists using GitHub API instead of git ls-remote
-          if curl -s -H "Authorization: token ${{ secrets.DRAUPNIR_TOKEN }}" \
+          # Verify the branch exists. -f makes curl exit non-zero on HTTP 404,
+          # so a missing branch falls through to the default commit.
+          if curl -sf -H "Authorization: token ${{ secrets.DRAUPNIR_TOKEN }}" \
           "https://api.github.com/repos/vechain/draupnir/branches/$REF" >/dev/null 2>&1; then
             echo "Branch $REF exists"
             echo "ref=$REF" >> "$GITHUB_OUTPUT"
