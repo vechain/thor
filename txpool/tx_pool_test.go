@@ -1111,12 +1111,45 @@ func TestValidateTxBasicsMaxTxGasLimitForkAware(t *testing.T) {
 	defer pool.Close()
 
 	overLimitLegacyTx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+	limitTx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 
 	assert.NoError(t, pool.validateTxBasics(overLimitLegacyTx))
+	assert.NoError(t, pool.validateTxBasics(limitTx))
 
 	require.NoError(t, tchain.MintBlock())
+
+	err = pool.validateTxBasics(limitTx)
+	assert.NoError(t, err)
 	err = pool.validateTxBasics(overLimitLegacyTx)
 	assert.Equal(t, badTxError{"tx gas limit exceeds the maximum allowed"}, err)
+}
+
+func TestWashMaxTxGasLimitAfterFork(t *testing.T) {
+	fc := thor.NoFork
+	fc.INTERSTELLAR = 2
+
+	tchain, err := testchain.NewWithFork(&fc, 180)
+	require.NoError(t, err)
+
+	pool := New(tchain.Repo(), tchain.Stater(), Options{
+		Limit:           LIMIT,
+		LimitPerAccount: LIMIT_PER_ACCOUNT,
+		MaxLifetime:     time.Hour,
+	}, &fc)
+	defer pool.Close()
+
+	// Tx with gas > MaxTxGasLimit is accepted before INTERSTELLAR
+	overLimitTx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, thor.MaxTxGasLimit+1, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
+	require.NoError(t, pool.Add(overLimitTx))
+	require.NotNil(t, pool.Get(overLimitTx.ID()))
+
+	// Mint one block and activate INTERSTELLAR
+	require.NoError(t, tchain.MintBlock())
+
+	_, washed, err := pool.wash(pool.repo.BestBlockSummary(), true)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, washed, 1)
+	assert.Nil(t, pool.Get(overLimitTx.ID()), "over-limit tx should be washed out once INTERSTELLAR is active")
 }
 
 func TestPoolLimit(t *testing.T) {
