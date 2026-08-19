@@ -813,10 +813,15 @@ func (srv *Server) listenLoop() {
 			fd  net.Conn
 			err error
 		)
+		var lastLog time.Time
 		for {
 			fd, err = srv.listener.Accept()
 			if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
-				srv.log.Debug("Temporary read error", "err", err)
+				if time.Since(lastLog) > 1*time.Second {
+					srv.log.Debug("Temporary read error", "err", err)
+					lastLog = time.Now()
+				}
+				time.Sleep(200 * time.Millisecond)
 				continue
 			} else if err != nil {
 				srv.log.Debug("Read error", "err", err)
