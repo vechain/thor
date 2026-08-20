@@ -55,6 +55,15 @@ func (c *Chain) MintBlock(transactions ...*tx.Transaction) error {
 	return c.CommitBlock(newBlk, stage, receipts)
 }
 
+func (c *Chain) MintBlocks(n int) error {
+	for range n {
+		if err := c.MintBlock(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CommitBlock manually adds a new block to the chain.
 func (c *Chain) CommitBlock(newBlk *block.Block, stage *state.Stage, receipts tx.Receipts) error {
 	// Commit the new block to the chain's state.
