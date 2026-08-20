@@ -80,6 +80,18 @@ func TestSet32Panic(t *testing.T) {
 	}, "Set32 should panic when trying to set 32 bytes in an empty store")
 }
 
+func TestMemoryCopyPanicsUndersizedBuffer(t *testing.T) {
+	m := NewMemory()
+	assert.NotNil(t, m)
+
+	m.Resize(32)
+	m.Set(0, 32, common.FromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
+
+	assert.Panics(t, func() {
+		m.Copy(0, 0, 33)
+	}, "Copy should panic if trying to copy more than the buffer size")
+}
+
 func TestMemoryCopy(t *testing.T) {
 	// Test cases from https://eips.ethereum.org/EIPS/eip-5656#test-cases
 	for i, tc := range []struct {
