@@ -127,6 +127,27 @@ func TestHistory_FutureBlockReverts(t *testing.T) {
 	require.Empty(t, out, "EIP-2935 revert must carry no return data")
 }
 
+func TestHistory_GenesisAtWindowBoundary(t *testing.T) {
+	chain := newChain(t, nil)
+
+	// Mint exactly 8191 blocks to reach the window boundary.
+	require.NoError(t, chain.MintBlocks(8191))
+	require.Equal(t, uint32(8191), chain.Repo().BestBlockSummary().Header.Number())
+
+	want, err := chain.Repo().NewBestChain().GetBlockID(0)
+	require.NoError(t, err)
+
+	got, err := callHistory(chain, 0)
+	require.NoError(t, err)
+	require.Equal(t, want.Bytes(), got)
+
+	// From now on we should never be able to read the genesis block through callHistory.
+	require.NoError(t, chain.MintBlock())
+	out, err := callHistory(chain, 0)
+	require.ErrorContains(t, err, "execution reverted")
+	require.Empty(t, out)
+}
+
 func TestHistory_InvalidCalldataLength(t *testing.T) {
 	chain := newChain(t, nil)
 	require.NoError(t, chain.MintBlock())
