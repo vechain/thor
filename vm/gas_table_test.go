@@ -217,6 +217,23 @@ func TestGasMcopy(t *testing.T) {
 			// Gverylow(3) + 1 word * CopyGas(3) + 0 expansion = 6
 			expected: 6,
 		},
+		{
+			name: "33 bytes pre-expanded memory",
+			dst:  0, src: 32, length: 33,
+			memorySize: 96,
+			memLen:     96,
+			// Gverylow(3) + 2 words * CopyGas(3) + 0 expansion = 9
+			expected: 9,
+		},
+		{
+			name: "33 bytes needs expansion",
+			dst:  0, src: 32, length: 33,
+			memorySize: 96,
+			memLen:     0,
+			// expansion: 3 words → linCoef=9, quadCoef=0, fee=9
+			// Gverylow(3) + 2 words * CopyGas(3) + 9 expansion = 18
+			expected: 18,
+		},
 	}
 
 	for _, tt := range tests {
