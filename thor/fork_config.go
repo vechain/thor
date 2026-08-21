@@ -84,8 +84,8 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		VIP214:       10_653_500,
 		FINALITY:     13_815_000,
 		GALACTICA:    22_084_200,
-		HAYABUSA:     23_414_400, // ~ Tue, 02 Dec 2025 11:27:00 UTC
-		INTERSTELLAR: math.MaxUint32,
+		HAYABUSA:     23_414_400,
+		INTERSTELLAR: 25_902_540, // ~ Wed, 16 Sep 2026 11:15:10 UTC
 	},
 	// testnet
 	MustParseBytes32("0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127"): {
@@ -96,8 +96,8 @@ var forkConfigs = map[Bytes32]*ForkConfig{
 		VIP214:       10_606_800,
 		FINALITY:     13_086_360,
 		GALACTICA:    21_770_500,
-		HAYABUSA:     23_221_800, // ~ Tue, 4 Nov  2025 11:39:30 UTC
-		INTERSTELLAR: math.MaxUint32,
+		HAYABUSA:     23_221_800,
+		INTERSTELLAR: 25_891_380, // ~ Wed, 9 Sep 2026 11:14:40 UTC
 	},
 }
 
