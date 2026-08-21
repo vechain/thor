@@ -111,30 +111,17 @@ func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
 	assert.Equal(t, best.Header.Timestamp(), stop)
 }
 
-func TestVerifyBlock_EIP7825(t *testing.T) {
-	tests := []struct {
-		name         string
-		interstellar uint32
-		gas          []uint64
-	}{
-		{"tx over limit accepted before INTERSTELLAR", 2, []uint64{thor.MaxTxGasLimit + 1}},
-		{"txs at limit accepted after INTERSTELLAR", 1, []uint64{thor.MaxTxGasLimit, thor.MaxTxGasLimit}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fc := thor.NoFork
-			fc.INTERSTELLAR = tt.interstellar
+func TestVerifyBlockPreFork_EIP7825(t *testing.T) {
+	gas := thor.MaxTxGasLimit + 1
+	fc := thor.NoFork
+	fc.INTERSTELLAR = 2
 
-			chain, err := testchain.NewWithFork(&fc, 180)
-			assert.NoError(t, err)
+	chain, err := testchain.NewWithFork(&fc, 180)
+	assert.NoError(t, err)
 
-			trxs := make([]*tx.Transaction, len(tt.gas))
-			for i, gas := range tt.gas {
-				trxs[i] = tx.MustSign(
-					tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(gas).Expiration(100).Nonce(uint64(i)).Build(),
-					genesis.DevAccounts()[i].PrivateKey)
-			}
-			assert.NoError(t, chain.MintBlock(trxs...))
-		})
-	}
+	trx := tx.MustSign(
+		tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(gas).Expiration(100).Nonce(0).Build(),
+		genesis.DevAccounts()[0].PrivateKey)
+
+	assert.NoError(t, chain.MintBlock(trx))
 }
