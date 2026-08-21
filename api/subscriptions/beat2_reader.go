@@ -43,6 +43,10 @@ func (br *beat2Reader) Read() ([]any, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
+		// the obsolete flag belongs to the emission, not to the block id: a reorg re-emits
+		// an already cached block to signal the rollback. Set it on the copy returned by
+		// the cache, so the cached entry stays a pure function of the block id.
+		msg.Obsolete = block.Obsolete
 		msgs = append(msgs, msg)
 	}
 	return msgs, len(blocks) > 0, nil
@@ -100,7 +104,6 @@ func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (
 			GasLimit:      header.GasLimit(),
 			Bloom:         hexutil.Encode(filter.Bits),
 			K:             filter.K,
-			Obsolete:      block.Obsolete,
 		}
 
 		return beat2, nil
