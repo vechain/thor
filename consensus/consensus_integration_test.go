@@ -16,8 +16,10 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/consensus"
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TestConsensus_ReplayStopsEnergyAtHardfork_Matrix(t *testing.T) {
@@ -107,4 +109,19 @@ func TestConsensus_StopsEnergyAtHardfork(t *testing.T) {
 	stop, err := builtin.Energy.Native(st, best.Header.Timestamp()).GetEnergyGrowthStopTime()
 	assert.NoError(t, err)
 	assert.Equal(t, best.Header.Timestamp(), stop)
+}
+
+func TestVerifyBlockPreFork_EIP7825(t *testing.T) {
+	gas := thor.MaxTxGasLimit + 1
+	fc := thor.NoFork
+	fc.INTERSTELLAR = 2
+
+	chain, err := testchain.NewWithFork(&fc, 180)
+	assert.NoError(t, err)
+
+	trx := tx.MustSign(
+		tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(gas).Expiration(100).Nonce(0).Build(),
+		genesis.DevAccounts()[0].PrivateKey)
+
+	assert.NoError(t, chain.MintBlock(trx))
 }
