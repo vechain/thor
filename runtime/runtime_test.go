@@ -37,6 +37,53 @@ func M(a ...any) []any {
 	return a
 }
 
+func evmPush(b []byte) []byte {
+	if n := len(b); n < 1 || n > 32 {
+		panic("evmPush: need 1..32 bytes")
+	}
+	return append([]byte{byte(vm.PUSH1) + byte(len(b)) - 1}, b...)
+}
+
+func initcodeDeployRuntime(runtime []byte) []byte {
+	code := evmPush(runtime)
+	code = append(code, byte(vm.PUSH1), 0x00, byte(vm.MSTORE))
+	off := byte(32 - len(runtime))
+	return append(code, byte(vm.PUSH1), byte(len(runtime)), byte(vm.PUSH1), off, byte(vm.RETURN))
+}
+
+// factoryCreateThenCall builds bytecode for a factory that CREATE's a child
+// from childInitcode (sending amount VET).
+func factoryCreateThenCall(childInitcode []byte, amount byte) []byte {
+	code := evmPush(childInitcode)
+	code = append(code, byte(vm.PUSH1), 0x00, byte(vm.MSTORE))
+	off := byte(32 - len(childInitcode))
+	return append(code,
+		byte(vm.PUSH1), byte(len(childInitcode)),
+		byte(vm.PUSH1), off,
+		byte(vm.PUSH1), amount,
+		byte(vm.CREATE),
+		byte(vm.PUSH1), 0x00, // retSize
+		byte(vm.PUSH1), 0x00, // retOffset
+		byte(vm.PUSH1), 0x00, // argSize
+		byte(vm.PUSH1), 0x00, // argOffset
+		byte(vm.PUSH1), 0x00, // value
+		byte(vm.DUP6),
+		byte(vm.GAS),
+		byte(vm.CALL),
+		byte(vm.POP),
+		byte(vm.STOP),
+	)
+}
+
+func findTransfer(transfers tx.Transfers, sender, recipient thor.Address) *tx.Transfer {
+	for _, tr := range transfers {
+		if tr.Sender == sender && tr.Recipient == recipient {
+			return tr
+		}
+	}
+	return nil
+}
+
 func TestEVMFunction(t *testing.T) {
 	target := thor.BytesToAddress([]byte("acc01"))
 
@@ -804,6 +851,182 @@ func TestEVMFunction(t *testing.T) {
 					Amount:    big.NewInt(300),
 				}
 				assert.Equal(t, expectedTransfer, out1.Transfers[0])
+			},
+		},
+		{
+			name:       "EIP-6780 same-clause create then selfdestruct deletes contract",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				head, _ := ctx.chain.GetBlockSummary(0)
+				time := head.Header.Timestamp()
+				origin := genesis.DevAccounts()[0].Address
+				txID := thor.BytesToBytes32([]byte("eip-6780-same-clause"))
+				txCtx := &xenv.TransactionContext{ID: txID, Origin: origin}
+
+				const amount int64 = 200
+				childInit := initcodeDeployRuntime([]byte{byte(vm.CALLER), byte(vm.SELFDESTRUCT)})
+				factory := factoryCreateThenCall(childInit, byte(amount))
+				childAddr := thor.CreateContractAddress(txID, 0, 0)
+
+				ctx.state.SetCode(target, factory)
+				ctx.state.SetBalance(target, big.NewInt(amount))
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Time: time}, forkFromStart).
+					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, txCtx)
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				exists, err := ctx.state.Exists(childAddr)
+				assert.Nil(t, err)
+				assert.False(t, exists, "child created in this clause must be deleted")
+
+				factoryBal, err := ctx.state.GetBalance(target)
+				assert.Nil(t, err)
+				assert.Equal(t, 0, factoryBal.Cmp(big.NewInt(amount)), "value must return to factory via CALLER SELFDESTRUCT")
+
+				created := findTransfer(out.Transfers, target, childAddr)
+				assert.NotNil(t, created, "CREATE amount transfer factory→child")
+				assert.Equal(t, 0, created.Amount.Cmp(big.NewInt(amount)))
+
+				refunded := findTransfer(out.Transfers, childAddr, target)
+				assert.NotNil(t, refunded, "SELFDESTRUCT transfer child→factory")
+				assert.Equal(t, 0, refunded.Amount.Cmp(big.NewInt(amount)))
+			},
+		},
+		{
+			// Constructor that self-destructs while still deploying. Suicide is in initcode,
+			// then create() still SetCode's the empty return. If those disagree, a leftover
+			// code hash can block the address forever (GetNonce is always 0).
+			// Checks the account is gone and a later CREATE to the same address still works.
+			name:       "EIP-6780 selfdestruct in initcode leaves clean state and allows CREATE recreate",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				head, _ := ctx.chain.GetBlockSummary(0)
+				time := head.Header.Timestamp()
+				origin := genesis.DevAccounts()[0].Address
+				txID := thor.BytesToBytes32([]byte("eip-6780-initcode"))
+				txCtx := &xenv.TransactionContext{ID: txID, Origin: origin}
+				bc := &xenv.BlockContext{Time: time}
+
+				const amount int64 = 300
+				slot := thor.BytesToBytes32([]byte{0x00})
+				// SSTORE(0, 1) then SELFDESTRUCT(origin)
+				sdInitcode := []byte{
+					byte(vm.PUSH1), 0x01,
+					byte(vm.PUSH1), 0x00,
+					byte(vm.SSTORE),
+					byte(vm.ORIGIN),
+					byte(vm.SELFDESTRUCT),
+				}
+
+				originBefore, err := ctx.state.GetBalance(origin)
+				assert.Nil(t, err)
+				originBefore = new(big.Int).Set(originBefore)
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, bc, forkFromStart).
+					PrepareClause(tx.NewClause(nil).WithData(sdInitcode).WithValue(big.NewInt(amount)), 0, math.MaxUint64, txCtx)
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+				assert.NotNil(t, out.ContractAddress)
+				contractAddr := *out.ContractAddress
+				assert.Equal(t, thor.CreateContractAddress(txID, 0, 0), contractAddr)
+
+				exists, err := ctx.state.Exists(contractAddr)
+				assert.Nil(t, err)
+				assert.False(t, exists, "account must not exist after initcode SELFDESTRUCT")
+
+				codeHash, err := ctx.state.GetCodeHash(contractAddr)
+				assert.Nil(t, err)
+				assert.True(t, codeHash.IsZero(), "create() SetCode after halt must not leave a code hash")
+
+				stored, err := ctx.state.GetStorage(contractAddr, slot)
+				assert.Nil(t, err)
+				assert.Equal(t, thor.Bytes32{}, stored, "storage written in initcode must be gone")
+
+				originAfter, err := ctx.state.GetBalance(origin)
+				assert.Nil(t, err)
+				assert.Equal(t, 0, originBefore.Cmp(originAfter), "amount must return to origin")
+
+				toContract := findTransfer(out.Transfers, origin, contractAddr)
+				assert.NotNil(t, toContract)
+				assert.Equal(t, 0, toContract.Amount.Cmp(big.NewInt(amount)))
+				toOrigin := findTransfer(out.Transfers, contractAddr, origin)
+				assert.NotNil(t, toOrigin)
+				assert.Equal(t, 0, toOrigin.Amount.Cmp(big.NewInt(amount)))
+
+				// Same (txID, clauseIndex, counter=0) address as the suicided CREATE.
+				recreateInit := initcodeDeployRuntime([]byte{byte(vm.STOP)})
+				exec2, _ := runtime.New(ctx.chain, ctx.state, bc, forkFromStart).
+					PrepareClause(tx.NewClause(nil).WithData(recreateInit), 0, math.MaxUint64, txCtx)
+				out2, _, err := exec2()
+				assert.Nil(t, err)
+				assert.Nil(t, out2.VMErr, "re-CREATE to the suicided address must not collide")
+				assert.Equal(t, contractAddr, *out2.ContractAddress)
+				deployed, err := ctx.state.GetCode(contractAddr)
+				assert.Nil(t, err)
+				assert.Equal(t, []byte{byte(vm.STOP)}, deployed)
+			},
+		},
+		{
+			// CREATE2 with same factory, salt, and initcode always produce the same address.
+			// This deploys with a constructor that immediately self-destructs,
+			// then CREATE2s again with the same salt. The second deploy must hit that address,
+			// not collide. A leftover code hash after suicide-during-deploy would lock the address forever.
+			name:       "EIP-6780 CREATE2 same-salt recreate after initcode selfdestruct",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				head, _ := ctx.chain.GetBlockSummary(0)
+				time := head.Header.Timestamp()
+				origin := genesis.DevAccounts()[0].Address
+				txID := thor.BytesToBytes32([]byte("eip-6780-create2"))
+				txCtx := &xenv.TransactionContext{ID: txID, Origin: origin}
+				bc := &xenv.BlockContext{Time: time}
+
+				factoryAddr := thor.BytesToAddress([]byte("factory"))
+				create2Init := []byte{byte(vm.ORIGIN), byte(vm.SELFDESTRUCT)}
+				create2Factory := append(evmPush(create2Init), byte(vm.PUSH1), 0x00, byte(vm.MSTORE))
+				create2Offset := byte(32 - len(create2Init))
+				pushCreate2 := []byte{
+					byte(vm.PUSH1), 0x00, // salt
+					byte(vm.PUSH1), byte(len(create2Init)),
+					byte(vm.PUSH1), create2Offset,
+					byte(vm.PUSH1), 0x00, // amount
+					byte(vm.CREATE2),
+				}
+				create2Factory = append(create2Factory, pushCreate2...)
+				create2Factory = append(create2Factory, pushCreate2...)
+				create2Factory = append(create2Factory,
+					byte(vm.PUSH1), 0x00,
+					byte(vm.MSTORE),
+					byte(vm.PUSH1), 0x20,
+					byte(vm.PUSH1), 0x00,
+					byte(vm.RETURN),
+				)
+				ctx.state.SetCode(factoryAddr, create2Factory)
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, bc, forkFromStart).
+					PrepareClause(tx.NewClause(&factoryAddr), 0, math.MaxUint64, txCtx)
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+				expectedCreate2 := thor.Address(vm.CreateAddress2(
+					common.Address(factoryAddr),
+					[32]byte{},
+					thor.Keccak256(create2Init).Bytes(),
+				))
+				gotCreate2 := thor.BytesToAddress(out.Data)
+				assert.Equal(t, expectedCreate2, gotCreate2, "second CREATE2 must succeed at the same address")
+				exists, err := ctx.state.Exists(expectedCreate2)
+				assert.Nil(t, err)
+				assert.False(t, exists)
 			},
 		},
 	}
