@@ -509,10 +509,22 @@ func BenchmarkPrecompiledP256Verify(bench *testing.B) {
 		Expected: "0000000000000000000000000000000000000000000000000000000000000001",
 		Name:     "p256Verify",
 	}
-	benchmarkPrecompiled("0b", t, bench)
+	benchmarkPrecompiled("0100", t, bench)
 }
 
 func TestPrecompiledP256Verify(t *testing.T) { testJSON("p256Verify", "0100", t) }
+
+func TestPrecompiledP256Verify_WrongLength(t *testing.T) {
+	p := allPrecompiles[common.HexToAddress("0100")]
+
+	for _, length := range []int{0, 159, 161, 320} {
+		input := make([]byte, length)
+		assert.Equal(t, uint64(6900), p.RequiredGas(input))
+		res, err := p.Run(input)
+		assert.NoError(t, err)
+		assert.Nil(t, res)
+	}
+}
 
 func TestPrecompiledP256Verify_PointAtInfinity(t *testing.T) {
 	p := allPrecompiles[common.HexToAddress("0100")]
