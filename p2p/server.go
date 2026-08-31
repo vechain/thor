@@ -45,6 +45,10 @@ const (
 	defaultMaxPendingPeers = 50
 	defaultDialRatio       = 3
 
+	// inboundThrottleTime is the minimum time between inbound
+	// connection attempts from a single (non-LAN) IP address.
+	inboundThrottleTime = 30 * time.Second
+
 	// Maximum time allowed for reading a complete message.
 	// This is effectively the amount of time a connection can be idle.
 	frameReadTimeout = 30 * time.Second
@@ -154,6 +158,11 @@ type Server struct {
 	// the whole protocol stack.
 	newTransport func(net.Conn) transport
 	newPeerHook  func(*Peer)
+	listenFunc   func(network, addr string) (net.Listener, error)
+
+	// inboundHistory is only accessed by listenLoop's goroutine; no lock needed.
+	inboundHistory expHeap
+	clock          mclock.Clock // for testing; Start() defaults it to mclock.System{}
 
 	lock    sync.Mutex // protects running
 	running bool
@@ -436,6 +445,12 @@ func (srv *Server) Start() (err error) {
 	if srv.newTransport == nil {
 		srv.newTransport = newRLPX
 	}
+	if srv.listenFunc == nil {
+		srv.listenFunc = net.Listen
+	}
+	if srv.clock == nil {
+		srv.clock = mclock.System{}
+	}
 	if srv.Dialer == nil {
 		srv.Dialer = TCPDialer{&net.Dialer{Timeout: defaultDialTimeout}}
 	}
@@ -545,7 +560,7 @@ func (srv *Server) Start() (err error) {
 
 func (srv *Server) startListening() error {
 	// Launch the TCP listener.
-	listener, err := net.Listen("tcp", srv.ListenAddr)
+	listener, err := srv.listenFunc("tcp", srv.ListenAddr)
 	if err != nil {
 		return err
 	}
@@ -859,6 +874,22 @@ func (srv *Server) listenLoop() {
 				fd.Close()
 				slots <- struct{}{}
 				continue
+			}
+		}
+
+		if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
+			now := srv.clock.Now()
+			srv.inboundHistory.expire(now, nil)
+			// Per-IP inbound throttle (LAN exempt). Runs after the
+			// NetRestrict check so rejected IPs don't pollute the history.
+			if !netutil.IsLAN(tcp.IP) {
+				if srv.inboundHistory.contains(tcp.IP.String()) {
+					srv.log.Debug("Rejected conn (too many attempts)", "addr", fd.RemoteAddr())
+					fd.Close()
+					slots <- struct{}{}
+					continue
+				}
+				srv.inboundHistory.add(tcp.IP.String(), now.Add(inboundThrottleTime))
 			}
 		}
 

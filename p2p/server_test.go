@@ -19,6 +19,7 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"errors"
+	"io"
 	"math/rand"
 	"net"
 	"reflect"
@@ -726,5 +727,137 @@ func TestDialQuotaSmallMaxPeers(t *testing.T) {
 		if got := srv.maxInboundConns(); got != tt.wantInbound {
 			t.Errorf("maxInboundConns(MaxPeers=%d) = %d, want %d", tt.maxPeers, got, tt.wantInbound)
 		}
+	}
+}
+
+func listenFakeAddr(network, laddr string, remoteAddr net.Addr) (net.Listener, error) {
+	l, err := net.Listen(network, laddr)
+	if err == nil {
+		l = &fakeAddrListener{l, remoteAddr}
+	}
+	return l, err
+}
+
+// fakeAddrListener creates connections with a mocked remote address.
+type fakeAddrListener struct {
+	net.Listener
+	remoteAddr net.Addr
+}
+
+type fakeAddrConn struct {
+	net.Conn
+	remoteAddr net.Addr
+}
+
+func (l *fakeAddrListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	return &fakeAddrConn{c, l.remoteAddr}, nil
+}
+
+func (c *fakeAddrConn) RemoteAddr() net.Addr {
+	return c.remoteAddr
+}
+
+func TestServerInboundThrottle(t *testing.T) {
+	const timeout = 5 * time.Second
+	newTransportCalled := make(chan struct{})
+	srv := &Server{
+		Config: Config{
+			PrivateKey:  newkey(),
+			ListenAddr:  "127.0.0.1:0",
+			MaxPeers:    10,
+			NoDial:      true,
+			NoDiscovery: true,
+			Protocols:   []Protocol{discard},
+		},
+		newTransport: func(fd net.Conn) transport {
+			newTransportCalled <- struct{}{}
+			return newRLPX(fd)
+		},
+		listenFunc: func(network, laddr string) (net.Listener, error) {
+			fakeAddr := &net.TCPAddr{IP: net.IP{95, 33, 21, 2}, Port: 4444}
+			return listenFakeAddr(network, laddr, fakeAddr)
+		},
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal("can't start:", err)
+	}
+	defer srv.Stop()
+
+	// First connection: should reach newTransport.
+	conn, err := net.DialTimeout("tcp", srv.ListenAddr, timeout)
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+	select {
+	case <-newTransportCalled:
+	case <-time.After(timeout):
+		t.Error("newTransport not called")
+	}
+	conn.Close()
+
+	// Second connection (same spoofed IP, within the 30s window): should be
+	// closed immediately without reaching newTransport.
+	connClosed := make(chan struct{}, 1)
+	conn, err = net.DialTimeout("tcp", srv.ListenAddr, timeout)
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+	defer conn.Close()
+	go func() {
+		conn.SetDeadline(time.Now().Add(timeout))
+		buf := make([]byte, 10)
+		if n, err := conn.Read(buf); n != 0 || err != io.EOF {
+			t.Errorf("expected io.EOF and n == 0, got err %q and n == %d", err, n)
+		}
+		connClosed <- struct{}{}
+	}()
+	select {
+	case <-connClosed:
+	case <-newTransportCalled:
+		t.Error("newTransport called for second inbound attempt")
+	case <-time.After(timeout):
+		t.Error("connection not closed within timeout")
+	}
+}
+
+func TestServerInboundLANExempt(t *testing.T) {
+	const timeout = 5 * time.Second
+	newTransportCalled := make(chan struct{}, 2)
+	srv := &Server{
+		Config: Config{
+			PrivateKey:  newkey(),
+			ListenAddr:  "127.0.0.1:0",
+			MaxPeers:    10,
+			NoDial:      true,
+			NoDiscovery: true,
+			Protocols:   []Protocol{discard},
+		},
+		newTransport: func(fd net.Conn) transport {
+			newTransportCalled <- struct{}{}
+			return newRLPX(fd)
+		},
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal("can't start:", err)
+	}
+	defer srv.Stop()
+
+	// Two connections from a real loopback address should both be accepted
+	// (LAN exempt).
+	for i := range 2 {
+		conn, err := net.DialTimeout("tcp", srv.ListenAddr, timeout)
+		if err != nil {
+			t.Fatalf("dial %d failed: %v", i, err)
+		}
+		select {
+		case <-newTransportCalled:
+		case <-time.After(timeout):
+			t.Fatalf("newTransport not called for LAN conn %d", i)
+		}
+		conn.Close()
 	}
 }
