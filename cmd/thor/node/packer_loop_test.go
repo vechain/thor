@@ -7,6 +7,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -255,4 +256,113 @@ func TestPackerLoop_WithDeadline(t *testing.T) {
 	defer cancel()
 
 	n.packerLoop(ctx)
+}
+
+// fakeFlow implements the txAdopter interface for testing adoptTxs.
+type fakeFlow struct {
+	when     uint64
+	adoptErr func(*tx.Transaction) error // returns non-nil to reject a tx
+	adopted  []*tx.Transaction           // txs that Adopt accepted
+	calls    int                         // number of Adopt invocations
+}
+
+func (f *fakeFlow) When() uint64 { return f.when }
+
+func (f *fakeFlow) Adopt(t *tx.Transaction) error {
+	f.calls++
+	if err := f.adoptErr(t); err != nil {
+		return err
+	}
+	f.adopted = append(f.adopted, t)
+	return nil
+}
+
+func txWithGas(gas uint64) *tx.Transaction {
+	return tx.NewBuilder(tx.TypeLegacy).Gas(gas).Build()
+}
+
+func makeTxs(n int, gas uint64) tx.Transactions {
+	txs := make(tx.Transactions, n)
+	for i := range txs {
+		txs[i] = txWithGas(gas)
+	}
+	return txs
+}
+
+// farFuture keeps the deadline check from tripping.
+const farFuture uint64 = 1 << 40
+
+func TestAdoptTxs_NoBadTxs(t *testing.T) {
+	f := &fakeFlow{
+		when:     farFuture,
+		adoptErr: func(*tx.Transaction) error { return nil },
+	}
+	txs := makeTxs(20, 21_000)
+
+	removed := adoptTxs(f, txs, func() uint64 { return 0 })
+
+	assert.Empty(t, removed)
+	assert.Equal(t, 20, f.calls) // all attempted
+	assert.Len(t, f.adopted, 20) // all adopted
+}
+
+func TestAdoptTxs_DeadlineTrip(t *testing.T) {
+	// The clock stays before the deadline until 3 txs have been adopted, then
+	// crosses it -> the loop breaks before attempting the 4th. Tying the clock
+	// to work done (f.calls) rather than to now()-call count keeps the test
+	// robust to how often adoptTxs samples now().
+	f := &fakeFlow{
+		when:     100,
+		adoptErr: func(*tx.Transaction) error { return nil },
+	}
+	txs := makeTxs(10, 21_000)
+
+	now := func() uint64 {
+		if f.calls < 3 {
+			return 99
+		}
+		return 100
+	}
+
+	removed := adoptTxs(f, txs, now)
+
+	assert.Empty(t, removed)
+	assert.Equal(t, 3, f.calls) // only 3 attempted before the deadline tripped
+}
+
+func TestAdoptTxs_DeadlineAtEntryAttemptsOne(t *testing.T) {
+	// Even if now() is already past the deadline at loop entry, adoptTxs must
+	// attempt at least one tx (forward progress) rather than pack an empty block.
+	f := &fakeFlow{
+		when:     100,
+		adoptErr: func(*tx.Transaction) error { return nil },
+	}
+	txs := makeTxs(10, 21_000)
+
+	removed := adoptTxs(f, txs, func() uint64 { return 200 }) // already past deadline
+
+	assert.Empty(t, removed)
+	assert.Len(t, f.adopted, 1) // exactly one attempted/adopted, then the deadline breaks
+	assert.Equal(t, 1, f.calls)
+}
+
+func TestAdoptTxs_BadTxsRemovedContinues(t *testing.T) {
+	// Rejected txs are collected for removal but no longer stop the loop (the
+	// uncounted-gas budget was removed); only the deadline stops it.
+	f := &fakeFlow{
+		when: farFuture,
+		adoptErr: func(t *tx.Transaction) error {
+			if t.Gas() > 1_000_000 {
+				return errors.New("bad tx")
+			}
+			return nil
+		},
+	}
+	txs := append(makeTxs(5, 21_000), makeTxs(10, 30_000_000)...)
+
+	removed := adoptTxs(f, txs, func() uint64 { return 0 })
+
+	assert.Len(t, f.adopted, 5)  // all good txs adopted
+	assert.Len(t, removed, 10)   // every bad tx collected, none stops the loop early
+	assert.Equal(t, 15, f.calls) // whole slice attempted
 }

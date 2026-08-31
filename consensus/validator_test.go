@@ -106,29 +106,31 @@ func TestValidateBlockBody_EIP7934(t *testing.T) {
 	repo, err := chain.NewRepository(db, parent)
 	assert.NoError(t, err)
 
-	t.Run("oversized block rejected after INTERSTELLAR fork", func(t *testing.T) {
+	t.Run("oversized block accepted at block before INTERSTELLAR", func(t *testing.T) {
 		largeData := make([]byte, thor.MaxRLPBlockSize)
 		clause := tx.NewClause(nil).WithData(largeData)
 		tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Clause(clause).Expiration(10).Build()
 		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
 		blk := new(block.Builder).Transaction(tr).Build()
+		assert.Equal(t, uint32(1), blk.Header().Number())
 
-		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 0})
+		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 2})
+		err := c.validateBlockBody(blk)
+		assert.NoError(t, err)
+	})
+
+	t.Run("oversized block rejected at INTERSTELLAR fork block", func(t *testing.T) {
+		largeData := make([]byte, thor.MaxRLPBlockSize)
+		clause := tx.NewClause(nil).WithData(largeData)
+		tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Clause(clause).Expiration(10).Build()
+		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+		blk := new(block.Builder).Transaction(tr).Build()
+		assert.Equal(t, uint32(1), blk.Header().Number())
+
+		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 1})
 		err := c.validateBlockBody(blk)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "block RLP-encoded size exceeds maximum")
-	})
-
-	t.Run("oversized block accepted before INTERSTELLAR fork", func(t *testing.T) {
-		largeData := make([]byte, thor.MaxRLPBlockSize)
-		clause := tx.NewClause(nil).WithData(largeData)
-		tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Clause(clause).Expiration(10).Build()
-		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
-		blk := new(block.Builder).Transaction(tr).Build()
-
-		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 10})
-		err := c.validateBlockBody(blk)
-		assert.NoError(t, err)
 	})
 
 	t.Run("normal block accepted after INTERSTELLAR fork", func(t *testing.T) {
@@ -139,6 +141,25 @@ func TestValidateBlockBody_EIP7934(t *testing.T) {
 		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 0})
 		err := c.validateBlockBody(blk)
 		assert.NoError(t, err)
+	})
+
+	t.Run("block at MaxRLPBlockSize accepted after INTERSTELLAR fork", func(t *testing.T) {
+		blk := buildBlockOfSize(repo, thor.MaxRLPBlockSize)
+		assert.Equal(t, thor.MaxRLPBlockSize, uint64(blk.Size()))
+
+		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 0})
+		err := c.validateBlockBody(blk)
+		assert.NoError(t, err)
+	})
+
+	t.Run("block at MaxRLPBlockSize+1 rejected after INTERSTELLAR fork", func(t *testing.T) {
+		blk := buildBlockOfSize(repo, thor.MaxRLPBlockSize+1)
+		assert.Equal(t, thor.MaxRLPBlockSize+1, uint64(blk.Size()))
+
+		c := New(repo, stater, &thor.ForkConfig{INTERSTELLAR: 0})
+		err := c.validateBlockBody(blk)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "block RLP-encoded size exceeds maximum")
 	})
 }
 
@@ -294,4 +315,18 @@ func TestValidateStakingProposer_LockedVETError(t *testing.T) {
 
 	_, err := consensus.validateStakingProposer(header, parent, staker)
 	assert.ErrorContains(t, err, "pos - block signer invalid")
+}
+
+func buildBlockOfSize(repo *chain.Repository, target uint64) *block.Block {
+	build := func(dataLen int) *block.Block {
+		clause := tx.NewClause(nil).WithData(make([]byte, dataLen))
+		tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(repo.ChainTag()).Clause(clause).Expiration(10).Build()
+		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+		return new(block.Builder).Transaction(tr).Build()
+	}
+	// Probe once to measure the fixed overhead, then correct. Near
+	// MaxRLPBlockSize the data field's RLP length prefix is stable, so one
+	// adjustment lands exactly on the target size.
+	probe := build(int(target))
+	return build(2*int(target) - int(probe.Size()))
 }

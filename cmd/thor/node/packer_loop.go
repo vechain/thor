@@ -21,6 +21,41 @@ import (
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
 const gasLimitSoftLimit uint64 = 40_000_000
 
+// txAdopter is the subset of *packer.Flow that adoptTxs uses.
+type txAdopter interface {
+	Adopt(*tx.Transaction) error
+	When() uint64
+}
+
+// adoptTxs adopts txs into flow, stopping once the wall-clock deadline
+// (flow.When()) is reached. now returns the current unix time in seconds
+// (injected for testability). It returns the txs that failed to adopt, for
+// removal from the pool.
+func adoptTxs(flow txAdopter, txs tx.Transactions, now func() uint64) []*tx.Transaction {
+	deadline := flow.When()
+
+	var txsToRemove []*tx.Transaction
+	for i, t := range txs {
+		// Try at least one tx before the deadline applies, so a slightly late
+		// proposer still packs a non-empty block. Checking here (not at the loop
+		// end) also covers the not-adoptable "continue" path.
+		if i > 0 && now() >= deadline {
+			logger.Warn("adopt stopped", "reason", "deadline")
+			break
+		}
+		if err := flow.Adopt(t); err != nil {
+			if packer.IsGasLimitReached(err) || packer.IsBlockSizeLimitReached(err) {
+				break
+			}
+			if packer.IsTxNotAdoptableNow(err) {
+				continue
+			}
+			txsToRemove = append(txsToRemove, t)
+		}
+	}
+	return txsToRemove
+}
+
 func (n *Node) packerLoop(ctx context.Context) {
 	logger.Debug("enter packer loop")
 	defer logger.Debug("leave packer loop")
@@ -141,19 +176,8 @@ func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error)
 		becomeBest: true,
 	}
 
-	txs := n.txPool.Executables()
-	// adopt txs
-	for _, tx := range txs {
-		if err := flow.Adopt(tx); err != nil {
-			if packer.IsGasLimitReached(err) || packer.IsBlockSizeLimitReached(err) {
-				break
-			}
-			if packer.IsTxNotAdoptableNow(err) {
-				continue
-			}
-			txsToRemove = append(txsToRemove, tx)
-		}
-	}
+	// adopt txs, bounded by the slot deadline
+	txsToRemove = adoptTxs(flow, n.txPool.Executables(), func() uint64 { return uint64(time.Now().Unix()) })
 
 	var shouldVote bool
 	if thor.IsForked(flow.Number(), n.forkConfig.FINALITY) {
