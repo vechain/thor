@@ -500,6 +500,10 @@ func readHandshakeMsg(msg plainDecoder, plainSize int, prv *ecdsa.PrivateKey, r 
 	if size < uint16(plainSize) {
 		return buf, fmt.Errorf("size underflow, need at least %d bytes", plainSize)
 	}
+	// Reject oversized handshake messages (upstream go-ethereum 27654d302).
+	if size > baseProtocolMaxMsgSize {
+		return buf, errors.New("handshake message too big")
+	}
 	buf = append(buf, make([]byte, size-uint16(plainSize)+2)...)
 	if _, err := io.ReadFull(r, buf[plainSize:]); err != nil {
 		return buf, err
