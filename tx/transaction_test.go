@@ -890,3 +890,40 @@ func TestClausesDecodeAtLimit(t *testing.T) {
 	var trx Transaction
 	assert.NoError(t, trx.UnmarshalBinary(data))
 }
+
+func TestValidateSignatureLength(t *testing.T) {
+	build := func(sigLen int, delegated bool) *Transaction {
+		b := NewBuilder(TypeLegacy).ChainTag(1).Gas(21000)
+		if delegated {
+			var feat Features
+			feat.SetDelegated(true)
+			b = b.Features(feat)
+		}
+		return b.Build().WithSignature(make([]byte, sigLen))
+	}
+
+	tests := []struct {
+		name      string
+		trx       *Transaction
+		expectErr bool
+	}{
+		{"undelegated 65 ok", build(65, false), false},
+		{"undelegated 130 rejected", build(130, false), true},
+		{"undelegated padded rejected", build(4096, false), true},
+		{"undelegated empty rejected", build(0, false), true},
+		{"delegated 130 ok", build(130, true), false},
+		{"delegated 65 rejected", build(65, true), true},
+		{"delegated padded rejected", build(4096, true), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.trx.ValidateSignatureLength()
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

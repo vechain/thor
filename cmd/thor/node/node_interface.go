@@ -21,6 +21,7 @@ import (
 // Consensus defines the interface for consensus processing
 type Consensus interface {
 	Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error)
+	PrevalidateStateless(blk *block.Block, ceilingGasLimit uint64) error
 }
 
 // Packer defines the interface for packing blocks

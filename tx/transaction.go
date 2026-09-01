@@ -355,7 +355,7 @@ func (t *Transaction) Features() Features {
 
 // Origin extract address of tx originator from signature.
 func (t *Transaction) Origin() (thor.Address, error) {
-	if err := t.validateSignatureLength(); err != nil {
+	if err := t.ValidateSignatureLength(); err != nil {
 		return thor.Address{}, err
 	}
 
@@ -380,7 +380,7 @@ func (t *Transaction) DelegatorSigningHash(origin thor.Address) (hash thor.Bytes
 
 // Delegator returns delegator address who would like to pay for gas fee.
 func (t *Transaction) Delegator() (*thor.Address, error) {
-	if err := t.validateSignatureLength(); err != nil {
+	if err := t.ValidateSignatureLength(); err != nil {
 		return nil, err
 	}
 
@@ -641,7 +641,9 @@ func (t *Transaction) String() string {
 		`, s, t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas())
 }
 
-func (t *Transaction) validateSignatureLength() error {
+// ValidateSignatureLength checks the signature has the length implied by the
+// tx's delegation feature: 65 bytes, or 130 when delegated.
+func (t *Transaction) ValidateSignatureLength() error {
 	expectedSigLen := 65
 	if t.Features().IsDelegated() {
 		expectedSigLen *= 2
@@ -656,7 +658,7 @@ func (t *Transaction) validateSignatureLength() error {
 // EnforceSignatureLowS checks that the S value in the signature are <= secp256k1 N/2.
 // This is not required for consensus, but a protection against signature malleability.
 func (t *Transaction) EnforceSignatureLowS() error {
-	if err := t.validateSignatureLength(); err != nil {
+	if err := t.ValidateSignatureLength(); err != nil {
 		return err
 	}
 

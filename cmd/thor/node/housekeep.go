@@ -59,12 +59,20 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	}
 }
 
+// futureBlockWindow caps how far ahead a block may be, both in time and in gas
+// limit drift over the chain head. The handshake caps peer clock skew at two
+// block intervals; malicious timestamps have no bound at all.
+const futureBlockWindow = 4
+
 func (n *Node) handleNewBlock(newBlockEvent *comm.NewBlockEvent) {
 	var stats blockStats
 	newBlock := newBlockEvent.Block
 	if isTrunk, err := n.processBlock(newBlock, &stats); err != nil {
 		if consensus.IsFutureBlock(err) ||
 			((err == errParentMissing || err == errBlockTemporaryUnprocessable) && n.futureBlocksCache.Contains(newBlock.Header().ParentID())) {
+			if !n.shouldCacheFutureBlock(newBlock) {
+				return
+			}
 			logger.Debug("future block added", "id", newBlock.Header().ID())
 			n.futureBlocksCache.Set(newBlock.Header().ID(), newBlock)
 		}
@@ -72,6 +80,31 @@ func (n *Node) handleNewBlock(newBlockEvent *comm.NewBlockEvent) {
 		n.comm.BroadcastBlock(newBlock)
 		logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Header())...)
 	}
+}
+
+// shouldCacheFutureBlock reports whether a block may enter the future block
+// cache. The gas limit ceiling comes from the chain head, not the parent: a
+// chained future block's parent is itself an unverified cache entry.
+func (n *Node) shouldCacheFutureBlock(blk *block.Block) bool {
+	header := blk.Header()
+
+	if header.Timestamp() > uint64(time.Now().Unix())+futureBlockWindow*thor.BlockInterval() {
+		logger.Debug("future block rejected, timestamp too far ahead", "id", header.ID(), "timestamp", header.Timestamp())
+		return false
+	}
+
+	// Gas limit may drift 1/GasLimitBoundDivisor per block, so allow the whole window.
+	ceiling := n.repo.BestBlockSummary().Header.GasLimit()
+	for range futureBlockWindow {
+		ceiling += ceiling / thor.GasLimitBoundDivisor
+	}
+
+	if err := n.cons.PrevalidateStateless(blk, ceiling); err != nil {
+		logger.Debug("future block rejected", "id", header.ID(), "err", err)
+		return false
+	}
+
+	return true
 }
 
 func (n *Node) handleFutureBlocks() {
@@ -84,17 +117,30 @@ func (n *Node) handleFutureBlocks() {
 		return blocks[i].Header().Number() < blocks[j].Header().Number()
 	})
 	var stats blockStats
-	for i, block := range blocks {
-		if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
-			logger.Debug("future block consumed", "id", block.Header().ID())
-			n.futureBlocksCache.Remove(block.Header().ID())
+	for i, blk := range blocks {
+		isTrunk, err := n.processBlock(blk, &stats)
+		switch {
+		case err == nil || err == errKnownBlock:
+			logger.Debug("future block consumed", "id", blk.Header().ID())
+			n.futureBlocksCache.Remove(blk.Header().ID())
 			if isTrunk {
-				n.comm.BroadcastBlock(block)
+				n.comm.BroadcastBlock(blk)
 			}
+		case consensus.IsFutureBlock(err) || err == errParentMissing || err == errBlockTemporaryUnprocessable:
+			// Only errFutureBlock is self-limiting; an orphan whose parent got
+			// evicted waits forever, so age it out on the admission window.
+			if blk.Header().Timestamp()+futureBlockWindow*thor.BlockInterval() < uint64(time.Now().Unix()) {
+				logger.Debug("future block aged out", "id", blk.Header().ID())
+				n.futureBlocksCache.Remove(blk.Header().ID())
+			}
+		default:
+			// Consensus failures, plus I/O errors from executeAndCommitBlock.
+			logger.Debug("future block dropped", "id", blk.Header().ID(), "err", err)
+			n.futureBlocksCache.Remove(blk.Header().ID())
 		}
 
 		if stats.processed > 0 && i == len(blocks)-1 {
-			logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+			logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(blk.Header())...)
 		}
 	}
 }

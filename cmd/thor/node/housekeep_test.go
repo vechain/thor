@@ -7,6 +7,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -88,7 +89,10 @@ func (m *mockBFT) Justified() (thor.Bytes32, error) {
 }
 
 type mockConsensus struct {
-	stager *state.Stage
+	stager         *state.Stage
+	prevalidateErr error
+	captureCeiling *uint64
+	processErr     error
 }
 
 func newMockConsensus() *mockConsensus {
@@ -108,11 +112,21 @@ func (m *mockConsensus) Process(
 	nowTimestamp uint64,
 	blockConflicts uint32,
 ) (*state.Stage, tx.Receipts, error) {
+	if m.processErr != nil {
+		return nil, nil, m.processErr
+	}
 	return m.stager, nil, nil
 }
 
 func (m *mockConsensus) NewRuntimeForReplay(header *block.Header, skipValidation bool) (*runtime.Runtime, error) {
 	return nil, nil
+}
+
+func (m *mockConsensus) PrevalidateStateless(blk *block.Block, ceilingGasLimit uint64) error {
+	if m.captureCeiling != nil {
+		*m.captureCeiling = ceilingGasLimit
+	}
+	return m.prevalidateErr
 }
 
 type mockableNode struct {
@@ -332,4 +346,156 @@ func TestNode_HouseKeeping_ConnectivityTicker(t *testing.T) {
 
 	cs.Check(0)
 	assert.Equal(t, ConnectivityState(1), *cs, "cs should be 1 after reaching threshold and checking clock offset")
+}
+
+func TestNode_ShouldCacheFutureBlock(t *testing.T) {
+	now := uint64(time.Now().Unix())
+
+	tests := []struct {
+		name           string
+		timestamp      uint64
+		gasLimit       uint64
+		prevalidateErr error
+		expectCache    bool
+	}{
+		{
+			name:        "within window cached",
+			timestamp:   now + 2*thor.BlockInterval(),
+			gasLimit:    thor.InitialGasLimit,
+			expectCache: true,
+		},
+		{
+			name:        "at window edge cached",
+			timestamp:   now + futureBlockWindow*thor.BlockInterval(),
+			gasLimit:    thor.InitialGasLimit,
+			expectCache: true,
+		},
+		{
+			name:        "beyond window rejected",
+			timestamp:   now + (futureBlockWindow+1)*thor.BlockInterval(),
+			gasLimit:    thor.InitialGasLimit,
+			expectCache: false,
+		},
+		{
+			name:        "far future rejected",
+			timestamp:   now + 86400,
+			gasLimit:    thor.InitialGasLimit,
+			expectCache: false,
+		},
+		{
+			name:           "prevalidation failure rejected",
+			timestamp:      now + thor.BlockInterval(),
+			gasLimit:       thor.InitialGasLimit,
+			prevalidateErr: errors.New("rejected"),
+			expectCache:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node, _ := setupTestNodeForHousekeeping(t)
+			node.cons.(*mockConsensus).prevalidateErr = tt.prevalidateErr
+
+			blk := new(block.Builder).
+				ParentID(node.repo.BestBlockSummary().Header.ID()).
+				Timestamp(tt.timestamp).
+				GasLimit(tt.gasLimit).
+				TotalScore(11).
+				Build()
+
+			assert.Equal(t, tt.expectCache, node.shouldCacheFutureBlock(blk))
+		})
+	}
+}
+
+// The ceiling handed to PrevalidateStateless must leave room for the gas limit
+// drifting up by 1/1024 per block over futureBlockWindow blocks.
+func TestNode_ShouldCacheFutureBlockCeiling(t *testing.T) {
+	node, _ := setupTestNodeForHousekeeping(t)
+
+	var captured uint64
+	node.cons.(*mockConsensus).captureCeiling = &captured
+
+	blk := new(block.Builder).
+		ParentID(node.repo.BestBlockSummary().Header.ID()).
+		Timestamp(uint64(time.Now().Unix())).
+		GasLimit(thor.InitialGasLimit).
+		TotalScore(11).
+		Build()
+
+	assert.True(t, node.shouldCacheFutureBlock(blk))
+
+	want := node.repo.BestBlockSummary().Header.GasLimit()
+	for range futureBlockWindow {
+		want += want / thor.GasLimitBoundDivisor
+	}
+	assert.Equal(t, want, captured)
+	assert.Greater(t, captured, node.repo.BestBlockSummary().Header.GasLimit())
+}
+
+func TestNode_HandleFutureBlocks_Eviction(t *testing.T) {
+	now := uint64(time.Now().Unix())
+
+	tests := []struct {
+		name         string
+		processErr   error
+		timestamp    uint64
+		expectRetain bool
+	}{
+		{
+			// consensusError is unexported, so a plain error stands in — both land
+			// in the same default branch, which is what this asserts.
+			name:         "hard failure evicted",
+			processErr:   errors.New("boom"),
+			timestamp:    now,
+			expectRetain: false,
+		},
+		{
+			name:         "parent missing retained within window",
+			processErr:   errParentMissing,
+			timestamp:    now,
+			expectRetain: true,
+		},
+		{
+			name:         "temporarily unprocessable retained within window",
+			processErr:   errBlockTemporaryUnprocessable,
+			timestamp:    now,
+			expectRetain: true,
+		},
+		{
+			name:         "parent missing aged out",
+			processErr:   errParentMissing,
+			timestamp:    now - (futureBlockWindow+1)*thor.BlockInterval(),
+			expectRetain: false,
+		},
+		{
+			name:         "temporarily unprocessable aged out",
+			processErr:   errBlockTemporaryUnprocessable,
+			timestamp:    now - (futureBlockWindow+1)*thor.BlockInterval(),
+			expectRetain: false,
+		},
+		{
+			name:         "success evicted",
+			processErr:   nil,
+			timestamp:    now,
+			expectRetain: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node, _ := setupTestNodeForHousekeeping(t)
+			node.cons.(*mockConsensus).processErr = tt.processErr
+
+			blk := (&block.Builder{}).
+				ParentID(node.repo.BestBlockSummary().Header.ID()).
+				Timestamp(tt.timestamp).
+				Build()
+			node.futureBlocksCache.Set(blk.Header().ID(), blk)
+
+			node.handleFutureBlocks()
+
+			assert.Equal(t, tt.expectRetain, node.futureBlocksCache.Contains(blk.Header().ID()))
+		})
+	}
 }
