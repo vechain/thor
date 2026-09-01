@@ -31,6 +31,10 @@ var (
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
+	// errValueTransferNotAllowed is returned when a CALL sends value to a native
+	// method. Native methods don't handle VET as part of the call.
+	errValueTransferNotAllowed = errors.New("value transfer not allowed")
+
 	// EmptyRuntimeBytecode is stored at every precompile address at fork activation.
 	// This makes precompile addresses "exist" in Thor's state, which prevents
 	// accidental contract deployment to those addresses (CREATE/CREATE2 will fail
@@ -256,11 +260,23 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 
 			if readonly && !abi.Const() {
+				if thor.IsForked(rt.ctx.Number, rt.forkConfig.INTERSTELLAR) {
+					return nil, vm.ErrWriteProtection, true
+				}
 				panic("invoke non-const method in readonly env")
 			}
 
 			if contract.Value().Sign() != 0 {
 				// reject value transfer on call
+				//
+				// Defensive: every builtin contract dispatches to its native_*
+				// counterpart via a plain address(this) self-call, which Solidity
+				// never gives a nonzero value unless written with {value: ...} -
+				// none of them are. So this is currently unreachable through any
+				// deployed builtin; it guards the invariant rather than a live path.
+				if thor.IsForked(rt.ctx.Number, rt.forkConfig.INTERSTELLAR) {
+					return nil, errValueTransferNotAllowed, true
+				}
 				panic("value transfer not allowed")
 			}
 

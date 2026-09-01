@@ -1583,6 +1583,81 @@ func GetMockTx(repo *chain.Repository, t *testing.T) *tx.Transaction {
 	return tx
 }
 
+// TestReadonlyNonConstNative exercises, on both sides of the INTERSTELLAR fork, a
+// STATICCALL that reaches a non-const builtin native method (Prototype.sponsor,
+// whose native_sponsor is non-const).
+func TestReadonlyNonConstNative(t *testing.T) {
+	// sponsor(address) selector.
+	sponsorSel := []byte{0x76, 0x6c, 0x4f, 0x37}
+	proto := builtin.Prototype.Address
+
+	selWord := make([]byte, 32)
+	copy(selWord, sponsorSel) // left-aligned in the first 4 bytes of calldata
+	argWord := make([]byte, 32)
+	argWord[31] = 0x01 // _self argument (value irrelevant to this test)
+
+	var code []byte
+	push32 := func(w []byte) { code = append(append(code, byte(vm.PUSH32)), w...) }
+	push1 := func(b byte) { code = append(code, byte(vm.PUSH1), b) }
+	push32(selWord)
+	push1(0x00)
+	code = append(code, byte(vm.MSTORE)) // mem[0x00:0x20) = selector
+	push32(argWord)
+	push1(0x04)
+	code = append(code, byte(vm.MSTORE)) // mem[0x04:0x24) = _self
+	// STATICCALL(gas, proto, argsOffset=0, argsSize=0x24, retOffset=0, retSize=0)
+	push1(0x00) // retSize
+	push1(0x00) // retOffset
+	push1(0x24) // argsSize
+	push1(0x00) // argsOffset
+	code = append(append(code, byte(vm.PUSH20)), proto.Bytes()...)
+	code = append(code, byte(vm.GAS), byte(vm.STATICCALL))
+	// return the STATICCALL success flag (0 => the sub-call failed).
+	push1(0x00)
+	code = append(code, byte(vm.MSTORE))
+	push1(0x20)
+	push1(0x00)
+	code = append(code, byte(vm.RETURN))
+
+	caller := thor.BytesToAddress([]byte("caller"))
+	const gasLimit = uint64(1_000_000)
+
+	run := func(interstellar uint32) (*runtime.Output, error) {
+		db := muxdb.NewMem()
+		g, _ := genesis.NewDevnet()
+		stater := state.NewStater(db)
+		b0, _, _, err := g.Build(stater)
+		if err != nil {
+			t.Fatal(err)
+		}
+		repo, err := chain.NewRepository(db, b0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st := stater.NewState(trie.Root{Hash: b0.Header().StateRoot()})
+		st.SetCode(caller, code)
+
+		fc := thor.SoloFork
+		fc.INTERSTELLAR = interstellar
+		exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{}, &fc).
+			PrepareClause(tx.NewClause(&caller), 0, gasLimit, &xenv.TransactionContext{})
+		out, _, err := exec()
+		return out, err
+	}
+
+	// Before the fork: the call is rejected with a tx-level error.
+	_, err := run(math.MaxUint32)
+	assert.ErrorContains(t, err, "invoke non-const method in readonly env")
+
+	// After the fork: the sub-call fails through the normal EVM path (STATICCALL
+	// returns 0, gas is consumed) and the outer tx completes without error.
+	out, err := run(0)
+	require.NoError(t, err)
+	assert.Nil(t, out.VMErr)
+	assert.Zero(t, new(big.Int).SetBytes(out.Data).Sign(), "sub-call must return 0")
+	assert.Less(t, out.LeftOverGas, gasLimit, "sub-call must consume gas")
+}
+
 // loopingCallCode expands memory to memTop once (paid a single time), then
 // loops n times performing a zero-forwarded-gas STATICCALL to precompile
 // 0x01 with input [0, inSize).

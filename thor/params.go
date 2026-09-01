@@ -31,6 +31,7 @@ const (
 	SloadGas             uint64 = 200              // EIP158 gas table
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
+	EcrecoverGas         uint64 = params.EcrecoverGas
 
 	MaxTxGasLimit             uint64 = 1 << 24                // 16,777,216 - EIP-7825 per-transaction gas cap
 	MaxTxWorkDelay            uint32 = 30                     // (unit: block) if tx delay exceeds this value, no energy can be exchanged.

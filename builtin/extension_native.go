@@ -99,6 +99,9 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
+			if thor.IsForked(env.BlockContext().Number, env.ForkConfig().INTERSTELLAR) {
+				env.UseGas(thor.EcrecoverGas)
+			}
 			signer, err := header.Signer()
 			if err != nil {
 				panic(err)

@@ -1887,3 +1887,40 @@ func TestExtensionV3(t *testing.T) {
 	val = new(big.Int).SetBytes(out.Data)
 	assert.Equal(t, uint64(clauseCount), val.Uint64())
 }
+
+func TestExtensionBlockSignerReprice(t *testing.T) {
+	// blockSignerDelta returns the extra gas the historical path (blockNum < current)
+	// charges over the early-return path (blockNum > current, which returns before any
+	// UseGas). The two calls share identical input size and wrapper cost, so the delta
+	// isolates the fork-gated surcharge on the historical path.
+	blockSignerDelta := func(t *testing.T, interstellar uint32) uint64 {
+		thorChain = newChain(t, &thor.ForkConfig{
+			BLOCKLIST:    0,
+			VIP191:       1,
+			VIP214:       2,
+			ETH_CONST:    math.MaxUint32,
+			ETH_IST:      math.MaxUint32,
+			FINALITY:     math.MaxUint32,
+			GALACTICA:    math.MaxUint32,
+			HAYABUSA:     math.MaxUint32,
+			INTERSTELLAR: interstellar,
+		})
+		for range 4 {
+			require.NoError(t, thorChain.MintBlock())
+		}
+		abiV2 := builtin.Extension.V2.ABI
+		to := builtin.Extension.Address
+
+		var out common.Address
+		histGas, err := callContractAndGetOutput(abiV2, "blockSigner", to, &out, big.NewInt(1)) // < current -> historical
+		require.NoError(t, err)
+		earlyGas, err := callContractAndGetOutput(abiV2, "blockSigner", to, &out, big.NewInt(1000)) // > current -> early return
+		require.NoError(t, err)
+		return histGas - earlyGas
+	}
+
+	// pre-fork: historical path charges 2*SloadGas over the early-return baseline.
+	assert.Equal(t, 2*thor.SloadGas, blockSignerDelta(t, math.MaxUint32))
+	// post-fork: the historical path charges an additional EcrecoverGas.
+	assert.Equal(t, 2*thor.SloadGas+thor.EcrecoverGas, blockSignerDelta(t, 0))
+}
