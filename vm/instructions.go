@@ -762,14 +762,14 @@ func opStaticCall(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack
 
 func opReturn(_ *uint64, _ *EVM, _ *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.popptr(), stack.popptr()
-	ret := memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	ret := memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 
 	return ret, nil
 }
 
 func opRevert(_ *uint64, _ *EVM, _ *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.popptr(), stack.popptr()
-	ret := memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	ret := memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 	return ret, nil
 }
 
