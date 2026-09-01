@@ -9,10 +9,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/vechain/thor/v2/thor"
+
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var _ Logger = (*noopTracer)(nil)
@@ -214,4 +217,30 @@ func TestCreate2(t *testing.T) {
 	assert.NotNil(t, addr)
 	assert.Nil(t, ret)
 	assert.NotNil(t, leftOverGas)
+}
+
+// CREATE and CREATE2 must execute initcode containing an internal jump
+// correctly (via the per-frame, uncached analysis branch) without ever
+// populating the process-global bitmapCache with the initcode's bitmap.
+func TestCreateAndCreate2DoNotPopulateGlobalBitmapCache(t *testing.T) {
+	bitmapCache.Purge()
+	t.Cleanup(func() { bitmapCache.Purge() })
+
+	// PUSH1 3, JUMP, JUMPDEST, PUSH1 0, PUSH1 0, RETURN: deploys empty code
+	// after taking an internal jump, so validJumpdest/isCode is exercised.
+	initcode := []byte{byte(PUSH1), 0x03, byte(JUMP), byte(JUMPDEST), byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(RETURN)}
+	hash := common.Hash(thor.Keccak256(initcode))
+
+	caller := common.HexToAddress("0x01234567A")
+
+	codeAddr := common.BytesToAddress([]byte{1})
+	evm, _ := setupEvmTestContract(&codeAddr)
+	_, _, _, err := evm.Create(AccountRef(caller), initcode, 1000000, big.NewInt(0))
+	assert.Nil(t, err)
+	assert.False(t, bitmapCache.Contains(hash), "CREATE must not cache the initcode's jumpdest bitmap globally")
+
+	evm2, _ := setupEvmTestContract(&codeAddr)
+	_, _, _, err = evm2.Create2(AccountRef(caller), initcode, 1000000, big.NewInt(0), uint256.NewInt(1))
+	assert.Nil(t, err)
+	assert.False(t, bitmapCache.Contains(hash), "CREATE2 must not cache the initcode's jumpdest bitmap globally")
 }

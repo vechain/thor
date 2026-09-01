@@ -167,10 +167,10 @@ func (c *Contract) isCode(udest uint64) bool {
 	if c.analysis != nil {
 		return c.analysis.codeSegment(udest)
 	}
-	// thor: although the codehash won't be empty currently, still keep the check logic.
-	//
 	// Do we have a contract hash already?
-	// If we do have a hash, that means it's a 'regular' contract.
+	// If we do have a hash, that means it's a 'regular' contract. For regular
+	// contracts (not temporary initcode), we cache the analysis in the
+	// process-global bitmapCache.
 	if c.CodeHash != (common.Hash{}) {
 		analysis := getCodeBitmapCached(c.CodeHash, c.Code)
 		// Also stash it in current contract for faster access

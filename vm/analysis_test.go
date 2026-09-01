@@ -21,6 +21,9 @@ import (
 	"testing"
 
 	"github.com/vechain/thor/v2/thor"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {
@@ -60,6 +63,50 @@ func TestJumpDestAnalysis(t *testing.T) {
 		if ret[test.which] != test.exp {
 			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
 		}
+	}
+}
+
+// A create frame (empty CodeHash) must analyze the
+// jumpdest bitmap locally and never populate the process-global bitmapCache;
+// a regular deployed contract (real CodeHash) still does.
+func TestIsCode_EmptyCodeHashSkipsGlobalCache(t *testing.T) {
+	bitmapCache.Purge()
+	t.Cleanup(func() { bitmapCache.Purge() })
+
+	// PUSH1 3, JUMP, JUMPDEST, PUSH1 0, PUSH1 0, RETURN. Position 3 holds
+	// JUMPDEST as real code; positions 1, 5 and 7 are PUSH1 data bytes that
+	// must NOT be classified as valid jump destinations.
+	code := []byte{byte(PUSH1), 0x03, byte(JUMP), byte(JUMPDEST), byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(RETURN)}
+	want := codeBitmap(code)
+
+	initcode := &Contract{}
+	initcode.SetCallCode(&common.Address{}, common.Hash{}, code)
+
+	for _, pos := range []uint64{1, 3, 5, 7} {
+		if got, exp := initcode.isCode(pos), want.codeSegment(pos); got != exp {
+			t.Fatalf("isCode(%d) = %v, want %v (matching codeBitmap ground truth)", pos, got, exp)
+		}
+	}
+	if !initcode.validJumpdest(uint256.NewInt(3)) {
+		t.Fatal("JUMPDEST at position 3 must be a valid jump destination")
+	}
+	if initcode.validJumpdest(uint256.NewInt(1)) {
+		t.Fatal("PUSH1 data byte at position 1 must not be a valid jump destination")
+	}
+
+	hash := common.Hash(thor.Keccak256(code))
+	if bitmapCache.Contains(hash) {
+		t.Fatal("analyzing a create-frame contract (empty CodeHash) must not populate the global bitmap cache")
+	}
+
+	// Positive control: the same code with a real codehash (the 'regular
+	// contract' branch) does get cached, proving the two branches actually
+	// differ and this test isn't vacuously passing.
+	deployed := &Contract{}
+	deployed.SetCallCode(&common.Address{}, hash, code)
+	deployed.isCode(3)
+	if !bitmapCache.Contains(hash) {
+		t.Fatal("a regular (deployed) contract with a real codehash should populate the global bitmap cache")
 	}
 }
 
