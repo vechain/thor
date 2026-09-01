@@ -258,3 +258,84 @@ func TestGasMcopy(t *testing.T) {
 		})
 	}
 }
+
+// refundStateDB tracks refunds for gas-function tests.
+type refundStateDB struct {
+	NoopStateDB
+	refund uint64
+}
+
+func (s *refundStateDB) AddRefund(g uint64) { s.refund += g }
+func (s *refundStateDB) GetRefund() uint64  { return s.refund }
+
+func newEVMWithStateDB(statedb StateDB) *EVM {
+	return NewEVM(Context{
+		BlockNumber:        big.NewInt(1),
+		GasPrice:           big.NewInt(1),
+		CanTransfer:        NoopCanTransfer,
+		Transfer:           NoopTransfer,
+		NewContractAddress: newContractAddress,
+	}, statedb, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+}
+
+func selfdestructTestContract() *Contract {
+	addr := common.HexToAddress("0x0badc0de")
+	return NewContract(AccountRef(addr), AccountRef(addr), big.NewInt(0), 0)
+}
+
+func selfdestructTestStack() *Stack {
+	s := &Stack{}
+	s.push(uint256.NewInt(0)) // beneficiary
+	return s
+}
+
+// gasSuicide (legacy/pre-fork) grants the refund.
+func TestGasSuicideGrantsRefund(t *testing.T) {
+	sdb := &refundStateDB{}
+	evm := newEVMWithStateDB(sdb)
+	gas, err := gasSuicide(params.GasTable{}, evm, selfdestructTestContract(), selfdestructTestStack(), &Memory{}, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), gas) // gt.Suicide == 0 for empty GasTable
+	assert.Equal(t, params.SuicideRefundGas, sdb.GetRefund())
+}
+
+// gasSuicide3529 (Cancun) grants no refund.
+func TestGasSuicide3529NoRefund(t *testing.T) {
+	sdb := &refundStateDB{}
+	evm := newEVMWithStateDB(sdb)
+	gas, err := gasSuicide3529(params.GasTable{}, evm, selfdestructTestContract(), selfdestructTestStack(), &Memory{}, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), gas)
+	assert.Equal(t, uint64(0), sdb.GetRefund())
+}
+
+// repeated SELFDESTRUCT on a surviving contract accumulates zero refund (exploit closed).
+func TestGasSuicide3529RepeatedNoRefund(t *testing.T) {
+	sdb := &refundStateDB{}
+	evm := newEVMWithStateDB(sdb)
+	for range 10 {
+		_, err := gasSuicide3529(params.GasTable{}, evm, selfdestructTestContract(), selfdestructTestStack(), &Memory{}, 0)
+		assert.NoError(t, err)
+	}
+	assert.Equal(t, uint64(0), sdb.GetRefund())
+}
+
+// the Cancun instruction set is wired to the no-refund gas function.
+func TestCancunSelfdestructWiredNoRefund(t *testing.T) {
+	sdb := &refundStateDB{}
+	evm := newEVMWithStateDB(sdb)
+	op := NewCancunInstructionSet()[SELFDESTRUCT]
+	_, err := op.gasCost(params.GasTable{}, evm, selfdestructTestContract(), selfdestructTestStack(), &Memory{}, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), sdb.GetRefund())
+}
+
+// gas cost (excluding refund) is identical between legacy and EIP-3529.
+func TestSelfdestructGasCostUnchanged(t *testing.T) {
+	gt := params.GasTable{Suicide: 5000, CreateBySuicide: 25000}
+	g1, err1 := gasSuicide(gt, newEVMWithStateDB(&refundStateDB{}), selfdestructTestContract(), selfdestructTestStack(), &Memory{}, 0)
+	g2, err2 := gasSuicide3529(gt, newEVMWithStateDB(&refundStateDB{}), selfdestructTestContract(), selfdestructTestStack(), &Memory{}, 0)
+	assert.NoError(t, err1)
+	assert.NoError(t, err2)
+	assert.Equal(t, g1, g2)
+}

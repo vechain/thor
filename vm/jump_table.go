@@ -80,7 +80,7 @@ func NewCancunInstructionSet() *JumpTable {
 	instructionSet := NewShanghaiInstructionSet()
 	instructionSet[SELFDESTRUCT] = &operation{
 		execute:       opSuicide6780,
-		gasCost:       gasSuicide,
+		gasCost:       gasSuicide3529,
 		validateStack: makeStackFunc(1, 0),
 		halts:         true,
 		writes:        true,

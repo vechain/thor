@@ -46,7 +46,11 @@ type (
 	// OnCreateContractFunc callback when creating contract.
 	OnCreateContractFunc func(evm *EVM, contractAddr common.Address, caller common.Address)
 
-	// OnSuicideContractFunc callback when suicide contract.
+	// OnSuicideContractFunc is called on SELFDESTRUCT, before the account is
+	// (possibly) deleted. shouldDestroy reports whether the contract was created
+	// within the current execution and will therefore be deleted: always true
+	// pre-EIP-6780, IsNewContract(contractAddr) after. Implementations use it to
+	// reproduce the pre-EIP-6780 output whenever the account does get deleted.
 	OnSuicideContractFunc func(evm *EVM, contractAddr common.Address, tokenReceiver common.Address, shouldDestroy bool)
 )
 

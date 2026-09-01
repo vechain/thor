@@ -460,6 +460,32 @@ func gasSuicide(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, 
 	return gas, nil
 }
 
+// gasSuicide3529 implements EIP-3529: SELFDESTRUCT no longer grants a
+// gas refund. Gas cost is otherwise identical to gasSuicide. Wired into the
+// Cancun set alongside EIP-6780 (opSuicide6780), whose semantics presuppose
+// the refund has already been removed.
+func gasSuicide3529(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, _ *Memory, _ uint64) (uint64, error) {
+	var gas uint64
+	// EIP150 homestead gas reprice fork:
+	if evm.ChainConfig().IsEIP150(evm.BlockNumber) {
+		gas = gt.Suicide
+		var (
+			address = common.Address(stack.Back(0).Bytes20())
+			eip158  = evm.ChainConfig().IsEIP158(evm.BlockNumber)
+		)
+
+		if eip158 {
+			// if empty and transfers value
+			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+				gas += gt.CreateBySuicide
+			}
+		} else if !evm.StateDB.Exist(address) {
+			gas += gt.CreateBySuicide
+		}
+	}
+	return gas, nil
+}
+
 func gasDelegateCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
