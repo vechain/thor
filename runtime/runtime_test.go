@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	goruntime "runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/block"
@@ -1579,4 +1581,131 @@ func GetMockTx(repo *chain.Repository, t *testing.T) *tx.Transaction {
 	tx = tx.WithSignature(sig)
 
 	return tx
+}
+
+// loopingCallCode expands memory to memTop once (paid a single time), then
+// loops n times performing a zero-forwarded-gas STATICCALL to precompile
+// 0x01 with input [0, inSize).
+func loopingCallCode(memTop uint32, inSize uint32, n uint32) []byte {
+	p3 := func(v uint32) []byte {
+		return []byte{byte(vm.PUSH3), byte(v >> 16), byte(v >> 8), byte(v)}
+	}
+	code := []byte{byte(vm.PUSH1), 0x00} // value for mstore8
+	code = append(code, p3(memTop-1)...) // offset
+	code = append(code, byte(vm.MSTORE8))
+	code = append(code, p3(n)...) // counter
+	loop := len(code)
+	code = append(code, byte(vm.JUMPDEST))
+	code = append(code, byte(vm.PUSH1), 0x00) // retSize
+	code = append(code, byte(vm.PUSH1), 0x00) // retOffset
+	code = append(code, p3(inSize)...)        // inSize
+	code = append(code, byte(vm.PUSH1), 0x00) // inOffset
+	code = append(code, byte(vm.PUSH1), 0x01) // addr = 0x01
+	code = append(code, byte(vm.PUSH1), 0x00) // gas = 0
+	code = append(code, byte(vm.STATICCALL))
+	code = append(code, byte(vm.POP))
+	code = append(code, byte(vm.PUSH1), 0x01, byte(vm.SWAP1), byte(vm.SUB))
+	code = append(code, byte(vm.DUP1), byte(vm.PUSH1), byte(loop), byte(vm.JUMPI))
+	code = append(code, byte(vm.STOP))
+	return code
+}
+
+// runLoopingCall executes code as a single clause and returns the Go heap
+// bytes allocated during exec(), isolated from genesis/state setup by
+// resetting the MemStats baseline right before exec() runs.
+func runLoopingCall(t *testing.T, code []byte, gas uint64) uint64 {
+	db := muxdb.NewMem()
+	g, forkConfig := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	require.NoError(t, err)
+	repo, err := chain.NewRepository(db, b0)
+	require.NoError(t, err)
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	r := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{GasLimit: gas}, forkConfig)
+
+	exec, _ := r.PrepareClause(tx.NewClause(nil).WithData(code), 0, gas, &xenv.TransactionContext{})
+
+	goruntime.GC()
+	var m0, m1 goruntime.MemStats
+	goruntime.ReadMemStats(&m0)
+	out, _, err := exec()
+	goruntime.ReadMemStats(&m1)
+	require.NoError(t, err)
+	require.Nil(t, out.VMErr)
+	return m1.TotalAlloc - m0.TotalAlloc
+}
+
+// TestCallInputNotCopiedPerCall pins the per-call cost of call-input
+// copying. Same call count n and the same one-time memory expansion
+// (memTop) in both runs -- only inSize differs between the large-input run
+// (2560 KiB input) and the zero-input run (0-byte input) -- so the
+// assertion isolates the per-call input-copy cost from unrelated
+// per-iteration overhead (e.g. Contract/stack allocations) that scales with
+// n regardless of GetCopy vs GetPtr.
+//
+// Under memory.GetCopy each iteration allocates+copies a fresh ~2.5 MB
+// buffer: large-input/zero-input ratio ~4000x, far outside the 3x bound.
+// Under memory.GetPtr the copy is eliminated: large-input ~= zero-input.
+//
+// Do not add t.Parallel(): this test measures process-global
+// runtime.MemStats.TotalAlloc, so allocations from any other goroutine
+// running concurrently would skew the measurement (risk is a false-fail,
+// not a false-pass).
+func TestCallInputNotCopiedPerCall(t *testing.T) {
+	const gas = 40_000_000
+	const n = 35000
+	withInput := runLoopingCall(t, loopingCallCode(0x280000, 0x280000, n), gas)
+	withoutInput := runLoopingCall(t, loopingCallCode(0x280000, 0, n), gas)
+	t.Logf("withInput=%d bytes (%.3f GB) withoutInput=%d bytes (%.3f GB)",
+		withInput, float64(withInput)/1e9, withoutInput, float64(withoutInput)/1e9)
+	assert.Less(t, withInput, withoutInput*3,
+		"call input allocation must not scale with inputSize x callCount")
+}
+
+// BenchmarkCallInputCopy runs the call-input loop (0x280000 memory
+// expansion, 35000 zero-forwarded-gas STATICCALLs to 0x01) under the
+// current (GetPtr) code path and reports AllocedBytesPerOp for regression
+// tracking.
+//
+// Reference numbers measured on this session's host (b967fbf0, go1.26.5,
+// darwin/arm64), same loop (n=35000):
+//   - before (memory.GetCopy): TotalAlloc 91.77 GB, HeapSys ~200 MB, wall ~2.9s
+//   - after  (memory.GetPtr):  TotalAlloc 0.023 GB, HeapSys ~79 MB,  wall ~0.021s
+//
+// HeapSys and wall above are manually measured, not collected by this
+// benchmark -- BenchmarkCallInputCopy only reports B/op (allocated
+// bytes/op) via b.ReportAllocs().
+//
+// The before case is not re-benchmarked here because vm/instructions.go no
+// longer has a GetCopy code path to select (single version, no fork) --
+// this benchmark only guards against regressing the current path back to
+// per-call allocation.
+func BenchmarkCallInputCopy(b *testing.B) {
+	const gas = 40_000_000
+	code := loopingCallCode(0x280000, 0x280000, 35000)
+
+	db := muxdb.NewMem()
+	g, forkConfig := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	if err != nil {
+		b.Fatal(err)
+	}
+	repo, err := chain.NewRepository(db, b0)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+		r := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{GasLimit: gas}, forkConfig)
+		exec, _ := r.PrepareClause(tx.NewClause(nil).WithData(code), 0, gas, &xenv.TransactionContext{})
+		out, _, err := exec()
+		if err != nil {
+			b.Fatal(err)
+		}
+		if out.VMErr != nil {
+			b.Fatal(out.VMErr)
+		}
+	}
 }

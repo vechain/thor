@@ -529,3 +529,240 @@ func TestPrecompiledP256Verify_PointAtInfinity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, res)
 }
+
+// sentinelByte marks bytes just past an input window / spare backing
+// capacity, so a precompile writing there (in-place append, in-place
+// mutation) flips it and gets caught.
+const sentinelByte = 0xAA
+
+// TestEcrecoverDoesNotWriteInput guards an invariant introduced by
+// memory.GetPtr: the call opcodes now pass a zero-copy view of the caller's
+// EVM memory straight into precompiles, so a precompile's input IS the
+// caller's memory and must never be written through. ecrecover
+// (vm/contracts.go) copies the signature onto a fresh [65]byte array before
+// calling crypto.Ecrecover, so it never touches its input slice.
+//
+// This drives a STATICCALL to 0x01 through the real opcode path (rather than
+// calling ecrecover.Run directly) so the GetPtr aliasing is actually
+// exercised, with a 128-byte input crafted to reach ecrecover.Run's
+// signature-construction step: (hash=0, v=27 => v-27=0, r=1, s=1) satisfies
+// the all-zero check on input[32:63] and ValidateSignatureValues(0, 1, 1,
+// false), regardless of what crypto.Ecrecover itself returns.
+//
+// The precompile fork table doesn't matter here — 0x01 resolves to the same
+// &ecrecover{} in every table (vm/contracts.go) — so this only needs to run
+// once, against Osaka.
+func TestEcrecoverDoesNotWriteInput(t *testing.T) {
+	chainCfg := &ChainConfig{OsakaBlock: big.NewInt(0)}
+	evm := NewEVM(Context{BlockNumber: big.NewInt(0)}, NoopStateDB{}, chainCfg, Config{})
+	if _, ok := evm.precompile(common.BytesToAddress([]byte{1})); !ok {
+		t.Fatal("expected a precompile at 0x01")
+	}
+
+	contract := NewContract(AccountRef(common.Address{}), AccountRef(common.Address{}), big.NewInt(0), 100000)
+
+	memory := NewMemory()
+	// 256 bytes gives the 128-byte input spare capacity past byte 128, so
+	// this remains a regression check: if ecrecover.Run ever reverts to
+	// writing through its input slice (e.g. append(input[64:128], v)), that
+	// write lands in-place here instead of on a reallocated backing array,
+	// and the sentinel below catches it.
+	memory.Resize(256)
+
+	input := make([]byte, 128)
+	input[63] = 27
+	input[95] = 1  // r = 1
+	input[127] = 1 // s = 1
+	memory.Set(0, 128, input)
+	memory.store[128] = sentinelByte
+
+	stack := newstack()
+	// STATICCALL(gas, addr=0x01, inOffset=0, inSize=128, retOffset=0, retSize=0)
+	stack.push(uint256.NewInt(0))                                                   // retSize
+	stack.push(uint256.NewInt(0))                                                   // retOffset
+	stack.push(uint256.NewInt(128))                                                 // inSize
+	stack.push(uint256.NewInt(0))                                                   // inOffset
+	stack.push(new(uint256.Int).SetBytes(common.BytesToAddress([]byte{1}).Bytes())) // addr = 0x01
+	stack.push(uint256.NewInt(100000))                                              // gas (popped & discarded by opStaticCall)
+	evm.callGasTemp = 100000
+
+	pc := uint64(0)
+	if _, err := opStaticCall(&pc, evm, contract, memory, stack); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := memory.store[128]; got != sentinelByte {
+		t.Errorf("ecrecover wrote past its 128-byte input window: got %#x, want sentinel %#x", got, byte(sentinelByte))
+	}
+}
+
+// precompileVectors maps a precompile's test address (in the same short hex
+// form used by testJSON elsewhere in this file) to a testdata/precompiles
+// JSON file supplying real success-path inputs. Precompiles without a vector
+// file fall back to genericFillerInput.
+var precompileVectors = func() map[common.Address]string {
+	names := map[string]string{
+		"01":   "ecRecover",
+		"05":   "modexp_eip7883", // Osaka: eip2565+eip7823+eip7883
+		"06":   "bn256Add_eip1108",
+		"07":   "bn256ScalarMul_eip1108",
+		"08":   "bn256Pairing_eip1108",
+		"09":   "blake2F",
+		"0b":   "blsG1Add",
+		"0c":   "blsG1MultiExp",
+		"0d":   "blsG2Add",
+		"0e":   "blsG2MultiExp",
+		"0f":   "blsPairing",
+		"10":   "blsMapG1",
+		"11":   "blsMapG2",
+		"0100": "p256Verify",
+		"b5":   "modexp",
+		"f5":   "modexp_eip2565",
+		"e5":   "modexp_eip2565", // eip7823 variant; vectors are all within the 1024-byte limit
+		"f9":   "modexp_eip7883",
+		"b6":   "bn256Add",
+		"f6":   "bn256Add_eip1108",
+		"b7":   "bn256ScalarMul",
+		"f7":   "bn256ScalarMul_eip1108",
+		"b8":   "bn256Pairing",
+		"f8":   "bn256Pairing_eip1108",
+	}
+	m := make(map[common.Address]string, len(names))
+	for addr, name := range names {
+		m[common.HexToAddress(addr)] = name
+	}
+	return m
+}()
+
+// genericFillerInput covers precompiles with no testdata/precompiles vector
+// file (sha256, ripemd160, identity: all take arbitrary-length input and
+// always succeed, so no bespoke vector is needed to reach their write path).
+var genericFillerInput = func() []byte {
+	b := make([]byte, 37)
+	for i := range b {
+		b[i] = byte(i)
+	}
+	return b
+}()
+
+// precompileInputs returns the set of inputs to exercise for addr, preferring
+// real success-path vectors (see precompileVectors) over the generic filler.
+func precompileInputs(t *testing.T, addr common.Address) [][]byte {
+	t.Helper()
+	name, ok := precompileVectors[addr]
+	if !ok {
+		return [][]byte{genericFillerInput}
+	}
+	tests, err := loadJSON(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := make([][]byte, len(tests))
+	for i, test := range tests {
+		inputs[i] = common.Hex2Bytes(test.Input)
+	}
+	return inputs
+}
+
+// TestPrecompilesDoNotWriteInput sweeps every entry in allPrecompiles and
+// asserts none of them write through their input.
+//
+// This matters because the call opcodes now pass memory.GetPtr's zero-copy
+// view straight into precompiles: a precompile's input IS the caller's own
+// EVM memory, so a write there corrupts the caller's memory and can produce
+// a consensus divergence between nodes. The precompiles present at the time
+// of this change have already been audited (see TestEcrecoverDoesNotWriteInput
+// and TestIdentityDoesNotWriteInput); this test's job is to catch a *future*
+// precompile that regresses the invariant.
+//
+// Each input is copied into a backing array with spare capacity past the
+// input window, filled with sentinelByte, so an in-place write (e.g. an
+// append that happens to fit within cap()) corrupts bytes this test can see,
+// instead of silently reallocating onto a private buffer.
+func TestPrecompilesDoNotWriteInput(t *testing.T) {
+	for addr, p := range allPrecompiles {
+		t.Run(addr.Hex(), func(t *testing.T) {
+			for _, in := range precompileInputs(t, addr) {
+				original := append([]byte(nil), in...)
+
+				buf := make([]byte, len(in)+64)
+				copy(buf, in)
+				for i := len(in); i < len(buf); i++ {
+					buf[i] = sentinelByte
+				}
+				view := buf[:len(in)]
+
+				// Return value / gas / error are covered by the existing
+				// precompile-specific tests; this only checks for writes.
+				_, _ = p.Run(view)
+
+				if !bytes.Equal(view, original) {
+					t.Errorf("precompile modified its input: got %x, want %x", view, original)
+				}
+				for i := len(in); i < len(buf); i++ {
+					if buf[i] != sentinelByte {
+						t.Errorf("precompile wrote past its input window at offset %d: got %#x, want sentinel %#x", i-len(in), buf[i], byte(sentinelByte))
+						break
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestIdentityDoesNotWriteInput reproduces the aliasing hazard that
+// memory.GetPtr introduces for the identity precompile (0x04): after
+// opStaticCall's args become a zero-copy view of caller memory, dataCopy.Run
+// returning `in` unmodified would mean the STATICCALL's return value — which
+// the interpreter stores as this frame's returnData (vm/interpreter.go:222)
+// for a later RETURNDATACOPY — still points into the caller's own memory. If
+// the caller mutates that same memory region after the call (e.g. a later
+// MSTORE reusing scratch space) but before reading returnData, it would
+// observe the mutated bytes instead of the value returned at call time.
+// common.CopyBytes in dataCopy.Run severs the alias.
+//
+// Note: inOffset and retOffset are deliberately non-overlapping (0 and 32).
+// This is not about the overlapping memory.Set self-copy (Go's copy() is
+// memmove-safe for any overlap) — it is about the returnData alias
+// surviving the call and being exposed to writes the caller makes
+// afterward.
+func TestIdentityDoesNotWriteInput(t *testing.T) {
+	evm := NewEVM(Context{}, NoopStateDB{}, &ChainConfig{OsakaBlock: big.NewInt(0)}, Config{})
+	contract := NewContract(AccountRef(common.Address{}), AccountRef(common.Address{}), big.NewInt(0), 100000)
+
+	memory := NewMemory()
+	memory.Resize(64)
+	original := make([]byte, 32)
+	for i := range original {
+		original[i] = byte(i)
+	}
+	memory.Set(0, 32, original)
+
+	stack := newstack()
+	// STATICCALL(gas, addr=0x04, inOffset=0, inSize=32, retOffset=32, retSize=32)
+	stack.push(uint256.NewInt(32))                                                  // retSize
+	stack.push(uint256.NewInt(32))                                                  // retOffset
+	stack.push(uint256.NewInt(32))                                                  // inSize
+	stack.push(uint256.NewInt(0))                                                   // inOffset
+	stack.push(new(uint256.Int).SetBytes(common.BytesToAddress([]byte{4}).Bytes())) // addr = 0x04
+	stack.push(uint256.NewInt(100000))                                              // gas (popped & discarded by opStaticCall)
+	evm.callGasTemp = 100000
+
+	pc := uint64(0)
+	ret, err := opStaticCall(&pc, evm, contract, memory, stack)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// simulate the interpreter capturing this opcode's result as returnData
+	// (vm/interpreter.go:222 `in.returnData = res`)
+	returnData := ret
+
+	// caller reuses memory[0:32] for something else AFTER the call returns,
+	// before a later RETURNDATACOPY would read returnData.
+	memory.Set(0, 32, bytes.Repeat([]byte{0xFF}, 32))
+
+	if !bytes.Equal(original, returnData) {
+		t.Error("identity precompile output aliases caller memory: returnData observes a write made after the call")
+	}
+}

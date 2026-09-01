@@ -654,7 +654,7 @@ func opCall(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	retOffset, retSize := stack.popptr().Uint64(), stack.popptr().Uint64()
 	toAddr := common.Address(addr)
 	// Get the arguments from the memory.
-	args := memory.GetCopy(int64(inOffset), int64(inSize))
+	args := memory.GetPtr(int64(inOffset), int64(inSize))
 
 	bigVal := big0
 	// TODO: use uint256.Int instead of converting with toBig()
@@ -688,7 +688,7 @@ func opCallCode(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	retOffset, retSize := stack.popptr().Uint64(), stack.popptr().Uint64()
 	toAddr := common.Address(addr)
 	// Get arguments from the memory.
-	args := memory.GetCopy(int64(inOffset), int64(inSize))
+	args := memory.GetPtr(int64(inOffset), int64(inSize))
 
 	// TODO: use uint256.Int instead of converting with toBig()
 	bigVal := big0
@@ -720,7 +720,7 @@ func opDelegateCall(_ *uint64, evm *EVM, contract *Contract, memory *Memory, sta
 	retOffset, retSize := stack.popptr().Uint64(), stack.popptr().Uint64()
 	toAddr := common.Address(addr)
 	// Get arguments from the memory.
-	args := memory.GetCopy(int64(inOffset), int64(inSize))
+	args := memory.GetPtr(int64(inOffset), int64(inSize))
 
 	ret, returnGas, err := evm.DelegateCall(contract, toAddr, args, gas)
 	if err != nil {
@@ -745,7 +745,7 @@ func opStaticCall(_ *uint64, evm *EVM, contract *Contract, memory *Memory, stack
 	retOffset, retSize := stack.popptr().Uint64(), stack.popptr().Uint64()
 	toAddr := common.Address(addr)
 	// Get arguments from the memory.
-	args := memory.GetCopy(int64(inOffset), int64(inSize))
+	args := memory.GetPtr(int64(inOffset), int64(inSize))
 
 	ret, returnGas, err := evm.StaticCall(contract, toAddr, args, gas)
 	if err != nil {
