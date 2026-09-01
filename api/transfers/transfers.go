@@ -37,14 +37,16 @@ func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uin
 	}
 }
 
-// Filter query logs with option
-func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*api.FilteredTransfer, error) {
+// Filter query logs with option. Rows are returned in their logdb form; the
+// conversion to the response shape is deferred to the response writer so only one
+// converted transfer exists at a time.
+func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*logdb.Transfer, error) {
 	rng, err := api.ConvertRange(t.repo.NewBestChain(), filter.Range)
 	if err != nil {
 		return nil, err
 	}
 
-	transfers, err := t.db.FilterTransfers(ctx, &logdb.TransferFilter{
+	return t.db.FilterTransfers(ctx, &logdb.TransferFilter{
 		CriteriaSet: filter.CriteriaSet,
 		Range:       rng,
 		Options: &logdb.Options{
@@ -53,14 +55,6 @@ func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*
 		},
 		Order: filter.Order,
 	})
-	if err != nil {
-		return nil, err
-	}
-	tLogs := make([]*api.FilteredTransfer, len(transfers))
-	for i, trans := range transfers {
-		tLogs[i] = api.ConvertTransfer(trans, filter.Options.IncludeIndexes)
-	}
-	return tLogs, nil
 }
 
 func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
@@ -97,17 +91,19 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		filter.Options.Limit = &limit
 	}
 
-	tLogs, err := t.filter(req.Context(), &filter)
+	transfers, err := t.filter(req.Context(), &filter)
 	if err != nil {
 		return err
 	}
 
 	// ensure the result size is less than the configured limit
-	if len(tLogs) > int(t.maxLimit) {
+	if len(transfers) > int(t.maxLimit) {
 		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.maxLimit))
 	}
 
-	return restutil.WriteJSON(w, tLogs)
+	return restutil.WriteJSONArray(w, len(transfers), func(i int) *api.FilteredTransfer {
+		return api.ConvertTransfer(transfers[i], filter.Options.IncludeIndexes)
+	})
 }
 
 func (t *Transfers) Mount(root *mux.Router, pathPrefix string) {

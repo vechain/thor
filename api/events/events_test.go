@@ -6,6 +6,7 @@
 package events
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -373,4 +374,52 @@ func insertBlocks(t *testing.T, chain *testchain.Chain, n int) {
 		err := chain.MintClauses(genesis.DevAccounts()[0], []*tx.Clause{transferClause})
 		require.NoError(t, err)
 	}
+}
+
+// The response is now streamed element-by-element rather than encoded from a fully
+// materialized slice. Pin the wire format: re-encoding the decoded response with the
+// previous buffered encoder must reproduce the raw bytes exactly.
+func TestEventsResponseEncodingUnchanged(t *testing.T) {
+	thorChain := initEventServer(t, defaultLogLimit, defaultLogOffset)
+	defer ts.Close()
+	insertBlocks(t, thorChain, 5)
+	tclient = thorclient.New(ts.URL)
+
+	for _, includeIndexes := range []bool{false, true} {
+		filter := api.EventFilter{
+			CriteriaSet: make([]*api.EventCriteria, 0),
+			Options:     &api.Options{Limit: new(defaultLogLimit), IncludeIndexes: includeIndexes},
+			Order:       logdb.DESC,
+		}
+
+		res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode)
+
+		var decoded []*api.FilteredEvent
+		require.NoError(t, json.Unmarshal(res, &decoded))
+		require.NotEmpty(t, decoded)
+
+		var buffered bytes.Buffer
+		require.NoError(t, json.NewEncoder(&buffered).Encode(decoded))
+
+		assert.Equal(t, buffered.String(), string(res), "includeIndexes=%v", includeIndexes)
+	}
+}
+
+// An empty result must stay [], not null: the streaming writer no longer goes
+// through a non-nil zero-length slice, so this is no longer implied by the types.
+func TestEventsEmptyResultIsEmptyArray(t *testing.T) {
+	initEventServer(t, defaultLogLimit, defaultLogOffset)
+	defer ts.Close()
+	tclient = thorclient.New(ts.URL)
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", api.EventFilter{
+		CriteriaSet: make([]*api.EventCriteria, 0),
+		Order:       logdb.DESC,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, "[]\n", string(res))
 }

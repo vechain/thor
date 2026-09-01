@@ -44,6 +44,7 @@ const (
 	defaultFeeCacheSize     = 1024
 	defaultRequestBodyLimit = 200 * 1024 // 200KB
 	defaultMaxCriteriaCount = 10
+	defaultIdleTimeout      = 10 * time.Second
 )
 
 type APIConfig struct {
@@ -154,7 +155,16 @@ func StartAPIServer(
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(router)
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
+	// IdleTimeout is set explicitly because http.Server otherwise falls back to
+	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read
+	// budget. No WriteTimeout: it would abort honest large responses (/logs,
+	// expanded blocks) mid-transfer on slow links.
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: time.Second,
+		ReadTimeout:       5 * time.Second,
+		IdleTimeout:       defaultIdleTimeout,
+	}
 	var goes sync.WaitGroup
 	goes.Go(func() {
 		srv.Serve(listener)

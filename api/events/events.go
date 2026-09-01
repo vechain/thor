@@ -37,22 +37,16 @@ func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uin
 	}
 }
 
-// Filter query events with option
-func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*api.FilteredEvent, error) {
+// Filter query events with option. Rows are returned in their logdb form; the
+// conversion to the response shape hex-expands Data to roughly twice its size and
+// is deferred to the response writer so only one converted event exists at a time.
+func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*logdb.Event, error) {
 	chain := e.repo.NewBestChain()
 	filter, err := api.ConvertEventFilter(chain, ef)
 	if err != nil {
 		return nil, err
 	}
-	events, err := e.db.FilterEvents(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	fes := make([]*api.FilteredEvent, len(events))
-	for i, e := range events {
-		fes[i] = api.ConvertEvent(e, ef.Options.IncludeIndexes)
-	}
-	return fes, nil
+	return e.db.FilterEvents(ctx, filter)
 }
 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
@@ -89,17 +83,19 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 		filter.Options.Limit = &limit
 	}
 
-	fes, err := e.filter(req.Context(), &filter)
+	events, err := e.filter(req.Context(), &filter)
 	if err != nil {
 		return err
 	}
 
 	// ensure the result size is less than the configured limit
-	if len(fes) > int(e.maxLimit) {
+	if len(events) > int(e.maxLimit) {
 		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.maxLimit))
 	}
 
-	return restutil.WriteJSON(w, fes)
+	return restutil.WriteJSONArray(w, len(events), func(i int) *api.FilteredEvent {
+		return api.ConvertEvent(events[i], filter.Options.IncludeIndexes)
+	})
 }
 
 func (e *Events) Mount(root *mux.Router, pathPrefix string) {

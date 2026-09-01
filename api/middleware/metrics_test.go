@@ -6,12 +6,15 @@
 package middleware
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -218,6 +221,35 @@ func TestBatchCallResponseSizeLimit(t *testing.T) {
 		assert.Contains(t, errorMsg, "exceeds limit", "error should mention size limit")
 		assert.Contains(t, errorMsg, "200", "error should mention the limit value")
 	}
+}
+
+// fakeHijackWriter adds Hijack to httptest.ResponseRecorder, which implements
+// Flush but not Hijack, so both interfaces can be exercised through one writer.
+type fakeHijackWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (f *fakeHijackWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return nil, nil, errors.New("not supported")
+}
+
+// statusCodeCaptor embeds http.ResponseWriter, whose interface doesn't include
+// Flush or Hijack, so it must forward them explicitly or nested consumers
+// (CompressHandler's httpsnoop wrapper, WS subscriptions) lose access to them.
+func TestStatusCodeCaptorExposesFlusherAndHijacker(t *testing.T) {
+	inner := &fakeHijackWriter{httptest.NewRecorder()}
+
+	var gotFlusher, gotHijacker bool
+	handler := MetricsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, gotFlusher = w.(http.Flusher)
+		_, gotHijacker = w.(http.Hijacker)
+	}))
+
+	req := httptest.NewRequest("GET", "http://example.com", nil)
+	handler.ServeHTTP(inner, req)
+
+	assert.True(t, gotFlusher, "Flusher must be visible through statusCodeCaptor")
+	assert.True(t, gotHijacker, "Hijacker must be visible through statusCodeCaptor")
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {

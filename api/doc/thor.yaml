@@ -348,6 +348,25 @@ paths:
               schema:
                 type: string
                 example: 'Invalid request body'
+        '403':
+          description: |
+            Forbidden. Returned when `options.limit` or `options.offset` exceeds the node's configured maximum, or when
+            the query matched more entries than the maximum and no `options.limit` was supplied — use pagination.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'the number of filtered logs exceeds the maximum allowed value of 1000, please use pagination'
+        '500':
+          description: |
+            Internal server error. Returned when a matched entry cannot be serialised into the response.
+            This indicates a defect rather than a problem with the request; retrying with different
+            parameters will not help.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Internal Server Error'
 
   /logs/transfer:
     post:
@@ -378,6 +397,25 @@ paths:
               schema:
                 type: string
                 example: 'Invalid request body'
+        '403':
+          description: |
+            Forbidden. Returned when `options.limit` or `options.offset` exceeds the node's configured maximum, or when
+            the query matched more entries than the maximum and no `options.limit` was supplied — use pagination.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'the number of filtered logs exceeds the maximum allowed value of 1000, please use pagination'
+        '500':
+          description: |
+            Internal server error. Returned when a matched entry cannot be serialised into the response.
+            This indicates a defect rather than a problem with the request; retrying with different
+            parameters will not help.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 'Internal Server Error'
 
   /node/network/peers:
     get:

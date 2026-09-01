@@ -6,6 +6,7 @@
 package transfers
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -316,4 +317,54 @@ func newReceipt() *tx.Receipt {
 			},
 		},
 	}
+}
+
+// The response is now streamed element-by-element rather than encoded from a fully
+// materialized slice. Pin the wire format: re-encoding the decoded response with the
+// previous buffered encoder must reproduce the raw bytes exactly.
+func TestTransfersResponseEncodingUnchanged(t *testing.T) {
+	db := createDb(t)
+	initTransferServer(t, db, defaultLogLimit, defaultLogOffset)
+	defer ts.Close()
+	insertBlocks(t, db, 5)
+	tclient = thorclient.New(ts.URL)
+
+	for _, includeIndexes := range []bool{false, true} {
+		filter := api.TransferFilter{
+			CriteriaSet: make([]*logdb.TransferCriteria, 0),
+			Options:     &api.Options{Limit: new(defaultLogLimit), IncludeIndexes: includeIndexes},
+			Order:       logdb.DESC,
+		}
+
+		res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode)
+
+		var decoded []*api.FilteredTransfer
+		require.NoError(t, json.Unmarshal(res, &decoded))
+		require.NotEmpty(t, decoded)
+
+		var buffered bytes.Buffer
+		require.NoError(t, json.NewEncoder(&buffered).Encode(decoded))
+
+		assert.Equal(t, buffered.String(), string(res), "includeIndexes=%v", includeIndexes)
+	}
+}
+
+// An empty result must stay [], not null: the streaming writer no longer goes
+// through a non-nil zero-length slice, so this is no longer implied by the types.
+func TestTransfersEmptyResultIsEmptyArray(t *testing.T) {
+	db := createDb(t)
+	initTransferServer(t, db, defaultLogLimit, defaultLogOffset)
+	defer ts.Close()
+	tclient = thorclient.New(ts.URL)
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", api.TransferFilter{
+		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		Order:       logdb.DESC,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, "[]\n", string(res))
 }

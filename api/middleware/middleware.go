@@ -48,7 +48,8 @@ func HandleXThorestVersion(next http.Handler) http.Handler {
 	})
 }
 
-// middleware for http request timeout.
+// HandleAPITimeout deadlines the request context, bounding handler work that
+// honours it (state reads, EVM calls, logdb queries).
 func HandleAPITimeout(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

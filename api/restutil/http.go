@@ -6,7 +6,9 @@
 package restutil
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -131,11 +133,80 @@ func ParseBlockRef(blockRef string) (tx.BlockRef, error) {
 }
 
 // WriteJSON response an object in JSON encoding.
+//
+// json.Encoder.Encode marshals into an internal buffer and issues a single Write,
+// so the whole payload is held in memory. Use WriteJSONArray for responses whose
+// size is driven by a caller-supplied limit.
 func WriteJSON(w http.ResponseWriter, obj any) error {
 	w.Header().Set("Content-Type", JSONContentType)
 	err := json.NewEncoder(w).Encode(obj)
 	if err != nil {
 		logger.Debug("failed to write JSON response", "err", err)
+	}
+	return nil
+}
+
+// jsonArrayBufferSize bounds the write buffer WriteJSONArray places in front of the
+// ResponseWriter. It amortises the per-element write over the gzip/chunking layers
+// without reintroducing a payload-sized buffer.
+const jsonArrayBufferSize = 16 * 1024
+
+// WriteJSONArray responds with a JSON array of n elements, marshalling one at a
+// time so peak memory is the write buffer plus one element, not the whole array.
+// Output is byte-identical to WriteJSON on the equivalent slice.
+//
+// The framing is hand-rolled: encoding/json has no incremental array API, and the
+// stdlib's streaming token writer is gated behind GOEXPERIMENT=jsonv2.
+//
+// elem is called once per index, in order; its result is not retained after the
+// element is written. The 200 is committed when the buffer first flushes, so any
+// later failure can only abandon the array unterminated. Callers must finish all
+// validation that can reject the request before calling this.
+//
+// Returns an error only when element 0 fails to marshal: nothing is committed yet,
+// so the caller can still turn it into an error status.
+func WriteJSONArray[T any](w http.ResponseWriter, n int, elem func(i int) T) error {
+	// Marshal element 0 before touching the ResponseWriter, so a non-serialisable
+	// T becomes an error status rather than a committed, truncated 200.
+	var first []byte
+	if n > 0 {
+		b, err := json.Marshal(elem(0))
+		if err != nil {
+			return err
+		}
+		first = b
+	}
+
+	w.Header().Set("Content-Type", JSONContentType)
+
+	// bufio latches the first write error, so once a write fails nothing further
+	// reaches the client — including the closing bracket.
+	bw := bufio.NewWriterSize(w, jsonArrayBufferSize)
+	_ = bw.WriteByte('[')
+	if n > 0 {
+		if _, err := bw.Write(first); err != nil {
+			return nil
+		}
+	}
+	for i := 1; i < n; i++ {
+		if err := bw.WriteByte(','); err != nil {
+			return nil
+		}
+		b, err := json.Marshal(elem(i))
+		if err != nil {
+			// Unreachable once element 0 marshalled. The response is already committed
+			// either way; the panic is for the stack trace naming the offending caller.
+			panic(fmt.Errorf("restutil: element %d of the JSON array is not serialisable: %w", i, err))
+		}
+		if _, err := bw.Write(b); err != nil {
+			// Client is gone; don't convert the rest.
+			return nil
+		}
+	}
+	_, _ = bw.WriteString("]\n")
+
+	if err := bw.Flush(); err != nil {
+		logger.Debug("failed to write JSON array response", "err", err)
 	}
 	return nil
 }

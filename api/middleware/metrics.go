@@ -46,6 +46,15 @@ func (s *statusCodeCaptor) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// Flush forwards to the wrapped writer. Without it the captor hides http.Flusher
+// from everything nested inside, including CompressHandler, whose httpsnoop wrapper
+// only exposes the interfaces the writer it wraps implements.
+func (s *statusCodeCaptor) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Hijack complies the writer with WS subscriptions interface
 // Hijack lets the caller take over the connection.
 // After a call to Hijack the HTTP server library
