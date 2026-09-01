@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -47,10 +48,11 @@ var (
 
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
-	lvl    *leveldb.DB   // Interface to the database itself
-	self   NodeID        // Own node id to prevent adding it into the database
-	runner sync.Once     // Ensures we can start at most one expirer
-	quit   chan struct{} // Channel to signal the expiring thread to stop
+	lvl     *leveldb.DB   // Interface to the database itself
+	self    NodeID        // Own node id to prevent adding it into the database
+	runner  sync.Once     // Ensures we can start at most one expirer
+	quit    chan struct{} // Channel to signal the expiring thread to stop
+	tickets *lru.Cache    // bounds the :tickets cache, keyed by NodeID
 }
 
 // Schema layout for the node database
@@ -65,6 +67,11 @@ var (
 	nodeDBDiscoverLocalEndpoint = nodeDBDiscoverRoot + ":localendpoint"
 	nodeDBTopicRegTickets       = ":tickets"
 )
+
+// maxTicketEntries bounds the :tickets cache. Sized above the largest
+// expected working set (Kademlia bucket capacity 4112, topicTable
+// maxEntries 10000) so eviction does not touch an actively used entry.
+const maxTicketEntries = 16384
 
 // newNodeDB creates a new node database for storing and retrieving infos about
 // known peers in the network. If no path is given, an in-memory, temporary
@@ -83,11 +90,18 @@ func newMemoryNodeDB(self NodeID) (*nodeDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &nodeDB{
+	ndb := &nodeDB{
 		lvl:  db,
 		self: self,
 		quit: make(chan struct{}),
-	}, nil
+	}
+	if ndb.tickets, err = lru.NewWithEvict(maxTicketEntries, func(k, _ any) {
+		ndb.lvl.Delete(makeKey(k.(NodeID), nodeDBTopicRegTickets), nil)
+	}); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return ndb, nil
 }
 
 // newPersistentNodeDB creates/opens a leveldb backed persistent node database,
@@ -125,11 +139,38 @@ func newPersistentNodeDB(path string, version int, self NodeID) (*nodeDB, error)
 			return newPersistentNodeDB(path, version, self)
 		}
 	}
-	return &nodeDB{
+	ndb := &nodeDB{
 		lvl:  db,
 		self: self,
 		quit: make(chan struct{}),
-	}, nil
+	}
+	if ndb.tickets, err = lru.NewWithEvict(maxTicketEntries, func(k, _ any) {
+		ndb.lvl.Delete(makeKey(k.(NodeID), nodeDBTopicRegTickets), nil)
+	}); err != nil {
+		db.Close()
+		return nil, err
+	}
+	// A reopened DB may already hold :tickets entries written by a prior
+	// process (or before this cap existed). Seed the LRU from them so the
+	// cache reflects on-disk truth from the first write instead of only
+	// bounding entries added since this process started; entries beyond
+	// maxTicketEntries are pruned immediately via the onEvicted callback
+	// above. Ordering is leveldb key order, not true recency, since
+	// on-disk entries carry no access-time metadata - an approximation,
+	// but it turns "never bounded" into "eventually bounded".
+	ndb.seedTicketsCache()
+	return ndb, nil
+}
+
+// seedTicketsCache populates the :tickets LRU from existing leveldb entries.
+func (db *nodeDB) seedTicketsCache() {
+	it := db.lvl.NewIterator(nil, nil)
+	defer it.Release()
+	for it.Next() {
+		if id, field := splitKey(it.Key()); field == nodeDBTopicRegTickets {
+			db.tickets.Add(id, struct{}{})
+		}
+	}
 }
 
 // makeKey generates the leveldb key-blob from a node id and its particular
@@ -220,6 +261,9 @@ func (db *nodeDB) deleteNode(id NodeID) error {
 			return err
 		}
 	}
+	// Remove re-triggers the LRU's onEvict callback, which issues a redundant
+	// leveldb Delete of the already-deleted :tickets key — a harmless no-op.
+	db.tickets.Remove(id)
 	return nil
 }
 
@@ -379,6 +423,7 @@ func (db *nodeDB) fetchTopicRegTickets(id NodeID) (issued, used uint32) {
 }
 
 func (db *nodeDB) updateTopicRegTickets(id NodeID, issued, used uint32) error {
+	db.tickets.Add(id, struct{}{}) // refresh recency; over cap triggers onEvict to drop the oldest key
 	key := makeKey(id, nodeDBTopicRegTickets)
 	blob := make([]byte, 8)
 	binary.BigEndian.PutUint32(blob[0:4], issued)

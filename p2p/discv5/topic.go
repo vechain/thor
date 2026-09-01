@@ -145,7 +145,7 @@ func (t *topicTable) checkDeleteNode(node *Node) {
 
 func (t *topicTable) storeTicketCounters(node *Node) {
 	n := t.getOrNewNode(node)
-	if t.db != nil {
+	if t.db != nil && node.state == known {
 		t.db.updateTopicRegTickets(node.ID, n.lastIssuedTicket, n.lastUsedTicket)
 	}
 }
