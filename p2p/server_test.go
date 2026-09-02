@@ -407,6 +407,49 @@ func TestServerAtCap(t *testing.T) {
 	}
 }
 
+// A full inbound set must not eat the slots reserved for dialing out: a node that
+// cannot dial out cannot choose any peer of its own — the eclipse precondition.
+func TestInboundCapLeavesRoomToDial(t *testing.T) {
+	srv := &Server{
+		Config: Config{
+			PrivateKey:  newkey(),
+			MaxPeers:    25,
+			DialRatio:   5,
+			NoDiscovery: true,
+			ListenAddr:  "",
+		},
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("could not start: %v", err)
+	}
+	defer srv.Stop()
+
+	newconn := func(id discover.NodeID, flags connFlag) *conn {
+		fd, _ := net.Pipe()
+		tx := newTestTransport(id, fd)
+		return &conn{fd: fd, transport: tx, flags: flags, id: id, cont: make(chan error)}
+	}
+
+	// Fill up to the inbound cap (20 = MaxPeers - MaxPeers/DialRatio).
+	for i := range 20 {
+		c := newconn(randomID(), inboundConn)
+		if err := srv.checkpoint(c, srv.addpeer); err != nil {
+			t.Fatalf("could not add inbound conn %d: %v", i, err)
+		}
+	}
+
+	c := newconn(randomID(), inboundConn)
+	if err := srv.checkpoint(c, srv.posthandshake); err != DiscTooManyPeers {
+		t.Error("wrong error for 21st inbound conn:", err)
+	}
+
+	// ...but an outbound dial still gets in.
+	c = newconn(randomID(), dynDialedConn)
+	if err := srv.checkpoint(c, srv.posthandshake); err != nil {
+		t.Error("unexpected error for dynDialedConn conn @posthandshake:", err)
+	}
+}
+
 func TestServerPeerLimits(t *testing.T) {
 	srvkey := newkey()
 
@@ -607,4 +650,81 @@ func randomID() (id discover.NodeID) {
 		id[i] = byte(rand.Intn(255))
 	}
 	return id
+}
+
+// NoDiscovery must move maxDialedConns but not maxInboundConns: p2psrv sets it and
+// dials from its own loop, capped at MaxPeers/DialRatio — 5 at the default MaxPeers
+// (p2psrv.Server.outboundQuota). The {true, false, 5, 0, 20} row is p2p's side of
+// that 5; p2psrv.TestOutboundQuota and TestDialRatioFloor assert the other side.
+func TestMaxInboundAndDialedConns(t *testing.T) {
+	tests := []struct {
+		noDiscovery bool
+		noDial      bool
+		dialRatio   int
+		wantDialed  int
+		wantInbound int
+	}{
+		{false, false, 0, 8, 17},
+		{false, false, 3, 8, 17},
+		{false, false, 5, 5, 20},
+		{false, true, 0, 0, 25},
+		{false, true, 3, 0, 25},
+		{false, true, 5, 0, 25},
+		{true, false, 0, 0, 17},
+		{true, false, 3, 0, 17},
+		{true, false, 5, 0, 20},
+		{true, true, 0, 0, 25},
+		{true, true, 3, 0, 25},
+		{true, true, 5, 0, 25},
+	}
+	for _, tt := range tests {
+		srv := &Server{Config: Config{
+			MaxPeers:    25,
+			NoDiscovery: tt.noDiscovery,
+			NoDial:      tt.noDial,
+			DialRatio:   tt.dialRatio,
+		}}
+		if got := srv.maxDialedConns(); got != tt.wantDialed {
+			t.Errorf("maxDialedConns(NoDiscovery=%v, NoDial=%v, DialRatio=%d) = %d, want %d",
+				tt.noDiscovery, tt.noDial, tt.dialRatio, got, tt.wantDialed)
+		}
+		if got := srv.maxInboundConns(); got != tt.wantInbound {
+			t.Errorf("maxInboundConns(NoDiscovery=%v, NoDial=%v, DialRatio=%d) = %d, want %d",
+				tt.noDiscovery, tt.noDial, tt.dialRatio, got, tt.wantInbound)
+		}
+	}
+}
+
+// A non-zero quota here starts the in-package dialer next to p2psrv.dialLoop, and
+// the two then fight over the same slots.
+func TestMaxDialedConnsZeroWithoutDiscovery(t *testing.T) {
+	srv := &Server{Config: Config{MaxPeers: 25, NoDiscovery: true, DialRatio: 5}}
+	if got := srv.maxDialedConns(); got != 0 {
+		t.Fatalf("maxDialedConns() = %d, want 0 (p2psrv is the only dialer)", got)
+	}
+}
+
+// MaxPeers > 0 always keeps a dial slot, even when the division rounds down to 0:
+// dialing out works behind NAT, accepting inbound may not.
+func TestDialQuotaSmallMaxPeers(t *testing.T) {
+	tests := []struct {
+		maxPeers    int
+		wantQuota   int
+		wantInbound int
+	}{
+		{0, 0, 0},
+		{1, 1, 0},
+		{2, 1, 1},
+		{3, 1, 2},
+		{4, 2, 2},
+	}
+	for _, tt := range tests {
+		srv := &Server{Config: Config{MaxPeers: tt.maxPeers, NoDiscovery: true, DialRatio: 2}}
+		if got := srv.dialQuota(); got != tt.wantQuota {
+			t.Errorf("dialQuota(MaxPeers=%d) = %d, want %d", tt.maxPeers, got, tt.wantQuota)
+		}
+		if got := srv.maxInboundConns(); got != tt.wantInbound {
+			t.Errorf("maxInboundConns(MaxPeers=%d) = %d, want %d", tt.maxPeers, got, tt.wantInbound)
+		}
+	}
 }

@@ -219,7 +219,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 	// Use random nodes from the table for half of the necessary
 	// dynamic dials.
 	randomCandidates := needDynDials / 2
-	if randomCandidates > 0 {
+	if randomCandidates > 0 && s.ntab != nil {
 		n := s.ntab.ReadRandomNodes(s.randomNodes)
 		for i := 0; i < randomCandidates && i < n; i++ {
 			if addDial(dynDialedConn, s.randomNodes[i]) {
@@ -359,6 +359,9 @@ func (t *dialTask) String() string {
 }
 
 func (t *discoverTask) Do(srv *Server) {
+	if srv.ntab == nil {
+		return
+	}
 	// newTasks generates a lookup task whenever dynamic dials are
 	// necessary. Lookups need to take some time, otherwise the
 	// event loop spins too fast.

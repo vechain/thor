@@ -30,7 +30,7 @@ variables, run: `bin/thor --help`
 | `--api-logs-max-offset`          | Limit the maximum offset for /logs API (default: 100000)                                                                                 |
 | `--api-priority-fees-percentage` | Percentage of the block base fee for priority fees calculation (default: 5)                                                              |
 | `--verbosity`                    | Log verbosity (0-9) (default: 3)                                                                                                         |
-| `--max-peers`                    | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)                                                     |
+| `--max-peers`                    | Maximum number of P2P network peers, shared between inbound and outbound connections (P2P network disabled if set to 0) (default: 25)    |
 | `--p2p-port`                     | P2P network listening port (default: 11235)                                                                                              |
 | `--nat`                          | Port mapping mechanism (any\|none\|upnp\|pmp\|extip:<IP>) (default: "any")                                                               |
 | `--bootnode`                     | Comma separated list of bootnode IDs                                                                                                     |

@@ -772,18 +772,40 @@ func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, inboundCo
 }
 
 func (srv *Server) maxInboundConns() int {
-	return srv.MaxPeers - srv.maxDialedConns()
+	return srv.MaxPeers - srv.reservedDialSlots()
 }
 
+// slots kept free for outgoing dials, including dials the embedder makes
+// (p2psrv.dialLoop).
+func (srv *Server) reservedDialSlots() int {
+	if srv.NoDial {
+		return 0
+	}
+	return srv.dialQuota()
+}
+
+// quota for the in-package dialstate. Must stay 0 under NoDiscovery, or it dials
+// alongside the embedder's own loop (p2psrv.dialLoop) and both fight for the slots.
 func (srv *Server) maxDialedConns() int {
 	if srv.NoDiscovery || srv.NoDial {
+		return 0
+	}
+	return srv.dialQuota()
+}
+
+// mirrors geth's MaxDialedConns: one dial slot minimum, none when MaxPeers is 0.
+func (srv *Server) dialQuota() int {
+	if srv.MaxPeers == 0 {
 		return 0
 	}
 	r := srv.DialRatio
 	if r == 0 {
 		r = defaultDialRatio
 	}
-	return srv.MaxPeers / r
+	if q := srv.MaxPeers / r; q > 0 {
+		return q
+	}
+	return 1
 }
 
 type tempError interface {

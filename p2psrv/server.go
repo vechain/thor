@@ -61,7 +61,7 @@ func New(opts *Options) *Server {
 				NetRestrict: opts.NetRestrict,
 				NAT:         opts.NAT,
 				NoDial:      opts.NoDial,
-				DialRatio:   int(math.Sqrt(float64(opts.MaxPeers))),
+				DialRatio:   max(2, int(math.Sqrt(float64(opts.MaxPeers)))),
 			},
 		},
 		done:            make(chan struct{}),
@@ -285,6 +285,16 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 	}
 }
 
+// outboundQuota mirrors the slots p2p keeps free (p2p.Server.reservedDialSlots).
+// MaxPeers 0 must yield 0: p2psrv still runs then, and dialing would only collect
+// DiscTooManyPeers. The DialRatio check just guards the division below.
+func (s *Server) outboundQuota() int {
+	if s.srv.MaxPeers < 1 || s.srv.DialRatio < 1 {
+		return 0
+	}
+	return max(1, s.srv.MaxPeers/s.srv.DialRatio)
+}
+
 func (s *Server) dialLoop() {
 	const fastDialDur = 500 * time.Millisecond
 	const nonFastDialDur = 2 * time.Second
@@ -305,11 +315,7 @@ func (s *Server) dialLoop() {
 
 		select {
 		case <-time.After(delay):
-			if s.srv.DialRatio < 1 {
-				continue
-			}
-
-			if s.dialingNodes.Len() >= s.srv.MaxPeers/s.srv.DialRatio {
+			if s.dialingNodes.Len() >= s.outboundQuota() {
 				continue
 			}
 

@@ -79,3 +79,47 @@ func TestNewServerConnectOnly(t *testing.T) {
 	assert.True(t, server.discoveredNodes.Contains(knownNode.ID))
 	assert.True(t, server.knownNodes.Contains(knownNode.ID))
 }
+
+// int(sqrt(MaxPeers)) rounds down to 1 for MaxPeers 1..3, which would give outbound
+// every slot and leave the inbound cap at 0. MaxPeers >= 4 keeps the plain sqrt.
+// The {25, 5} row is p2psrv's side of the 5 slots p2p reserves (asserted by
+// p2p.TestMaxInboundAndDialedConns).
+func TestDialRatioFloor(t *testing.T) {
+	tests := []struct {
+		maxPeers  int
+		wantRatio int
+	}{
+		{0, 2},
+		{1, 2},
+		{2, 2},
+		{3, 2},
+		{4, 2},
+		{9, 3},
+		{25, 5},
+	}
+	for _, tt := range tests {
+		s := New(&Options{MaxPeers: tt.maxPeers})
+		assert.Equal(t, tt.wantRatio, s.srv.DialRatio, "MaxPeers=%d", tt.maxPeers)
+	}
+}
+
+// dialLoop's cap must agree with the slots p2p keeps free. MaxPeers 1 is the case
+// that broke: DialRatio is floored at 2, so 1/2 truncated to 0 and it never dialed.
+func TestOutboundQuota(t *testing.T) {
+	tests := []struct {
+		maxPeers  int
+		wantQuota int
+	}{
+		{0, 0},
+		{1, 1},
+		{2, 1},
+		{3, 1},
+		{4, 2},
+		{9, 3},
+		{25, 5},
+	}
+	for _, tt := range tests {
+		s := New(&Options{MaxPeers: tt.maxPeers})
+		assert.Equal(t, tt.wantQuota, s.outboundQuota(), "MaxPeers=%d", tt.maxPeers)
+	}
+}
