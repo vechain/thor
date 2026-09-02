@@ -48,9 +48,7 @@ func (ex *extension) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP implements rlp.Decoder.
 func (ex *extension) DecodeRLP(s *rlp.Stream) error {
-	var raws []rlp.RawValue
-
-	if err := s.Decode(&raws); err != nil {
+	if _, err := s.List(); err != nil {
 		// Error(end-of-list) means this field is not present, return default value
 		// for backward compatibility
 		if err == rlp.EOL {
@@ -61,9 +59,29 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 			}
 			return nil
 		}
+		return err
 	}
 
-	if len(raws) == 0 || len(raws) > 3 {
+	var raws []rlp.RawValue
+	for {
+		var raw rlp.RawValue
+		err := s.Decode(&raw)
+		if err == rlp.EOL {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if len(raws) == 3 {
+			return errors.New("rlp: unexpected extension")
+		}
+		raws = append(raws, raw)
+	}
+	if err := s.ListEnd(); err != nil {
+		return err
+	}
+
+	if len(raws) == 0 {
 		return errors.New("rlp: unexpected extension")
 	}
 

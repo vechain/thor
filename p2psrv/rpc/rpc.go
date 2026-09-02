@@ -25,6 +25,7 @@ const (
 var (
 	errPeerDisconnected = errors.New("peer disconnected")
 	errMsgTooLarge      = errors.New("msg too large")
+	errResultTooLarge   = errors.New("result too large")
 	logger              = log.WithContext("pkg", "rpc")
 )
 
@@ -144,13 +145,18 @@ func (r *RPC) handleResult(callID uint32, msg *p2p.Msg) error {
 		return errors.New("msg code mismatch")
 	}
 
+	if listener.maxResultSize != 0 && msg.Size > listener.maxResultSize {
+		r.logger.Debug("result too large", "msg", msg.Code, "size", msg.Size, "limit", listener.maxResultSize)
+		return errResultTooLarge
+	}
+
 	if err := listener.onResult(msg); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 {
+func (r *RPC) prepareCall(msgCode uint64, maxResultSize uint32, onResult func(*p2p.Msg) error) uint32 {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	for {
@@ -162,6 +168,7 @@ func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 
 		if _, ok := r.pendings[id]; !ok {
 			r.pendings[id] = &resultListener{
 				msgCode,
+				maxResultSize,
 				onResult,
 			}
 			return id
@@ -181,12 +188,15 @@ func (r *RPC) Notify(_ context.Context, msgCode uint64, arg any) error {
 }
 
 // Call send a call to the peer and wait for result.
-func (r *RPC) Call(ctx context.Context, msgCode uint64, arg any, result any) error {
+// maxResultSize bounds the size of the accepted response message; a larger
+// response is rejected before it is decoded. Zero means no narrowing beyond
+// the connection-wide limit already enforced by Serve.
+func (r *RPC) Call(ctx context.Context, msgCode uint64, arg any, result any, maxResultSize uint32) error {
 	ctx, cancel := context.WithTimeout(ctx, rpcDefaultTimeout)
 	defer cancel()
 
 	errCh := make(chan error, 1)
-	id := r.prepareCall(msgCode, func(msg *p2p.Msg) error {
+	id := r.prepareCall(msgCode, maxResultSize, func(msg *p2p.Msg) error {
 		// msg should decode here, or its payload will be discarded by msg loop
 		err := msg.Decode(result)
 		if err != nil {

@@ -35,13 +35,27 @@ func (r *reserved) EncodeRLP(w io.Writer) error {
 }
 
 func (r *reserved) DecodeRLP(s *rlp.Stream) error {
-	var raws []rlp.RawValue
-	if err := s.Decode(&raws); err != nil {
+	if _, err := s.List(); err != nil {
 		return err
 	}
 
-	if len(raws) > MaxUnusedReservedFields+1 { // +1 for Features itself
-		return fmt.Errorf("reserved field count exceeds limit: %d > %d", len(raws)-1, MaxUnusedReservedFields)
+	var raws []rlp.RawValue
+	for {
+		var raw rlp.RawValue
+		err := s.Decode(&raw)
+		if err == rlp.EOL {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if len(raws) == MaxUnusedReservedFields+1 { // +1 for Features itself
+			return fmt.Errorf("reserved field count exceeds limit: > %d", MaxUnusedReservedFields)
+		}
+		raws = append(raws, raw)
+	}
+	if err := s.ListEnd(); err != nil {
+		return err
 	}
 
 	if len := len(raws); len > 0 {

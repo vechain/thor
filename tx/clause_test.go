@@ -8,6 +8,7 @@ package tx
 import (
 	"math/big"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -102,6 +103,42 @@ func BenchmarkRawClauseSliceDecodeRLP_OverLimit(b *testing.B) {
 		var cs []*Clause
 		_ = rlp.DecodeBytes(data, &cs)
 	}
+}
+
+// makeClauseList encodes a list of n minimal clauses (0xc3 0x80 0x80 0x80).
+func makeClauseList(n int) []byte {
+	content := make([]byte, 0, n*4)
+	for range n {
+		content = append(content, 0xc3, 0x80, 0x80, 0x80)
+	}
+	return append(txRLPListHeader(len(content)), content...)
+}
+
+func allocsForDecodeClauses(data []byte) uint64 {
+	var m0, m1 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&m0)
+
+	var cs Clauses
+	_ = rlp.DecodeBytes(data, &cs) // expected to fail; we only measure allocations
+
+	runtime.ReadMemStats(&m1)
+	runtime.KeepAlive(cs)
+	return m1.TotalAlloc - m0.TotalAlloc
+}
+
+func TestClausesDecodeRLP_AllocDecoupledFromInput(t *testing.T) {
+	justOver := allocsForDecodeClauses(makeClauseList(MaxClausesPerTx + 1))
+	// 2.5M minimal clauses = 10 MB on the wire
+	wayOver := allocsForDecodeClauses(makeClauseList(2_500_000))
+
+	t.Logf("just-over=%d B  way-over=%d B", justOver, wayOver)
+
+	// Both are rejected at clause 2501. After the fix the 10 MB input must not
+	// cost 10 MB; the ceiling is 2501 Clause structs plus stream buffering.
+	assert.Less(t, justOver, uint64(1024*1024))
+	assert.Less(t, wayOver, uint64(1024*1024),
+		"s.Raw() still copies the whole input before the count is checked")
 }
 
 func TestClauseTo(t *testing.T) {

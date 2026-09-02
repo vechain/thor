@@ -6,6 +6,7 @@
 package tx
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -79,4 +80,76 @@ func TestReservedDecoding(t *testing.T) {
 
 	err = rlp.DecodeBytes([]byte{0xc2, 0x1, 0x80}, &r)
 	assert.EqualError(t, err, "invalid reserved fields: not trimmed")
+}
+
+// txRLPListHeader builds a canonical RLP long-list header.
+func txRLPListHeader(sz int) []byte {
+	if sz < 56 {
+		return []byte{byte(0xc0 + sz)}
+	}
+	var lb []byte
+	for s := sz; s > 0; s >>= 8 {
+		lb = append([]byte{byte(s)}, lb...)
+	}
+	return append([]byte{0xf7 + byte(len(lb))}, lb...)
+}
+
+// makeTxWithReserved builds a legacy transaction whose Reserved field holds n
+// empty strings. Reserved is the amplification point.
+func makeTxWithReserved(n int) []byte {
+	reservedContent := make([]byte, n)
+	for i := range reservedContent {
+		reservedContent[i] = 0x80
+	}
+	reserved := append(txRLPListHeader(len(reservedContent)), reservedContent...)
+
+	var body []byte
+	body = append(body, 0x80, 0x80, 0x80)       // ChainTag, BlockRef, Expiration
+	body = append(body, 0xc0)                   // Clauses = []
+	body = append(body, 0x80, 0x80, 0x80, 0x80) // GasPriceCoef, Gas, DependsOn, Nonce
+	body = append(body, reserved...)            // Reserved
+	body = append(body, 0x80)                   // Signature
+
+	return append(txRLPListHeader(len(body)), body...)
+}
+
+func allocsForDecodeTx(data []byte) uint64 {
+	var m0, m1 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&m0)
+
+	var trx Transaction
+	_ = rlp.DecodeBytes(data, &trx) // expected to fail; we only measure allocations
+
+	runtime.ReadMemStats(&m1)
+	runtime.KeepAlive(&trx) // &: Transaction embeds sync/atomic fields; copying it trips go vet copylocks
+	return m1.TotalAlloc - m0.TotalAlloc
+}
+
+func TestReservedDecodeRLP_AllocDecoupledFromInput(t *testing.T) {
+	justOver := allocsForDecodeTx(makeTxWithReserved(MaxUnusedReservedFields + 2))
+	wayOver := allocsForDecodeTx(makeTxWithReserved(4_000_000))
+
+	t.Logf("just-over=%d B  way-over=%d B", justOver, wayOver)
+
+	assert.Less(t, wayOver, uint64(64*1024),
+		"allocation tracks input size; the limit is still being enforced after materialization")
+}
+
+func BenchmarkReservedDecodeRLP_AtLimit(b *testing.B) {
+	data := makeTxWithReserved(MaxUnusedReservedFields + 1)
+	b.ReportAllocs()
+	for b.Loop() {
+		var trx Transaction
+		_ = rlp.DecodeBytes(data, &trx)
+	}
+}
+
+func BenchmarkReservedDecodeRLP_OverLimit(b *testing.B) {
+	data := makeTxWithReserved(MaxUnusedReservedFields + 2)
+	b.ReportAllocs()
+	for b.Loop() {
+		var trx Transaction
+		_ = rlp.DecodeBytes(data, &trx)
+	}
 }

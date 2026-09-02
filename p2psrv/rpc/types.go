@@ -14,6 +14,7 @@ type msgData struct {
 }
 
 type resultListener struct {
-	msgCode  uint64
-	onResult func(*p2p.Msg) error
+	msgCode       uint64
+	maxResultSize uint32
+	onResult      func(*p2p.Msg) error
 }

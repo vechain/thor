@@ -6,137 +6,112 @@
 package proto
 
 import (
-	"context"
+	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vechain/thor/v2/thor"
+	"github.com/stretchr/testify/require"
 )
 
-// mockRPC is a mock implementation of the RPC interface for testing
-type mockRPC struct {
-	callFunc func(ctx context.Context, msgCode uint64, arg any, result any) error
-}
+func TestBlockByIDResult_DecodeRLP(t *testing.T) {
+	t.Run("rejects more than MaxBlockByIDResult", func(t *testing.T) {
+		data, err := rlp.EncodeToBytes([]rlp.RawValue{
+			[]byte{0x01},
+			[]byte{0x02},
+		})
+		require.NoError(t, err)
 
-func (m *mockRPC) Notify(ctx context.Context, msgCode uint64, arg any) error {
-	return nil
-}
-
-func (m *mockRPC) Call(ctx context.Context, msgCode uint64, arg any, result any) error {
-	if m.callFunc != nil {
-		return m.callFunc(ctx, msgCode, arg, result)
-	}
-	return nil
-}
-
-func TestGetBlockByID_SizeLimit(t *testing.T) {
-	ctx := context.Background()
-	blockID := thor.Bytes32{}
-
-	t.Run("returns error when result exceeds limit", func(t *testing.T) {
-		mock := &mockRPC{
-			callFunc: func(ctx context.Context, msgCode uint64, arg any, result any) error {
-				// Simulate receiving 2 blocks (exceeds MaxBlockByIDResult = 1)
-				res := result.(*[]rlp.RawValue)
-				*res = []rlp.RawValue{
-					[]byte{0x01},
-					[]byte{0x02},
-				}
-				return nil
-			},
-		}
-
-		_, err := GetBlockByID(ctx, mock, blockID)
-		assert.Error(t, err)
+		var result blockByIDResult
+		err = rlp.DecodeBytes(data, &result)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "exceeds limit")
 	})
 
 	t.Run("accepts empty result", func(t *testing.T) {
-		mock := &mockRPC{
-			callFunc: func(ctx context.Context, msgCode uint64, arg any, result any) error {
-				// Simulate empty result
-				res := result.(*[]rlp.RawValue)
-				*res = []rlp.RawValue{}
-				return nil
-			},
-		}
+		data, err := rlp.EncodeToBytes([]rlp.RawValue{})
+		require.NoError(t, err)
 
-		block, err := GetBlockByID(ctx, mock, blockID)
-		assert.NoError(t, err)
-		assert.Nil(t, block)
+		var result blockByIDResult
+		require.NoError(t, rlp.DecodeBytes(data, &result))
+		assert.Empty(t, result)
 	})
 
 	t.Run("accepts single block", func(t *testing.T) {
-		mock := &mockRPC{
-			callFunc: func(ctx context.Context, msgCode uint64, arg any, result any) error {
-				// Simulate single block
-				res := result.(*[]rlp.RawValue)
-				*res = []rlp.RawValue{[]byte{0x01}}
-				return nil
-			},
+		data, err := rlp.EncodeToBytes([]rlp.RawValue{[]byte{0x01}})
+		require.NoError(t, err)
+
+		var result blockByIDResult
+		require.NoError(t, rlp.DecodeBytes(data, &result))
+		assert.Len(t, result, 1)
+	})
+
+	// The point of the fix: rejecting a huge list must not cost in proportion
+	// to its size.
+	t.Run("allocation is decoupled from input size", func(t *testing.T) {
+		measure := func(n int) uint64 {
+			oversized := make([]rlp.RawValue, n)
+			for i := range oversized {
+				oversized[i] = []byte{0x80}
+			}
+			data, err := rlp.EncodeToBytes(oversized)
+			require.NoError(t, err)
+
+			var m0, m1 runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&m0)
+
+			var result blockByIDResult
+			_ = rlp.DecodeBytes(data, &result)
+
+			runtime.ReadMemStats(&m1)
+			runtime.KeepAlive(result)
+			return m1.TotalAlloc - m0.TotalAlloc
 		}
 
-		block, err := GetBlockByID(ctx, mock, blockID)
-		assert.NoError(t, err)
-		assert.NotNil(t, block)
+		justOver := measure(2)
+		wayOver := measure(2_000_000)
+		t.Logf("just-over=%d B  way-over=%d B", justOver, wayOver)
+		assert.Less(t, wayOver, uint64(64*1024))
 	})
 }
 
-func TestGetBlocksFromNumber_SizeLimit(t *testing.T) {
-	ctx := context.Background()
-	num := uint32(1)
-
-	t.Run("returns error when result exceeds limit", func(t *testing.T) {
-		mock := &mockRPC{
-			callFunc: func(ctx context.Context, msgCode uint64, arg any, result any) error {
-				// Simulate receiving 1025 blocks (exceeds MaxBlocksFromNumber = 1024)
-				res := result.(*[]rlp.RawValue)
-				oversized := make([]rlp.RawValue, MaxBlocksFromNumber+1)
-				for i := range oversized {
-					oversized[i] = []byte{byte(i)}
-				}
-				*res = oversized
-				return nil
-			},
+func TestBlocksFromNumberResult_DecodeRLP(t *testing.T) {
+	t.Run("rejects more than MaxBlocksFromNumber", func(t *testing.T) {
+		oversized := make([]rlp.RawValue, MaxBlocksFromNumber+1)
+		for i := range oversized {
+			// byte(i)&0x7f keeps every element within the single-byte
+			// self-encoded RLP range so it's a valid raw value on its own.
+			oversized[i] = []byte{byte(i) & 0x7f}
 		}
+		data, err := rlp.EncodeToBytes(oversized)
+		require.NoError(t, err)
 
-		_, err := GetBlocksFromNumber(ctx, mock, num)
-		assert.Error(t, err)
+		var result blocksFromNumberResult
+		err = rlp.DecodeBytes(data, &result)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "exceeds limit")
 	})
 
 	t.Run("accepts empty result", func(t *testing.T) {
-		mock := &mockRPC{
-			callFunc: func(ctx context.Context, msgCode uint64, arg any, result any) error {
-				res := result.(*[]rlp.RawValue)
-				*res = []rlp.RawValue{}
-				return nil
-			},
-		}
+		data, err := rlp.EncodeToBytes([]rlp.RawValue{})
+		require.NoError(t, err)
 
-		blocks, err := GetBlocksFromNumber(ctx, mock, num)
-		assert.NoError(t, err)
-		assert.Empty(t, blocks)
+		var result blocksFromNumberResult
+		require.NoError(t, rlp.DecodeBytes(data, &result))
+		assert.Empty(t, result)
 	})
 
-	t.Run("accepts maximum allowed blocks", func(t *testing.T) {
-		mock := &mockRPC{
-			callFunc: func(ctx context.Context, msgCode uint64, arg any, result any) error {
-				// Simulate exactly MaxBlocksFromNumber blocks
-				res := result.(*[]rlp.RawValue)
-				blocks := make([]rlp.RawValue, MaxBlocksFromNumber)
-				for i := range blocks {
-					blocks[i] = []byte{byte(i)}
-				}
-				*res = blocks
-				return nil
-			},
+	t.Run("accepts exactly MaxBlocksFromNumber", func(t *testing.T) {
+		blocks := make([]rlp.RawValue, MaxBlocksFromNumber)
+		for i := range blocks {
+			blocks[i] = []byte{byte(i) & 0x7f}
 		}
+		data, err := rlp.EncodeToBytes(blocks)
+		require.NoError(t, err)
 
-		blocks, err := GetBlocksFromNumber(ctx, mock, num)
-		assert.NoError(t, err)
-		assert.Len(t, blocks, MaxBlocksFromNumber)
+		var result blocksFromNumberResult
+		require.NoError(t, rlp.DecodeBytes(data, &result))
+		assert.Len(t, result, MaxBlocksFromNumber)
 	})
 }
