@@ -16,6 +16,8 @@ Refer to the [Hardware Requirements](https://github.com/vechain/thor/tree/master
 
 When operating a validator the recommended configuration is without logs.
 
+For enhanced security, we recommend that validators do not accept incoming P2P connections, for example by blocking inbound traffic with firewall rules or by running the node behind a NAT gateway.
+
 ### Prerequisites
 
 Thor requires Go 1.19+ and a C compiler to build. Install them using your preferred package manager before continuing.
