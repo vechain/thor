@@ -113,21 +113,15 @@ func decodeAndWarmupBatches(ctx context.Context, rawBatches <-chan rawBlockBatch
 		for batch := range rawBatches {
 			metricReceivedBlocksCount().Add(int64(len(batch.rawBlocks)))
 			for i, raw := range batch.rawBlocks {
-				var rawBlk *block.RawBlock
-				if rawBlk, err = block.DecodeRawBlock(raw); err != nil {
-					err = errors.Wrap(err, "invalid block structure")
+				var blk *block.Block
+				if err = rlp.DecodeBytes(raw, &blk); err != nil {
+					err = errors.Wrap(err, "invalid block")
 					return
 				}
 
 				expectedNum := batch.startNum + uint32(i)
-				if rawBlk.Header().Number() != expectedNum {
+				if blk.Header().Number() != expectedNum {
 					err = errors.New("broken sequence")
-					return
-				}
-
-				var blk *block.Block
-				if blk, err = rawBlk.Decode(); err != nil {
-					err = errors.Wrap(err, "invalid block body")
 					return
 				}
 

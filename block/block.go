@@ -6,6 +6,7 @@
 package block
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -20,6 +21,11 @@ import (
 const (
 	ComplexSigSize = 81 + 65
 )
+
+// MaxTxsPerBlock bounds the transactions decoded from one block body. A valid
+// block cannot hold more than gasLimit/21000 txs, so 8192 covers a 172M gas
+// limit — 4.3x the current 40M.
+const MaxTxsPerBlock = 8192
 
 // Block is an immutable block type.
 type Block struct {
@@ -79,21 +85,64 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements rlp.Decoder.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	_, size, _ := s.Kind()
-	payload := struct {
-		Header Header
-		Txs    tx.Transactions
-	}{}
 
-	if err := s.Decode(&payload); err != nil {
+	if _, err := s.List(); err != nil {
 		return err
 	}
-
-	*b = Block{
-		header: &payload.Header,
-		txs:    payload.Txs,
+	var header Header
+	if err := s.Decode(&header); err != nil {
+		if err == rlp.EOL {
+			// Returning the EOL sentinel would let an enclosing list decoder read it
+			// as "end of list" and silently drop the block.
+			return errors.New("rlp: too few elements for block")
+		}
+		return err
 	}
+	txs, err := decodeTxs(s)
+	if err != nil {
+		if err == rlp.EOL {
+			// Same reasoning: EOL here means the tx list element is absent.
+			return errors.New("rlp: too few elements for block")
+		}
+		return err
+	}
+	// The outer list must hold exactly two items. Mapping every error is total:
+	// after a successful s.List only errNotAtEOL is reachable, and rlp's own
+	// wording for it says nothing about blocks.
+	if err := s.ListEnd(); err != nil {
+		return errors.New("rlp: too many elements for block")
+	}
+
+	*b = Block{header: &header, txs: txs}
 	b.cache.size.Store(rlp.ListSize(size))
 	return nil
+}
+
+// decodeTxs decodes a transaction list, stopping as soon as MaxTxsPerBlock is
+// exceeded so that a malformed list costs no more than the limit allows.
+func decodeTxs(s *rlp.Stream) (tx.Transactions, error) {
+	if _, err := s.List(); err != nil {
+		return nil, err
+	}
+	var txs tx.Transactions
+	for {
+		var t tx.Transaction
+		err := s.Decode(&t)
+		if err == rlp.EOL {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(txs) == MaxTxsPerBlock {
+			return nil, fmt.Errorf("tx count exceeds limit: > %d", MaxTxsPerBlock)
+		}
+		txs = append(txs, &t)
+	}
+	if err := s.ListEnd(); err != nil {
+		return nil, err
+	}
+	return txs, nil
 }
 
 // Size returns block size in bytes.

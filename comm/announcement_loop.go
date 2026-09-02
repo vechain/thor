@@ -6,6 +6,8 @@
 package comm
 
 import (
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/p2p/discover"
@@ -77,20 +79,14 @@ func (c *Communicator) fetchBlockByID(peer *Peer, newBlockID thor.Bytes32) {
 		return
 	}
 
-	rawBlk, err := block.DecodeRawBlock(result)
-	if err != nil {
-		peer.logger.Debug("failed to decode block structure", "err", err)
+	var blk *block.Block
+	if err := rlp.DecodeBytes(result, &blk); err != nil {
+		peer.logger.Debug("failed to decode block", "err", err)
 		return
 	}
 
-	if rawBlk.Header().ID() != newBlockID {
-		peer.logger.Debug("block ID mismatch", "expected", newBlockID, "got", rawBlk.Header().ID())
-		return
-	}
-
-	blk, err := rawBlk.Decode()
-	if err != nil {
-		peer.logger.Debug("failed to decode block body", "err", err)
+	if blk.Header().ID() != newBlockID {
+		peer.logger.Debug("block ID mismatch", "expected", newBlockID, "got", blk.Header().ID())
 		return
 	}
 
