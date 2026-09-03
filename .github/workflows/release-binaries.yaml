@@ -78,14 +78,15 @@ jobs:
         shell: bash
         run: |
           cd dist
-          tar czf "${ARCHIVE_NAME##*/}" "$(basename "$RELEASE_BINARY_NAME")"
+          binary="$(basename "$RELEASE_BINARY_NAME")"
+          tar czf "${ARCHIVE_NAME##*/}" "$binary" "$binary.asc"
 
       - name: Upload Binary
         uses: alexellis/upload-assets@d8de0b9b956cfb3d7633afdb66ef24c36940a9f7 # 0.5.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          asset_paths: '["${{env.RELEASE_BINARY_NAME}}", "${{env.ARCHIVE_NAME}}"]'
+          asset_paths: '["${{env.ARCHIVE_NAME}}"]'
 
   build-windows:
     name: Build Windows binary
@@ -134,11 +135,12 @@ jobs:
         shell: pwsh
         run: |
           Set-Location ./dist
-          Compress-Archive -Path (Split-Path -Leaf $Env:RELEASE_BINARY_NAME) -DestinationPath (Split-Path -Leaf $Env:ARCHIVE_NAME)
+          $binary = Split-Path -Leaf $Env:RELEASE_BINARY_NAME
+          Compress-Archive -Path $binary, "$binary.asc" -DestinationPath (Split-Path -Leaf $Env:ARCHIVE_NAME)
 
       - name: Upload Binary
         uses: alexellis/upload-assets@d8de0b9b956cfb3d7633afdb66ef24c36940a9f7 # 0.5.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          asset_paths: '["${{env.RELEASE_BINARY_NAME}}", "${{env.ARCHIVE_NAME}}"]'
+          asset_paths: '["${{env.ARCHIVE_NAME}}"]'
