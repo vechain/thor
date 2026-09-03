@@ -10,18 +10,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
 func TestAuthority(t *testing.T) {
-	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(muxdb.NewMem(), trie.Root{})
 
 	p1 := thor.BytesToAddress([]byte("p1"))
 	p2 := thor.BytesToAddress([]byte("p2"))
@@ -32,24 +33,35 @@ func TestAuthority(t *testing.T) {
 	st.SetBalance(p3, big.NewInt(30))
 
 	aut := New(thor.BytesToAddress([]byte("aut")), st)
+
+	checker := func(amount *big.Int) BalanceChecker {
+		return func(master, endorser thor.Address) (bool, error) {
+			bal, err := st.GetBalance(endorser)
+			if err != nil {
+				return false, err
+			}
+			return bal.Cmp(amount) >= 0, nil
+		}
+	}
+
 	tests := []struct {
-		ret      interface{}
-		expected interface{}
+		ret      any
+		expected any
 	}{
 		{M(aut.Add(p1, p1, thor.Bytes32{})), M(true, nil)},
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
 		{M(aut.Add(p2, p2, thor.Bytes32{})), M(true, nil)},
 		{M(aut.Add(p3, p3, thor.Bytes32{})), M(true, nil)},
-		{M(aut.Candidates(big.NewInt(10), thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(big.NewInt(10)), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(20), thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(big.NewInt(20)), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(30), thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(big.NewInt(30)), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(10), 2)), M(
+		{M(aut.Candidates(checker(big.NewInt(10)), 2)), M(
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}}, nil,
 		)},
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
@@ -59,9 +71,19 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
 		{M(aut.Revoke(p1)), M(true, nil)},
 		{M(aut.Get(p1)), M(false, p1, thor.Bytes32{}, false, nil)},
-		{M(aut.Candidates(&big.Int{}, thor.InitialMaxBlockProposers)), M(
+		{M(aut.Candidates(checker(&big.Int{}), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
+		{
+			M(aut.AllCandidates()), M([]*Candidate{
+				{p2, p2, thor.Bytes32{}, true},
+				{p3, p3, thor.Bytes32{}, true},
+			}, nil),
+		},
+		{M(aut.First()), M(&p2, nil)},
+		{M(aut.Next(p2)), M(&p3, nil)},
+		{M(aut.Revoke(p1)), M(false, nil)},
+		{M(aut.Revoke(p3)), M(true, nil)},
 	}
 
 	for i, tt := range tests {

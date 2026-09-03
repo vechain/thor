@@ -6,87 +6,244 @@
 package blocks
 
 import (
+	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
+	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
-	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	hexMath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cmd/thor/solo"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (
-	testAddress = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
-	testPrivHex = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
+	invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" // invalid bytes32
 )
 
-var blk *block.Block
-var ts *httptest.Server
-
-var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
-var invalidNumberRevision = "4294967296"                                                  //invalid block number
+var (
+	genesisBlock *block.Block
+	blk          *block.Block
+	ts           *httptest.Server
+	tclient      *thorclient.Client
+)
 
 func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
-	//invalid block id
-	res, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
-	assert.Equal(t, http.StatusBadRequest, statusCode)
-	//invalid block number
-	res, statusCode = httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
-	assert.Equal(t, http.StatusBadRequest, statusCode)
 
-	res, statusCode = httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
-	rb := new(JSONCollapsedBlock)
-	if err := json.Unmarshal(res, rb); err != nil {
-		t.Fatal(err)
+	tclient = thorclient.New(ts.URL)
+	for name, tt := range map[string]func(*testing.T){
+		"testBadQueryParams":                    testBadQueryParams,
+		"testInvalidBlockID":                    testInvalidBlockID,
+		"testInvalidBlockNumber":                testInvalidBlockNumber,
+		"testGetBlockByID":                      testGetBlockByID,
+		"testGetBlockNotFound":                  testGetBlockNotFound,
+		"testGetExpandedBlockByID":              testGetExpandedBlockByID,
+		"testGetBlockByHeight":                  testGetBlockByHeight,
+		"testGetBestBlock":                      testGetBestBlock,
+		"testGetFinalizedBlock":                 testGetFinalizedBlock,
+		"testGetJustifiedBlock":                 testGetJustifiedBlock,
+		"testGetBlockWithRevisionNumberTooHigh": testGetBlockWithRevisionNumberTooHigh,
+		"testMutuallyExclusiveQueries":          testMutuallyExclusiveQueries,
+		"testGetRawBlock":                       testGetRawBlock,
+	} {
+		t.Run(name, tt)
 	}
-	checkBlock(t, blk, rb)
-	assert.Equal(t, http.StatusOK, statusCode)
-
-	res, statusCode = httpGet(t, ts.URL+"/blocks/1")
-	if err := json.Unmarshal(res, &rb); err != nil {
-		t.Fatal(err)
-	}
-	checkBlock(t, blk, rb)
-	assert.Equal(t, http.StatusOK, statusCode)
-
-	res, statusCode = httpGet(t, ts.URL+"/blocks/best")
-	if err := json.Unmarshal(res, &rb); err != nil {
-		t.Fatal(err)
-	}
-	checkBlock(t, blk, rb)
-	assert.Equal(t, http.StatusOK, statusCode)
-
 }
 
-func initBlockServer(t *testing.T) {
-	db := muxdb.NewMem()
-	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+func testBadQueryParams(t *testing.T) {
+	badQueryParams := "?expanded=1"
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
 
-	b, _, _, err := gene.Build(stater)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "expanded: should be boolean", strings.TrimSpace(string(res)))
+
+	badQueryParams = "?raw=1"
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "raw: should be boolean", strings.TrimSpace(string(res)))
+}
+
+func testMutuallyExclusiveQueries(t *testing.T) {
+	badQueryParams := "?expanded=true&raw=true"
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best" + badQueryParams)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "raw&expanded: Raw and Expanded are mutually exclusive", strings.TrimSpace(string(res)))
+}
+
+func testGetBestBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best")
+	require.NoError(t, err)
+	rb := new(api.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &rb); err != nil {
+		t.Fatal(err)
+	}
+	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetRawBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/best?raw=true")
+	require.NoError(t, err)
+	rawBlock := new(api.JSONRawBlockSummary)
+	if err := json.Unmarshal(res, &rawBlock); err != nil {
+		t.Fatal(err)
+	}
+
+	blockBytes, err := hex.DecodeString(rawBlock.Raw[2:len(rawBlock.Raw)])
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, _ := chain.NewRepository(db, b)
+
+	header := block.Header{}
+	err = rlp.DecodeBytes(blockBytes, &header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expHeader := blk.Header()
+	assert.Equal(t, expHeader.Number(), header.Number(), "Number should be equal")
+	assert.Equal(t, expHeader.ID(), header.ID(), "Hash should be equal")
+	assert.Equal(t, expHeader.ParentID(), header.ParentID(), "ParentID should be equal")
+	assert.Equal(t, expHeader.Timestamp(), header.Timestamp(), "Timestamp should be equal")
+	assert.Equal(t, expHeader.TotalScore(), header.TotalScore(), "TotalScore should be equal")
+	assert.Equal(t, expHeader.GasLimit(), header.GasLimit(), "GasLimit should be equal")
+	assert.Equal(t, expHeader.GasUsed(), header.GasUsed(), "GasUsed should be equal")
+	assert.Equal(t, expHeader.Beneficiary(), header.Beneficiary(), "Beneficiary should be equal")
+	assert.Equal(t, expHeader.TxsRoot(), header.TxsRoot(), "TxsRoot should be equal")
+	assert.Equal(t, expHeader.StateRoot(), header.StateRoot(), "StateRoot should be equal")
+	assert.Equal(t, expHeader.ReceiptsRoot(), header.ReceiptsRoot(), "ReceiptsRoot should be equal")
+
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetBlockByHeight(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/2")
+	require.NoError(t, err)
+	rb := new(api.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &rb); err != nil {
+		t.Fatal(err)
+	}
+	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetFinalizedBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/finalized")
+	require.NoError(t, err)
+	finalized := new(api.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &finalized); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.True(t, finalized.IsFinalized)
+	assert.Equal(t, uint32(0), finalized.Number)
+	assert.Equal(t, genesisBlock.Header().ID(), finalized.ID)
+}
+
+func testGetJustifiedBlock(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/justified")
+	require.NoError(t, err)
+	justified := new(api.JSONCollapsedBlock)
+	require.NoError(t, json.Unmarshal(res, &justified))
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, uint32(0), justified.Number)
+	assert.Equal(t, genesisBlock.Header().ID(), justified.ID)
+}
+
+func testGetBlockByID(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + blk.Header().ID().String())
+	require.NoError(t, err)
+	rb := new(api.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, rb); err != nil {
+		t.Fatal(err)
+	}
+	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetBlockNotFound(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a")
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, "null", strings.TrimSpace(string(res)))
+}
+
+func testGetExpandedBlockByID(t *testing.T) {
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + blk.Header().ID().String() + "?expanded=true")
+	require.NoError(t, err)
+
+	rb := new(api.JSONExpandedBlock)
+	if err := json.Unmarshal(res, rb); err != nil {
+		t.Fatal(err)
+	}
+	checkExpandedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testInvalidBlockNumber(t *testing.T) {
+	invalidNumberRevision := "4294967296" // invalid block number
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidNumberRevision)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+}
+
+func testInvalidBlockID(t *testing.T) {
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidBytes32)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+}
+
+func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
+	revisionNumberTooHigh := strconv.FormatUint(math.MaxUint64, 10)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + revisionNumberTooHigh)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(string(res)))
+}
+
+func initBlockServer(t *testing.T) {
+	forks := thor.ForkConfig{
+		BLOCKLIST:    0,
+		VIP191:       1,
+		GALACTICA:    1,
+		VIP214:       2,
+		HAYABUSA:     math.MaxUint32,
+		INTERSTELLAR: math.MaxUint32,
+	}
+	hayabusaTP := uint32(math.MaxUint32)
+	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
+	thorChain, err := testchain.NewWithFork(&forks, 180)
+	require.NoError(t, err)
+
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
+	legacyTx := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(thorChain.Repo().ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
@@ -94,42 +251,36 @@ func initBlockServer(t *testing.T) {
 		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
+	legacyTx = tx.MustSign(legacyTx, genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, thorChain.MintBlock(legacyTx))
 
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx = tx.WithSignature(sig)
-	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	sum, _ := repo.GetBlockSummary(b.Header().ID())
-	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = flow.Adopt(tx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stage.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.AddBlock(block, receipts, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetBestBlockID(block.Header().ID()); err != nil {
-		t.Fatal(err)
-	}
+	dynFeeTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(thorChain.Repo().ChainTag()).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		MaxPriorityFeePerGas(big.NewInt(100)).
+		Expiration(10).
+		Gas(21000).
+		Nonce(2).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+	dynFeeTx = tx.MustSign(dynFeeTx, genesis.DevAccounts()[0].PrivateKey)
+
+	require.NoError(t, thorChain.MintBlock(dynFeeTx))
+
+	allBlocks, err := thorChain.GetAllBlocks()
+	require.NoError(t, err)
+
+	genesisBlock = allBlocks[0]
+	// taking best block to include also galactica block
+	blk = allBlocks[len(allBlocks)-1]
+
 	router := mux.NewRouter()
-	New(repo, &solo.BFTEngine{}).Mount(router, "/blocks")
+	New(thorChain.Repo(), thorChain.Engine()).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
-	blk = block
 }
 
-func checkBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
+func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *api.JSONCollapsedBlock) {
 	header := expBl.Header()
 	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
 	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")
@@ -145,18 +296,26 @@ func checkBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i], "txid should be equal")
 	}
-
+	assert.Equal(t, (*hexMath.HexOrDecimal256)(header.BaseFee()), actBl.BaseFeePerGas, "BaseFee should be equal")
 }
 
-func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
+func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *api.JSONExpandedBlock) {
+	header := expBl.Header()
+	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
+	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")
+	assert.Equal(t, header.ParentID(), actBl.ParentID, "ParentID should be equal")
+	assert.Equal(t, header.Timestamp(), actBl.Timestamp, "Timestamp should be equal")
+	assert.Equal(t, header.TotalScore(), actBl.TotalScore, "TotalScore should be equal")
+	assert.Equal(t, header.GasLimit(), actBl.GasLimit, "GasLimit should be equal")
+	assert.Equal(t, header.GasUsed(), actBl.GasUsed, "GasUsed should be equal")
+	assert.Equal(t, header.Beneficiary(), actBl.Beneficiary, "Beneficiary should be equal")
+	assert.Equal(t, header.TxsRoot(), actBl.TxsRoot, "TxsRoot should be equal")
+	assert.Equal(t, header.StateRoot(), actBl.StateRoot, "StateRoot should be equal")
+	assert.Equal(t, header.ReceiptsRoot(), actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
+	for i, tx := range expBl.Transactions() {
+		assert.Equal(t, tx.ID(), actBl.Transactions[i].ID, "txid should be equal")
+		assert.Equal(t, tx.Type(), actBl.Transactions[i].Type, "tx type should be equal")
+		assert.Equal(t, tx.ChainTag(), actBl.Transactions[i].ChainTag, "ChainTag should be equal")
 	}
-	r, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r, res.StatusCode
+	assert.Equal(t, (*hexMath.HexOrDecimal256)(header.BaseFee()), actBl.BaseFeePerGas, "BaseFee should be equal")
 }

@@ -8,10 +8,10 @@ package genesis
 import (
 	"math/big"
 
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // NewTestnet create genesis for testnet.
@@ -23,12 +23,12 @@ func NewTestnet() *Genesis {
 	acccount0 := thor.MustParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d")
 
 	master0 := thor.MustParseAddress("0x25AE0ef84dA4a76D5a1DFE80D3789C2c46FeE30a")
-	endorser0 := thor.MustParseAddress("0xb4094c25f86d628fdD571Afc4077f0d0196afB48")
+	endorsor0 := thor.MustParseAddress("0xb4094c25f86d628fdD571Afc4077f0d0196afB48")
 
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(thor.InitialGasLimit).
-		ForkConfig(thor.NoFork).
+		ForkConfig(&thor.NoFork).
 		State(func(state *state.State) error {
 			tokenSupply := new(big.Int)
 
@@ -59,12 +59,12 @@ func NewTestnet() *Genesis {
 			}
 			tokenSupply.Add(tokenSupply, amount)
 
-			// 25 million for endorser0
+			// 25 million for endorsor0
 			amount = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25*1000*1000))
-			if err := state.SetBalance(endorser0, amount); err != nil {
+			if err := state.SetBalance(endorsor0, amount); err != nil {
 				return err
 			}
-			if err := state.SetEnergy(endorser0, &big.Int{}, launchTime); err != nil {
+			if err := state.SetEnergy(endorsor0, &big.Int{}, launchTime); err != nil {
 				return err
 			}
 			tokenSupply.Add(tokenSupply, amount)
@@ -74,19 +74,22 @@ func NewTestnet() *Genesis {
 		// set initial params
 		// use an external account as executor to manage testnet easily
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
+			tx.NewClause(&builtin.Params.Address).
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
 			thor.Address{}).
 		Call(
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, thor.InitialBaseGasPrice)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+			tx.NewClause(&builtin.Params.Address).
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
 			executor).
+
 		// add master0 as the initial block proposer
-		Call(tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", master0, endorser0, thor.BytesToBytes32([]byte("master0")))),
+		Call(tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", master0, endorsor0, thor.BytesToBytes32([]byte("master0")))),
 			executor)
 
 	id, err := builder.ComputeID()

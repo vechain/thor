@@ -6,49 +6,74 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/inconshreveable/log15"
-	isatty "github.com/mattn/go-isatty"
+	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/bft"
-	"github.com/vechain/thor/cmd/thor/node"
-	"github.com/vechain/thor/cmd/thor/optimizer"
-	"github.com/vechain/thor/cmd/thor/solo"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/txpool"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v3"
+
+	"github.com/vechain/thor/v2/api/admin"
+	"github.com/vechain/thor/v2/api/doc"
+	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/httpserver"
+	"github.com/vechain/thor/v2/cmd/thor/node"
+	"github.com/vechain/thor/v2/cmd/thor/pruner"
+	"github.com/vechain/thor/v2/cmd/thor/reprocess"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
+	"github.com/vechain/thor/v2/consensus"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/metrics"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/txpool"
 
 	// Force-load the tracer engines to trigger registration
-	_ "github.com/vechain/thor/tracers/js"
-	_ "github.com/vechain/thor/tracers/native"
+	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/logger"
+	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
 var (
-	version   string
-	gitCommit string
-	gitTag    string
-	log       = log15.New()
-
+	version              string
+	gitCommit            string
+	gitTag               string
+	copyrightYear        string
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,
-		LimitPerAccount: 16,
+		LimitPerAccount: 128,
 		MaxLifetime:     20 * time.Minute,
 	}
 )
+
+func init() {
+	content, err := doc.FS.ReadFile("thor.yaml")
+	if err != nil {
+		panic(err)
+	}
+	s := string(content)
+	versionMeta := "release"
+	if gitTag == "" {
+		versionMeta = "dev"
+	}
+	s = strings.Replace(s, "{{GIT_VERSION}}", gitCommit+"-"+versionMeta, 1)
+	doc.Thoryaml = []byte(s)
+}
 
 func fullVersion() string {
 	versionMeta := "release"
@@ -59,14 +84,16 @@ func fullVersion() string {
 }
 
 func main() {
-	app := cli.App{
+	app := &cli.Command{
 		Version:   fullVersion(),
 		Name:      "Thor",
 		Usage:     "Node of VeChain Thor Network",
-		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
+		Copyright: fmt.Sprintf("2018-%s VeChain Foundation <https://vechain.org/>", copyrightYear),
 		Flags: []cli.Flag{
 			networkFlag,
+			apiTxpoolFlag,
 			configDirFlag,
+			masterKeyStdinFlag,
 			dataDirFlag,
 			cacheFlag,
 			beneficiaryFlag,
@@ -75,42 +102,83 @@ func main() {
 			apiCorsFlag,
 			apiTimeoutFlag,
 			apiCallGasLimitFlag,
+			apiBatchDataMaxSizeFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			apiEnableDeprecatedFlag,
+			enableAPILogsFlag,
+			apiLogsLimitFlag,
+			apiLogsMaxOffsetFlag,
+			apiPriorityFeesPercentageFlag,
+			apiSlowQueriesThresholdFlag,
+			apiLog5xxErrorsFlag,
 			verbosityFlag,
+			verbosityStakerFlag,
+			jsonLogsFlag,
 			maxPeersFlag,
 			p2pPortFlag,
 			natFlag,
 			bootNodeFlag,
+			allowedPeersFlag,
 			skipLogsFlag,
+			logDbAdditionalIndexesFlag,
+			logDbMaxReadConnsFlag,
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			enableMetricsFlag,
+			metricsAddrFlag,
+			adminAddrFlag,
+			enableAdminFlag,
+			txPoolLimitPerAccountFlag,
+			allowedTracersFlag,
+			minEffectivePriorityFeeFlag,
 		},
 		Action: defaultAction,
-		Commands: []cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:  "solo",
 				Usage: "client runs in solo mode for test & dev",
 				Flags: []cli.Flag{
+					genesisFlag,
 					dataDirFlag,
 					cacheFlag,
+					logDbAdditionalIndexesFlag,
+					logDbMaxReadConnsFlag,
+					apiTxpoolFlag,
 					apiAddrFlag,
 					apiCorsFlag,
 					apiTimeoutFlag,
 					apiCallGasLimitFlag,
+					apiBatchDataMaxSizeFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					apiEnableDeprecatedFlag,
+					apiSlowQueriesThresholdFlag,
+					enableAPILogsFlag,
+					apiLogsLimitFlag,
+					apiLogsMaxOffsetFlag,
+					apiPriorityFeesPercentageFlag,
+					apiLog5xxErrorsFlag,
 					onDemandFlag,
+					blockInterval,
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
+					verbosityStakerFlag,
+					jsonLogsFlag,
 					pprofFlag,
 					verifyLogsFlag,
 					skipLogsFlag,
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
+					enableMetricsFlag,
+					metricsAddrFlag,
+					adminAddrFlag,
+					enableAdminFlag,
+					allowedTracersFlag,
+					minEffectivePriorityFeeFlag,
 				},
 				Action: soloAction,
 			},
@@ -124,41 +192,78 @@ func main() {
 				},
 				Action: masterKeyAction,
 			},
+			{
+				Name:      "reprocess",
+				Usage:     "reprocess chain from source instance directory and save to the output directory",
+				ArgsUsage: "<source-instance-dir> <output-dir>",
+				Flags: []cli.Flag{
+					skipLogsFlag,
+					disablePrunerFlag,
+					cacheFlag,
+					verbosityFlag,
+					jsonLogsFlag,
+				},
+				Action: reprocessAction,
+			},
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func defaultAction(ctx *cli.Context) error {
+func defaultAction(_ context.Context, ctx *cli.Command) error {
 	exitSignal := handleExitSignal()
 
 	defer func() { log.Info("exited") }()
 
-	initLogger(ctx)
+	logLevel, err := initLogger(ctx)
+	if err != nil {
+		return err
+	}
+
+	// enable metrics as soon as possible
+	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
+	metricsURL := ""
+	if enableMetrics {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
+	}
+
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
 		return err
 	}
-	instanceDir, err := makeInstanceDir(ctx, gene)
+	instanceDir, err := makeInstanceDir(ctx.String(dataDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name))
 	if err != nil {
 		return err
 	}
 
-	mainDB, err := openMainDB(ctx, instanceDir)
+	mainDB, err := openMainDB(instanceDir, int(ctx.Uint64(cacheFlag.Name)), ctx.Bool(disablePrunerFlag.Name))
 	if err != nil {
 		return err
+	}
+	if enableMetrics {
+		mainDB.EnableMetrics()
 	}
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
+	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
+	logDbMaxReadConns := ctx.Uint64(logDbMaxReadConnsFlag.Name)
 
-	logDB, err := openLogDB(ctx, instanceDir)
+	logDB, err := openLogDB(instanceDir, logDbAdditionalIndexes, logDbMaxReadConns)
 	if err != nil {
 		return err
+	}
+	if enableMetrics {
+		logDB.EnableMetrics()
 	}
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
@@ -174,6 +279,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
@@ -181,50 +287,100 @@ func defaultAction(ctx *cli.Context) error {
 	}
 
 	txpoolOpt := defaultTxPoolOptions
-	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
+	txpoolOpt.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+	}
+	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt, forkConfig)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pcom, err := newP2PComm(ctx, repo, txPool, instanceDir)
+	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
 	if err != nil {
 		return err
+	}
+
+	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := httpserver.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			p2pCommunicator.Communicator(),
+			apiLogsGate,
+			txpoolGate,
+			pprofGate,
+			master,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
 	}
 
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
 	}
+	// Skip resync when the pruner is enabled: it needs full historical state (pruned
+	// nodes lack it); leftover stale quality is safe — BFT only reads forward from finalized.
+	if ctx.Bool(disablePrunerFlag.Name) {
+		if err := resyncBFT(bftEngine); err != nil {
+			return errors.Wrap(err, "resync bft")
+		}
+	}
 
-	apiHandler, apiCloser := api.New(
+	apiURL, srvCloser, err := httpserver.StartAPIServer(
+		ctx.String(apiAddrFlag.Name),
 		repo,
 		state.NewStater(mainDB),
 		txPool,
 		logDB,
 		bftEngine,
-		p2pcom.comm,
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
-		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		forkConfig)
-	defer func() { log.Info("closing API..."); apiCloser() }()
-
-	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
+		p2pCommunicator.Communicator(),
+		forkConfig,
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, false),
+	)
 	if err != nil {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(apiURL, p2pcom.enode)
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL, false)
 
-	if err := p2pcom.Start(); err != nil {
+	if err := p2pCommunicator.Start(); err != nil {
 		return err
 	}
-	defer p2pcom.Stop()
+	defer p2pCommunicator.Stop()
 
-	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
+
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
+	if minTxPriorityFee > 0 {
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
+	}
+
+	options := node.Options{
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		TargetGasLimit:   ctx.Uint64(targetGasLimitFlag.Name),
+	}
+	stater := state.NewStater(mainDB)
 
 	return node.New(
 		master,
@@ -234,41 +390,88 @@ func defaultAction(ctx *cli.Context) error {
 		logDB,
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
-		p2pcom.comm,
-		uint64(ctx.Int(targetGasLimitFlag.Name)),
-		skipLogs,
-		forkConfig).Run(exitSignal)
+		p2pCommunicator.Communicator(),
+		forkConfig,
+		options,
+		consensus.New(repo, stater, forkConfig),
+		packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig, options.MinTxPriorityFee),
+	).Run(exitSignal)
 }
 
-func soloAction(ctx *cli.Context) error {
+func soloAction(_ context.Context, ctx *cli.Command) error {
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
+	logLevel, err := initLogger(ctx)
+	if err != nil {
+		return err
+	}
 
-	initLogger(ctx)
-	gene := genesis.NewDevnet()
-	// Solo forks from the start
-	forkConfig := thor.ForkConfig{}
+	onDemandBlockProduction := ctx.Bool(onDemandFlag.Name)
+	blockInterval := ctx.Uint64(blockInterval.Name)
+	if blockInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
+	thor.SetConfig(thor.Config{BlockInterval: blockInterval})
+
+	// enable metrics as soon as possible
+	enableMetrics := ctx.Bool(enableMetricsFlag.Name)
+	metricsURL := ""
+	if enableMetrics {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); closeFunc() }()
+	}
+
+	var (
+		gene       *genesis.Genesis
+		forkConfig *thor.ForkConfig
+		isDevnet   bool
+	)
+
+	flagGenesis := ctx.String(genesisFlag.Name)
+	if flagGenesis == "" {
+		gene, forkConfig = genesis.NewDevnet()
+		isDevnet = true
+	} else {
+		gene, forkConfig, err = parseGenesisFile(flagGenesis)
+		if err != nil {
+			return err
+		}
+	}
 
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
-	var err error
+
+	logDbAdditionalIndexes := ctx.Bool(logDbAdditionalIndexesFlag.Name)
+	logDbMaxReadConns := ctx.Uint64(logDbMaxReadConnsFlag.Name)
 
 	if ctx.Bool(persistFlag.Name) {
-		if instanceDir, err = makeInstanceDir(ctx, gene); err != nil {
+		if instanceDir, err = makeInstanceDir(ctx.String(dataDirFlag.Name), gene, ctx.Bool(disablePrunerFlag.Name)); err != nil {
 			return err
 		}
-		if mainDB, err = openMainDB(ctx, instanceDir); err != nil {
+		if mainDB, err = openMainDB(instanceDir, int(ctx.Uint64(cacheFlag.Name)), ctx.Bool(disablePrunerFlag.Name)); err != nil {
 			return err
+		}
+		if enableMetrics {
+			mainDB.EnableMetrics()
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
-		if logDB, err = openLogDB(ctx, instanceDir); err != nil {
+
+		if logDB, err = openLogDB(instanceDir, logDbAdditionalIndexes, logDbMaxReadConns); err != nil {
 			return err
+		}
+		if enableMetrics {
+			logDB.EnableMetrics()
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
 	} else {
 		instanceDir = "Memory"
-		mainDB = openMemMainDB()
+		mainDB = openMemMainDB() // Skip metrics of in-memory DB
 		logDB = openMemLogDB()
 	}
 
@@ -277,60 +480,108 @@ func soloAction(ctx *cli.Context) error {
 		return err
 	}
 
-	skipLogs := ctx.Bool(skipLogsFlag.Name)
+	adminURL := ""
+	logAPIRequests := &atomic.Bool{}
+	logAPIRequests.Store(ctx.Bool(enableAPILogsFlag.Name))
+	enableTxPool := &atomic.Bool{}
+	enableTxPool.Store(ctx.Bool(apiTxpoolFlag.Name))
+	pprofEnabled := &atomic.Bool{}
+	pprofEnabled.Store(ctx.Bool(pprofFlag.Name))
+	apiLogsGate := admin.NewGate("apilogs", logAPIRequests)
+	txpoolGate := admin.NewGate("txpool-api", enableTxPool)
+	pprofGate := admin.NewGate("pprof", pprofEnabled)
+	if pprofEnabled.Load() && !ctx.Bool(enableAdminFlag.Name) {
+		log.Warn("--pprof has no effect without --enable-admin; pprof endpoints are only served by the admin server")
+	}
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, closeFunc, err := httpserver.StartAdminServer(
+			ctx.String(adminAddrFlag.Name),
+			logLevel,
+			repo,
+			nil,
+			apiLogsGate,
+			txpoolGate,
+			pprofGate,
+			nil,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); closeFunc() }()
+	}
 
+	printStartupMessage1(gene, repo, nil, instanceDir, forkConfig)
+
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
 		}
 	}
 
-	txPoolOption := defaultTxPoolOptions
-	txPoolOption.Limit = ctx.Int(txPoolLimitFlag.Name)
-	txPoolOption.LimitPerAccount = ctx.Int(txPoolLimitPerAccountFlag.Name)
+	minTxPriorityFee := ctx.Uint64(minEffectivePriorityFeeFlag.Name)
+	if minTxPriorityFee > 0 {
+		log.Info(fmt.Sprintf("the minimum effective priority fee required in transactions is %d wei", minTxPriorityFee))
+	}
+	options := solo.Options{
+		GasLimit:         ctx.Uint64(gasLimitFlag.Name),
+		SkipLogs:         skipLogs,
+		MinTxPriorityFee: minTxPriorityFee,
+		OnDemand:         onDemandBlockProduction,
+	}
 
-	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
-	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+	stater := state.NewStater(mainDB)
+	core := solo.NewCore(repo, stater, logDB, options, forkConfig)
 
-	bftEngine := solo.NewBFTEngine(repo)
-	apiHandler, apiCloser := api.New(
+	var pool solo.TxPool
+	if ctx.Bool(onDemandFlag.Name) {
+		pool = solo.NewOnDemandTxPool(core)
+	} else {
+		txPoolOption := defaultTxPoolOptions
+		txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-limit flag")
+		}
+		txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+		if err != nil {
+			return errors.Wrap(err, "parse txpool-limit-per-account flag")
+		}
+
+		txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption, forkConfig)
+		defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+		pool = txPool
+	}
+
+	// Use solo mocked engine that tracks chain progress to enable pruning.
+	bftEngine := bft.NewSoloMockedEngine(repo, forkConfig)
+	apiURL, srvCloser, err := httpserver.StartAPIServer(
+		ctx.String(apiAddrFlag.Name),
 		repo,
-		state.NewStater(mainDB),
-		txPool,
+		stater,
+		pool,
 		logDB,
 		bftEngine,
 		&solo.Communicator{},
-		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
-		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
-		ctx.Bool(pprofFlag.Name),
-		skipLogs,
-		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		forkConfig)
-	defer func() { log.Info("closing API..."); apiCloser() }()
-
-	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
+		forkConfig,
+		makeAPIConfig(ctx, logAPIRequests, enableTxPool, true),
+	)
 	if err != nil {
 		return err
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
+	printStartupMessage2(gene, apiURL, "", metricsURL, adminURL, isDevnet)
 
-	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
 
-	return solo.New(repo,
-		state.NewStater(mainDB),
-		logDB,
-		txPool,
-		uint64(ctx.Int(gasLimitFlag.Name)),
-		ctx.Bool(onDemandFlag.Name),
-		skipLogs,
-		forkConfig).Run(exitSignal)
+	return solo.New(repo, stater, pool, options, core).Run(exitSignal)
 }
 
-func masterKeyAction(ctx *cli.Context) error {
+func masterKeyAction(_ context.Context, ctx *cli.Command) error {
 	hasImportFlag := ctx.Bool(importMasterKeyFlag.Name)
 	hasExportFlag := ctx.Bool(exportMasterKeyFlag.Name)
 	if hasImportFlag && hasExportFlag {
@@ -347,7 +598,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Master:", thor.Address(crypto.PubkeyToAddress(masterKey.PublicKey)))
+		fmt.Println("Master:", crypto.PubkeyToAddress(masterKey.PublicKey).Hex())
 		return nil
 	}
 
@@ -355,12 +606,12 @@ func masterKeyAction(ctx *cli.Context) error {
 		if isatty.IsTerminal(os.Stdin.Fd()) {
 			fmt.Println("Input JSON keystore (end with ^d):")
 		}
-		keyjson, err := ioutil.ReadAll(os.Stdin)
+		keyjson, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return err
 		}
 
-		if err := json.Unmarshal(keyjson, &map[string]interface{}{}); err != nil {
+		if err := json.Unmarshal(keyjson, &map[string]any{}); err != nil {
 			return errors.WithMessage(err, "unmarshal")
 		}
 		password, err := readPasswordFromNewTTY("Enter passphrase: ")
@@ -376,7 +627,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if err := crypto.SaveECDSA(keyPath, key.PrivateKey); err != nil {
 			return err
 		}
-		fmt.Println("Master key imported:", thor.Address(key.Address))
+		fmt.Println("Master key imported:", key.Address.Hex())
 		return nil
 	}
 
@@ -405,7 +656,8 @@ func masterKeyAction(ctx *cli.Context) error {
 		keyjson, err := keystore.EncryptKey(&keystore.Key{
 			PrivateKey: masterKey,
 			Address:    crypto.PubkeyToAddress(masterKey.PublicKey),
-			Id:         uuid.NewRandom()},
+			Id:         uuid.NewRandom(),
+		},
 			password, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {
 			return err
@@ -416,5 +668,102 @@ func masterKeyAction(ctx *cli.Context) error {
 		_, err = fmt.Println(string(keyjson))
 		return err
 	}
+	return nil
+}
+
+func reprocessAction(_ context.Context, ctx *cli.Command) error {
+	// get output directory from positional argument
+	if ctx.Args().Len() != 2 {
+		return errors.New("source-instance-dir and output-dir arguments are required, e.g. 'thor reprocess /path/to/source /path/to/output'")
+	}
+	sourceInstanceDir := ctx.Args().Get(0)
+	outputDir := ctx.Args().Get(1)
+
+	exitSignal := handleExitSignal()
+	defer func() { log.Info("exited") }()
+
+	_, err := initLogger(ctx)
+	if err != nil {
+		return errors.Wrap(err, "init logger")
+	}
+
+	// initialize and verify source database
+	sourceDB, gene, err := openDBFromInstanceDir(sourceInstanceDir)
+	if err != nil {
+		return errors.Wrap(err, "open source instance directory")
+	}
+	defer func() { log.Info("closing source database..."); sourceDB.Close() }()
+
+	genesisBlock, _, _, err := gene.Build(state.NewStater(sourceDB))
+	if err != nil {
+		return errors.Wrap(err, "build genesis block")
+	}
+	sourceRepo, err := chain.NewRepository(sourceDB, genesisBlock)
+	if err != nil {
+		return errors.Wrap(err, "initialize source repository")
+	}
+
+	forkConfig := thor.GetForkConfig(genesisBlock.Header().ID())
+	if forkConfig == nil {
+		return errors.Errorf("unknown genesis ID: %v", genesisBlock.Header().ID())
+	}
+
+	// initialize the output directory
+	instanceDir, err := makeInstanceDir(outputDir, gene, ctx.Bool(disablePrunerFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "make instance directory")
+	}
+	mainDB, err := openMainDB(instanceDir, int(ctx.Uint64(cacheFlag.Name)), ctx.Bool(disablePrunerFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "open database")
+	}
+	defer func() { log.Info("closing database..."); mainDB.Close() }()
+
+	logDB, err := openLogDB(instanceDir, true, ctx.Uint64(logDbMaxReadConnsFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "open log database")
+	}
+	defer func() { log.Info("closing log database..."); logDB.Close() }()
+
+	repo, err := initChainRepository(gene, mainDB, logDB)
+	if err != nil {
+		return errors.Wrap(err, "initialize repository")
+	}
+
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
+	if !skipLogs {
+		if err := syncLogDB(exitSignal, repo, logDB, false); err != nil {
+			return err
+		}
+	}
+
+	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, thor.Address{})
+	if err != nil {
+		return errors.Wrap(err, "init bft engine")
+	}
+	// Skip resync when the pruner is enabled: it needs full historical state (pruned
+	// nodes lack it); leftover stale quality is safe — BFT only reads forward from finalized.
+	if ctx.Bool(disablePrunerFlag.Name) {
+		if err := resyncBFT(bftEngine); err != nil {
+			return errors.Wrap(err, "resync bft")
+		}
+	}
+
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo, bftEngine, *forkConfig)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
+
+	log.Info("starting chain reprocessing", "instance-directory", sourceInstanceDir)
+	if sourceRepo.BestBlockSummary().Header.Number() > repo.BestBlockSummary().Header.Number() {
+		err = reprocess.ReprocessChainFromSnapshot(exitSignal, sourceRepo.NewBestChain(), state.NewStater(mainDB), logDB, repo, forkConfig, bftEngine, skipLogs)
+		if err != nil {
+			return errors.Wrap(err, "reprocess chain")
+		}
+		log.Info("chain reprocessing completed successfully")
+	} else {
+		log.Info("chain reprocessing already complete")
+	}
+
 	return nil
 }

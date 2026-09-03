@@ -23,23 +23,26 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-func NoopCanTransfer(db StateDB, from common.Address, balance *big.Int) bool {
+func NoopCanTransfer(_ StateDB, _ common.Address, _ *big.Int) bool {
 	return true
 }
-func NoopTransfer(db StateDB, from, to common.Address, amount *big.Int) {}
+func NoopTransfer(_ StateDB, _, _ common.Address, _ *big.Int) {}
 
 type NoopEVMCallContext struct{}
 
-func (NoopEVMCallContext) Call(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
+func (NoopEVMCallContext) Call(_ ContractRef, _ common.Address, _ []byte, _, _ *big.Int) ([]byte, error) {
 	return nil, nil
 }
-func (NoopEVMCallContext) CallCode(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
+
+func (NoopEVMCallContext) CallCode(_ ContractRef, _ common.Address, _ []byte, _, _ *big.Int) ([]byte, error) {
 	return nil, nil
 }
-func (NoopEVMCallContext) Create(caller ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error) {
+
+func (NoopEVMCallContext) Create(_ ContractRef, _ []byte, _, _ *big.Int) ([]byte, common.Address, error) {
 	return nil, common.Address{}, nil
 }
-func (NoopEVMCallContext) DelegateCall(me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
+
+func (NoopEVMCallContext) DelegateCall(_ ContractRef, _ common.Address, _ []byte, _ *big.Int) ([]byte, error) {
 	return nil, nil
 }
 
@@ -68,3 +71,7 @@ func (NoopStateDB) Snapshot() int                                               
 func (NoopStateDB) AddLog(*types.Log)                                                  {}
 func (NoopStateDB) AddPreimage(common.Hash, []byte)                                    {}
 func (NoopStateDB) ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) {}
+func (NoopStateDB) GetTransientState(common.Address, common.Hash) common.Hash          { return common.Hash{} }
+func (NoopStateDB) SetTransientState(common.Address, common.Hash, common.Hash)         {}
+func (NoopStateDB) CreateContract(common.Address)                                      {}
+func (NoopStateDB) IsNewContract(common.Address) bool                                  { return false }

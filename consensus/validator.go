@@ -10,15 +10,22 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/poa"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/xenv"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
+
+type cacher interface {
+	Handle(header *block.Header, receipts tx.Receipts) (cachedEntry any, err error)
+}
 
 func (c *Consensus) validate(
 	state *state.State,
@@ -33,7 +40,24 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	candidates, err := c.validateProposer(header, parent, state)
+	checkpoint := state.NewCheckpoint()
+	staker := builtin.Staker.Native(state)
+	dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
+	if err != nil {
+		log.Error("staker sync pos failed - reverting state", "err", err, "height", header.Number(), "parent", parent, "checkpoint", checkpoint)
+		dPosStatus.Updates = false // reset since no changes actually occurred
+		state.RevertTo(checkpoint)
+	}
+	if dPosStatus.Updates {
+		c.validatorsCache.Remove(parent.ID())
+	}
+
+	var cacher cacher
+	if dPosStatus.Active {
+		cacher, err = c.validateStakingProposer(header, parent, staker)
+	} else {
+		cacher, err = c.validateAuthorityProposer(header, parent, state)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -42,52 +66,19 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	stage, receipts, err := c.verifyBlock(block, state, blockConflicts)
+	stage, receipts, err := c.verifyBlock(block, state, blockConflicts, dPosStatus.Active)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	hasAuthorityEvent := func() bool {
-		for _, r := range receipts {
-			for _, o := range r.Outputs {
-				for _, ev := range o.Events {
-					if ev.Address == builtin.Authority.Address {
-						return true
-					}
-				}
-			}
-		}
-		return false
-	}()
-
-	// if no event emitted from Authority contract, it's believed that the candidates list not changed
-	if !hasAuthorityEvent {
-
-		// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
-		// can be reused
-		hasEndorsorEvent := func() bool {
-			for _, r := range receipts {
-				for _, o := range r.Outputs {
-					for _, ev := range o.Events {
-						if ev.Address == builtin.Params.Address {
-							return true
-						}
-					}
-					for _, t := range o.Transfers {
-						if candidates.IsEndorsor(t.Sender) || candidates.IsEndorsor(t.Recipient) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-
-		if hasEndorsorEvent {
-			candidates.InvalidateCache()
-		}
-		c.candidatesCache.Add(header.ID(), candidates)
+	cachedEntry, err := cacher.Handle(header, receipts)
+	if err != nil {
+		return nil, nil, err
 	}
+	if cachedEntry != nil {
+		c.validatorsCache.Add(header.ID(), cachedEntry)
+	}
+
 	return stage, receipts, nil
 }
 
@@ -96,16 +87,12 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
-	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
+	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval() != 0 {
 		return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
-	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
+	if header.Timestamp() > nowTimestamp+thor.BlockInterval() {
 		return errFutureBlock
-	}
-
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 	}
 
 	if header.GasUsed() > header.GasLimit() {
@@ -116,11 +103,15 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
+	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+	}
+
 	signature := header.Signature()
 
-	if header.Number() < c.forkConfig.VIP214 {
+	if !thor.IsForked(header.Number(), c.forkConfig.VIP214) {
 		if len(header.Alpha()) > 0 {
-			return consensusError("invlid block, alpha should be empty before VIP214")
+			return consensusError("invalid block, alpha should be empty before VIP214")
 		}
 		if len(signature) != 65 {
 			return consensusError(fmt.Sprintf("block signature length invalid: want 65 have %v", len(signature)))
@@ -151,102 +142,74 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		}
 	}
 
-	if header.Number() < c.forkConfig.FINALITY {
+	if !thor.IsForked(header.Number(), c.forkConfig.FINALITY) {
 		if header.COM() {
 			return consensusError("invalid block: COM should not set before fork FINALITY")
+		}
+	}
+
+	if !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) {
+		if header.BaseFee() != nil {
+			return consensusError("invalid block: baseFee should not set before fork GALACTICA")
+		}
+	} else {
+		if header.BaseFee() == nil {
+			return consensusError("invalid block: baseFee is missing")
+		}
+
+		// Verify the baseFee is correct based on the parent header.
+		expectedBaseFee := galactica.CalcBaseFee(parent, c.forkConfig)
+		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
+			return consensusError(fmt.Sprintf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
+				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed()))
 		}
 	}
 
 	return nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
-	signer, err := header.Signer()
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
-	}
-
-	authority := builtin.Authority.Native(st)
-	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
-		candidates = entry.(*poa.Candidates).Copy()
-	} else {
-		list, err := authority.AllCandidates()
-		if err != nil {
-			return nil, err
-		}
-		candidates = poa.NewCandidates(list)
-	}
-
-	proposers, err := candidates.Pick(st)
-	if err != nil {
-		return nil, err
-	}
-
-	var sched poa.Scheduler
-	if header.Number() < c.forkConfig.VIP214 {
-		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
-	} else {
-		var seed []byte
-		seed, err = c.seeder.Generate(header.ParentID())
-		if err != nil {
-			return nil, err
-		}
-		sched, err = poa.NewSchedulerV2(signer, proposers, parent.Number(), parent.Timestamp(), seed)
-	}
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
-	}
-
-	if !sched.IsTheTime(header.Timestamp()) {
-		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
-	}
-
-	updates, score := sched.Updates(header.Timestamp())
-	if parent.TotalScore()+score != header.TotalScore() {
-		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
-	}
-
-	for _, u := range updates {
-		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, err
-		}
-		if !candidates.Update(u.Address, u.Active) {
-			// should never happen
-			panic("something wrong with candidates list")
-		}
-	}
-
-	return candidates, nil
-}
-
 func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	header := blk.Header()
+
+	if thor.IsForked(header.Number(), c.forkConfig.INTERSTELLAR) && uint64(blk.Size()) > thor.MaxRLPBlockSize {
+		return consensusError(fmt.Sprintf("block RLP-encoded size exceeds maximum: size %v, limit %v", blk.Size(), thor.MaxRLPBlockSize))
+	}
+
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
 		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
 	}
 
-	for _, tx := range txs {
-		origin, err := tx.Origin()
+	for _, tr := range txs {
+		origin, err := tr.Origin()
 		if err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
 		}
 
-		if header.Number() >= c.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
+		if thor.IsForked(header.Number(), c.forkConfig.BLOCKLIST) && thor.IsOriginBlocked(origin) {
 			return consensusError(fmt.Sprintf("tx origin blocked got packed: %v", origin))
 		}
 
-		switch {
-		case tx.ChainTag() != c.repo.ChainTag():
-			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tx.ChainTag()))
-		case header.Number() < tx.BlockRef().Number():
-			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
-		case tx.IsExpired(header.Number()):
-			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
+		delegator, err := tr.Delegator()
+		if err != nil {
+			return consensusError(fmt.Sprintf("tx delegator unavailable: %v", err))
+		}
+		if thor.IsForked(header.Number(), c.forkConfig.BLOCKLIST) && delegator != nil && thor.IsOriginBlocked(*delegator) {
+			return consensusError(fmt.Sprintf("tx delegator blocked got packed: %v", delegator))
 		}
 
-		if err := tx.TestFeatures(header.TxsFeatures()); err != nil {
+		switch {
+		case tr.ChainTag() != c.repo.ChainTag():
+			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tr.ChainTag()))
+		case header.Number() < tr.BlockRef().Number():
+			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tr.BlockRef().Number(), header.Number()))
+		case tr.IsExpired(header.Number()):
+			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tr.BlockRef().Number(), header.Number(), tr.Expiration()))
+		case !thor.IsForked(header.Number(), c.forkConfig.GALACTICA) && tr.Type() != tx.TypeLegacy:
+			return consensusError("invalid tx: " + tx.ErrTxTypeNotSupported.Error())
+		}
+
+		if err := tr.TestFeatures(header.TxsFeatures()); err != nil {
 			return consensusError("invalid tx: " + err.Error())
 		}
 	}
@@ -254,7 +217,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	return nil
 }
 
-func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConflicts uint32, posActive bool) (*state.Stage, tx.Receipts, error) {
 	var totalGasUsed uint64
 	txs := blk.Transactions()
 	receipts := make(tx.Receipts, 0, len(txs))
@@ -273,6 +236,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		c.forkConfig)
 
@@ -327,6 +291,10 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 
 		totalGasUsed += receipt.GasUsed
+		if totalGasUsed > header.GasLimit() {
+			return nil, nil, consensusError(fmt.Sprintf("executed tx gas exceeds limit: block gas limit %v, gas used %v", header.GasLimit(), totalGasUsed))
+		}
+
 		receipts = append(receipts, receipt)
 		processedTxs[tx.ID()] = receipt.Reverted
 	}
@@ -342,7 +310,18 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 	}
 
-	stage, err := state.Stage(header.Number(), blockConflicts)
+	if posActive {
+		staker := builtin.Staker.Native(state)
+		if err := staker.ContractBalanceCheck(0); err != nil {
+			return nil, nil, consensusError(fmt.Sprintf("staker sanity check failed while verifying block: %v", err))
+		}
+		energy := builtin.Energy.Native(state, header.Timestamp())
+		if err := energy.DistributeRewards(blk.Header().Beneficiary(), signer, staker, header.Number()); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	stage, err := state.Stage(trie.Version{Major: header.Number(), Minor: blockConflicts})
 	if err != nil {
 		return nil, nil, err
 	}

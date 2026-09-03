@@ -6,22 +6,23 @@
 package state
 
 import (
+	"crypto/rand"
 	"math/big"
-	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestCachedObject(t *testing.T) {
 	db := muxdb.NewMem()
 	addr := thor.Address{}
 
-	stgTrie := db.NewTrie(StorageTrieName([]byte("sid")), thor.Bytes32{}, 0, 0)
+	stgTrie := db.NewTrie(StorageTrieName([]byte("sid")), trie.Root{})
 	storages := []struct {
 		k thor.Bytes32
 		v rlp.RawValue
@@ -36,15 +37,15 @@ func TestCachedObject(t *testing.T) {
 		saveStorage(stgTrie, s.k, s.v)
 	}
 
-	storageRoot, commit := stgTrie.Stage(0, 0)
+	storageRoot := stgTrie.Hash()
 
-	err := commit()
+	err := stgTrie.Commit(trie.Version{}, false)
 	assert.Nil(t, err)
 
 	code := make([]byte, 100)
 	rand.Read(code)
 
-	codeHash := crypto.Keccak256(code)
+	codeHash := thor.Keccak256(code).Bytes()
 	db.NewStore(codeStoreName).Put(codeHash, code)
 
 	account := Account{
@@ -62,6 +63,6 @@ func TestCachedObject(t *testing.T) {
 	for _, s := range storages {
 		assert.Equal(t,
 			M(s.v, nil),
-			M(obj.GetStorage(s.k, 0)))
+			M(obj.GetStorage(s.k)))
 	}
 }

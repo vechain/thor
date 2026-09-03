@@ -6,14 +6,11 @@
 package tx
 
 import (
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/trie"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
-var (
-	emptyRoot = trie.DeriveRoot(&derivableTxs{})
-)
+var emptyRoot = trie.DeriveRoot(&derivableTxs{})
 
 // Transactions a slice of transactions.
 type Transactions []*Transaction
@@ -34,8 +31,8 @@ func (txs derivableTxs) Len() int {
 	return len(txs)
 }
 
-func (txs derivableTxs) GetRlp(i int) []byte {
-	data, err := rlp.EncodeToBytes(txs[i])
+func (txs derivableTxs) EncodeIndex(i int) []byte {
+	data, err := txs[i].MarshalBinary()
 	if err != nil {
 		panic(err)
 	}

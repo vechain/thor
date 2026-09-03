@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/vm"
 )
 
 var _ = (*callFrameMarshaling)(nil)

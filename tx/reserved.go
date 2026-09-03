@@ -1,8 +1,14 @@
+// Copyright (c) 2019 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package tx
 
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -29,8 +35,26 @@ func (r *reserved) EncodeRLP(w io.Writer) error {
 }
 
 func (r *reserved) DecodeRLP(s *rlp.Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+
 	var raws []rlp.RawValue
-	if err := s.Decode(&raws); err != nil {
+	for {
+		var raw rlp.RawValue
+		err := s.Decode(&raw)
+		if err == rlp.EOL {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if len(raws) == MaxUnusedReservedFields+1 { // +1 for Features itself
+			return fmt.Errorf("reserved field count exceeds limit: > %d", MaxUnusedReservedFields)
+		}
+		raws = append(raws, raw)
+	}
+	if err := s.ListEnd(); err != nil {
 		return err
 	}
 

@@ -22,9 +22,10 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/vm"
 )
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -32,9 +33,9 @@ import (
 type Context struct {
 	BlockID     thor.Bytes32 // Hash of the block the tx is contained within (zero if dangling tx or call)
 	BlockTime   uint64       // Timestamp of the block the tx is contained within
-	TxIndex     int          // Index of the transaction within a block (zero if dangling tx or call)
+	TxIndex     uint64       // Index of the transaction within a block (zero if dangling tx or call)
 	TxID        thor.Bytes32 // ID of the transaction being traced (zero if dangling call)
-	ClauseIndex int          // Index of the clause within a transaction (zero if dangling call)
+	ClauseIndex uint32       // Index of the clause within a transaction (zero if dangling call)
 	State       *state.State
 }
 
@@ -48,8 +49,10 @@ type Tracer interface {
 	Stop(err error)
 }
 
-type ctorFn func(json.RawMessage) (Tracer, error)
-type jsCtorFn func(string, json.RawMessage) (Tracer, error)
+type (
+	ctorFn   func(json.RawMessage) (Tracer, error)
+	jsCtorFn func(string, json.RawMessage) (Tracer, error)
+)
 
 type elem struct {
 	ctor ctorFn
@@ -79,6 +82,17 @@ func (d *directory) RegisterJSEval(f jsCtorFn) {
 	d.jsEval = f
 }
 
+// Lookup returns true if the given tracer is registered.
+func (d *directory) Lookup(name string) bool {
+	if _, ok := d.elems[name]; ok {
+		return ok
+	}
+
+	// backward compatible, allow users emit "Tracer" suffix
+	_, ok := d.elems[name+"Tracer"]
+	return ok
+}
+
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups. Name is either name of an existing tracer
 // or an arbitrary JS code.
@@ -95,7 +109,7 @@ func (d *directory) New(name string, cfg json.RawMessage, allowCustom bool) (Tra
 		// Assume JS code
 		tracer, err := d.jsEval(name, cfg)
 		if err != nil {
-			return nil, errors.Wrap(err, "create custom tracer")
+			return nil, errors.Wrap(err, "unable to create custom tracer")
 		}
 		return tracer, nil
 	} else {

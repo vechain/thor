@@ -3,17 +3,16 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package cache_test
+package cache
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/cache"
 )
 
 func TestRandCacheAddRemove(t *testing.T) {
-	c := cache.NewRandCache(16)
+	c := NewRandCache(16)
 	c.Set("key", "value")
 	assert.Equal(t, 1, c.Len())
 
@@ -28,8 +27,8 @@ func TestRandCacheAddRemove(t *testing.T) {
 }
 
 func TestRandCacheLimit(t *testing.T) {
-	c := cache.NewRandCache(16)
-	for i := 0; i < 100; i++ {
+	c := NewRandCache(16)
+	for i := range 100 {
 		c.Set(i, i)
 	}
 

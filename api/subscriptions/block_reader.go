@@ -6,30 +6,29 @@
 package subscriptions
 
 import (
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type blockReader struct {
-	repo        *chain.Repository
 	blockReader chain.BlockReader
 }
 
 func newBlockReader(repo *chain.Repository, position thor.Bytes32) *blockReader {
 	return &blockReader{
-		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
 	}
 }
 
-func (br *blockReader) Read() ([]interface{}, bool, error) {
+func (br *blockReader) Read() ([]any, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []interface{}
+	var msgs []any
 	for _, block := range blocks {
-		msg, err := convertBlock(block)
+		msg, err := api.ConvertBlock(block)
 		if err != nil {
 			return nil, false, err
 		}

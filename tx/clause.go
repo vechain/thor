@@ -9,10 +9,46 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/thor"
 )
+
+// Clauses is a slice of *Clause with a limit on RLP decode.
+// DecodeRLP streams the list one element at a time and stops as soon as
+// MaxClausesPerTx is exceeded, so a malformed list costs no more than the
+// limit allows regardless of how large it is on the wire.
+type Clauses []*Clause
+
+// DecodeRLP implements rlp.Decoder.
+func (cs *Clauses) DecodeRLP(s *rlp.Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+
+	var result []*Clause
+	for {
+		var c Clause
+		err := s.Decode(&c)
+		if err == rlp.EOL {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if len(result) == MaxClausesPerTx {
+			return fmt.Errorf("clause count exceeds limit: > %d", MaxClausesPerTx)
+		}
+		result = append(result, &c)
+	}
+	if err := s.ListEnd(); err != nil {
+		return err
+	}
+	*cs = result
+	return nil
+}
 
 type clauseBody struct {
 	To    *thor.Address `rlp:"nil"`
@@ -51,7 +87,7 @@ func (c *Clause) WithValue(value *big.Int) *Clause {
 // WithData create a new clause copy with data changed.
 func (c *Clause) WithData(data []byte) *Clause {
 	newClause := *c
-	newClause.body.Data = append([]byte(nil), data...)
+	newClause.body.Data = slices.Clone(data)
 	return &newClause
 }
 
@@ -71,7 +107,7 @@ func (c *Clause) Value() *big.Int {
 
 // Data returns 'Data'.
 func (c *Clause) Data() []byte {
-	return append([]byte(nil), c.body.Data...)
+	return slices.Clone(c.body.Data)
 }
 
 // IsCreatingContract return if this clause is going to create a contract.

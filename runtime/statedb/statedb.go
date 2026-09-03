@@ -12,10 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/vechain/thor/stackedmap"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+
+	"github.com/vechain/thor/v2/stackedmap"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 var codeSizeCache, _ = lru.New(32 * 1024)
@@ -27,22 +28,31 @@ type StateDB struct {
 }
 
 type (
-	suicideFlagKey common.Address
-	refundKey      struct{}
-	preimageKey    common.Hash
-	eventKey       struct{}
-	transferKey    struct{}
-	stateRevKey    struct{}
+	suicideFlagKey      common.Address
+	refundKey           struct{}
+	preimageKey         common.Hash
+	eventKey            struct{}
+	transferKey         struct{}
+	stateRevKey         struct{}
+	newContractKey      common.Address
+	transientStorageKey struct {
+		addr thor.Address
+		key  thor.Bytes32
+	}
 )
 
 // New create a statedb object.
 func New(state *state.State) *StateDB {
-	getter := func(k interface{}) (interface{}, bool, error) {
+	getter := func(k any) (any, bool, error) {
 		switch k.(type) {
 		case suicideFlagKey:
 			return false, true, nil
 		case refundKey:
 			return uint64(0), true, nil
+		case transientStorageKey:
+			return common.Hash{}, true, nil
+		case newContractKey:
+			return false, true, nil
 		}
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
@@ -66,7 +76,7 @@ func (s *StateDB) GetLogs() (tx.Events, tx.Transfers) {
 		events    tx.Events
 		transfers tx.Transfers
 	)
-	s.repo.Journal(func(k, v interface{}) bool {
+	s.repo.Journal(func(k, v any) bool {
 		switch k.(type) {
 		case eventKey:
 			events = append(events, ethlogToEvent(v.(*types.Log)))
@@ -87,7 +97,7 @@ func (s *StateDB) GetLogs() (tx.Events, tx.Transfers) {
 // }
 
 // CreateAccount stub.
-func (s *StateDB) CreateAccount(addr common.Address) {}
+func (s *StateDB) CreateAccount(_ common.Address) {}
 
 // GetBalance stub.
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
@@ -127,10 +137,10 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 }
 
 // GetNonce stub.
-func (s *StateDB) GetNonce(addr common.Address) uint64 { return 0 }
+func (s *StateDB) GetNonce(_ common.Address) uint64 { return 0 }
 
 // SetNonce stub.
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {}
+func (s *StateDB) SetNonce(_ common.Address, _ uint64) {}
 
 // GetCodeHash stub.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
@@ -249,6 +259,24 @@ func (s *StateDB) AddLog(vmlog *types.Log) {
 
 func (s *StateDB) AddTransfer(transfer *tx.Transfer) {
 	s.repo.Put(transferKey{}, transfer)
+}
+
+func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash) {
+	s.repo.Put(transientStorageKey{thor.Address(addr), thor.Bytes32(key)}, value)
+}
+
+func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
+	v, _, _ := s.repo.Get(transientStorageKey{thor.Address(addr), thor.Bytes32(key)})
+	return v.(common.Hash)
+}
+
+func (s *StateDB) CreateContract(addr common.Address) {
+	s.repo.Put(newContractKey(addr), true)
+}
+
+func (s *StateDB) IsNewContract(addr common.Address) bool {
+	v, _, _ := s.repo.Get(newContractKey(addr))
+	return v.(bool)
 }
 
 // Snapshot stub.

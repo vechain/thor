@@ -19,12 +19,14 @@ package native
 import (
 	"encoding/json"
 	"math/big"
+	"slices"
 	"strconv"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 func init() {
@@ -64,24 +66,19 @@ func newFourByteTracer(_ json.RawMessage) (tracers.Tracer, error) {
 
 // isPrecompiled returns whether the addr is a precompile. Logic borrowed from newJsTracer in eth/tracers/js/tracer.go
 func (t *fourByteTracer) isPrecompiled(addr common.Address) bool {
-	for _, p := range t.activePrecompiles {
-		if p == addr {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.activePrecompiles, addr)
 }
 
 // store saves the given identifier and datasize.
 func (t *fourByteTracer) store(id []byte, size int) {
 	key := bytesToHex(id) + "-" + strconv.Itoa(size)
-	t.ids[key] += 1
+	t.ids[key]++
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureStart(env *vm.EVM, _ common.Address, _ common.Address, _ bool, input []byte, _ uint64, _ *big.Int) {
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	rules := env.ChainConfig().Rules(env.BlockNumber)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 
 	// Save the outer calldata also
@@ -91,7 +88,7 @@ func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureEnter(op vm.OpCode, _ common.Address, to common.Address, input []byte, _ uint64, _ *big.Int) {
 	// Skip if tracing was interrupted
 	if stop := t.interrupt.Load(); stop != nil && stop.(bool) {
 		return

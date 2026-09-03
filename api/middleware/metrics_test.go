@@ -1,0 +1,266 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package middleware
+
+import (
+	"bufio"
+	"bytes"
+	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
+	"github.com/prometheus/common/expfmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/metrics"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/txpool"
+)
+
+func init() {
+	metrics.InitializePrometheusMetrics()
+}
+
+func TestMetricsMiddleware(t *testing.T) {
+	thorChain, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	// inject some invalid data to db
+	data := thorChain.Database().NewStore("chain.hdr")
+	var blkID thor.Bytes32
+	rand.Read(blkID[:])
+	data.Put(blkID[:], []byte("invalid data"))
+
+	// get summary should fail since the block data is not rlp encoded
+	_, err = thorChain.Repo().GetBlockSummary(blkID)
+	assert.NotNil(t, err)
+
+	router := mux.NewRouter()
+	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, 5*1024*1024, &thor.NoFork, thorChain.Engine(), true)
+	acc.Mount(router, "/accounts")
+	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+	router.Use(MetricsMiddleware)
+	ts := httptest.NewServer(router)
+
+	httpGet(t, ts.URL+"/accounts/0x")
+	httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String())
+
+	_, code := httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String()+"?revision="+blkID.String())
+	assert.Equal(t, 500, code)
+
+	body, _ := httpGet(t, ts.URL+"/metrics")
+	parser := expfmt.TextParser{}
+	metrics, err := parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m := metrics["thor_metrics_api_request_count"].GetMetric()
+	assert.Equal(t, 3, len(m), "should be 3 metric entries")
+	assert.Equal(t, float64(1), m[0].GetCounter().GetValue())
+	assert.Equal(t, float64(1), m[1].GetCounter().GetValue())
+
+	labels := m[0].GetLabel()
+	assert.Equal(t, 3, len(labels))
+	assert.Equal(t, "code", labels[0].GetName())
+	assert.Equal(t, "200", labels[0].GetValue())
+	assert.Equal(t, "method", labels[1].GetName())
+	assert.Equal(t, "GET", labels[1].GetValue())
+	assert.Equal(t, "name", labels[2].GetName())
+	assert.Equal(t, "GET /accounts/{address}", labels[2].GetValue())
+
+	labels = m[1].GetLabel()
+	assert.Equal(t, 3, len(labels))
+	assert.Equal(t, "code", labels[0].GetName())
+	assert.Equal(t, "400", labels[0].GetValue())
+	assert.Equal(t, "method", labels[1].GetName())
+	assert.Equal(t, "GET", labels[1].GetValue())
+	assert.Equal(t, "name", labels[2].GetName())
+	assert.Equal(t, "GET /accounts/{address}", labels[2].GetValue())
+
+	labels = m[2].GetLabel()
+	assert.Equal(t, 3, len(labels))
+	assert.Equal(t, "code", labels[0].GetName())
+	assert.Equal(t, "500", labels[0].GetValue())
+	assert.Equal(t, "method", labels[1].GetName())
+	assert.Equal(t, "GET", labels[1].GetValue())
+	assert.Equal(t, "name", labels[2].GetName())
+	assert.Equal(t, "GET /accounts/{address}", labels[2].GetValue())
+}
+
+func TestWebsocketMetrics(t *testing.T) {
+	thorChain, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	router := mux.NewRouter()
+	sub := subscriptions.New(thorChain.Repo(), []string{"*"}, 10, txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{}, &thor.NoFork), true)
+	sub.Mount(router, "/subscriptions")
+	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+	router.Use(MetricsMiddleware)
+	ts := httptest.NewServer(router)
+
+	// initiate 1 beat subscription, active websocket should be 1
+	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/beat"}
+	conn1, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Nil(t, err)
+	defer conn1.Close()
+
+	body, _ := httpGet(t, ts.URL+"/metrics")
+	parser := expfmt.TextParser{}
+	metrics, err := parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m := metrics["thor_metrics_api_active_websocket_gauge"].GetMetric()
+	assert.Equal(t, 1, len(m), "should be 1 metric entries")
+	assert.Equal(t, float64(1), m[0].GetGauge().GetValue())
+
+	labels := m[0].GetLabel()
+	assert.Equal(t, "name", labels[0].GetName())
+	assert.Equal(t, "WS /subscriptions/beat", labels[0].GetValue())
+
+	// initiate 1 beat subscription, active websocket should be 2
+	conn2, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Nil(t, err)
+	defer conn2.Close()
+
+	body, _ = httpGet(t, ts.URL+"/metrics")
+	metrics, err = parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m = metrics["thor_metrics_api_active_websocket_gauge"].GetMetric()
+	assert.Equal(t, 1, len(m), "should be 1 metric entries")
+	assert.Equal(t, float64(2), m[0].GetGauge().GetValue())
+
+	// initiate 1 block subscription, active websocket should be 3
+	u = url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/block"}
+	conn3, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Nil(t, err)
+	defer conn3.Close()
+
+	body, _ = httpGet(t, ts.URL+"/metrics")
+	metrics, err = parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m = metrics["thor_metrics_api_active_websocket_gauge"].GetMetric()
+	assert.Equal(t, 2, len(m), "should be 2 metric entries")
+	// both m[0] and m[1] should have the value of 1
+	assert.Equal(t, float64(2), m[0].GetGauge().GetValue())
+	assert.Equal(t, float64(1), m[1].GetGauge().GetValue())
+
+	// m[1] should have the name of block
+	labels = m[1].GetLabel()
+	assert.Equal(t, "name", labels[0].GetName())
+	assert.Equal(t, "WS /subscriptions/block", labels[0].GetValue())
+}
+
+func TestBatchCallResponseSizeLimit(t *testing.T) {
+	thorChain, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	// Create Accounts with a very small response limit (200 bytes)
+	router := mux.NewRouter()
+	accounts.New(thorChain.Repo(), thorChain.Stater(), uint64(50000000), 200, &thor.NoFork, thorChain.Engine(), true).
+		Mount(router, "/accounts")
+
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	tclient := thorclient.New(ts.URL)
+
+	// Using builtin Energy contract - each balanceOf call returns ~66 bytes of hex data
+	energyAddr := builtin.Energy.Address
+
+	// Create a batch call with 10 clauses
+	// Each call returns ~66 bytes hex, total: 10 × 66 = 660 bytes
+	// This exceeds our 200 byte limit
+	clauses := make(api.Clauses, 10)
+	for i := range 10 {
+		// balanceOf(address) signature
+		data := "0x70a08231" + "0000000000000000000000000000000000000000000000000000000000000000"
+		clauses[i] = &api.Clause{
+			To:   &energyAddr,
+			Data: data,
+		}
+	}
+
+	reqBody := &api.BatchCallData{
+		Clauses: clauses,
+		Gas:     50000000,
+	}
+
+	// Make the batch call - should fail due to response size limit
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", reqBody)
+	require.NoError(t, err)
+
+	// Should get HTTP 400 Bad Request
+	assert.Equal(t, http.StatusBadRequest, statusCode, "should reject request exceeding response size limit")
+
+	// Verify error message mentions the limit
+	var errorResp map[string]any
+	if err := json.Unmarshal(res, &errorResp); err == nil {
+		errorMsg := fmt.Sprintf("%v", errorResp["error"])
+		assert.Contains(t, errorMsg, "exceeds limit", "error should mention size limit")
+		assert.Contains(t, errorMsg, "200", "error should mention the limit value")
+	}
+}
+
+// fakeHijackWriter adds Hijack to httptest.ResponseRecorder, which implements
+// Flush but not Hijack, so both interfaces can be exercised through one writer.
+type fakeHijackWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (f *fakeHijackWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return nil, nil, errors.New("not supported")
+}
+
+// statusCodeCaptor embeds http.ResponseWriter, whose interface doesn't include
+// Flush or Hijack, so it must forward them explicitly or nested consumers
+// (CompressHandler's httpsnoop wrapper, WS subscriptions) lose access to them.
+func TestStatusCodeCaptorExposesFlusherAndHijacker(t *testing.T) {
+	inner := &fakeHijackWriter{httptest.NewRecorder()}
+
+	var gotFlusher, gotHijacker bool
+	handler := MetricsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, gotFlusher = w.(http.Flusher)
+		_, gotHijacker = w.(http.Hijacker)
+	}))
+
+	req := httptest.NewRequest("GET", "http://example.com", nil)
+	handler.ServeHTTP(inner, req)
+
+	assert.True(t, gotFlusher, "Flusher must be visible through statusCodeCaptor")
+	assert.True(t, gotHijacker, "Hijacker must be visible through statusCodeCaptor")
+}
+
+func httpGet(t *testing.T, url string) ([]byte, int) {
+	res, err := http.Get(url) //#nosec G107
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r, res.StatusCode
+}

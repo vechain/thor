@@ -34,6 +34,9 @@ CREATE INDEX IF NOT EXISTS event_i2 ON event(topic1, topic0, address) WHERE topi
 CREATE INDEX IF NOT EXISTS event_i3 ON event(topic2, topic0, address) WHERE topic2 IS NOT NULL;
 CREATE INDEX IF NOT EXISTS event_i4 ON event(topic3, topic0, address) WHERE topic3 IS NOT NULL;`
 
+	// additional index for topic4
+	additionalEventIndexSchema = `CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;`
+
 	// create transfers table
 	transferTableSchema = `CREATE TABLE IF NOT EXISTS transfer (
 	seq INTEGER PRIMARY KEY NOT NULL,

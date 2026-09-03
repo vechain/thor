@@ -1,0 +1,425 @@
+// Copyright (c) 2025 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package middleware
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/vechain/thor/v2/api/doc"
+	"github.com/vechain/thor/v2/thor"
+)
+
+func TestHandleXGenesisID(t *testing.T) {
+	// Create a test genesis ID
+	genesisID := thor.MustParseBytes32("0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
+	expectedID := genesisID.String()
+
+	// Create middleware
+	middleware := HandleXGenesisID(genesisID)
+
+	// Create a simple handler for testing
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	// Wrap handler with middleware
+	wrappedHandler := middleware(handler)
+
+	tests := []struct {
+		name           string
+		headerValue    string
+		queryValue     string
+		expectedStatus int
+		expectedBody   string
+		checkHeader    bool
+	}{
+		{
+			name:           "no header and no query parameter",
+			headerValue:    "",
+			queryValue:     "",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+			checkHeader:    true,
+		},
+		{
+			name:           "correct header value",
+			headerValue:    expectedID,
+			queryValue:     "",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+			checkHeader:    true,
+		},
+		{
+			name:           "correct query parameter value",
+			headerValue:    "",
+			queryValue:     expectedID,
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+			checkHeader:    true,
+		},
+		{
+			name:           "incorrect header value",
+			headerValue:    "incorrect-id",
+			queryValue:     "",
+			expectedStatus: http.StatusForbidden,
+			expectedBody:   "genesis id mismatch\n",
+			checkHeader:    true,
+		},
+		{
+			name:           "incorrect query parameter value",
+			headerValue:    "",
+			queryValue:     "incorrect-id",
+			expectedStatus: http.StatusForbidden,
+			expectedBody:   "genesis id mismatch\n",
+			checkHeader:    true,
+		},
+		{
+			name:           "header takes precedence over query parameter",
+			headerValue:    expectedID,
+			queryValue:     "incorrect-id",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+			checkHeader:    true,
+		},
+		{
+			name:           "incorrect header takes precedence over correct query parameter",
+			headerValue:    "incorrect-id",
+			queryValue:     expectedID,
+			expectedStatus: http.StatusForbidden,
+			expectedBody:   "genesis id mismatch\n",
+			checkHeader:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create request
+			req := httptest.NewRequest("GET", "/test", nil)
+
+			// Set header if provided
+			if tt.headerValue != "" {
+				req.Header.Set("x-genesis-id", tt.headerValue)
+			}
+
+			// Set query parameter if provided
+			if tt.queryValue != "" {
+				q := req.URL.Query()
+				q.Set("x-genesis-id", tt.queryValue)
+				req.URL.RawQuery = q.Encode()
+			}
+
+			// Create response recorder
+			rr := httptest.NewRecorder()
+
+			// Call the wrapped handler
+			wrappedHandler.ServeHTTP(rr, req)
+
+			// Check status code
+			assert.Equal(t, tt.expectedStatus, rr.Code)
+
+			// Check response body
+			assert.Equal(t, tt.expectedBody, rr.Body.String())
+
+			// Check that x-genesis-id header is always set in response
+			if tt.checkHeader {
+				assert.Equal(t, expectedID, rr.Header().Get("x-genesis-id"))
+			}
+		})
+	}
+}
+
+func TestHandleXGenesisIDWithDifferentGenesisIDs(t *testing.T) {
+	// Test with different genesis IDs
+	genesisIDs := []thor.Bytes32{
+		thor.MustParseBytes32("0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"),
+		thor.MustParseBytes32("0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e0"),
+		thor.MustParseBytes32("0x0000000000000000000000000000000000000000000000000000000000000000"),
+	}
+
+	for i, genesisID := range genesisIDs {
+		t.Run(fmt.Sprintf("genesis_id_%d", i), func(t *testing.T) {
+			expectedID := genesisID.String()
+			middleware := HandleXGenesisID(genesisID)
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+
+			wrappedHandler := middleware(handler)
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			rr := httptest.NewRecorder()
+
+			wrappedHandler.ServeHTTP(rr, req)
+
+			// Should always succeed with no header/query parameter
+			assert.Equal(t, http.StatusOK, rr.Code)
+			assert.Equal(t, expectedID, rr.Header().Get("x-genesis-id"))
+		})
+	}
+}
+
+func TestHandleXGenesisIDWithBodyDiscard(t *testing.T) {
+	// Test that request body is properly discarded when genesis ID mismatch occurs
+	genesisID := thor.MustParseBytes32("0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
+	middleware := HandleXGenesisID(genesisID)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// This should not be called when genesis ID mismatch occurs
+		t.Error("Handler should not be called when genesis ID mismatch occurs")
+	})
+
+	wrappedHandler := middleware(handler)
+
+	// Create request with incorrect genesis ID and a body
+	req := httptest.NewRequest("POST", "/test", strings.NewReader("test body"))
+	req.Header.Set("x-genesis-id", "incorrect-id")
+
+	rr := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rr, req)
+
+	// Should return forbidden status
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Equal(t, "genesis id mismatch\n", rr.Body.String())
+	assert.Equal(t, genesisID.String(), rr.Header().Get("x-genesis-id"))
+}
+
+func TestHandleXThorestVersion(t *testing.T) {
+	// Create a simple handler for testing
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	// Wrap handler with middleware
+	wrappedHandler := HandleXThorestVersion(handler)
+
+	// Create request
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+
+	// Call the wrapped handler
+	wrappedHandler.ServeHTTP(rr, req)
+
+	// Check that the response is successful
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "success", rr.Body.String())
+
+	// Check that x-thorest-ver header is set in response
+	version := rr.Header().Get("x-thorest-ver")
+	assert.NotEmpty(t, version, "x-thorest-ver header should not be empty")
+
+	// Verify that the version matches what doc.Version() returns
+	expectedVersion := doc.Version()
+	assert.Equal(t, expectedVersion, version, "x-thorest-ver header should match doc.Version()")
+}
+
+func TestHandleXThorestVersionWithDifferentHTTPMethods(t *testing.T) {
+	// Test that the middleware works with different HTTP methods
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(r.Method)) // #nosec G705
+	})
+
+	wrappedHandler := HandleXThorestVersion(handler)
+
+	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+
+	for _, method := range methods {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/test", nil)
+			rr := httptest.NewRecorder()
+
+			wrappedHandler.ServeHTTP(rr, req)
+
+			// Check that the response is successful
+			assert.Equal(t, http.StatusOK, rr.Code)
+
+			// Check that x-thorest-ver header is set
+			version := rr.Header().Get("x-thorest-ver")
+			assert.NotEmpty(t, version)
+			assert.Equal(t, doc.Version(), version)
+		})
+	}
+}
+
+func TestHandleXThorestVersionWithErrorResponse(t *testing.T) {
+	// Test that the middleware works even when the handler returns an error
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	})
+
+	wrappedHandler := HandleXThorestVersion(handler)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rr, req)
+
+	// Check that the error response is preserved
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), "internal server error")
+
+	// Check that x-thorest-ver header is still set even for error responses
+	version := rr.Header().Get("x-thorest-ver")
+	assert.NotEmpty(t, version)
+	assert.Equal(t, doc.Version(), version)
+}
+
+func TestHandleXThorestVersionHeaderConsistency(t *testing.T) {
+	// Test that the header is consistently set across multiple requests
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrappedHandler := HandleXThorestVersion(handler)
+	expectedVersion := doc.Version()
+
+	// Make multiple requests to ensure consistency
+	for i := range 5 {
+		t.Run(fmt.Sprintf("request_%d", i), func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/test", nil)
+			rr := httptest.NewRecorder()
+
+			wrappedHandler.ServeHTTP(rr, req)
+
+			assert.Equal(t, http.StatusOK, rr.Code)
+
+			version := rr.Header().Get("x-thorest-ver")
+			assert.Equal(t, expectedVersion, version, "Version should be consistent across requests")
+		})
+	}
+}
+
+func TestHandleAPITimeout(t *testing.T) {
+	// Test normal request with timeout
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	middleware := HandleAPITimeout(100 * time.Millisecond)
+	wrappedHandler := middleware(handler)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "success", rr.Body.String())
+}
+
+func TestHandleAPITimeoutWithSlowHandler(t *testing.T) {
+	// Test timeout with slow handler
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			w.WriteHeader(http.StatusRequestTimeout)
+			w.Write([]byte("timeout"))
+			return
+		case <-time.After(200 * time.Millisecond):
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("success"))
+		}
+	})
+
+	middleware := HandleAPITimeout(50 * time.Millisecond)
+	wrappedHandler := middleware(handler)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusRequestTimeout, rr.Code)
+	assert.Equal(t, "timeout", rr.Body.String())
+}
+
+func TestHandleRequestBodyLimit(t *testing.T) {
+	// Test normal request within limit
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+		w.Write(body)
+	})
+
+	middleware := HandleRequestBodyLimit(100)
+	wrappedHandler := middleware(handler)
+
+	req := httptest.NewRequest("POST", "/test", strings.NewReader("small body"))
+	rr := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "small body", rr.Body.String())
+}
+
+func TestHandleRequestBodyLimitExceeded(t *testing.T) {
+	// Test request body exceeds limit
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := HandleRequestBodyLimit(10)
+	wrappedHandler := middleware(handler)
+
+	req := httptest.NewRequest("POST", "/test", strings.NewReader("this body is too large"))
+	rr := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
+	assert.Contains(t, rr.Body.String(), "http: request body too large")
+}
+
+func TestBodyLimitWithRequestLogger(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Log(err.Error())
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success from handler"))
+	})
+
+	router := mux.NewRouter()
+	router.Handle("/test", handler).Methods("POST")
+
+	var enabled atomic.Bool
+	enabled.Store(true)
+	router.Use(HandleRequestBodyLimit(1))
+	router.Use(RequestLoggerMiddleware(&mockLogger{}, &enabled, 0, false))
+
+	req := httptest.NewRequest("POST", "/test", strings.NewReader("this body is too large"))
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
+	assert.Contains(t, rr.Body.String(), "http: request body too large")
+}

@@ -1,0 +1,68 @@
+name: Pull Request CI
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  run-unit-tests:
+    name: Run Unit Tests
+    uses: ./.github/workflows/test.yaml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  license-check:
+    name: License Check
+    uses: ./.github/workflows/license-check.yaml
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint-go.yaml
+
+  module-check:
+    name: Go Module Check
+    uses: ./.github/workflows/go-mod-check.yaml
+
+  scan-workflows:
+    name: Scan Workflows
+    uses: ./.github/workflows/scan-workflows.yaml
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      issues: write
+      pull-requests: write
+    secrets:
+      ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
+
+  thor-docker-test-suite:
+    uses: ./.github/workflows/thor-docker-test-suite.yaml
+    secrets:
+      DRAUPNIR_TOKEN: ${{ secrets.DRAUPNIR_TOKEN }}
+
+  run-rosetta-tests:
+    name: Rosetta Tests
+    uses: ./.github/workflows/test-rosetta.yaml
+    with:
+      thor_repo: https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git
+      thor_version: ${{ github.event.pull_request.head.sha }}
+
+  # This doesn't publish the image, it just tests the publishing workflow (build the image / tags / labels)
+  test-docker-publish:
+    name: Test Docker Publish
+    uses: ./.github/workflows/publish-docker-images.yaml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+    with:
+      images: |
+        ghcr.io/${{ github.repository }}
+      tags: |
+        type=raw,value=${{ github.ref }}-${{ github.sha }}

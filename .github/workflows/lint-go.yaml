@@ -1,0 +1,38 @@
+name: Lint
+
+on:
+  # Should only be used by other workflows
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  golangci:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Check `builtins` directory
+        # if it has any changes in the 'builtins' dir after running `go generate`, echo an error and fail the workflow
+        run: |
+          go generate ./builtin/gen
+          git diff --exit-code builtin/gen || (echo "\n\n\nbuiltin/gen directory is not up to date, run 'go generate ./...' to update it" && exit 1)
+
+      - name: Check `modernize` (code style)
+        run: |
+          go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@v0.21.1 -test ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          # use the default if on main branch, otherwise use the pull request config
+          args: --timeout=30m --config=.golangci.yml
+          only-new-issues: false
+          skip-cache: true

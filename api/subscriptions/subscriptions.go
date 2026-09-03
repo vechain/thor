@@ -6,40 +6,44 @@
 package subscriptions
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/restutil"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 const txQueueSize = 20
 
 type Subscriptions struct {
-	backtraceLimit uint32
-	repo           *chain.Repository
-	upgrader       *websocket.Upgrader
-	pendingTx      *pendingTx
-	done           chan struct{}
-	wg             sync.WaitGroup
+	backtraceLimit    uint32
+	enabledDeprecated bool
+	repo              *chain.Repository
+	upgrader          *websocket.Upgrader
+	pendingTx         *pendingTx
+	done              chan struct{}
+	wg                sync.WaitGroup
+	beat2Cache        *messageCache[api.Beat2Message]
+	beatCache         *messageCache[api.BeatMessage]
 }
 
 type msgReader interface {
-	Read() (msgs []interface{}, hasMore bool, err error)
+	Read() (msgs []any, hasMore bool, err error)
 }
 
-var (
-	log = log15.New("pkg", "subscriptions")
-)
+var logger = log.WithContext("pkg", "subscriptions")
 
 const (
 	// Time allowed to read the next pong message from the peer.
@@ -48,10 +52,11 @@ const (
 	pingPeriod = (pongWait * 7) / 10
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool txpool.Pool, enabledDeprecated bool) *Subscriptions {
 	sub := &Subscriptions{
-		backtraceLimit: backtraceLimit,
-		repo:           repo,
+		backtraceLimit:    backtraceLimit,
+		repo:              repo,
+		enabledDeprecated: enabledDeprecated,
 		upgrader: &websocket.Upgrader{
 			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
@@ -67,20 +72,19 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 				return false
 			},
 		},
-		pendingTx: newPendingTx(txpool),
-		done:      make(chan struct{}),
+		pendingTx:  newPendingTx(txpool),
+		done:       make(chan struct{}),
+		beat2Cache: newMessageCache[api.Beat2Message](backtraceLimit),
+		beatCache:  newMessageCache[api.BeatMessage](backtraceLimit),
 	}
-
-	sub.wg.Add(1)
-	go func() {
-		defer sub.wg.Done()
-
+	sub.wg.Go(func() {
 		sub.pendingTx.DispatchLoop(sub.done)
-	}()
+	})
+
 	return sub
 }
 
-func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*blockReader, error) {
+func (s *Subscriptions) handleBlockReader(_ http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
@@ -88,36 +92,36 @@ func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Reque
 	return newBlockReader(s.repo, position), nil
 }
 
-func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
+func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
 	}
 	address, err := parseAddress(req.URL.Query().Get("addr"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "addr"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "addr"))
 	}
 	t0, err := parseTopic(req.URL.Query().Get("t0"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t0"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t0"))
 	}
 	t1, err := parseTopic(req.URL.Query().Get("t1"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t1"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t1"))
 	}
 	t2, err := parseTopic(req.URL.Query().Get("t2"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t2"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t2"))
 	}
 	t3, err := parseTopic(req.URL.Query().Get("t3"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t3"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t3"))
 	}
 	t4, err := parseTopic(req.URL.Query().Get("t4"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "t4"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "t4"))
 	}
-	eventFilter := &EventFilter{
+	eventFilter := &api.SubscriptionEventFilter{
 		Address: address,
 		Topic0:  t0,
 		Topic1:  t1,
@@ -128,24 +132,24 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 	return newEventReader(s.repo, position, eventFilter), nil
 }
 
-func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*transferReader, error) {
+func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
 	}
 	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "txOrigin"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "txOrigin"))
 	}
 	sender, err := parseAddress(req.URL.Query().Get("sender"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "sender"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "sender"))
 	}
 	recipient, err := parseAddress(req.URL.Query().Get("recipient"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "recipient"))
+		return nil, restutil.BadRequest(errors.WithMessage(err, "recipient"))
 	}
-	transferFilter := &TransferFilter{
+	transferFilter := &api.SubscriptionTransferFilter{
 		TxOrigin:  txOrigin,
 		Sender:    sender,
 		Recipient: recipient,
@@ -153,65 +157,20 @@ func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Re
 	return newTransferReader(s.repo, position, transferFilter), nil
 }
 
-func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Request) (*beatReader, error) {
+func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
 	}
-	return newBeatReader(s.repo, position), nil
+	return newBeatReader(s.repo, position, s.beatCache), nil
 }
 
-func (s *Subscriptions) handleBeat2Reader(w http.ResponseWriter, req *http.Request) (*beat2Reader, error) {
+func (s *Subscriptions) handleBeat2Reader(_ http.ResponseWriter, req *http.Request) (msgReader, error) {
 	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, err
 	}
-	return newBeat2Reader(s.repo, position), nil
-}
-
-func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
-	s.wg.Add(1)
-	defer s.wg.Done()
-
-	var (
-		reader msgReader
-		err    error
-	)
-	switch mux.Vars(req)["subject"] {
-	case "block":
-		if reader, err = s.handleBlockReader(w, req); err != nil {
-			return err
-		}
-	case "event":
-		if reader, err = s.handleEventReader(w, req); err != nil {
-			return err
-		}
-	case "transfer":
-		if reader, err = s.handleTransferReader(w, req); err != nil {
-			return err
-		}
-	case "beat":
-		if reader, err = s.handleBeatReader(w, req); err != nil {
-			return err
-		}
-	case "beat2":
-		if reader, err = s.handleBeat2Reader(w, req); err != nil {
-			return err
-		}
-	default:
-		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
-	}
-
-	conn, closed, err := s.setupConn(w, req)
-	// since the conn is hijacked here, no error should be returned in lines below
-	if err != nil {
-		log.Debug("upgrade to websocket", "err", err)
-		return nil
-	}
-
-	err = s.pipe(conn, reader, closed)
-	s.closeConn(conn, err)
-	return nil
+	return newBeat2Reader(s.repo, position, s.beat2Cache), nil
 }
 
 func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *http.Request) error {
@@ -221,7 +180,8 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
-		log.Debug("upgrade to websocket", "err", err)
+		logger.Debug("upgrade to websocket", "err", err)
+		// websocket connection do not return errors to the wrapHandler
 		return nil
 	}
 	defer s.closeConn(conn, err)
@@ -239,8 +199,8 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	for {
 		select {
 		case tx := <-txCh:
-			err = conn.WriteJSON(&PendingTxIDMessage{ID: tx.ID()})
-			if err != nil {
+			if err = conn.WriteJSON(&api.PendingTxIDMessage{ID: tx.ID()}); err != nil {
+				// likely conn has failed
 				return nil
 			}
 		case <-s.done:
@@ -248,7 +208,10 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 		case <-closed:
 			return nil
 		case <-pingTicker.C:
-			conn.WriteMessage(websocket.PingMessage, nil)
+			if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				// likely conn has failed
+				return nil
+			}
 		}
 	}
 }
@@ -258,25 +221,30 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 	if err != nil {
 		return nil, nil, err
 	}
+	conn.SetReadLimit(100 * 1024) // 100 KB
 
 	closed := make(chan struct{})
-	// start read loop to handle close event
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		conn.SetReadDeadline(time.Now().Add(pongWait))
+	s.wg.Go(func() {
+		// close connections if not closed already
+		defer close(closed)
+
+		if err = conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			logger.Debug("failed to set initial read deadline", "err", err)
+			return
+		}
 		conn.SetPongHandler(func(string) error {
-			conn.SetReadDeadline(time.Now().Add(pongWait))
+			if err = conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+				logger.Debug("failed to set pong read deadline", "err", err)
+			}
 			return nil
 		})
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
-				log.Debug("websocket read err", "err", err)
-				close(closed)
+				logger.Debug("websocket read err", "err", err)
 				break
 			}
 		}
-	}()
+	})
 
 	return conn, closed, nil
 }
@@ -290,11 +258,11 @@ func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
 	}
 
 	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-		log.Debug("write close message", "err", err)
+		logger.Debug("write close message", "err", err)
 	}
 
 	if err := conn.Close(); err != nil {
-		log.Debug("close websocket", "err", err)
+		logger.Debug("close websocket", "err", err)
 	}
 }
 
@@ -305,11 +273,11 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 	for {
 		msgs, hasMore, err := reader.Read()
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to read subscription message: %w", err)
 		}
 		for _, msg := range msgs {
 			if err := conn.WriteJSON(msg); err != nil {
-				return err
+				return fmt.Errorf("unable to write subscription json: %w", err)
 			}
 		}
 		if hasMore {
@@ -319,7 +287,9 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 			case <-closed:
 				return nil
 			case <-pingTicker.C:
-				conn.WriteMessage(websocket.PingMessage, nil)
+				if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return fmt.Errorf("failed to write ping message: %w", err)
+				}
 			default:
 			}
 		} else {
@@ -330,7 +300,9 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 				return nil
 			case <-ticker.C():
 			case <-pingTicker.C:
-				conn.WriteMessage(websocket.PingMessage, nil)
+				if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return fmt.Errorf("failed to write ping message: %w", err)
+				}
 			}
 		}
 	}
@@ -343,10 +315,10 @@ func (s *Subscriptions) parsePosition(posStr string) (thor.Bytes32, error) {
 	}
 	pos, err := thor.ParseBytes32(posStr)
 	if err != nil {
-		return thor.Bytes32{}, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return thor.Bytes32{}, restutil.BadRequest(errors.WithMessage(err, "pos"))
 	}
 	if block.Number(bestID)-block.Number(pos) > s.backtraceLimit {
-		return thor.Bytes32{}, utils.Forbidden(errors.New("pos: backtrace limit exceeded"))
+		return thor.Bytes32{}, restutil.Forbidden(errors.New("pos: backtrace limit exceeded"))
 	}
 	return pos, nil
 }
@@ -378,9 +350,72 @@ func (s *Subscriptions) Close() {
 	s.wg.Wait()
 }
 
+func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Request) (msgReader, error)) restutil.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) error {
+		s.wg.Add(1)
+		defer s.wg.Done()
+
+		// Call the provided reader function
+		reader, err := readerFunc(w, req)
+		if err != nil {
+			// it's not yet a websocket connection, this is likely a setup error in the original http request
+			return err
+		}
+
+		// Setup WebSocket connection
+		conn, closed, err := s.setupConn(w, req)
+		if err != nil {
+			logger.Debug("upgrade to websocket", "err", err)
+			// websocket connection do not return errors to the wrapHandler
+			return nil
+		}
+		defer s.closeConn(conn, err)
+
+		// Stream messages
+		err = s.pipe(conn, reader, closed)
+		if err != nil {
+			logger.Debug("error in websocket pipe", "err", err)
+			// websocket connection do not return errors to the wrapHandler
+		}
+		return nil
+	}
+}
+
 func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/txpool").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
-	sub.Path("/{subject}").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
+	sub.Path("/txpool").
+		Methods(http.MethodGet).
+		Name("WS /subscriptions/txpool"). // metrics middleware relies on this name
+		HandlerFunc(restutil.WrapHandlerFunc(s.handlePendingTransactions))
+
+	sub.Path("/block").
+		Methods(http.MethodGet).
+		Name("WS /subscriptions/block"). // metrics middleware relies on this name
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleBlockReader)))
+
+	sub.Path("/event").
+		Methods(http.MethodGet).
+		Name("WS /subscriptions/event"). // metrics middleware relies on this name
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleEventReader)))
+
+	sub.Path("/transfer").
+		Methods(http.MethodGet).
+		Name("WS /subscriptions/transfer"). // metrics middleware relies on this name
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleTransferReader)))
+
+	sub.Path("/beat2").
+		Methods(http.MethodGet).
+		Name("WS /subscriptions/beat2"). // metrics middleware relies on this name
+		HandlerFunc(restutil.WrapHandlerFunc(s.websocket(s.handleBeat2Reader)))
+
+	// This method is currently deprecated
+	beatHandler := restutil.HandleGone
+	if s.enabledDeprecated {
+		beatHandler = s.websocket(s.handleBeatReader)
+	}
+	sub.Path("/beat").
+		Methods(http.MethodGet).
+		Name("WS /subscriptions/beat"). // metrics middleware relies on this name
+		HandlerFunc(restutil.WrapHandlerFunc(beatHandler))
 }

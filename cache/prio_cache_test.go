@@ -3,20 +3,19 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package cache_test
+// #nosec G404
+package cache
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/cache"
 )
 
 func TestPrioCacheAddRemove(t *testing.T) {
-	c := cache.NewPrioCache(16)
+	c := NewPrioCache(16)
 	c.Set("key", "value", 100)
 	assert.True(t, c.Contains("key"))
 	assert.Equal(t, 1, c.Len())
@@ -26,7 +25,7 @@ func TestPrioCacheAddRemove(t *testing.T) {
 	assert.Equal(t, float64(100), p)
 	assert.Equal(t, true, b)
 
-	assert.Equal(t, &cache.PrioEntry{Entry: cache.Entry{Key: "key", Value: "value"}, Priority: float64(100)}, c.Remove("key"))
+	assert.Equal(t, &PrioEntry{Entry: Entry{Key: "key", Value: "value"}, Priority: float64(100)}, c.Remove("key"))
 	assert.Equal(t, 0, c.Len())
 
 	_, _, b = c.Get("key")
@@ -34,8 +33,7 @@ func TestPrioCacheAddRemove(t *testing.T) {
 }
 
 func TestPrioCache(t *testing.T) {
-	c := cache.NewPrioCache(5)
-	rand.Seed(time.Now().UnixNano())
+	c := NewPrioCache(5)
 
 	type kvp struct {
 		k, v int
@@ -44,11 +42,12 @@ func TestPrioCache(t *testing.T) {
 
 	var kvps []kvp
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		e := kvp{
 			rand.Int(),
 			rand.Int(),
-			rand.Float64()}
+			rand.Float64(),
+		}
 		kvps = append(kvps, e)
 		c.Set(e.k, e.v, e.p)
 	}
@@ -57,11 +56,12 @@ func TestPrioCache(t *testing.T) {
 		return kvps[i].p > kvps[j].p
 	})
 	var remained []kvp
-	c.ForEach(func(entry *cache.PrioEntry) bool {
+	c.ForEach(func(entry *PrioEntry) bool {
 		remained = append(remained, kvp{
 			entry.Key.(int),
 			entry.Value.(int),
-			entry.Priority})
+			entry.Priority,
+		})
 		return true
 	})
 

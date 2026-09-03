@@ -1,3 +1,8 @@
+// Copyright (c) 2021 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package p2psrv
 
 import (
@@ -5,10 +10,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
-	"github.com/vechain/thor/p2psrv/discv5"
+	"github.com/vechain/thor/v2/p2p/discv5"
 )
 
 func fetchRemoteBootstrapNodes(ctx context.Context, remoteURL string) ([]*discv5.Node, error) {
@@ -22,7 +26,7 @@ func fetchRemoteBootstrapNodes(ctx context.Context, remoteURL string) ([]*discv5
 		return nil, err
 	}
 	defer resp.Body.Close()
-	defer io.Copy(ioutil.Discard, resp.Body)
+	defer io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("http fetch failed: statusCode=%d", resp.StatusCode)

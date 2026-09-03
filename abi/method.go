@@ -9,8 +9,19 @@ import (
 	"bytes"
 	"errors"
 
-	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
+	ethabi "github.com/vechain/thor/v2/abi/ethabi"
 )
+
+// MethodID method id.
+type MethodID [4]byte
+
+// EmptyMethodID represents an empty method ID (used for constructors).
+var EmptyMethodID = MethodID{}
+
+// IsEmpty returns true if the MethodID is empty.
+func (id MethodID) IsEmpty() bool {
+	return id == EmptyMethodID
+}
 
 // Method see abi.Method in go-ethereum.
 type Method struct {
@@ -30,41 +41,52 @@ func (m *Method) Name() string {
 
 // Const returns if the method is const.
 func (m *Method) Const() bool {
-	return m.method.Const
+	return m.method.Constant || m.method.StateMutability == "view" || m.method.StateMutability == "pure"
 }
 
-// EncodeInput encode args to data, and the data is prefixed with method id.
-func (m *Method) EncodeInput(args ...interface{}) ([]byte, error) {
+// EncodeInput encode args to data.
+func (m *Method) EncodeInput(args ...any) ([]byte, error) {
 	data, err := m.method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
 	}
+
+	if m.id.IsEmpty() {
+		return data, nil
+	}
+
 	return append(m.id[:], data...), nil
 }
 
 // DecodeInput decode input data into args.
-func (m *Method) DecodeInput(input []byte, v interface{}) error {
+func (m *Method) DecodeInput(input []byte, v any) error {
+	if m.id.IsEmpty() {
+		if len(input) != 0 {
+			return UnpackIntoInterface(&m.method.Inputs, input, v)
+		}
+		// if constructor with no parameters
+		return nil
+	}
+
 	if !bytes.HasPrefix(input, m.id[:]) {
 		return errors.New("input has incorrect prefix")
 	}
-	return m.method.Inputs.Unpack(v, input[4:])
+
+	return UnpackIntoInterface(&m.method.Inputs, input[len(m.id):], v)
 }
 
 // EncodeOutput encode output args to data.
-func (m *Method) EncodeOutput(args ...interface{}) ([]byte, error) {
+func (m *Method) EncodeOutput(args ...any) ([]byte, error) {
 	return m.method.Outputs.Pack(args...)
 }
 
 // DecodeOutput decode output data.
-func (m *Method) DecodeOutput(output []byte, v interface{}) error {
+func (m *Method) DecodeOutput(output []byte, v any) error {
 	if len(output)%32 != 0 {
 		return errors.New("output has incorrect length")
 	}
-	return m.method.Outputs.Unpack(v, output)
+	return UnpackIntoInterface(&m.method.Outputs, output, v)
 }
-
-// MethodID method id.
-type MethodID [4]byte
 
 // ExtractMethodID extract method id from input data.
 func ExtractMethodID(input []byte) (id MethodID, err error) {

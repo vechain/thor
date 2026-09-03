@@ -7,31 +7,32 @@ package txpool
 
 import (
 	"context"
-	"math/rand"
+	"math/big"
+	"math/rand/v2"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/pkg/errors"
+
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (
 	// max size of tx allowed
-	maxTxSize = 64 * 1024
+	MaxTxSize = 64 * 1024
 )
 
-var (
-	log = log15.New("pkg", "txpool")
-)
+var logger = log.WithContext("pkg", "txpool")
 
 // Options options for tx pool.
 type Options struct {
@@ -48,12 +49,29 @@ type TxEvent struct {
 	Executable *bool
 }
 
+// Pool defines the interface for the transaction pool
+type Pool interface {
+	Get(txID thor.Bytes32) *tx.Transaction
+	Add(newTx *tx.Transaction) error
+	AddLocal(tx *tx.Transaction) error
+	StrictlyAdd(newTx *tx.Transaction) error
+	Remove(txHash thor.Bytes32, txID thor.Bytes32) bool
+	Dump() tx.Transactions
+	Len() int
+	SubscribeTxEvent(chan *TxEvent) event.Subscription
+	Executables() tx.Transactions
+	Fill(txs tx.Transactions)
+	Close()
+}
+
 // TxPool maintains unprocessed transactions.
 type TxPool struct {
-	options   Options
-	repo      *chain.Repository
-	stater    *state.Stater
-	blocklist blocklist
+	options      Options
+	repo         *chain.Repository
+	stater       *state.Stater
+	blocklist    blocklist
+	forkConfig   *thor.ForkConfig
+	baseFeeCache *baseFeeCache
 
 	executables    atomic.Value
 	all            *txObjectMap
@@ -63,20 +81,22 @@ type TxPool struct {
 	cancel func()
 	txFeed event.Feed
 	scope  event.SubscriptionScope
-	goes   co.Goes
+	goes   sync.WaitGroup
 }
 
 // New create a new TxPool instance.
 // Shutdown is required to be called at end.
-func New(repo *chain.Repository, stater *state.Stater, options Options) *TxPool {
+func New(repo *chain.Repository, stater *state.Stater, options Options, forkConfig *thor.ForkConfig) *TxPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &TxPool{
-		options: options,
-		repo:    repo,
-		stater:  stater,
-		all:     newTxObjectMap(),
-		ctx:     ctx,
-		cancel:  cancel,
+		options:      options,
+		repo:         repo,
+		stater:       stater,
+		all:          newTxObjectMap(),
+		ctx:          ctx,
+		cancel:       cancel,
+		forkConfig:   forkConfig,
+		baseFeeCache: newBaseFeeCache(forkConfig),
 	}
 
 	pool.goes.Go(pool.housekeeping)
@@ -85,8 +105,8 @@ func New(repo *chain.Repository, stater *state.Stater, options Options) *TxPool 
 }
 
 func (p *TxPool) housekeeping() {
-	log.Debug("enter housekeeping")
-	defer log.Debug("leave housekeeping")
+	logger.Debug("enter housekeeping")
+	defer logger.Debug("leave housekeeping")
 
 	ticker := time.NewTicker(time.Second * 1)
 	defer ticker.Stop()
@@ -115,14 +135,13 @@ func (p *TxPool) housekeeping() {
 			if headBlockChanged ||
 				poolLen > p.options.Limit ||
 				(poolLen < 200 && atomic.LoadUint32(&p.addedAfterWash) > 0) {
-
 				atomic.StoreUint32(&p.addedAfterWash, 0)
 
 				startTime := mclock.Now()
-				executables, removed, err := p.wash(headSummary)
+				executables, removed, err := p.wash(headSummary, headBlockChanged)
 				elapsed := mclock.Now() - startTime
 
-				ctx := []interface{}{
+				ctx := []any{
 					"len", poolLen,
 					"removed", removed,
 					"elapsed", common.PrettyDuration(elapsed),
@@ -131,9 +150,14 @@ func (p *TxPool) housekeeping() {
 					ctx = append(ctx, "err", err)
 				} else {
 					p.executables.Store(executables)
+					// Post-wash snapshot: report alongside the executables gauge
+					// from the same wash, so both reflect the consistent state
+					// that wash observed (not affected by concurrent Adds).
+					metricTxPoolExecutablesGauge().Set(int64(len(executables)))
+					metricTxPoolAllGauge().Set(int64(poolLen - removed))
 				}
 
-				log.Debug("wash done", ctx...)
+				logger.Trace("wash done", ctx...)
 			}
 		}
 	}
@@ -148,10 +172,10 @@ func (p *TxPool) fetchBlocklistLoop() {
 	if path != "" {
 		if err := p.blocklist.Load(path); err != nil {
 			if !os.IsNotExist(err) {
-				log.Warn("blocklist load failed", "error", err, "path", path)
+				logger.Warn("blocklist load failed", "error", err, "path", path)
 			}
 		} else {
-			log.Debug("blocklist loaded", "len", p.blocklist.Len())
+			logger.Debug("blocklist loaded", "len", p.blocklist.Len())
 		}
 	}
 	if url == "" {
@@ -164,14 +188,14 @@ func (p *TxPool) fetchBlocklistLoop() {
 			if err == context.Canceled {
 				return
 			}
-			log.Warn("blocklist fetch failed", "error", err, "url", url)
+			logger.Warn("blocklist fetch failed", "error", err, "url", url)
 		} else {
-			log.Debug("blocklist fetched", "len", p.blocklist.Len())
+			logger.Debug("blocklist fetched", "len", p.blocklist.Len())
 			if path != "" {
 				if err := p.blocklist.Save(path); err != nil {
-					log.Warn("blocklist save failed", "error", err, "path", path)
+					logger.Warn("blocklist save failed", "error", err, "path", path)
 				} else {
-					log.Debug("blocklist saved")
+					logger.Debug("blocklist saved")
 				}
 			}
 		}
@@ -181,7 +205,7 @@ func (p *TxPool) fetchBlocklistLoop() {
 
 	for {
 		// delay 1~2 min
-		delay := time.Second * time.Duration(rand.Int()%60+60)
+		delay := time.Second * time.Duration(rand.Int()%60+60) //#nosec G404
 		select {
 		case <-p.ctx.Done():
 			return
@@ -196,7 +220,7 @@ func (p *TxPool) Close() {
 	p.cancel()
 	p.scope.Close()
 	p.goes.Wait()
-	log.Debug("closed")
+	logger.Debug("closed")
 }
 
 // SubscribeTxEvent receivers will receive a tx
@@ -204,84 +228,183 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 	return p.scope.Track(p.txFeed.Subscribe(ch))
 }
 
-func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) error {
+func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) (err error) {
+	source := txSourceRemote
+	if localSubmitted {
+		source = txSourceLocal
+	}
+	defer func() {
+		if err != nil {
+			metricBadTxGauge().AddWithLabel(1, map[string]string{"source": string(source)})
+		}
+	}()
+
 	if p.all.ContainsHash(newTx.Hash()) {
 		// tx already in the pool
 		return nil
 	}
 
-	origin, _ := newTx.Origin()
-	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
-		// tx origin blocked
+	if err := p.validateTxBasics(newTx); err != nil {
+		return err
+	}
+
+	if p.isBlocked(newTx) {
 		return nil
 	}
 
-	headSummary := p.repo.BestBlockSummary()
-
-	// validation
-	switch {
-	case newTx.ChainTag() != p.repo.ChainTag():
-		return badTxError{"chain tag mismatch"}
-	case newTx.Size() > maxTxSize:
-		return txRejectedError{"size too large"}
-	}
-
-	if err := newTx.TestFeatures(headSummary.Header.TxsFeatures()); err != nil {
-		return txRejectedError{err.Error()}
-	}
-
-	txObj, err := resolveTx(newTx, localSubmitted)
+	txObj, err := resolveTxWithSource(newTx, source)
 	if err != nil {
 		return badTxError{err.Error()}
 	}
 
+	headSummary := p.repo.BestBlockSummary()
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-		if !localSubmitted {
-			// reject when pool size exceeds 120% of limit
-			if p.all.Len() >= p.options.Limit*12/10 {
-				return txRejectedError{"pool is full"}
-			}
-		}
-
-		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
-		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
-		if err != nil {
-			return txRejectedError{err.Error()}
-		}
-
-		if rejectNonExecutable && !executable {
-			return txRejectedError{"tx is not executable"}
-		}
-
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
-			return txRejectedError{err.Error()}
-		}
-
-		txObj.executable = executable
-		p.goes.Go(func() {
-			p.txFeed.Send(&TxEvent{newTx, &executable})
-		})
-		log.Debug("tx added", "id", newTx.ID(), "executable", executable)
+		err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable)
 	} else {
-		// we skip steps that rely on head block when chain is not synced,
-		// but check the pool's limit
-		if p.all.Len() >= p.options.Limit {
-			return txRejectedError{"pool is full"}
-		}
-
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
-			return txRejectedError{err.Error()}
-		}
-		log.Debug("tx added", "id", newTx.ID())
-		p.goes.Go(func() {
-			p.txFeed.Send(&TxEvent{newTx, nil})
-		})
+		err = p.addWhenNotSynced(newTx, txObj)
 	}
+	if err != nil {
+		return err
+	}
+
 	atomic.AddUint32(&p.addedAfterWash, 1)
+	addTxPoolMetric(txObj, 1)
+
 	return nil
 }
 
-// Add add new tx into pool.
+// isBlocked checks if the transaction origin or delegator is blocked.
+func (p *TxPool) isBlocked(newTx *tx.Transaction) bool {
+	origin, _ := newTx.Origin()
+	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
+		// tx origin blocked
+		return true
+	}
+
+	delegator, _ := newTx.Delegator()
+	if delegator != nil && (thor.IsOriginBlocked(*delegator) || p.blocklist.Contains(*delegator)) {
+		// tx delegator blocked
+		return true
+	}
+
+	return false
+}
+
+// checkTxPriority checks if the new tx has higher priority than the bottom 10% of existing executable txs.
+// Since executables are sorted descending by price, the threshold at 90th percentile represents
+// the boundary where 90% have higher priority and 10% have lower priority.
+func (p *TxPool) checkTxPriority(executable bool, candidatePGP *big.Int) bool {
+	if !executable || candidatePGP == nil {
+		return false
+	}
+
+	executables := p.Executables()
+	if len(executables) == 0 {
+		return true
+	}
+
+	// Get the transaction at the 90th percentile (bottom 10% threshold)
+	thresholdIdx := len(executables) * 9 / 10 // 90th percentile, executables are sorted by price desc
+	thresholdTxObj := p.all.GetByID(executables[thresholdIdx].ID())
+	if thresholdTxObj == nil {
+		return false
+	}
+	thresholdPGP := thresholdTxObj.priorityGasPrice()
+	if thresholdPGP == nil {
+		return false
+	}
+	return candidatePGP.Cmp(thresholdPGP) > 0
+}
+
+// addWhenSynced handles transaction addition when the chain is synced.
+func (p *TxPool) addWhenSynced(
+	newTx *tx.Transaction,
+	txObj *TxObject,
+	headSummary *chain.BlockSummary,
+	rejectNonExecutable bool,
+) error {
+	state := p.stater.NewState(headSummary.Root())
+	executable, pricing, err := txObj.Evaluate(
+		p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header,
+		p.forkConfig, p.baseFeeCache.Get(headSummary.Header), false,
+	)
+	if err != nil {
+		return txRejectedError{err.Error()}
+	}
+
+	var candidatePGP *big.Int
+	if pricing != nil {
+		candidatePGP = pricing.priorityGasPrice
+	}
+
+	// Check pool limits and priority for remote transactions
+	if !txObj.localSubmitted() {
+		if p.all.Len() >= p.options.Limit*15/10 {
+			return txRejectedError{"pool is full"}
+		} else if p.all.Len() >= p.options.Limit*12/10 {
+			if !p.checkTxPriority(executable, candidatePGP) {
+				return txRejectedError{"pool is full"}
+			}
+		}
+	}
+
+	if rejectNonExecutable && !executable {
+		return txRejectedError{"tx is not executable"}
+	}
+
+	// Check non-executable pool limit (20% of total)
+	if !executable {
+		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
+			return txRejectedError{"non executable pool is full"}
+		}
+	}
+
+	if err := p.all.Add(txObj, executable, pricing, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
+		// check payer's balance
+		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+		if err != nil {
+			return err
+		}
+
+		if balance.Cmp(needs) < 0 {
+			return errors.New("insufficient energy for overall pending cost")
+		}
+
+		return nil
+	}); err != nil {
+		return txRejectedError{err.Error()}
+	}
+
+	p.goes.Go(func() {
+		p.txFeed.Send(&TxEvent{newTx, &executable})
+	})
+	logger.Trace("tx added", "id", newTx.ID(), "executable", executable)
+
+	return nil
+}
+
+// addWhenNotSynced handles transaction addition when the chain is not synced.
+func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error {
+	// we skip steps that rely on head block when chain is not synced,
+	// but check the pool's limit
+	if p.all.Len() >= p.options.Limit {
+		return txRejectedError{"pool is full"}
+	}
+
+	// skip pending cost check when chain is not synced
+	if err := p.all.Add(txObj, false, nil, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
+		return txRejectedError{err.Error()}
+	}
+
+	logger.Trace("tx added", "id", newTx.ID())
+	p.goes.Go(func() {
+		p.txFeed.Send(&TxEvent{newTx, nil})
+	})
+
+	return nil
+}
+
+// Add adds a new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
 func (p *TxPool) Add(newTx *tx.Transaction) error {
 	return p.add(newTx, false, false)
@@ -307,8 +430,13 @@ func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
 
 // Remove removes tx from pool by its Hash.
 func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
+	removedTransaction := p.all.GetByID(txID)
+	if removedTransaction == nil {
+		return false
+	}
 	if p.all.RemoveByHash(txHash) {
-		log.Debug("tx removed", "id", txID)
+		addTxPoolMetric(removedTransaction, -1)
+		logger.Debug("tx removed", "id", txID)
 		return true
 	}
 	return false
@@ -324,18 +452,19 @@ func (p *TxPool) Executables() tx.Transactions {
 
 // Fill fills txs into pool.
 func (p *TxPool) Fill(txs tx.Transactions) {
-	txObjs := make([]*txObject, 0, len(txs))
+	txObjs := make([]*TxObject, 0, len(txs))
 	for _, tx := range txs {
-		origin, _ := tx.Origin()
-		if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
+		if p.isBlocked(tx) {
 			continue
 		}
 		// here we ignore errors
-		if txObj, err := resolveTx(tx, false); err == nil {
+		if txObj, err := resolveTxWithSource(tx, txSourceFill); err == nil {
 			txObjs = append(txObjs, txObj)
 		}
 	}
-	p.all.Fill(txObjs)
+	for _, txObj := range p.all.Fill(txObjs) {
+		addTxPoolMetric(txObj, 1)
+	}
 }
 
 // Dump dumps all txs in the pool.
@@ -344,87 +473,130 @@ func (p *TxPool) Dump() tx.Transactions {
 }
 
 // wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
-// this method should only be called in housekeeping go routine
-func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transactions, removed int, err error) {
+// this method should only be called in housekeeping go routine.
+//
+// removed counts every tx evicted by this wash regardless of tx type. The
+// per-source/per-type breakdown lives on the txpool_washed_tx_count counter,
+// which is the source of truth for dashboards/alerts.
+func (p *TxPool) wash(
+	headSummary *chain.BlockSummary,
+	headBlockChanged bool,
+) (
+	executables tx.Transactions,
+	removed int,
+	err error,
+) {
 	all := p.all.ToTxObjects()
-	var toRemove []*txObject
+	var toRemove []*TxObject
 	defer func() {
+		evict := func(txObj *TxObject) {
+			if p.all.RemoveByHash(txObj.Hash()) {
+				addTxPoolMetric(txObj, -1)
+				countWashedTx(txObj)
+				removed++
+			}
+		}
 		if err != nil {
 			// in case of error, simply cut pool size to limit
 			for i, txObj := range all {
 				if len(all)-i <= p.options.Limit {
 					break
 				}
-				removed++
-				p.all.RemoveByHash(txObj.Hash())
+				evict(txObj)
 			}
 		} else {
 			for _, txObj := range toRemove {
-				p.all.RemoveByHash(txObj.Hash())
+				evict(txObj)
 			}
-			removed = len(toRemove)
 		}
 	}()
 
-	// recreate state every time to avoid high RAM usage when the pool at hight water-mark.
+	// recreate state every time to avoid high RAM usage when the pool at high water-mark.
 	newState := func() *state.State {
-		return p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
-	}
-	baseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyBaseGasPrice)
-	if err != nil {
-		return nil, 0, err
+		return p.stater.NewState(headSummary.Root())
 	}
 
 	var (
 		chain               = p.repo.NewChain(headSummary.Header.ID())
-		executableObjs      = make([]*txObject, 0, len(all))
-		nonExecutableObjs   = make([]*txObject, 0, len(all))
-		localExecutableObjs = make([]*txObject, 0, len(all))
+		executableObjs      = make([]*TxObject, 0, len(all))
+		nonExecutableObjs   = make([]*TxObject, 0, len(all))
+		localExecutableObjs = make([]*TxObject, 0, len(all))
 		now                 = time.Now().UnixNano()
+		baseFee             = p.baseFeeCache.Get(headSummary.Header)
 	)
+
+	legacyTxBaseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyLegacyTxBaseGasPrice)
+	if err != nil {
+		return executables, removed, err
+	}
+	needPriorityGasPriceUpdate := func() bool {
+		if !headBlockChanged {
+			return false
+		}
+
+		currentBaseFee := headSummary.Header.BaseFee()
+		if currentBaseFee == nil {
+			return false
+		}
+		parentBlock, err := p.repo.GetBlock(headSummary.Header.ParentID())
+		if err != nil {
+			logger.Warn("failed to get parent block for baseFee comparison", "err", err)
+			// Fallback: assume baseFee might have changed if we can't check
+			return true
+		}
+		parentBaseFee := parentBlock.Header().BaseFee()
+		if parentBaseFee == nil {
+			// Transitioning into GALACTICA, we need to recompute the priority gas price
+			return true
+		}
+
+		return parentBaseFee.Cmp(currentBaseFee) != 0
+	}()
+
 	for _, txObj := range all {
-		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
+		if p.isBlocked(txObj.Transaction) {
 			toRemove = append(toRemove, txObj)
-			log.Debug("tx washed out", "id", txObj.ID(), "err", "blocked")
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", "blocked")
 			continue
 		}
 
 		// out of lifetime
-		if !txObj.localSubmitted && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
+		if !txObj.localSubmitted() && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
 			toRemove = append(toRemove, txObj)
-			log.Debug("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, newState(), headSummary.Header)
+		executable, pricing, err := txObj.Evaluate(chain, newState(), headSummary.Header, p.forkConfig, baseFee, txObj.executable)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
-			log.Debug("tx washed out", "id", txObj.ID(), "err", err)
+			logger.Trace("tx washed out", "id", txObj.ID(), "err", err)
 			continue
+		}
+		if pricing != nil {
+			txObj.setPricing(pricing) // lock-free publish
+		}
+
+		// Only recalculate the priority gas price when the base fee might be changed
+		if needPriorityGasPriceUpdate {
+			txObj.refreshPriorityGasPrice(baseFee, legacyTxBaseGasPrice, headSummary.Header.Number()+1)
 		}
 
 		if executable {
-			provedWork, err := txObj.ProvedWork(headSummary.Header.Number(), chain.GetBlockID)
-			if err != nil {
-				toRemove = append(toRemove, txObj)
-				log.Debug("tx washed out", "id", txObj.ID(), "err", err)
-				continue
-			}
-			txObj.overallGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
-			if txObj.localSubmitted {
+			if txObj.localSubmitted() {
 				localExecutableObjs = append(localExecutableObjs, txObj)
 			} else {
 				executableObjs = append(executableObjs, txObj)
 			}
 		} else {
-			if !txObj.localSubmitted {
+			if !txObj.localSubmitted() {
 				nonExecutableObjs = append(nonExecutableObjs, txObj)
 			}
 		}
 	}
 
 	// sort objs by price from high to low.
-	sortTxObjsByOverallGasPriceDesc(executableObjs)
+	sortTxObjsByPriorityGasPriceDesc(executableObjs)
 
 	limit := p.options.Limit
 
@@ -432,35 +604,61 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	if len(executableObjs) > limit {
 		for _, txObj := range nonExecutableObjs {
 			toRemove = append(toRemove, txObj)
-			log.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
+			logger.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
 		}
 		for _, txObj := range executableObjs[limit:] {
 			toRemove = append(toRemove, txObj)
-			log.Debug("executable tx washed out due to pool limit", "id", txObj.ID())
+			logger.Debug("executable tx washed out due to pool limit", "id", txObj.ID())
 		}
 		executableObjs = executableObjs[:limit]
 	} else if len(executableObjs)+len(nonExecutableObjs) > limit {
 		// executableObjs + nonExecutableObjs over pool limit
 		for _, txObj := range nonExecutableObjs[limit-len(executableObjs):] {
 			toRemove = append(toRemove, txObj)
-			log.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
+			logger.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
+		}
+	} else if len(nonExecutableObjs) > limit*2/10 {
+		// nonExecutableObjs over pool limit
+		for _, txObj := range nonExecutableObjs[limit*2/10:] {
+			toRemove = append(toRemove, txObj)
+			logger.Debug("non-executable tx washed out due to non-executable limit", "id", txObj.ID())
 		}
 	}
 
 	// Concatenate executables.
 	executableObjs = append(executableObjs, localExecutableObjs...)
 	// Sort will be faster (part of it already sorted).
-	sortTxObjsByOverallGasPriceDesc(executableObjs)
+	sortTxObjsByPriorityGasPriceDesc(executableObjs)
 
 	executables = make(tx.Transactions, 0, len(executableObjs))
 	var toBroadcast tx.Transactions
 
 	for _, obj := range executableObjs {
-		executables = append(executables, obj.Transaction)
-		if !obj.executable || obj.localSubmitted {
-			obj.executable = true
+		// the tx was not executable previously: validate payer energy before promoting
+		if !obj.executable {
+			payer := *obj.Payer()
+			needs := new(big.Int).Add(p.all.PendingCostOf(payer), obj.Cost())
+			energy, err := builtin.Energy.Native(newState(), headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
+			if err != nil || energy.Cmp(needs) < 0 {
+				toRemove = append(toRemove, obj)
+				logger.Trace("tx washed out", "id", obj.ID(), "err", "insufficient energy for overall pending cost")
+				continue
+			}
+			// the tx moves from non-executable to executable. Reflect the transition in
+			// the gauges around promote, which sets executable and accounts the pending
+			// cost atomically under the map lock (promote-if-present: a tx removed
+			// concurrently is skipped, leaving its removal to account its own -1).
+			addTxPoolMetric(obj, -1) // remove from the non-executable gauge
+			if !p.all.promote(obj) {
+				continue
+			}
+			addTxPoolMetric(obj, 1) // re-count as executable
+			toBroadcast = append(toBroadcast, obj.Transaction)
+		} else if obj.localSubmitted() {
+			// broadcast local submitted even it's already executable
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
+		executables = append(executables, obj.Transaction)
 	}
 
 	p.goes.Go(func() {
@@ -472,10 +670,72 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	return executables, 0, nil
 }
 
+// Len returns the length of the `all` field
+func (p *TxPool) Len() int {
+	return p.all.Len()
+}
+
+// validateTxBasics runs static validation on a transaction.
+func (p *TxPool) validateTxBasics(trx *tx.Transaction) error {
+	if err := trx.EnforceSignatureLowS(); err != nil {
+		return badTxError{err.Error()}
+	}
+
+	if trx.ChainTag() != p.repo.ChainTag() {
+		return badTxError{"chain tag mismatch"}
+	}
+
+	if trx.Size() > MaxTxSize {
+		return txRejectedError{"size too large"}
+	}
+
+	nextBlockNum := p.repo.BestBlockSummary().Header.Number() + 1
+	if nextBlockNum >= p.forkConfig.INTERSTELLAR {
+		if trx.Gas() > thor.MaxTxGasLimit {
+			return badTxError{"tx gas limit exceeds the maximum allowed"}
+		}
+	}
+
+	return nil
+}
+
 func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 	timeDiff := nowTimestamp - blockTimestamp
 	if blockTimestamp > nowTimestamp {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
-	return timeDiff < thor.BlockInterval*6
+	return timeDiff < thor.BlockInterval()*6
+}
+
+func txMetricType(trx *tx.Transaction) string {
+	switch trx.Type() {
+	case tx.TypeLegacy:
+		return "Legacy"
+	case tx.TypeDynamicFee:
+		return "DynamicFee"
+	default:
+		return "Unknown"
+	}
+}
+
+func txMetricStatus(executable bool) string {
+	if executable {
+		return "executable"
+	}
+	return "non_executable"
+}
+
+func addTxPoolMetric(txObj *TxObject, delta int64) {
+	metricTxPoolGauge().AddWithLabel(delta, map[string]string{
+		"source": string(txObj.source),
+		"type":   txMetricType(txObj.Transaction),
+		"status": txMetricStatus(txObj.executable),
+	})
+}
+
+func countWashedTx(txObj *TxObject) {
+	metricTxPoolWashedCounter().AddWithLabel(1, map[string]string{
+		"source": string(txObj.source),
+		"type":   txMetricType(txObj.Transaction),
+	})
 }

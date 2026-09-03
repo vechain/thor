@@ -6,49 +6,62 @@
 package genesis
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/params"
+	"github.com/vechain/thor/v2/builtin/staker"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
-// CustomGenesis is user customized genesis
-type CustomGenesis struct {
-	LaunchTime uint64           `json:"launchTime"`
-	GasLimit   uint64           `json:"gaslimit"`
-	ExtraData  string           `json:"extraData"`
-	Accounts   []Account        `json:"accounts"`
-	Authority  []Authority      `json:"authority"`
-	Params     Params           `json:"params"`
-	Executor   Executor         `json:"executor"`
-	ForkConfig *thor.ForkConfig `json:"forkConfig"`
+// NewCustomNet create custom network genesis block
+func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
+	return NewCustomNetWithName(gen, "customnet")
 }
 
-// NewCustomNet create custom network genesis.
-func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
-	launchTime := gen.LaunchTime
+// NewCustomNetWithName create custom network genesis block with given name
+func NewCustomNetWithName(gen *CustomGenesis, name string) (*Genesis, error) {
+	if gen.Config != nil {
+		// value of 0 does not update thor config
+		if gen.Config.BlockInterval == 1 {
+			return nil, errors.New("BlockInterval can not be zero or one")
+		}
+		if gen.Config.EpochLength == 1 {
+			return nil, errors.New("EpochLength can not be zero or one")
+		}
 
+		thor.SetConfig(*gen.Config)
+	}
+
+	launchTime := gen.LaunchTime
 	if gen.GasLimit == 0 {
 		gen.GasLimit = thor.InitialGasLimit
 	}
-	var executor thor.Address
+
+	// When a Params.ExecutorAddress is set, the gen.Executor.Approvers cannot be set by the genesis
+	// as the ExecutorAddress can be a contract or an EOA
+	if gen.Params.ExecutorAddress != nil && len(gen.Executor.Approvers) > 0 {
+		return nil, errors.New("can not specify both executorAddress and approvers")
+	}
+
+	executor := builtin.Executor.Address
+	externalExecutor := false
+
 	if gen.Params.ExecutorAddress != nil {
 		executor = *gen.Params.ExecutorAddress
-	} else {
-		executor = builtin.Executor.Address
+		externalExecutor = true
 	}
 
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(gen.GasLimit).
-		ForkConfig(*gen.ForkConfig).
+		ForkConfig(gen.ForkConfig).
 		State(func(state *state.State) error {
 			// alloc builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
@@ -66,8 +79,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
 				return err
 			}
-
-			if len(gen.Executor.Approvers) > 0 {
+			if !externalExecutor {
 				if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
 					return err
 				}
@@ -112,8 +124,23 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 					}
 				}
 			}
+			if err := builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply); err != nil {
+				return err
+			}
 
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
+			if gen.ForkConfig.HAYABUSA == 0 && len(gen.Stakers) > 0 {
+				stkr := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
+				for _, val := range gen.Stakers {
+					if err := transferToStaker(state, val.Endorser, staker.MinStake); err != nil {
+						return err
+					}
+					if err := stkr.AddValidation(val.Master, val.Endorser, thor.HighStakingPeriod(), staker.MinStakeVET); err != nil {
+						return err
+					}
+				}
+			}
+
+			return nil
 		})
 
 	///// initialize builtin contracts
@@ -152,7 +179,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, r)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, bgp)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyLegacyTxBaseGasPrice, bgp)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, e)
@@ -166,22 +193,59 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 	}
 
-	if len(gen.Authority) == 0 {
+	if d := gen.Params.DelegatorContract; d != nil {
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyDelegatorContractAddress, new(big.Int).SetBytes((*d)[:]))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if f := gen.Params.CurveFactor; f != nil {
+		if *f == uint64(0) {
+			return nil, errors.New("curveFactor must be a non-negative integer")
+		}
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyCurveFactor, new(big.Int).SetUint64(*f))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if s := gen.Params.StakerSwitches; s != nil {
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyStakerSwitches, new(big.Int).SetUint64(uint64(*s)))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if p := gen.Params.RewardPercentage; p != nil {
+		if *p > 100 || *p == 0 {
+			return nil, errors.New("validatorRewardPercentage must be between 1 and 100")
+		}
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyValidatorRewardPercentage, new(big.Int).SetUint64(uint64(*p)))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
+	if len(gen.Authority) == 0 && !isPoSActiveGenesis(gen) {
 		return nil, errors.New("at least one authority node")
 	}
 	// add initial authority nodes
 	for _, anode := range gen.Authority {
-		data := mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
+		data = mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 
-	if len(gen.Executor.Approvers) > 0 {
-		// add initial approvers
+	if !externalExecutor {
 		for _, approver := range gen.Executor.Approvers {
-			data := mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
-			builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), executor)
+			data = mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
+			// using builtin.Executor.Address guarantees the execution of this clause
+			builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), builtin.Executor.Address)
 		}
 	}
+
+	builder.PostCallState(func(state *state.State) error {
+		if isPoSActiveGenesis(gen) {
+			stk := staker.New(builtin.Staker.Address, state, params.New(builtin.Params.Address, state), nil)
+			_, err := stk.Housekeep(0)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 
 	if len(gen.ExtraData) > 0 {
 		var extra [28]byte
@@ -193,67 +257,40 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	if err != nil {
 		panic(err)
 	}
-	return &Genesis{builder, id, "customnet"}, nil
+	return &Genesis{builder, id, name}, nil
 }
 
-// Account is the account will set to the genesis block
-type Account struct {
-	Address thor.Address            `json:"address"`
-	Balance *HexOrDecimal256        `json:"balance"`
-	Energy  *HexOrDecimal256        `json:"energy"`
-	Code    string                  `json:"code"`
-	Storage map[string]thor.Bytes32 `json:"storage"`
+// config is already applied in NewCustomNet
+func isPoSActiveGenesis(gen *CustomGenesis) bool {
+	return gen.ForkConfig.HAYABUSA == 0 && thor.HayabusaTP() == 0
 }
 
-// Authority is the authority node info
-type Authority struct {
-	MasterAddress   thor.Address `json:"masterAddress"`
-	EndorsorAddress thor.Address `json:"endorsorAddress"`
-	Identity        thor.Bytes32 `json:"identity"`
-}
-
-// Executor is the params for executor info
-type Executor struct {
-	Approvers []Approver `json:"approvers"`
-}
-
-// Approver is the approver info for executor contract
-type Approver struct {
-	Address  thor.Address `json:"address"`
-	Identity thor.Bytes32 `json:"identity"`
-}
-
-// Params means the chain params for params contract
-type Params struct {
-	RewardRatio         *HexOrDecimal256 `json:"rewardRatio"`
-	BaseGasPrice        *HexOrDecimal256 `json:"baseGasPrice"`
-	ProposerEndorsement *HexOrDecimal256 `json:"proposerEndorsement"`
-	ExecutorAddress     *thor.Address    `json:"executorAddress"`
-	MaxBlockProposers   *uint64          `json:"maxBlockProposers"`
-}
-
-// hexOrDecimal256 marshals big.Int as hex or decimal.
-// Copied from go-ethereum/common/math and implement json. Marshaler
-type HexOrDecimal256 math.HexOrDecimal256
-
-// UnmarshalJSON implements the json.Unmarshaler interface.
-func (i *HexOrDecimal256) UnmarshalJSON(input []byte) error {
-	var hex string
-	if err := json.Unmarshal(input, &hex); err != nil {
-		if err = (*big.Int)(i).UnmarshalJSON(input); err != nil {
-			return err
-		}
-		return nil
+func transferToStaker(state *state.State, from thor.Address, amount *big.Int) error {
+	fromBalance, err := state.GetBalance(from)
+	if err != nil {
+		return err
 	}
-	bigint, ok := math.ParseBig256(hex)
-	if !ok {
-		return fmt.Errorf("invalid hex or decimal integer %q", input)
+
+	if fromBalance.Cmp(amount) < 0 {
+		return fmt.Errorf("insufficient balance for %s", from)
 	}
-	*i = HexOrDecimal256(*bigint)
+
+	toBalance, err := state.GetBalance(builtin.Staker.Address)
+	if err != nil {
+		return err
+	}
+
+	newBalance := new(big.Int).Add(toBalance, amount)
+
+	if err := state.SetBalance(from, new(big.Int).Sub(fromBalance, amount)); err != nil {
+		return err
+	}
+
+	if err := state.SetBalance(builtin.Staker.Address, newBalance); err != nil {
+		return err
+	}
+
+	// update the effectiveVET tracking
+	state.SetStorage(builtin.Staker.Address, thor.Bytes32{}, thor.BytesToBytes32(newBalance.Bytes()))
 	return nil
-}
-
-// MarshalJSON implements the json.Marshaler interface.
-func (i *HexOrDecimal256) MarshalJSON() ([]byte, error) {
-	return (*math.HexOrDecimal256)(i).MarshalText()
 }

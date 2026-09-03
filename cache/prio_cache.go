@@ -13,7 +13,7 @@ import (
 // PrioCache a cache holds entries with priority.
 // If len of cache reaches limit, the entry has lowest priority will be evicted.
 type PrioCache struct {
-	m     map[interface{}]*prioEntry
+	m     map[any]*prioEntry
 	s     prioEntries
 	limit int
 	lock  sync.Mutex
@@ -25,7 +25,7 @@ func NewPrioCache(limit int) *PrioCache {
 		panic("invalid limit for PrioCache")
 	}
 	return &PrioCache{
-		m:     make(map[interface{}]*prioEntry),
+		m:     make(map[any]*prioEntry),
 		limit: limit,
 	}
 }
@@ -38,7 +38,7 @@ func (pc *PrioCache) Len() int {
 }
 
 // Set set value and priority for given key.
-func (pc *PrioCache) Set(key, value interface{}, priority float64) {
+func (pc *PrioCache) Set(key, value any, priority float64) {
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
 	if ent, ok := pc.m[key]; ok {
@@ -65,7 +65,7 @@ func (pc *PrioCache) Set(key, value interface{}, priority float64) {
 }
 
 // Get retrieves value for given key.
-func (pc *PrioCache) Get(key interface{}) (interface{}, float64, bool) {
+func (pc *PrioCache) Get(key any) (any, float64, bool) {
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
 	if ent, ok := pc.m[key]; ok {
@@ -75,7 +75,7 @@ func (pc *PrioCache) Get(key interface{}) (interface{}, float64, bool) {
 }
 
 // Contains returns whether the given key is contained.
-func (pc *PrioCache) Contains(key interface{}) bool {
+func (pc *PrioCache) Contains(key any) bool {
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
 	_, ok := pc.m[key]
@@ -83,7 +83,7 @@ func (pc *PrioCache) Contains(key interface{}) bool {
 }
 
 // Remove removes the given key, and returns the removed entry if any.
-func (pc *PrioCache) Remove(key interface{}) *PrioEntry {
+func (pc *PrioCache) Remove(key any) *PrioEntry {
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
 	if ent, ok := pc.m[key]; ok {
@@ -136,13 +136,13 @@ func (h prioEntries) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 }
 
-func (h *prioEntries) Push(value interface{}) {
+func (h *prioEntries) Push(value any) {
 	ent := value.(*prioEntry)
 	ent.index = len(*h)
 	*h = append(*h, ent)
 }
 
-func (h *prioEntries) Pop() interface{} {
+func (h *prioEntries) Pop() any {
 	n := len(*h)
 	ent := (*h)[n-1]
 	ent.index = -1

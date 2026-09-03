@@ -6,11 +6,12 @@
 package comm
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type announcement struct {
@@ -78,13 +79,20 @@ func (c *Communicator) fetchBlockByID(peer *Peer, newBlockID thor.Bytes32) {
 		return
 	}
 
-	var blk block.Block
+	var blk *block.Block
 	if err := rlp.DecodeBytes(result, &blk); err != nil {
-		peer.logger.Debug("failed to decode block got by id", "err", err)
+		peer.logger.Debug("failed to decode block", "err", err)
 		return
 	}
 
+	if blk.Header().ID() != newBlockID {
+		peer.logger.Debug("block ID mismatch", "expected", newBlockID, "got", blk.Header().ID())
+		return
+	}
+
+	metricFetchedBlockCount().Add(1)
+
 	c.newBlockFeed.Send(&NewBlockEvent{
-		Block: &blk,
+		Block: blk,
 	})
 }

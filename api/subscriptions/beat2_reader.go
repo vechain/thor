@@ -9,45 +9,65 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/thor/bloom"
+	"github.com/ethereum/go-ethereum/common/math"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thor/bloom"
 )
 
 type beat2Reader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
+	cache       *messageCache[api.Beat2Message]
 }
 
-func newBeat2Reader(repo *chain.Repository, position thor.Bytes32) *beat2Reader {
+func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[api.Beat2Message]) *beat2Reader {
 	return &beat2Reader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
+		cache:       cache,
 	}
 }
 
-func (br *beat2Reader) Read() ([]interface{}, bool, error) {
+func (br *beat2Reader) Read() ([]any, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []interface{}
-
-	bloomGenerator := &bloom.Generator{}
-
-	bloomAdd := func(key []byte) {
-		key = bytes.TrimLeft(key, "\x00")
-		// exclude non-address key
-		if len(key) <= thor.AddressLength {
-			bloomGenerator.Add(key)
-		}
-	}
+	var msgs []any
 
 	for _, block := range blocks {
+		msg, _, err := br.cache.GetOrAdd(block.Header().ID(), br.generateBeat2Message(block))
+		if err != nil {
+			return nil, false, err
+		}
+		// the obsolete flag belongs to the emission, not to the block id: a reorg re-emits
+		// an already cached block to signal the rollback. Set it on the copy returned by
+		// the cache, so the cached entry stays a pure function of the block id.
+		msg.Obsolete = block.Obsolete
+		msgs = append(msgs, msg)
+	}
+	return msgs, len(blocks) > 0, nil
+}
+
+func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (api.Beat2Message, error) {
+	return func() (api.Beat2Message, error) {
+		bloomGenerator := &bloom.Generator{}
+
+		bloomAdd := func(key []byte) {
+			key = bytes.TrimLeft(key, "\x00")
+			// exclude non-address key
+			if len(key) <= thor.AddressLength {
+				bloomGenerator.Add(key)
+			}
+		}
+
 		header := block.Header()
 		receipts, err := br.repo.GetBlockReceipts(header.ID())
 		if err != nil {
-			return nil, false, err
+			return api.Beat2Message{}, err
 		}
 		txs := block.Transactions()
 		for i, receipt := range receipts {
@@ -74,17 +94,18 @@ func (br *beat2Reader) Read() ([]interface{}, bool, error) {
 		const bitsPerKey = 20
 		filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
 
-		msgs = append(msgs, &Beat2Message{
-			Number:      header.Number(),
-			ID:          header.ID(),
-			ParentID:    header.ParentID(),
-			Timestamp:   header.Timestamp(),
-			TxsFeatures: uint32(header.TxsFeatures()),
-			GasLimit:    header.GasLimit(),
-			Bloom:       hexutil.Encode(filter.Bits),
-			K:           filter.K,
-			Obsolete:    block.Obsolete,
-		})
+		beat2 := api.Beat2Message{
+			Number:        header.Number(),
+			ID:            header.ID(),
+			ParentID:      header.ParentID(),
+			Timestamp:     header.Timestamp(),
+			TxsFeatures:   uint32(header.TxsFeatures()),
+			BaseFeePerGas: (*math.HexOrDecimal256)(header.BaseFee()),
+			GasLimit:      header.GasLimit(),
+			Bloom:         hexutil.Encode(filter.Bits),
+			K:             filter.K,
+		}
+
+		return beat2, nil
 	}
-	return msgs, len(blocks) > 0, nil
 }

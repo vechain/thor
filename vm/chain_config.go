@@ -23,11 +23,23 @@ func isForked(s, head *big.Int) bool {
 type ChainConfig struct {
 	params.ChainConfig
 	IstanbulBlock *big.Int `json:"istanbulBlock,omitempty"` // Istanbul switch block (nil = no fork, 0 = already on istanbul)
+	ShanghaiBlock *big.Int `json:"shanghaiBlock,omitempty"` // Shanghai switch block (nil = no fork, 0 = already on shanghai)
+	OsakaBlock    *big.Int `json:"osakaBlock,omitempty"`    // Osaka switch block (nil = no fork, 0 = already on osaka)
 }
 
 // IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
 func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
 	return isForked(c.IstanbulBlock, num)
+}
+
+// IsShanghai returns whether num is either equal to the Shanghai fork block or greater.
+func (c *ChainConfig) IsShanghai(num *big.Int) bool {
+	return isForked(c.ShanghaiBlock, num)
+}
+
+// IsOsaka returns whether num is either equal to the Osaka fork block or greater.
+func (c *ChainConfig) IsOsaka(num *big.Int) bool {
+	return isForked(c.OsakaBlock, num)
 }
 
 // Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
@@ -40,6 +52,8 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
 	IsByzantium                               bool
 	IsIstanbul                                bool
+	IsShanghai                                bool
+	IsOsaka                                   bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -48,5 +62,15 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 	if chainID == nil {
 		chainID = new(big.Int)
 	}
-	return Rules{ChainID: new(big.Int).Set(chainID), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num), IsIstanbul: c.IsIstanbul((num))}
+	return Rules{
+		ChainID:     new(big.Int).Set(chainID),
+		IsHomestead: c.IsHomestead(num),
+		IsEIP150:    c.IsEIP150(num),
+		IsEIP155:    c.IsEIP155(num),
+		IsEIP158:    c.IsEIP158(num),
+		IsByzantium: c.IsByzantium(num),
+		IsIstanbul:  c.IsIstanbul(num),
+		IsShanghai:  c.IsShanghai(num),
+		IsOsaka:     c.IsOsaka(num),
+	}
 }

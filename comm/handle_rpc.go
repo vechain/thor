@@ -7,24 +7,29 @@ package comm
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/vechain/thor/v2/txpool"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/metric"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/p2p"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
-// peer will be disconnected if error returned
-func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{}), txsToSync *txsToSync) (err error) {
+var maxTxSize = uint32(txpool.MaxTxSize + 1024)
 
+// peer will be disconnected if error returned
+func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsToSync *txsToSync) (err error) {
 	log := peer.logger.New("msg", proto.MsgName(msg.Code))
-	log.Debug("received RPC call")
+	log.Trace("received RPC call")
 	defer func() {
+		metricHandleRPCCounter().AddWithLabel(1, map[string]string{"method": proto.MsgName(msg.Code), "error": strconv.FormatBool(err != nil)})
 		if err != nil {
 			log.Debug("failed to handle RPC call", "err", err)
 		}
@@ -65,12 +70,15 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		}
 		write(&struct{}{})
 	case proto.MsgNewTx:
-		var newTx *tx.Transaction
+		if msg.Size > maxTxSize {
+			return errors.New("payload size: exceeds limit")
+		}
+		var newTx tx.Transaction
 		if err := msg.Decode(&newTx); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkTransaction(newTx.Hash())
-		_ = c.txPool.Add(newTx)
+		_ = c.txPool.Add(&newTx)
 		write(&struct{}{})
 	case proto.MsgGetBlockByID:
 		var blockID thor.Bytes32
@@ -109,12 +117,11 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 
-		const maxBlocks = 1024
 		const maxSize = 512 * 1024
-		result := make([]rlp.RawValue, 0, maxBlocks)
-		var size metric.StorageSize
+		result := make([]rlp.RawValue, 0, proto.MaxBlocksFromNumber)
+		var size thor.StorageSize
 		chain := c.repo.NewBestChain()
-		for size < maxSize && len(result) < maxBlocks {
+		for size < maxSize && len(result) < proto.MaxBlocksFromNumber {
 			b, err := chain.GetBlock(num)
 			if err != nil {
 				if !c.repo.IsNotFound(err) {
@@ -125,7 +132,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			raw, _ := rlp.EncodeToBytes(b)
 			result = append(result, rlp.RawValue(raw))
 			num++
-			size += metric.StorageSize(len(raw))
+			size += thor.StorageSize(len(raw))
 		}
 		write(result)
 	case proto.MsgGetTxs:
@@ -143,7 +150,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 
 			var (
 				toSend tx.Transactions
-				size   metric.StorageSize
+				size   thor.StorageSize
 				n      int
 			)
 

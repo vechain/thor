@@ -11,11 +11,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -38,13 +40,40 @@ func TestAccount(t *testing.T) {
 	assert.True(t, acc.IsEmpty())
 }
 
+func TestCalculateEnergy(t *testing.T) {
+	assert.True(t, emptyAccount().IsEmpty())
+
+	acc := emptyAccount()
+	acc.Energy = big.NewInt(1)
+	energy := acc.CalcEnergy(1, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+
+	acc.BlockTime = 1
+	energy = acc.CalcEnergy(1, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+
+	acc.Balance = big.NewInt(100000000000000000)
+	energy = acc.CalcEnergy(1, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+
+	energy = acc.CalcEnergy(10, 10)
+	assert.Equal(t, big.NewInt(4500000001), energy)
+
+	energy = acc.CalcEnergy(20, 10)
+	assert.Equal(t, big.NewInt(4500000001), energy)
+
+	acc.BlockTime = 10
+	energy = acc.CalcEnergy(20, 10)
+	assert.Equal(t, big.NewInt(1), energy)
+}
+
 func TestTrie(t *testing.T) {
 	db := muxdb.NewMem()
-	trie := db.NewTrie("", thor.Bytes32{}, 0, 0)
+	tr := db.NewTrie("", trie.Root{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
-		M(loadAccount(trie, addr, 0)),
+		M(loadAccount(tr, addr)),
 		M(emptyAccount(), &AccountMetadata{}, nil),
 		"should load an empty account")
 
@@ -57,40 +86,40 @@ func TestTrie(t *testing.T) {
 		[]byte("storage root"),
 	}
 	meta1 := AccountMetadata{
-		StorageID:          []byte("sid"),
-		StorageCommitNum:   1,
-		StorageDistinctNum: 2,
+		StorageID:       []byte("sid"),
+		StorageMajorVer: 1,
+		StorageMinorVer: 2,
 	}
-	saveAccount(trie, addr, &acc1, &meta1)
+	saveAccount(tr, addr, &acc1, &meta1)
 	assert.Equal(t,
-		M(loadAccount(trie, addr, 0)),
+		M(loadAccount(tr, addr)),
 		M(&acc1, &meta1, nil))
 
-	saveAccount(trie, addr, emptyAccount(), &meta1)
+	saveAccount(tr, addr, emptyAccount(), &meta1)
 	assert.Equal(t,
-		M(trie.Get(addr[:])),
+		M(tr.Get(addr[:])),
 		M([]byte(nil), []byte(nil), nil),
 		"empty account should be deleted")
 }
 
 func TestStorageTrie(t *testing.T) {
 	db := muxdb.NewMem()
-	trie := db.NewTrie("", thor.Bytes32{}, 0, 0)
+	tr := db.NewTrie("", trie.Root{})
 
 	key := thor.BytesToBytes32([]byte("key"))
 	assert.Equal(t,
-		M(loadStorage(trie, key, 0)),
+		M(loadStorage(tr, key)),
 		M(rlp.RawValue(nil), nil))
 
 	value := rlp.RawValue("value")
-	saveStorage(trie, key, value)
+	saveStorage(tr, key, value)
 	assert.Equal(t,
-		M(loadStorage(trie, key, 0)),
+		M(loadStorage(tr, key)),
 		M(value, nil))
 
-	saveStorage(trie, key, nil)
+	saveStorage(tr, key, nil)
 	assert.Equal(t,
-		M(trie.Get(key[:])),
+		M(tr.Get(key[:])),
 		M([]byte(nil), []byte(nil), nil),
 		"empty storage value should be deleted")
 }

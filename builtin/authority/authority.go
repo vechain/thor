@@ -6,11 +6,10 @@
 package authority
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
 )
 
 var (
@@ -199,8 +198,10 @@ func (a *Authority) Update(nodeMaster thor.Address, active bool) (bool, error) {
 	return true, nil
 }
 
+type BalanceChecker func(master, endorser thor.Address) (bool, error)
+
 // Candidates picks a batch of candidates up to limit, that satisfy given endorsement.
-func (a *Authority) Candidates(endorsement *big.Int, limit uint64) ([]*Candidate, error) {
+func (a *Authority) Candidates(checker BalanceChecker, limit uint64) ([]*Candidate, error) {
 	ptr, err := a.getAddressPtr(headKey)
 	if err != nil {
 		return nil, err
@@ -211,11 +212,11 @@ func (a *Authority) Candidates(endorsement *big.Int, limit uint64) ([]*Candidate
 		if err != nil {
 			return nil, err
 		}
-		bal, err := a.state.GetBalance(entry.Endorsor)
+		ok, err := checker(*ptr, entry.Endorsor)
 		if err != nil {
 			return nil, err
 		}
-		if bal.Cmp(endorsement) >= 0 {
+		if ok {
 			candidates = append(candidates, &Candidate{
 				NodeMaster: *ptr,
 				Endorsor:   entry.Endorsor,

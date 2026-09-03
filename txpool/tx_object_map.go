@@ -7,25 +7,28 @@ package txpool
 
 import (
 	"errors"
+	"math/big"
 	"sync"
 
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
-// txObjectMap to maintain mapping of tx hash to tx object, and account quota.
+// txObjectMap to maintain mapping of tx hash to tx object, account quota and pending cost.
 type txObjectMap struct {
 	lock      sync.RWMutex
-	mapByHash map[thor.Bytes32]*txObject
-	mapByID   map[thor.Bytes32]*txObject
+	mapByHash map[thor.Bytes32]*TxObject
+	mapByID   map[thor.Bytes32]*TxObject
 	quota     map[thor.Address]int
+	cost      map[thor.Address]*big.Int
 }
 
 func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
-		mapByHash: make(map[thor.Bytes32]*txObject),
-		mapByID:   make(map[thor.Bytes32]*txObject),
+		mapByHash: make(map[thor.Bytes32]*TxObject),
+		mapByID:   make(map[thor.Bytes32]*TxObject),
 		quota:     make(map[thor.Address]int),
+		cost:      make(map[thor.Address]*big.Int),
 	}
 }
 
@@ -36,7 +39,10 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
+func (m *txObjectMap) Add(
+	txObj *TxObject, executable bool, pricing *txPricing,
+	limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error,
+) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -46,25 +52,54 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
 	}
 
 	if m.quota[txObj.Origin()] >= limitPerAccount {
+		metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "account"})
 		return errors.New("account quota exceeded")
 	}
-
-	if d := txObj.Delegator(); d != nil {
-		if m.quota[*d] >= limitPerAccount {
+	delegator := txObj.Delegator()
+	if delegator != nil {
+		if m.quota[*delegator] >= limitPerAccount {
+			metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "delegator"})
 			return errors.New("delegator quota exceeded")
 		}
-		m.quota[*d]++
+	}
+
+	if pricing != nil {
+		txObj.setPricing(pricing)
+	}
+	txObj.executable = executable // executable written under the lock
+
+	var (
+		cost  *big.Int
+		payer thor.Address
+	)
+	if executable && txObj.Cost() != nil {
+		payer = *txObj.Payer()
+		pending := m.cost[payer]
+		if pending == nil {
+			cost = new(big.Int).Set(txObj.Cost())
+		} else {
+			cost = new(big.Int).Add(pending, txObj.Cost())
+		}
+		if err := validatePayer(payer, cost); err != nil {
+			return err
+		}
 	}
 
 	m.quota[txObj.Origin()]++
+	if delegator != nil {
+		m.quota[*delegator]++
+	}
+	if cost != nil {
+		m.cost[payer] = cost
+	}
 	m.mapByHash[hash] = txObj
 	m.mapByID[txObj.ID()] = txObj
 	return nil
 }
 
-func (m *txObjectMap) GetByID(id thor.Bytes32) *txObject {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func (m *txObjectMap) GetByID(id thor.Bytes32) *TxObject {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	return m.mapByID[id]
 }
 
@@ -79,11 +114,27 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 			delete(m.quota, txObj.Origin())
 		}
 
-		if d := txObj.Delegator(); d != nil {
-			if m.quota[*d] > 1 {
-				m.quota[*d]--
+		if delegator := txObj.Delegator(); delegator != nil {
+			if m.quota[*delegator] > 1 {
+				m.quota[*delegator]--
 			} else {
-				delete(m.quota, *d)
+				delete(m.quota, *delegator)
+			}
+		}
+
+		// only txs actually accounted (executable, with a committed cost) contribute;
+		// gating on executable (written under this lock) pairs add/sub exactly and never
+		// reads a cost that was not counted.
+		if txObj.executable {
+			if cost := txObj.Cost(); cost != nil {
+				payer := *txObj.Payer()
+				if pending := m.cost[payer]; pending != nil {
+					if pending.Cmp(cost) <= 0 {
+						delete(m.cost, payer)
+					} else {
+						m.cost[payer] = new(big.Int).Sub(pending, cost)
+					}
+				}
 			}
 		}
 
@@ -94,11 +145,45 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	return false
 }
 
-func (m *txObjectMap) ToTxObjects() []*txObject {
+func (m *txObjectMap) PendingCostOf(payer thor.Address) *big.Int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	if cost := m.cost[payer]; cost != nil {
+		return new(big.Int).Set(cost)
+	}
+	return new(big.Int)
+}
+
+// promote marks a pooled tx executable and adds its cost to the payer's pending total,
+// but only if the tx is still present (promote-if-present). Returns false if the tx was
+// already removed. Idempotent for an already-executable tx. Requires the pricing to have
+// been published (via setPricing) beforehand.
+func (m *txObjectMap) promote(txObj *TxObject) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if _, ok := m.mapByHash[txObj.Hash()]; !ok {
+		return false
+	}
+	if txObj.executable {
+		return true
+	}
+	txObj.executable = true
+	if cost := txObj.Cost(); cost != nil {
+		payer := *txObj.Payer()
+		if pending := m.cost[payer]; pending != nil {
+			m.cost[payer] = new(big.Int).Add(pending, cost)
+		} else {
+			m.cost[payer] = new(big.Int).Set(cost)
+		}
+	}
+	return true
+}
+
+func (m *txObjectMap) ToTxObjects() []*TxObject {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	txObjs := make([]*txObject, 0, len(m.mapByHash))
+	txObjs := make([]*TxObject, 0, len(m.mapByHash))
 	for _, txObj := range m.mapByHash {
 		txObjs = append(txObjs, txObj)
 	}
@@ -116,21 +201,26 @@ func (m *txObjectMap) ToTxs() tx.Transactions {
 	return txs
 }
 
-func (m *txObjectMap) Fill(txObjs []*txObject) {
+func (m *txObjectMap) Fill(txObjs []*TxObject) []*TxObject {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	inserted := make([]*TxObject, 0, len(txObjs))
 	for _, txObj := range txObjs {
 		if _, found := m.mapByHash[txObj.Hash()]; found {
 			continue
 		}
 		// skip account limit check
 		m.quota[txObj.Origin()]++
-		if d := txObj.Delegator(); d != nil {
-			m.quota[*d]++
+		if delegator := txObj.Delegator(); delegator != nil {
+			m.quota[*delegator]++
 		}
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj
+		inserted = append(inserted, txObj)
+		// skip cost check and accumulation
 	}
+	return inserted
 }
 
 func (m *txObjectMap) Len() int {

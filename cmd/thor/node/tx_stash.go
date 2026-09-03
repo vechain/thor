@@ -9,11 +9,11 @@ import (
 	"bytes"
 	"container/list"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // to stash non-executable txs.
@@ -37,7 +37,7 @@ func (ts *txStash) Save(tx *tx.Transaction) error {
 		return nil
 	}
 
-	data, err := rlp.EncodeToBytes(tx)
+	data, err := tx.MarshalBinary()
 	if err != nil {
 		return err
 	}
@@ -66,8 +66,8 @@ func (ts *txStash) LoadAll() tx.Transactions {
 
 	for it.Next() {
 		var tx tx.Transaction
-		if err := rlp.DecodeBytes(it.Value(), &tx); err != nil {
-			log.Warn("decode stashed tx", "err", err)
+		if err := tx.UnmarshalBinary(it.Value()); err != nil {
+			logger.Warn("decode stashed tx", "err", err)
 			batch.Delete(it.Key())
 		} else {
 			txs = append(txs, &tx)
@@ -83,7 +83,7 @@ func (ts *txStash) LoadAll() tx.Transactions {
 	}
 
 	if err := ts.db.Write(&batch, nil); err != nil {
-		log.Warn("remap stashed txs", "err", err)
+		logger.Warn("remap stashed txs", "err", err)
 	}
 	return txs
 }

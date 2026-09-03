@@ -3,25 +3,24 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package stackedmap_test
+package stackedmap
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/stackedmap"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
-func TestStackedMap(t *testing.T) {
 
+func TestStackedMap(t *testing.T) {
 	assert := assert.New(t)
 	src := make(map[string]string)
 	src["foo"] = "bar"
 
-	sm := stackedmap.New(func(key interface{}) (interface{}, bool, error) {
+	sm := New(func(key any) (any, bool, error) {
 		v, r := src[key.(string)]
 		return v, r, nil
 	})
@@ -32,14 +31,14 @@ func TestStackedMap(t *testing.T) {
 		putKey    string
 		putValue  string
 		getKey    string
-		getReturn []interface{}
+		getReturn []any
 	}{
-		{func() {}, 1, "", "", "foo", []interface{}{"bar", true, nil}},
-		{func() { sm.Push() }, 2, "foo", "baz", "foo", []interface{}{"baz", true, nil}},
-		{func() {}, 2, "foo", "baz1", "foo", []interface{}{"baz1", true, nil}},
-		{func() { sm.Push() }, 3, "foo", "qux", "foo", []interface{}{"qux", true, nil}},
-		{func() { sm.Pop() }, 2, "", "", "foo", []interface{}{"baz1", true, nil}},
-		{func() { sm.Pop() }, 1, "", "", "foo", []interface{}{"bar", true, nil}},
+		{func() {}, 1, "", "", "foo", []any{"bar", true, nil}},
+		{func() { sm.Push() }, 2, "foo", "baz", "foo", []any{"baz", true, nil}},
+		{func() {}, 2, "foo", "baz1", "foo", []any{"baz1", true, nil}},
+		{func() { sm.Push() }, 3, "foo", "qux", "foo", []any{"qux", true, nil}},
+		{func() { sm.Pop() }, 2, "", "", "foo", []any{"baz1", true, nil}},
+		{func() { sm.Pop() }, 1, "", "", "foo", []any{"bar", true, nil}},
 
 		{func() { sm.Push(); sm.Push() }, 3, "", "", "", nil},
 		{func() { sm.PopTo(0) }, 0, "", "", "", nil},
@@ -59,7 +58,7 @@ func TestStackedMap(t *testing.T) {
 
 func TestStackedMapPuts(t *testing.T) {
 	assert := assert.New(t)
-	sm := stackedmap.New(func(key interface{}) (interface{}, bool, error) {
+	sm := New(func(_ any) (any, bool, error) {
 		return nil, false, nil
 	})
 
@@ -79,7 +78,7 @@ func TestStackedMapPuts(t *testing.T) {
 		sm.Put(kv.k, kv.v)
 	}
 	i := 0
-	sm.Journal(func(k, v interface{}) bool {
+	sm.Journal(func(k, v any) bool {
 		assert.Equal(k, kvs[i].k)
 		assert.Equal(v, kvs[i].v)
 		i++
@@ -88,7 +87,7 @@ func TestStackedMapPuts(t *testing.T) {
 	assert.Equal(len(kvs), i, "Journal traverse should abort")
 
 	i = 0
-	sm.Journal(func(k, v interface{}) bool {
+	sm.Journal(func(_, _ any) bool {
 		i++
 		return false
 	})

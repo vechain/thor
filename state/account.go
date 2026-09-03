@@ -10,15 +10,16 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/thor"
 )
 
 // AccountMetadata is the account metadata.
 type AccountMetadata struct {
-	StorageID          []byte // the unique id of the storage trie.
-	StorageCommitNum   uint32 // the commit number of the last storage update.
-	StorageDistinctNum uint32 // the distinct number of the last storage update.
+	StorageID       []byte // the unique id of the storage trie.
+	StorageMajorVer uint32 // the major version of the last storage update.
+	StorageMinorVer uint32 // the minor version of the last storage update.
 }
 
 // Account is the Thor consensus representation of an account.
@@ -44,7 +45,7 @@ func (a *Account) IsEmpty() bool {
 var bigE18 = big.NewInt(1e18)
 
 // CalcEnergy calculates energy based on current block time.
-func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
+func (a *Account) CalcEnergy(blockTime uint64, stopTime uint64) *big.Int {
 	if a.BlockTime == 0 {
 		return a.Energy
 	}
@@ -57,11 +58,26 @@ func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
 		return a.Energy
 	}
 
-	x := new(big.Int).SetUint64(blockTime - a.BlockTime)
-	x.Mul(x, a.Balance)
-	x.Mul(x, thor.EnergyGrowthRate)
-	x.Div(x, bigE18)
-	return new(big.Int).Add(a.Energy, x)
+	growth := new(big.Int)
+	// If accounts last access block time is less than stop time, calculate energy growth.
+	if a.BlockTime < stopTime {
+		timeDiff := uint64(0)
+		// if current block time is less than growth stop time, time diff is block time - account last access block time.
+		// the same as before growth stop.
+		if blockTime <= stopTime {
+			timeDiff = blockTime - a.BlockTime
+		} else {
+			// if current block time is greater than growth stop time, we are taking the time diff only up to growth stop time.
+			timeDiff = stopTime - a.BlockTime
+		}
+		// the rest of calculation is same as before growth stops.
+		growth.SetUint64(timeDiff)
+		growth.Mul(growth, a.Balance)
+		growth.Mul(growth, thor.EnergyGrowthRate)
+		growth.Div(growth, bigE18)
+	}
+
+	return new(big.Int).Add(a.Energy, growth)
 }
 
 func emptyAccount() *Account {
@@ -69,11 +85,12 @@ func emptyAccount() *Account {
 	return &a
 }
 
+func secureKey(k []byte) []byte { return thor.Blake2b(k).Bytes() }
+
 // loadAccount load an account object and its metadata by address in trie.
 // It returns empty account is no account found at the address.
-func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*Account, *AccountMetadata, error) {
-	hashedKey := thor.Blake2b(addr[:])
-	data, meta, err := trie.FastGet(hashedKey[:], steadyBlockNum)
+func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, *AccountMetadata, error) {
+	data, meta, err := trie.Get(secureKey(addr[:]))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -98,9 +115,8 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*A
 // If the given account is empty, the value for given address is deleted.
 func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account, am *AccountMetadata) error {
 	if a.IsEmpty() {
-		hashedKey := thor.Blake2b(addr[:])
 		// delete if account is empty
-		return trie.Update(hashedKey[:], nil, nil)
+		return trie.Update(secureKey(addr[:]), nil, nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
@@ -114,25 +130,20 @@ func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account, am *AccountMet
 			return err
 		}
 	}
-	hashedKey := thor.Blake2b(addr[:])
-	return trie.Update(hashedKey[:], data, mdata)
+	return trie.Update(secureKey(addr[:]), data, mdata)
 }
 
 // loadStorage load storage data for given key.
-func loadStorage(trie *muxdb.Trie, key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
-	hashedKey := thor.Blake2b(key[:])
-	v, _, err := trie.FastGet(
-		hashedKey[:],
-		steadyBlockNum)
+func loadStorage(trie *muxdb.Trie, key thor.Bytes32) (rlp.RawValue, error) {
+	v, _, err := trie.Get(secureKey(key[:]))
 	return v, err
 }
 
 // saveStorage save value for given key.
 // If the data is zero, the given key will be deleted.
 func saveStorage(trie *muxdb.Trie, key thor.Bytes32, data rlp.RawValue) error {
-	hashedKey := thor.Blake2b(key[:])
 	return trie.Update(
-		hashedKey[:],
+		secureKey(key[:]),
 		data,
 		bytes.TrimLeft(key[:], "\x00"), // key preimage as metadata
 	)

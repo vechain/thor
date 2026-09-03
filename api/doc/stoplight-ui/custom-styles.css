@@ -1,0 +1,80 @@
+/* Custom styles for human-readable response formatting */
+
+.formatted-response {
+    margin-top: 16px;
+    padding: 12px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+}
+
+.formatted-response .formatted-label {
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #212529;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.formatted-response pre {
+    margin: 0;
+    padding: 12px;
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #212529;
+}
+
+.formatted-response pre code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+}
+
+/* Highlight readable fields */
+.formatted-response pre .json-key {
+    color: #881391;
+}
+
+.formatted-response pre .json-string {
+    color: #0b6125;
+}
+
+.formatted-response pre .json-number {
+    color: #1c00cf;
+}
+
+/* Tooltip for additional info */
+.formatted-tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    margin-left: 4px;
+}
+
+.formatted-tooltip .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 4px;
+    padding: 6px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.formatted-tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+

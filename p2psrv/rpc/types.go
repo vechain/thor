@@ -5,15 +5,16 @@
 
 package rpc
 
-import "github.com/ethereum/go-ethereum/p2p"
+import "github.com/vechain/thor/v2/p2p"
 
 type msgData struct {
 	ID       uint32
 	IsResult bool
-	Payload  interface{}
+	Payload  any
 }
 
 type resultListener struct {
-	msgCode  uint64
-	onResult func(*p2p.Msg) error
+	msgCode       uint64
+	maxResultSize uint32
+	onResult      func(*p2p.Msg) error
 }

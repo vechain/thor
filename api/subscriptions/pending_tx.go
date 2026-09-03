@@ -9,18 +9,19 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/simplelru"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
+
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 type pendingTx struct {
-	txPool    *txpool.TxPool
+	txPool    txpool.Pool
 	listeners map[chan *tx.Transaction]struct{}
 	mu        sync.Mutex
 }
 
-func newPendingTx(txPool *txpool.TxPool) *pendingTx {
+func newPendingTx(txPool txpool.Pool) *pendingTx {
 	p := &pendingTx{
 		txPool:    txPool,
 		listeners: make(map[chan *tx.Transaction]struct{}),
@@ -58,7 +59,7 @@ func (p *pendingTx) DispatchLoop(done <-chan struct{}) {
 			}
 			now := time.Now().Unix()
 			// ignored if seen within half block interval
-			if seen, ok := knownTx.Get(txEv.Tx.ID()); ok && now-seen.(int64) <= int64(thor.BlockInterval/2) {
+			if seen, ok := knownTx.Get(txEv.Tx.ID()); ok && now-seen.(int64) <= int64(thor.BlockInterval()/2) {
 				continue
 			}
 			knownTx.Add(txEv.Tx.ID(), now)

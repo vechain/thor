@@ -7,16 +7,25 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vrf"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vrf"
 )
+
+// blockSizeBufferZone is a safety buffer subtracted from MaxRLPBlockSize during block production
+// to avoid going over the maximum with auxiliary data (header finalization, RLP overhead, etc.).
+// 2K is accounting for the theoretical maximum size of block header RLP size which is 415 bytes.
+const blockSizeBufferZone uint64 = 2_000
 
 // Flow the flow of packing a new block.
 type Flow struct {
@@ -25,9 +34,11 @@ type Flow struct {
 	runtime      *runtime.Runtime
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
 	gasUsed      uint64
+	blockSize    uint64 // accumulated block size by adopting txs
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
+	posActive    bool
 }
 
 func newFlow(
@@ -35,6 +46,7 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
+	posActive bool,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
@@ -42,6 +54,7 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		posActive:    posActive,
 	}
 }
 
@@ -86,27 +99,72 @@ func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
 	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
+func (f *Flow) txFitsBlockSize(t *tx.Transaction) bool {
+	return f.blockSize+uint64(t.Size()) < thor.MaxRLPBlockSize-blockSizeBufferZone
+}
+
+// only works after galactica fork
+func (f *Flow) validateTxFee(t *tx.Transaction) error {
+	legacyTxBaseGasPrice, err := builtin.Params.Native(f.runtime.State()).Get(thor.KeyLegacyTxBaseGasPrice)
+	if err != nil {
+		return err
+	}
+
+	provedWork, err := t.ProvedWork(f.Number(), f.runtime.Chain().GetBlockID)
+	if err != nil {
+		return err
+	}
+
+	// this is only for a finer granularity check as
+	// 1. txpool will check the effective gas price and only returns executable txs
+	// 2. runtime will have the final check
+	effectiveGasPrice := t.EffectiveGasPrice(f.runtime.Context().BaseFee, legacyTxBaseGasPrice)
+	if effectiveGasPrice.Cmp(f.runtime.Context().BaseFee) < 0 {
+		return fmt.Errorf("%w: gas price is less than block base fee", errTxNotAdoptableNow)
+	}
+
+	// Skip priority fee check if the minimum priority fee is not set
+	if f.packer.minTxPriorityFee.Sign() <= 0 {
+		return nil
+	}
+
+	effectivePriorityFee := t.EffectivePriorityFeePerGas(f.runtime.Context().BaseFee, legacyTxBaseGasPrice, provedWork)
+	if effectivePriorityFee.Cmp(f.packer.minTxPriorityFee) < 0 {
+		return badTxError{"effective priority fee too low"}
+	}
+
+	return nil
+}
+
 // Adopt try to execute the given transaction.
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
-func (f *Flow) Adopt(tx *tx.Transaction) error {
-	origin, _ := tx.Origin()
-	if f.Number() >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
+func (f *Flow) Adopt(t *tx.Transaction) error {
+	origin, _ := t.Origin()
+	if thor.IsForked(f.Number(), f.packer.forkConfig.BLOCKLIST) && thor.IsOriginBlocked(origin) {
 		return badTxError{"tx origin blocked"}
 	}
 
-	if err := tx.TestFeatures(f.features); err != nil {
+	delegator, err := t.Delegator()
+	if err != nil {
+		return badTxError{"delegator cannot be extracted"}
+	}
+	if thor.IsForked(f.Number(), f.packer.forkConfig.BLOCKLIST) && delegator != nil && thor.IsOriginBlocked(*delegator) {
+		return badTxError{"tx delegator blocked"}
+	}
+
+	if err := t.TestFeatures(f.features); err != nil {
 		return badTxError{err.Error()}
 	}
 
 	switch {
-	case tx.ChainTag() != f.packer.repo.ChainTag():
+	case t.ChainTag() != f.packer.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
-	case f.Number() < tx.BlockRef().Number():
+	case f.Number() < t.BlockRef().Number():
 		return errTxNotAdoptableNow
-	case tx.IsExpired(f.Number()):
+	case t.IsExpired(f.Number()):
 		return badTxError{"expired"}
-	case f.gasUsed+tx.Gas() > f.runtime.Context().GasLimit:
+	case f.gasUsed+t.Gas() > f.runtime.Context().GasLimit:
 		// has enough space to adopt minimum tx
 		if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
 			// try to find a lower gas tx
@@ -115,14 +173,28 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		return errGasLimitReached
 	}
 
+	if thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) && !f.txFitsBlockSize(t) {
+		return errBlockSizeLimitReached
+	}
+
+	if !thor.IsForked(f.Number(), f.packer.forkConfig.GALACTICA) {
+		if t.Type() != tx.TypeLegacy {
+			return badTxError{"invalid tx type"}
+		}
+	} else {
+		if err := f.validateTxFee(t); err != nil {
+			return err
+		}
+	}
+
 	// check if tx already there
-	if found, err := f.hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
+	if found, err := f.hasTx(t.ID(), t.BlockRef().Number()); err != nil {
 		return err
 	} else if found {
 		return errKnownTx
 	}
 
-	if dependsOn := tx.DependsOn(); dependsOn != nil {
+	if dependsOn := t.DependsOn(); dependsOn != nil {
 		// check if deps exists
 		found, reverted, err := f.findDep(*dependsOn)
 		if err != nil {
@@ -137,16 +209,17 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	}
 
 	checkpoint := f.runtime.State().NewCheckpoint()
-	receipt, err := f.runtime.ExecuteTransaction(tx)
+	receipt, err := f.runtime.ExecuteTransaction(t)
 	if err != nil {
 		// skip and revert state
 		f.runtime.State().RevertTo(checkpoint)
 		return badTxError{err.Error()}
 	}
-	f.processedTxs[tx.ID()] = receipt.Reverted
+	f.processedTxs[t.ID()] = receipt.Reverted
 	f.gasUsed += receipt.GasUsed
+	f.blockSize += uint64(t.Size())
 	f.receipts = append(f.receipts, receipt)
-	f.txs = append(f.txs, tx)
+	f.txs = append(f.txs, t)
 	return nil
 }
 
@@ -156,7 +229,16 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	stage, err := f.runtime.State().Stage(f.Number(), newBlockConflicts)
+	if f.posActive {
+		signer := crypto.PubkeyToAddress(privateKey.PublicKey)
+		staker := builtin.Staker.Native(f.runtime.State())
+		energy := builtin.Energy.Native(f.runtime.State(), f.runtime.Context().Time)
+		if err := energy.DistributeRewards(f.runtime.Context().Beneficiary, thor.Address(signer), staker, f.Number()); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	stage, err := f.runtime.State().Stage(trie.Version{Major: f.Number(), Minor: newBlockConflicts})
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -171,17 +253,18 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
-		TransactionFeatures(f.features)
+		TransactionFeatures(f.features).
+		BaseFee(f.runtime.Context().BaseFee)
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
 	}
 
-	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {
+	if thor.IsForked(f.Number(), f.packer.forkConfig.FINALITY) && shouldVote {
 		builder.COM()
 	}
 
-	if f.Number() < f.packer.forkConfig.VIP214 {
+	if !thor.IsForked(f.Number(), f.packer.forkConfig.VIP214) {
 		newBlock := builder.Build()
 
 		sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)

@@ -7,15 +7,18 @@ package genesis
 
 import (
 	"math"
+	"math/big"
 
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/xenv"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 // Builder helper to build genesis block.
@@ -23,11 +26,12 @@ type Builder struct {
 	timestamp uint64
 	gasLimit  uint64
 
-	stateProcs []func(state *state.State) error
+	stateProcs func(state *state.State) error
 	calls      []call
 	extraData  [28]byte
 
-	forkConfig thor.ForkConfig
+	forkConfig *thor.ForkConfig
+	postState  func(state *state.State) error
 }
 
 type call struct {
@@ -49,7 +53,7 @@ func (b *Builder) GasLimit(limit uint64) *Builder {
 
 // State add a state process !!!touch accounts's energy is mandatory if you touch its balance
 func (b *Builder) State(proc func(state *state.State) error) *Builder {
-	b.stateProcs = append(b.stateProcs, proc)
+	b.stateProcs = proc
 	return b
 }
 
@@ -65,17 +69,21 @@ func (b *Builder) ExtraData(data [28]byte) *Builder {
 	return b
 }
 
+// PostCallState executes state changes after the contract calls
+func (b *Builder) PostCallState(f func(state *state.State) error) *Builder {
+	b.postState = f
+	return b
+}
+
 // ForkConfig set fork config.
-func (b *Builder) ForkConfig(fc thor.ForkConfig) *Builder {
+func (b *Builder) ForkConfig(fc *thor.ForkConfig) *Builder {
 	b.forkConfig = fc
 	return b
 }
 
 // ComputeID compute genesis ID.
 func (b *Builder) ComputeID() (thor.Bytes32, error) {
-	db := muxdb.NewMem()
-
-	blk, _, _, err := b.Build(state.NewStater(db))
+	blk, _, _, err := b.Build(state.NewStater(muxdb.NewMem()))
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -84,10 +92,10 @@ func (b *Builder) ComputeID() (thor.Bytes32, error) {
 
 // Build build genesis block according to presets.
 func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Events, transfers tx.Transfers, err error) {
-	state := stater.NewState(thor.Bytes32{}, 0, 0, 0)
+	state := stater.NewState(trie.Root{})
 
-	for _, proc := range b.stateProcs {
-		if err := proc(state); err != nil {
+	if b.stateProcs != nil {
+		if err := b.stateProcs(state); err != nil {
 			return nil, nil, nil, errors.Wrap(err, "state process")
 		}
 	}
@@ -106,13 +114,19 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 			return nil, nil, nil, errors.Wrap(err, "call")
 		}
 		if out.VMErr != nil {
-			return nil, nil, nil, errors.Wrap(out.VMErr, "vm")
+			return nil, nil, nil, errors.Wrapf(out.VMErr, "calls to %s failed", call.clause.To())
 		}
 		events = append(events, out.Events...)
 		transfers = append(transfers, out.Transfers...)
 	}
 
-	stage, err := state.Stage(0, 0)
+	if b.postState != nil {
+		if err = b.postState(state); err != nil {
+			return nil, nil, nil, errors.Wrap(err, "post state")
+		}
+	}
+
+	stage, err := state.Stage(trie.Version{})
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "stage")
 	}
@@ -121,14 +135,19 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		return nil, nil, nil, errors.Wrap(err, "commit state")
 	}
 
-	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} //so, genesis number is 0
+	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} // so, genesis number is 0
 	copy(parentID[4:], b.extraData[:])
 
-	return new(block.Builder).
+	blkBuilder := new(block.Builder).
 		ParentID(parentID).
 		Timestamp(b.timestamp).
 		GasLimit(b.gasLimit).
 		StateRoot(stateRoot).
-		ReceiptsRoot(tx.Transactions(nil).RootHash()).
-		Build(), events, transfers, nil
+		ReceiptsRoot(tx.Transactions(nil).RootHash())
+
+	if b.forkConfig.GALACTICA == 0 {
+		blkBuilder.BaseFee(new(big.Int).SetUint64(thor.InitialBaseFee))
+	}
+
+	return blkBuilder.Build(), events, transfers, nil
 }

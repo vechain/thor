@@ -6,17 +6,18 @@
 package subscriptions
 
 import (
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type transferReader struct {
 	repo        *chain.Repository
-	filter      *TransferFilter
+	filter      *api.SubscriptionTransferFilter
 	blockReader chain.BlockReader
 }
 
-func newTransferReader(repo *chain.Repository, position thor.Bytes32, filter *TransferFilter) *transferReader {
+func newTransferReader(repo *chain.Repository, position thor.Bytes32, filter *api.SubscriptionTransferFilter) *transferReader {
 	return &transferReader{
 		repo:        repo,
 		filter:      filter,
@@ -24,12 +25,12 @@ func newTransferReader(repo *chain.Repository, position thor.Bytes32, filter *Tr
 	}
 }
 
-func (tr *transferReader) Read() ([]interface{}, bool, error) {
+func (tr *transferReader) Read() ([]any, bool, error) {
 	blocks, err := tr.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
-	var msgs []interface{}
+	var msgs []any
 	for _, block := range blocks {
 		receipts, err := tr.repo.GetBlockReceipts(block.Header().ID())
 		if err != nil {
@@ -44,7 +45,7 @@ func (tr *transferReader) Read() ([]interface{}, bool, error) {
 						return nil, false, err
 					}
 					if tr.filter.Match(transfer, origin) {
-						msg, err := convertTransfer(block.Header(), txs[i], uint32(j), transfer, block.Obsolete)
+						msg, err := api.ConvertSubscriptionTransfer(block.Header(), txs[i], uint32(j), transfer, block.Obsolete)
 						if err != nil {
 							return nil, false, err
 						}

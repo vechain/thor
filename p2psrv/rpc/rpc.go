@@ -7,20 +7,16 @@ package rpc
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
-)
+	"github.com/vechain/thor/v2/p2p"
 
-func init() {
-	// required when generate call id
-	rand.Seed(time.Now().UnixNano())
-}
+	"github.com/vechain/thor/v2/log"
+)
 
 const (
 	rpcDefaultTimeout = time.Second * 10
@@ -29,11 +25,12 @@ const (
 var (
 	errPeerDisconnected = errors.New("peer disconnected")
 	errMsgTooLarge      = errors.New("msg too large")
-	log                 = log15.New("pkg", "rpc")
+	errResultTooLarge   = errors.New("result too large")
+	logger              = log.WithContext("pkg", "rpc")
 )
 
 // HandleFunc to handle received messages from peer.
-type HandleFunc func(msg *p2p.Msg, write func(interface{})) error
+type HandleFunc func(msg *p2p.Msg, write func(any)) error
 
 // RPC defines the common pattern that peer interacts with each other.
 type RPC struct {
@@ -42,7 +39,7 @@ type RPC struct {
 	doneCh   chan struct{}
 	pendings map[uint32]*resultListener
 	lock     sync.Mutex
-	logger   log15.Logger
+	logger   log.Logger
 }
 
 // New create a new RPC instance.
@@ -51,7 +48,7 @@ func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
 	if peer.Inbound() {
 		dir = "inbound"
 	}
-	ctx := []interface{}{
+	ctx := []any{
 		"peer", peer,
 		"dir", dir,
 	}
@@ -60,7 +57,7 @@ func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
 		rw:       rw,
 		doneCh:   make(chan struct{}),
 		pendings: make(map[uint32]*resultListener),
-		logger:   log.New(ctx...),
+		logger:   logger.New(ctx...),
 	}
 }
 
@@ -111,7 +108,7 @@ func (r *RPC) Serve(handleFunc HandleFunc, maxMsgSize uint32) error {
 				return err
 			}
 		} else {
-			if err := handleFunc(&msg, func(result interface{}) {
+			if err := handleFunc(&msg, func(result any) {
 				if callID != 0 {
 					p2p.Send(r.rw, msg.Code, &msgData{callID, true, result})
 				}
@@ -148,17 +145,22 @@ func (r *RPC) handleResult(callID uint32, msg *p2p.Msg) error {
 		return errors.New("msg code mismatch")
 	}
 
+	if listener.maxResultSize != 0 && msg.Size > listener.maxResultSize {
+		r.logger.Debug("result too large", "msg", msg.Code, "size", msg.Size, "limit", listener.maxResultSize)
+		return errResultTooLarge
+	}
+
 	if err := listener.onResult(msg); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 {
+func (r *RPC) prepareCall(msgCode uint64, maxResultSize uint32, onResult func(*p2p.Msg) error) uint32 {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	for {
-		id := rand.Uint32()
+		id := rand.Uint32() //#nosec G404
 		if id == 0 {
 			// 0 id is taken by Notify
 			continue
@@ -166,12 +168,14 @@ func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 
 		if _, ok := r.pendings[id]; !ok {
 			r.pendings[id] = &resultListener{
 				msgCode,
+				maxResultSize,
 				onResult,
 			}
 			return id
 		}
 	}
 }
+
 func (r *RPC) finalizeCall(id uint32) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -179,17 +183,20 @@ func (r *RPC) finalizeCall(id uint32) {
 }
 
 // Notify notifies a message to the peer.
-func (r *RPC) Notify(ctx context.Context, msgCode uint64, arg interface{}) error {
+func (r *RPC) Notify(_ context.Context, msgCode uint64, arg any) error {
 	return p2p.Send(r.rw, msgCode, &msgData{0, false, arg})
 }
 
 // Call send a call to the peer and wait for result.
-func (r *RPC) Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error {
+// maxResultSize bounds the size of the accepted response message; a larger
+// response is rejected before it is decoded. Zero means no narrowing beyond
+// the connection-wide limit already enforced by Serve.
+func (r *RPC) Call(ctx context.Context, msgCode uint64, arg any, result any, maxResultSize uint32) error {
 	ctx, cancel := context.WithTimeout(ctx, rpcDefaultTimeout)
 	defer cancel()
 
 	errCh := make(chan error, 1)
-	id := r.prepareCall(msgCode, func(msg *p2p.Msg) error {
+	id := r.prepareCall(msgCode, maxResultSize, func(msg *p2p.Msg) error {
 		// msg should decode here, or its payload will be discarded by msg loop
 		err := msg.Decode(result)
 		if err != nil {

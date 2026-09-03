@@ -6,8 +6,11 @@
 package block
 
 import (
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"math/big"
+	"slices"
+
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // Builder to make it easy to build a block object.
@@ -78,13 +81,19 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 
 // Alpha set the alpha.
 func (b *Builder) Alpha(alpha []byte) *Builder {
-	b.headerBody.Extension.Alpha = append([]byte(nil), alpha...)
+	b.headerBody.Extension.Alpha = slices.Clone(alpha)
 	return b
 }
 
 // COM enables COM.
 func (b *Builder) COM() *Builder {
 	b.headerBody.Extension.COM = true
+	return b
+}
+
+// BaseFee sets base fee.
+func (b *Builder) BaseFee(baseFee *big.Int) *Builder {
+	b.headerBody.Extension.BaseFee = baseFee
 	return b
 }
 

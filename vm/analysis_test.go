@@ -20,7 +20,10 @@ import (
 	"math/bits"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/v2/thor"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {
@@ -32,7 +35,11 @@ func TestJumpDestAnalysis(t *testing.T) {
 		{[]byte{byte(PUSH1), 0x01, 0x01, 0x01}, 0b0000_0010, 0},
 		{[]byte{byte(PUSH1), byte(PUSH1), byte(PUSH1), byte(PUSH1)}, 0b0000_1010, 0},
 		{[]byte{0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1)}, 0b0101_0100, 0},
-		{[]byte{byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), 0x01, 0x01, 0x01}, bits.Reverse8(0x7F), 0},
+		{
+			[]byte{byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), 0x01, 0x01, 0x01},
+			bits.Reverse8(0x7F),
+			0,
+		},
 		{[]byte{byte(PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0001, 1},
 		{[]byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(PUSH2), byte(PUSH2), byte(PUSH2), 0x01, 0x01, 0x01}, 0b1100_0000, 0},
 		{[]byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(PUSH2), 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0000, 1},
@@ -59,25 +66,70 @@ func TestJumpDestAnalysis(t *testing.T) {
 	}
 }
 
+// A create frame (empty CodeHash) must analyze the
+// jumpdest bitmap locally and never populate the process-global bitmapCache;
+// a regular deployed contract (real CodeHash) still does.
+func TestIsCode_EmptyCodeHashSkipsGlobalCache(t *testing.T) {
+	bitmapCache.Purge()
+	t.Cleanup(func() { bitmapCache.Purge() })
+
+	// PUSH1 3, JUMP, JUMPDEST, PUSH1 0, PUSH1 0, RETURN. Position 3 holds
+	// JUMPDEST as real code; positions 1, 5 and 7 are PUSH1 data bytes that
+	// must NOT be classified as valid jump destinations.
+	code := []byte{byte(PUSH1), 0x03, byte(JUMP), byte(JUMPDEST), byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(RETURN)}
+	want := codeBitmap(code)
+
+	initcode := &Contract{}
+	initcode.SetCallCode(&common.Address{}, common.Hash{}, code)
+
+	for _, pos := range []uint64{1, 3, 5, 7} {
+		if got, exp := initcode.isCode(pos), want.codeSegment(pos); got != exp {
+			t.Fatalf("isCode(%d) = %v, want %v (matching codeBitmap ground truth)", pos, got, exp)
+		}
+	}
+	if !initcode.validJumpdest(uint256.NewInt(3)) {
+		t.Fatal("JUMPDEST at position 3 must be a valid jump destination")
+	}
+	if initcode.validJumpdest(uint256.NewInt(1)) {
+		t.Fatal("PUSH1 data byte at position 1 must not be a valid jump destination")
+	}
+
+	hash := common.Hash(thor.Keccak256(code))
+	if bitmapCache.Contains(hash) {
+		t.Fatal("analyzing a create-frame contract (empty CodeHash) must not populate the global bitmap cache")
+	}
+
+	// Positive control: the same code with a real codehash (the 'regular
+	// contract' branch) does get cached, proving the two branches actually
+	// differ and this test isn't vacuously passing.
+	deployed := &Contract{}
+	deployed.SetCallCode(&common.Address{}, hash, code)
+	deployed.isCode(3)
+	if !bitmapCache.Contains(hash) {
+		t.Fatal("a regular (deployed) contract with a real codehash should populate the global bitmap cache")
+	}
+}
+
 const analysisCodeSize = 1200 * 1024
 
 func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	// 1.4 ms
 	code := make([]byte, analysisCodeSize)
 	bench.SetBytes(analysisCodeSize)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+
+	for bench.Loop() {
 		codeBitmap(code)
 	}
 	bench.StopTimer()
 }
+
 func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 	// 4 ms
 	code := make([]byte, analysisCodeSize)
 	bench.SetBytes(analysisCodeSize)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
-		crypto.Keccak256Hash(code)
+
+	for bench.Loop() {
+		thor.Keccak256(code)
 	}
 	bench.StopTimer()
 }
@@ -92,7 +144,7 @@ func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
 		}
 		bits := make(bitvec, len(code)/8+1+4)
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			for j := range bits {
 				bits[j] = 0
 			}

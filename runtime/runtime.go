@@ -6,6 +6,7 @@
 package runtime
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -13,16 +14,16 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/abi"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/runtime/statedb"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	Tx "github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
-	"github.com/vechain/thor/xenv"
+
+	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/runtime/statedb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vm"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 var (
@@ -30,6 +31,15 @@ var (
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 
+	// EmptyRuntimeBytecode is stored at every precompile address at fork activation.
+	// This makes precompile addresses "exist" in Thor's state, which prevents
+	// accidental contract deployment to those addresses (CREATE/CREATE2 will fail
+	// with ErrContractAddressCollision since the code hash differs from emptyCodeHash).
+	//
+	// NOTE: This means EXTCODESIZE/EXTCODECOPY/EXTCODEHASH on any precompile address
+	// returns 8 bytes of non-empty code on Thor, whereas on Ethereum precompile
+	// addresses have no code (EXTCODESIZE returns 0). Contracts that detect
+	// precompiles by checking extcodesize == 0 will behave differently on Thor.
 	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 )
 
@@ -59,6 +69,8 @@ var baseChainConfig = vm.ChainConfig{
 		Clique:              nil,
 	},
 	IstanbulBlock: nil,
+	ShanghaiBlock: nil,
+	OsakaBlock:    nil,
 }
 
 // Output output of clause execution.
@@ -74,7 +86,7 @@ type Output struct {
 
 type TransactionExecutor struct {
 	HasNextClause func() bool
-	PrepareNext   func() (exec func() (gasUsed uint64, output *Output, err error), interrupt func())
+	PrepareNext   func() (exec func() (interrupted bool, err error), interrupt func())
 	Finalize      func() (*tx.Receipt, error)
 }
 
@@ -85,6 +97,7 @@ type Runtime struct {
 	state       *state.State
 	ctx         *xenv.BlockContext
 	chainConfig vm.ChainConfig
+	forkConfig  *thor.ForkConfig
 }
 
 // New create a Runtime object.
@@ -92,35 +105,59 @@ func New(
 	chain *chain.Chain,
 	state *state.State,
 	ctx *xenv.BlockContext,
-	forkConfig thor.ForkConfig,
+	forkConfig *thor.ForkConfig,
 ) *Runtime {
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
+	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.GALACTICA))
+	currentChainConfig.OsakaBlock = big.NewInt(int64(forkConfig.INTERSTELLAR))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
 	}
 
-	// alloc precompiled contracts
-	if forkConfig.ETH_IST == ctx.Number {
-		for addr := range vm.PrecompiledContractsIstanbul {
-			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
-				panic(err)
-			}
-		}
+	// allocate precompiled contracts
+	var precompiled map[common.Address]vm.PrecompiledContract
+	if forkConfig.INTERSTELLAR == ctx.Number {
+		precompiled = vm.PrecompiledContractsOsaka
+	} else if forkConfig.GALACTICA == ctx.Number {
+		precompiled = vm.PrecompiledContractsShanghai
+	} else if forkConfig.ETH_IST == ctx.Number {
+		precompiled = vm.PrecompiledContractsIstanbul
 	} else if ctx.Number == 0 {
-		for addr := range vm.PrecompiledContractsByzantium {
-			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
-				panic(err)
-			}
+		precompiled = vm.PrecompiledContractsByzantium
+	}
+	for addr := range precompiled {
+		if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
+			panic(err)
 		}
 	}
 
-	// VIP191
-	if forkConfig.VIP191 == ctx.Number {
-		// upgrade extension contract to V2
+	// set builtin contracts
+	if forkConfig.GALACTICA == ctx.Number {
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	} else if forkConfig.VIP191 == ctx.Number {
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	}
+
+	// Prepare the transition period
+	if forkConfig.HAYABUSA == ctx.Number {
+		if err := state.SetCode(builtin.Staker.Address, builtin.Staker.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+		if err := builtin.Energy.Native(state, ctx.Time).StopEnergyGrowth(); err != nil {
+			panic(err)
+		}
+	}
+
+	// EIP-2935 HISTORY_STORAGE facade. The contract reads historical block
+	if forkConfig.INTERSTELLAR == ctx.Number {
+		if err := state.SetCode(builtin.History.Address, builtin.History.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
 	}
@@ -130,6 +167,7 @@ func New(
 		state:       state,
 		ctx:         ctx,
 		chainConfig: currentChainConfig,
+		forkConfig:  forkConfig,
 	}
 	return &rt
 }
@@ -146,7 +184,13 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 }
 
 func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *xenv.TransactionContext) *vm.EVM {
-	var lastNonNativeCallGas uint64
+	var (
+		lastNonNativeCallGas uint64
+		baseFee              *big.Int
+	)
+	if rt.ctx.BaseFee != nil {
+		baseFee = new(big.Int).Set(rt.ctx.BaseFee)
+	}
 	return vm.NewEVM(vm.Context{
 		CanTransfer: func(_ vm.StateDB, addr common.Address, amount *big.Int) bool {
 			return stateDB.GetBalance(addr).Cmp(amount) >= 0
@@ -157,11 +201,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			// touch energy balance when token balance changed
 			// SHOULD be performed before transfer
-			senderEnergy, err := rt.state.GetEnergy(thor.Address(sender), rt.ctx.Time)
+			senderEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(sender))
 			if err != nil {
 				panic(err)
 			}
-			recipientEnergy, err := rt.state.GetEnergy(thor.Address(recipient), rt.ctx.Time)
+			recipientEnergy, err := builtin.Energy.Native(rt.state, rt.ctx.Time).Get(thor.Address(recipient))
 			if err != nil {
 				panic(err)
 			}
@@ -173,8 +217,8 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic(err)
 			}
 
-			stateDB.SubBalance(common.Address(sender), amount)
-			stateDB.AddBalance(common.Address(recipient), amount)
+			stateDB.SubBalance(sender, amount)
+			stateDB.AddBalance(recipient, amount)
 
 			stateDB.AddTransfer(&tx.Transfer{
 				Sender:    thor.Address(sender),
@@ -205,29 +249,38 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				return nil, nil, false
 			}
 
-			abi, run, found := builtin.FindNativeCall(thor.Address(contract.Address()), contract.Input)
+			abi, run, found, returnsGas := builtin.FindNativeCall(thor.Address(contract.Address()), contract.Input)
 			if !found {
 				lastNonNativeCallGas = contract.Gas
 				return nil, nil, false
 			}
 
 			if readonly && !abi.Const() {
+				if thor.IsForked(rt.ctx.Number, rt.forkConfig.INTERSTELLAR) {
+					return nil, vm.ErrWriteProtection, true
+				}
 				panic("invoke non-const method in readonly env")
 			}
 
 			if contract.Value().Sign() != 0 {
-				// reject value transfer on call
+				// Law for builtin contract developers: native methods never take
+				// value. Every builtin must dispatch to its native_* counterpart
+				// via a plain address(this) self-call without value attached, so
+				// this path is unreachable through any deployed builtin. The panic
+				// is a development-time guard for that invariant.
 				panic("value transfer not allowed")
 			}
 
-			// here we return call gas and extcodeSize gas for native calls, to make
-			// builtin contract cheap.
-			contract.Gas += nativeCallReturnGas
-			if contract.Gas > lastNonNativeCallGas {
-				panic("serious bug: native call returned gas over consumed")
+			if returnsGas {
+				// here we return call gas and extcodeSize gas for native calls, to make
+				// builtin contract cheap, this only applies to the 0.4.24 complied contracts
+				contract.Gas += nativeCallReturnGas
+				if contract.Gas > lastNonNativeCallGas {
+					panic("serious bug: native call returned gas over consumed")
+				}
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, rt.forkConfig, txCtx, evm, contract, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
@@ -242,60 +295,83 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 
 			stateDB.AddLog(&types.Log{
-				Address: common.Address(contractAddr),
+				Address: contractAddr,
 				Topics:  []common.Hash{common.Hash(prototypeSetMasterEvent.ID())},
 				Data:    data,
 			})
 		},
-		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
-			// it's IMPORTANT to process energy before token
-			amount, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time)
+		// shouldDestroy indicates if the contract will be destroyed in the current execution, introduced by EIP6780
+		// Invariant: whenever the account ends up deleted (shouldDestroy), both the
+		// state effects and the receipt output must stay identical to the
+		// pre-EIP-6780 ones. Only the EIP-6780-only case -- a surviving contract
+		// self-destructing to itself -- has no legacy counterpart, and it reports
+		// nothing.
+		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address, shouldDestroy bool) {
+			energyNative := builtin.Energy.Native(rt.state, rt.ctx.Time)
+			settle := func(addr common.Address, energy *big.Int) {
+				if err := rt.state.SetEnergy(thor.Address(addr), energy, rt.ctx.Time); err != nil {
+					panic(err)
+				}
+			}
+
+			energy, err := energyNative.Get(thor.Address(contractAddr))
 			if err != nil {
 				panic(err)
 			}
-			if amount.Sign() != 0 {
-				// add remained energy of suiciding contract to receiver.
-				// no need to clear contract's energy, vm will delete the whole contract later.
-				receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time)
-				if err != nil {
-					panic(err)
-				}
-				if err := rt.state.SetEnergy(
-					thor.Address(tokenReceiver),
-					new(big.Int).Add(receiverEnergy, amount),
-					rt.ctx.Time); err != nil {
-					panic(err)
-				}
+			bal := stateDB.GetBalance(contractAddr)
+			toSelf := contractAddr == tokenReceiver
 
+			// self-destructing to itself moves nothing
+			if !toSelf {
+				if bal.Sign() != 0 || energy.Sign() != 0 {
+					// settle both sides before the balance moves: CalcEnergy applies
+					// the current balance to the whole unsettled window. Under
+					// EIP-6780 the contract may survive, so it needs settling too.
+					receiverEnergy, err := energyNative.Get(thor.Address(tokenReceiver))
+					if err != nil {
+						panic(err)
+					}
+					settle(tokenReceiver, new(big.Int).Add(receiverEnergy, energy))
+					settle(contractAddr, big.NewInt(0))
+				}
+				if bal.Sign() != 0 {
+					stateDB.AddBalance(tokenReceiver, bal)
+					stateDB.SubBalance(contractAddr, bal)
+				}
+			}
+
+			// the only case with no pre-EIP-6780 equivalent, so nothing above
+			// constrains it: nothing moved, so nothing is reported
+			if toSelf && !shouldDestroy {
+				return
+			}
+
+			if energy.Sign() != 0 {
 				// see ERC20's Transfer event
-				topics := []common.Hash{
-					common.Hash(energyTransferEvent.ID()),
-					common.BytesToHash(contractAddr[:]),
-					common.BytesToHash(tokenReceiver[:]),
-				}
-
-				data, err := energyTransferEvent.Encode(amount)
+				data, err := energyTransferEvent.Encode(energy)
 				if err != nil {
 					panic(err)
 				}
-
 				stateDB.AddLog(&types.Log{
 					Address: common.Address(builtin.Energy.Address),
-					Topics:  topics,
-					Data:    data,
+					Topics: []common.Hash{
+						common.Hash(energyTransferEvent.ID()),
+						common.BytesToHash(contractAddr[:]),
+						common.BytesToHash(tokenReceiver[:]),
+					},
+					Data: data,
 				})
 			}
 
-			if amount := stateDB.GetBalance(contractAddr); amount.Sign() != 0 {
-				stateDB.AddBalance(tokenReceiver, amount)
-
+			if bal.Sign() != 0 {
 				stateDB.AddTransfer(&tx.Transfer{
 					Sender:    thor.Address(contractAddr),
 					Recipient: thor.Address(tokenReceiver),
-					Amount:    amount,
+					Amount:    bal,
 				})
 			}
 		},
+
 		Origin:      common.Address(txCtx.Origin),
 		GasPrice:    txCtx.GasPrice,
 		Coinbase:    common.Address(rt.ctx.Beneficiary),
@@ -303,6 +379,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.ctx.Number)),
 		Time:        new(big.Int).SetUint64(rt.ctx.Time),
 		Difficulty:  &big.Int{},
+		BaseFee:     baseFee,
 	}, stateDB, &rt.chainConfig, rt.vmConfig)
 }
 
@@ -328,7 +405,14 @@ func (rt *Runtime) PrepareClause(
 		defer func() {
 			if e := recover(); e != nil {
 				// caught state error
-				err = e.(error)
+				switch e := e.(type) {
+				case error:
+					err = e
+				case string:
+					err = errors.New(e)
+				default:
+					err = fmt.Errorf("runtime: unknown error: %v", e)
+				}
 			}
 		}()
 
@@ -368,7 +452,7 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 	}
 	for executor.HasNextClause() {
 		exec, _ := executor.PrepareNext()
-		if _, _, err := exec(); err != nil {
+		if _, err := exec(); err != nil {
 			return nil, err
 		}
 	}
@@ -376,28 +460,41 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 }
 
 // PrepareTransaction prepare to execute tx.
-func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor, error) {
-	resolvedTx, err := ResolveTransaction(tx)
+func (rt *Runtime) PrepareTransaction(trx *tx.Transaction) (*TransactionExecutor, error) {
+	resolvedTx, err := ResolveTransaction(trx)
 	if err != nil {
 		return nil, err
 	}
 
-	baseGasPrice, gasPrice, payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
+	// ensure tx respects block boundaries
+	if trx.Gas() > rt.ctx.GasLimit {
+		return nil, errors.New("tx gas exceeds block gas limit")
+	}
+
+	if rt.ctx.Number >= rt.forkConfig.INTERSTELLAR && trx.Gas() > thor.MaxTxGasLimit {
+		return nil, errors.New("tx gas limit exceeds the maximum allowed")
+	}
+
+	legacyTxBaseGasPrice, effectiveGasPrice, payer, _, returnGas, err := resolvedTx.BuyGas(
+		rt.state,
+		rt.ctx.Time,
+		rt.ctx.BaseFee,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	txCtx, err := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
+	txCtx, err := resolvedTx.ToContext(effectiveGasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
 	if err != nil {
 		return nil, err
 	}
 
 	// ResolveTransaction has checked that tx.Gas() >= IntrinsicGas
-	leftOverGas := tx.Gas() - resolvedTx.IntrinsicGas
+	leftOverGas := trx.Gas() - resolvedTx.IntrinsicGas
 	// checkpoint to be reverted when clause failure.
 	checkpoint := rt.state.NewCheckpoint()
 
-	txOutputs := make([]*Tx.Output, 0, len(resolvedTx.Clauses))
+	txOutputs := make([]*tx.Output, 0, len(resolvedTx.Clauses))
 	reverted := false
 	finalized := false
 
@@ -407,11 +504,11 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 
 	return &TransactionExecutor{
 		HasNextClause: hasNext,
-		PrepareNext: func() (exec func() (uint64, *Output, error), interrupt func()) {
+		PrepareNext: func() (exec func() (bool, error), interrupt func()) {
 			nextClauseIndex := uint32(len(txOutputs))
 			execFunc, interrupt := rt.PrepareClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
 
-			exec = func() (gasUsed uint64, output *Output, err error) {
+			exec = func() (interrupted bool, err error) {
 				if rt.vmConfig.Tracer != nil {
 					rt.vmConfig.Tracer.CaptureClauseStart(leftOverGas)
 					defer func() {
@@ -419,18 +516,20 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 					}()
 				}
 
-				output, _, err = execFunc()
+				output, interrupted, err := execFunc()
 				if err != nil {
-					return 0, nil, err
+					return false, err
 				}
-				gasUsed = leftOverGas - output.LeftOverGas
+
+				if interrupted {
+					return true, nil
+				}
+
+				gasUsed := leftOverGas - output.LeftOverGas
 				leftOverGas = output.LeftOverGas
 
 				// Apply refund counter, capped to half of the used gas.
-				refund := gasUsed / 2
-				if refund > output.RefundGas {
-					refund = output.RefundGas
-				}
+				refund := min(gasUsed/2, output.RefundGas)
 
 				// won't overflow
 				leftOverGas += refund
@@ -443,13 +542,13 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 					txOutputs = nil
 					return
 				}
-				txOutputs = append(txOutputs, &Tx.Output{Events: output.Events, Transfers: output.Transfers})
+				txOutputs = append(txOutputs, &tx.Output{Events: output.Events, Transfers: output.Transfers})
 				return
 			}
 
 			return
 		},
-		Finalize: func() (*Tx.Receipt, error) {
+		Finalize: func() (*tx.Receipt, error) {
 			if hasNext() {
 				return nil, errors.New("not all clauses processed")
 			}
@@ -458,39 +557,47 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			}
 			finalized = true
 
-			receipt := &Tx.Receipt{
+			receipt := &tx.Receipt{
+				Type:     trx.Type(),
 				Reverted: reverted,
 				Outputs:  txOutputs,
-				GasUsed:  tx.Gas() - leftOverGas,
+				GasUsed:  trx.Gas() - leftOverGas,
 				GasPayer: payer,
 			}
-
-			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
+			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), effectiveGasPrice)
 
 			if err := returnGas(leftOverGas); err != nil {
 				return nil, err
 			}
 
-			// reward
-			rewardRatio, err := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-			if err != nil {
-				return nil, err
-			}
-			provedWork, err := tx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
-			if err != nil {
-				return nil, err
-			}
-			overallGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
+			if !thor.IsForked(rt.ctx.Number, rt.forkConfig.GALACTICA) {
+				provedWork, err := trx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
+				if err != nil {
+					return nil, err
+				}
+				overallGasPrice := trx.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
 
-			reward := new(big.Int).SetUint64(receipt.GasUsed)
-			reward.Mul(reward, overallGasPrice)
-			reward.Mul(reward, rewardRatio)
-			reward.Div(reward, big.NewInt(1e18))
-			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
-				return nil, err
+				// before galactica, reward is based on the reward ratio
+				rewardRatio, err := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
+				if err != nil {
+					return nil, err
+				}
+
+				reward := new(big.Int).SetUint64(receipt.GasUsed)
+				reward.Mul(reward, overallGasPrice)
+				reward.Mul(reward, rewardRatio)
+				reward.Div(reward, big.NewInt(1e18))
+
+				receipt.Reward = reward
+			} else {
+				// after galactica, reward is the priority fee
+				priorityFeePerGas := trx.EffectivePriorityFeePerGas(rt.ctx.BaseFee, legacyTxBaseGasPrice, txCtx.ProvedWork)
+				receipt.Reward = priorityFeePerGas.Mul(priorityFeePerGas, new(big.Int).SetUint64(receipt.GasUsed))
 			}
 
-			receipt.Reward = reward
+			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, receipt.Reward); err != nil {
+				return nil, err
+			}
 			return receipt, nil
 		},
 	}, nil

@@ -6,31 +6,13 @@
 package solo
 
 import (
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/comm"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/comm"
 )
 
 // Communicator in solo is a fake one just for api handler.
-type Communicator struct {
-}
+type Communicator struct{}
 
 // PeersStats returns nil solo doesn't join p2p network.
 func (comm *Communicator) PeersStats() []*comm.PeerStats {
 	return nil
-}
-
-// BFTEngine is a fake bft engine for solo.
-type BFTEngine struct {
-	finalized thor.Bytes32
-}
-
-func (engine *BFTEngine) Finalized() thor.Bytes32 {
-	return engine.finalized
-}
-
-func NewBFTEngine(repo *chain.Repository) *BFTEngine {
-	return &BFTEngine{
-		finalized: repo.GenesisBlock().Header().ID(),
-	}
 }

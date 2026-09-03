@@ -10,46 +10,58 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"strconv"
+	"net/url"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/xenv"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/restutil"
+	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 type Accounts struct {
-	repo         *chain.Repository
-	stater       *state.Stater
-	callGasLimit uint64
-	forkConfig   thor.ForkConfig
+	repo              *chain.Repository
+	stater            *state.Stater
+	callGasLimit      uint64
+	batchDataMaxSize  uint64
+	forkConfig        *thor.ForkConfig
+	bft               bft.Committer
+	enabledDeprecated bool
 }
 
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	callGasLimit uint64,
-	forkConfig thor.ForkConfig,
+	batchDataMaxSize uint64,
+	forkConfig *thor.ForkConfig,
+	bft bft.Committer,
+	enabledDeprecated bool,
 ) *Accounts {
 	return &Accounts{
-		repo,
-		stater,
-		callGasLimit,
-		forkConfig,
+		repo:              repo,
+		stater:            stater,
+		callGasLimit:      callGasLimit,
+		batchDataMaxSize:  batchDataMaxSize,
+		forkConfig:        forkConfig,
+		bft:               bft,
+		enabledDeprecated: enabledDeprecated,
 	}
 }
 
-func (a *Accounts) getCode(addr thor.Address, summary *chain.BlockSummary) ([]byte, error) {
-	code, err := a.stater.
-		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
-		GetCode(addr)
+func (a *Accounts) getCode(addr thor.Address, state *state.State) ([]byte, error) {
+	code, err := state.GetCode(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -60,21 +72,29 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	hexAddr := mux.Vars(req)["address"]
 	addr, err := thor.ParseAddress(hexAddr)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return restutil.BadRequest(errors.WithMessage(err, "address"))
 	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
+	if err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+	}
+
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return err
+	}
+	code, err := a.getCode(addr, st)
 	if err != nil {
 		return err
 	}
-	code, err := a.getCode(addr, summary)
-	if err != nil {
-		return err
-	}
-	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
+
+	return restutil.WriteJSON(w, &api.GetCodeResult{Code: hexutil.Encode(code)})
 }
 
-func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*Account, error) {
-	state := a.stater.NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
+func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*api.Account, error) {
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -83,85 +103,138 @@ func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*
 	if err != nil {
 		return nil, err
 	}
-	energy, err := state.GetEnergy(addr, summary.Header.Timestamp())
+	energy, err := builtin.Energy.Native(state, header.Timestamp()).Get(addr)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Account{
-		Balance: math.HexOrDecimal256(*b),
-		Energy:  math.HexOrDecimal256(*energy),
+	return &api.Account{
+		Balance: (*math.HexOrDecimal256)(b),
+		Energy:  (*math.HexOrDecimal256)(energy),
 		HasCode: len(code) != 0,
 	}, nil
 }
 
-func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, summary *chain.BlockSummary) (thor.Bytes32, error) {
-	storage, err := a.stater.
-		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
-		GetStorage(addr, key)
+func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
+	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
+	if err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "address"))
+	}
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), false)
+	if err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+	}
 
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return err
+	}
+
+	acc, err := a.getAccount(addr, summary.Header, st)
+	if err != nil {
+		return err
+	}
+	return restutil.WriteJSON(w, acc)
+}
+
+func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, state *state.State) (thor.Bytes32, error) {
+	storage, err := state.GetStorage(addr, key)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
 	return storage, nil
 }
 
-func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
-	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
+func (a *Accounts) parseStorageRequest(routerVars map[string]string, queryParams url.Values) (thor.Address, thor.Bytes32, *state.State, error) {
+	addr, err := thor.ParseAddress(routerVars["address"])
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "address"))
 	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	key, err := thor.ParseBytes32(routerVars["key"])
 	if err != nil {
-		return err
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "key"))
 	}
-	acc, err := a.getAccount(addr, summary)
+	revision, err := restutil.ParseRevision(queryParams.Get("revision"), false)
 	if err != nil {
-		return err
+		return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	return utils.WriteJSON(w, acc)
+
+	_, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return thor.Address{}, thor.Bytes32{}, nil, restutil.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return thor.Address{}, thor.Bytes32{}, nil, err
+	}
+
+	return addr, key, st, nil
 }
 
 func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
-	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
-	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
-	}
-	key, err := thor.ParseBytes32(mux.Vars(req)["key"])
-	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "key"))
-	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	addr, key, st, err := a.parseStorageRequest(mux.Vars(req), req.URL.Query())
 	if err != nil {
 		return err
 	}
-	storage, err := a.getStorage(addr, key, summary)
+
+	storage, err := a.getStorage(addr, key, st)
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{"value": storage.String()})
+	return restutil.WriteJSON(w, &api.GetStorageResult{Value: storage.String()})
+}
+
+func (a *Accounts) getRawStorage(addr thor.Address, key thor.Bytes32, state *state.State) ([]byte, error) {
+	storage, err := state.GetRawStorage(addr, key)
+	if err != nil {
+		return nil, err
+	}
+	return storage, nil
+}
+
+func (a *Accounts) handleGetRawStorage(w http.ResponseWriter, req *http.Request) error {
+	addr, key, st, err := a.parseStorageRequest(mux.Vars(req), req.URL.Query())
+	if err != nil {
+		return err
+	}
+
+	storage, err := a.getRawStorage(addr, key, st)
+	if err != nil {
+		return err
+	}
+
+	return restutil.WriteJSON(w, &api.GetStorageResult{Value: hexutil.Encode(storage)})
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	callData := &CallData{}
-	if err := utils.ParseJSON(req.Body, &callData); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+	callData := &api.CallData{}
+	if err := restutil.ParseJSON(req.Body, &callData); err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	var addr *thor.Address
 	if mux.Vars(req)["address"] != "" {
 		address, err := thor.ParseAddress(mux.Vars(req)["address"])
 		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "address"))
+			return restutil.BadRequest(errors.WithMessage(err, "address"))
 		}
 		addr = &address
 	}
-	var batchCallData = &BatchCallData{
-		Clauses: Clauses{
-			Clause{
+	batchCallData := &api.BatchCallData{
+		Clauses: api.Clauses{
+			&api.Clause{
 				To:    addr,
 				Value: callData.Value,
 				Data:  callData.Data,
@@ -171,39 +244,55 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		GasPrice: callData.GasPrice,
 		Caller:   callData.Caller,
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary)
+	results, err := a.batchCall(req.Context(), batchCallData, summary.Header, st)
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, results[0])
+	return restutil.WriteJSON(w, results[0])
 }
 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
-	batchCallData := &BatchCallData{}
-	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+	var batchCallData api.BatchCallData
+	if err := restutil.ParseJSON(req.Body, &batchCallData); err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	// reject null element in clauses, {} will be unmarshaled to default value and will be accepted/handled by the runtime
+	for i, clause := range batchCallData.Clauses {
+		if clause == nil {
+			return restutil.BadRequest(fmt.Errorf("clauses[%d]: null not allowed", i))
+		}
+	}
+	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
+	if err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, st, err := restutil.GetSummaryAndState(revision, a.repo, a.bft, a.stater, a.forkConfig)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return restutil.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return err
+	}
+	results, err := a.batchCall(req.Context(), &batchCallData, summary.Header, st)
 	if err != nil {
 		return err
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, h)
-	if err != nil {
-		return err
-	}
-	return utils.WriteJSON(w, results)
+	return restutil.WriteJSON(w, results)
 }
 
-func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, summary *chain.BlockSummary) (results BatchCallResults, err error) {
+func (a *Accounts) batchCall(
+	ctx context.Context,
+	batchCallData *api.BatchCallData,
+	header *block.Header,
+	st *state.State,
+) (results api.BatchCallResults, err error) {
 	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
 	}
-	header := summary.Header
-	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
 
 	signer, _ := header.Signer()
-	rt := runtime.New(a.repo.NewChain(header.ParentID()), state,
+	rt := runtime.New(a.repo.NewChain(header.ParentID()), st,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
@@ -211,49 +300,84 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		a.forkConfig)
-	results = make(BatchCallResults, 0)
-	resultCh := make(chan interface{}, 1)
+
+	results = make(api.BatchCallResults, 0)
+	var accumulatedSize int
+
 	for i, clause := range clauses {
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
+
+		done := make(chan struct{})
 		go func() {
-			out, _, err := exec()
-			if err != nil {
-				resultCh <- err
+			select {
+			case <-ctx.Done():
+				interrupt()
+				return
+			case <-done:
+				return
 			}
-			resultCh <- out
 		}()
-		select {
-		case <-ctx.Done():
-			interrupt()
-			return nil, ctx.Err()
-		case result := <-resultCh:
-			switch v := result.(type) {
-			case error:
-				return nil, v
-			case *runtime.Output:
-				results = append(results, convertCallResultWithInputGas(v, gas))
-				if v.VMErr != nil {
-					return results, nil
-				}
-				gas = v.LeftOverGas
+
+		out, interrupted, err := exec()
+		close(done)
+
+		if interrupted {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
+			return nil, errors.New("execution interrupted")
 		}
+		// errors other than interrupted
+		if err != nil {
+			return nil, err
+		}
+
+		// Track accumulated raw EVM output bytes.
+		// Data and event data are exact; topics are exactly 32 bytes each (thor.Bytes32);
+		// event address is exactly 20 bytes (thor.Address);
+		// transfer uses a fixed upper bound: 20 (sender) + 20 (recipient) + 32 (amount) = 72 bytes.
+		accumulatedSize += len(out.Data)
+		for _, event := range out.Events {
+			accumulatedSize += 20 // Address
+			accumulatedSize += len(event.Topics) * 32
+			accumulatedSize += len(event.Data)
+		}
+		for range out.Transfers {
+			accumulatedSize += 72
+		}
+		if uint64(accumulatedSize) > a.batchDataMaxSize {
+			return nil, restutil.BadRequest(
+				fmt.Errorf("batch call data exceeds limit of %d bytes", a.batchDataMaxSize))
+		}
+
+		result := api.ConvertCallResultWithInputGas(out, gas)
+		results = append(results, result)
+
+		if out.VMErr != nil {
+			return results, nil
+		}
+		gas = out.LeftOverGas
 	}
+
 	return results, nil
 }
 
-func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
+func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
 	if batchCallData.Gas > a.callGasLimit {
-		return nil, 0, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
+		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))
 	} else if batchCallData.Gas == 0 {
 		gas = a.callGasLimit
 	} else {
 		gas = batchCallData.Gas
 	}
 
-	txCtx = &xenv.TransactionContext{}
+	txCtx = &xenv.TransactionContext{
+		ClauseCount: uint32(len(batchCallData.Clauses)),
+		Expiration:  batchCallData.Expiration,
+	}
 
 	if batchCallData.GasPrice == nil {
 		txCtx.GasPrice = new(big.Int)
@@ -275,18 +399,12 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 	} else {
 		txCtx.ProvedWork = (*big.Int)(batchCallData.ProvedWork)
 	}
-	txCtx.Expiration = batchCallData.Expiration
 
 	if len(batchCallData.BlockRef) > 0 {
-		blockRef, err := hexutil.Decode(batchCallData.BlockRef)
+		blkRef, err := restutil.ParseBlockRef(batchCallData.BlockRef)
 		if err != nil {
-			return nil, 0, nil, errors.WithMessage(err, "blockRef")
+			return nil, 0, nil, err
 		}
-		if len(blockRef) != 8 {
-			return nil, 0, nil, errors.New("blockRef: invalid length")
-		}
-		var blkRef tx.BlockRef
-		copy(blkRef[:], blockRef[:])
 		txCtx.BlockRef = blkRef
 	}
 
@@ -302,7 +420,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		if c.Data != "" {
 			data, err = hexutil.Decode(c.Data)
 			if err != nil {
-				err = utils.BadRequest(errors.WithMessage(err, fmt.Sprintf("data[%d]", i)))
+				err = restutil.BadRequest(errors.WithMessage(err, fmt.Sprintf("data[%d]", i)))
 				return
 			}
 		}
@@ -311,49 +429,41 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 	return
 }
 
-func (a *Accounts) handleRevision(revision string) (*chain.BlockSummary, error) {
-	if revision == "" || revision == "best" {
-		return a.repo.BestBlockSummary(), nil
-	}
-	if len(revision) == 66 || len(revision) == 64 {
-		blockID, err := thor.ParseBytes32(revision)
-		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		summary, err := a.repo.GetBlockSummary(blockID)
-		if err != nil {
-			if a.repo.IsNotFound(err) {
-				return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-			}
-			return nil, err
-		}
-		return summary, nil
-	}
-	n, err := strconv.ParseUint(revision, 0, 0)
-	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	if n > math.MaxUint32 {
-		return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
-	}
-	summary, err := a.repo.NewBestChain().GetBlockSummary(uint32(n))
-	if err != nil {
-		if a.repo.IsNotFound(err) {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		return nil, err
-	}
-	return summary, nil
-}
-
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/*").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
-	sub.Path("/{address}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
-	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
-	sub.Path("/{address}/storage/{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
-	sub.Path("/{address}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+	sub.Path("/*").
+		Methods(http.MethodPost).
+		Name("POST /accounts/*").
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleCallBatchCode))
+	sub.Path("/{address}").
+		Methods(http.MethodGet).
+		Name("GET /accounts/{address}").
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetAccount))
+	sub.Path("/{address}/code").
+		Methods(http.MethodGet).
+		Name("GET /accounts/{address}/code").
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetCode))
+	sub.Path("/{address}/storage/{key}").
+		Methods("GET").
+		Name("GET /accounts/{address}/storage").
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetStorage))
+	sub.Path("/{address}/storage/raw/{key}").
+		Methods("GET").
+		Name("GET /accounts/{address}/storage/raw").
+		HandlerFunc(restutil.WrapHandlerFunc(a.handleGetRawStorage))
 
+	// These two methods are currently deprecated
+	callContractHandler := restutil.HandleGone
+	if a.enabledDeprecated {
+		callContractHandler = a.handleCallContract
+	}
+	sub.Path("").
+		Methods(http.MethodPost).
+		Name("POST /accounts").
+		HandlerFunc(restutil.WrapHandlerFunc(callContractHandler))
+	sub.Path("/{address}").
+		Methods(http.MethodPost).
+		Name("POST /accounts/{address}").
+		HandlerFunc(restutil.WrapHandlerFunc(callContractHandler))
 }

@@ -6,12 +6,11 @@
 package comm
 
 import (
-	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/txpool"
+	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 func (c *Communicator) txsLoop() {
-
 	txEvCh := make(chan *txpool.TxEvent, 10)
 	sub := c.txPool.SubscribeTxEvent(txEvCh)
 	defer sub.Unsubscribe()
@@ -28,7 +27,6 @@ func (c *Communicator) txsLoop() {
 				})
 
 				for _, peer := range peers {
-					peer := peer
 					peer.MarkTransaction(tx.Hash())
 					c.goes.Go(func() {
 						if err := proto.NotifyNewTx(c.ctx, peer, tx); err != nil {

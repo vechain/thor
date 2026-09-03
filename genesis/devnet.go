@@ -11,10 +11,39 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+
+	"github.com/vechain/thor/v2/thor"
+)
+
+// Config for the devnet network, to be extended by our needs
+type DevConfig struct {
+	ForkConfig   *thor.ForkConfig
+	BaseGasPrice *big.Int
+	LaunchTime   uint64
+	Config       *thor.Config
+	GasLimit     uint64
+}
+
+// DefaultHayabusaTP is the default Hayabusa transition period (0 = immediate PoS).
+var DefaultHayabusaTP = uint32(0)
+
+// SoloConfig is the default configuration for solo/dev mode.
+// Uses short staking periods for faster testing.
+var SoloConfig = thor.Config{
+	LowStakingPeriod:    12,
+	MediumStakingPeriod: 30,
+	HighStakingPeriod:   90,
+	CooldownPeriod:      12,
+	HayabusaTP:          &DefaultHayabusaTP,
+}
+
+const (
+	// DefaultDevnetLaunchTime is the default genesis timestamp for devnet.
+	// Wed May 16 2018 00:00:00 GMT+0800 (CST)
+	DefaultDevnetLaunchTime = uint64(1526400000)
+
+	// InitialDevAccountBalance is 1 billion VET in wei (1e27).
+	InitialDevAccountBalance = "1000000000000000000000000000"
 )
 
 // DevAccount account for development.
@@ -56,70 +85,69 @@ func DevAccounts() []DevAccount {
 	return accs
 }
 
-// NewDevnet create genesis for solo mode.
-func NewDevnet() *Genesis {
-	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+func NewDevnet() (*Genesis, *thor.ForkConfig) {
+	forkConfig := thor.SoloFork
+	return NewDevnetWithConfig(DevConfig{
+		ForkConfig: &forkConfig,
+		Config:     &SoloConfig,
+	}), &forkConfig
+}
 
-	executor := DevAccounts()[0].Address
-	soloBlockSigner := DevAccounts()[0]
+func NewDevnetWithConfig(config DevConfig) *Genesis {
+	var gene CustomGenesis
 
-	builder := new(Builder).
-		GasLimit(thor.InitialGasLimit).
-		Timestamp(launchTime).
-		State(func(state *state.State) error {
+	if config.ForkConfig != nil {
+		gene.ForkConfig = config.ForkConfig
+	} else {
+		fc := thor.SoloFork
+		gene.ForkConfig = &fc
+	}
 
-			// setup builtin contracts
-			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
-				return err
-			}
-			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
-				return err
-			}
+	if config.LaunchTime != 0 {
+		gene.LaunchTime = config.LaunchTime
+	} else {
+		gene.LaunchTime = DefaultDevnetLaunchTime
+	}
 
-			tokenSupply := &big.Int{}
-			energySupply := &big.Int{}
-			for _, a := range DevAccounts() {
-				bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
-				if err := state.SetBalance(a.Address, bal); err != nil {
-					return err
-				}
-				if err := state.SetEnergy(a.Address, bal, launchTime); err != nil {
-					return err
-				}
-				tokenSupply.Add(tokenSupply, bal)
-				energySupply.Add(energySupply, bal)
-			}
-			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
-		}).
-		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
-			thor.Address{}).
-		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
-			executor).
-		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
-			executor).
-		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
-			executor).
-		Call(
-			tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
-			executor)
+	if config.GasLimit > 0 {
+		gene.GasLimit = config.GasLimit
+	}
 
-	id, err := builder.ComputeID()
+	if config.Config != nil {
+		gene.Config = config.Config
+	}
+
+	if config.BaseGasPrice != nil {
+		gene.Params.BaseGasPrice = (*HexOrDecimal256)(config.BaseGasPrice)
+	}
+
+	gene.Params.ExecutorAddress = &DevAccounts()[0].Address
+
+	bal, _ := new(big.Int).SetString(InitialDevAccountBalance, 10)
+	for _, a := range DevAccounts() {
+		gene.Accounts = append(gene.Accounts, Account{
+			Address: a.Address,
+			Balance: (*HexOrDecimal256)(bal),
+			Energy:  (*HexOrDecimal256)(bal),
+		})
+	}
+
+	if gene.ForkConfig.HAYABUSA == 0 {
+		gene.Stakers = append(gene.Stakers, Validator{
+			Master:   DevAccounts()[0].Address,
+			Endorser: DevAccounts()[0].Address,
+		})
+	} else {
+		gene.Authority = append(gene.Authority, Authority{
+			MasterAddress:   DevAccounts()[0].Address,
+			EndorsorAddress: DevAccounts()[0].Address,
+			Identity:        thor.BytesToBytes32([]byte("Solo Block Signer")),
+		})
+	}
+
+	genesis, err := NewCustomNetWithName(&gene, "devnet")
 	if err != nil {
 		panic(err)
 	}
-
-	return &Genesis{builder, id, "devnet"}
+	return genesis
 }

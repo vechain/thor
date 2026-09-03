@@ -1,0 +1,232 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+// Package wsclient provides a WebSocket client for subscribing to various VeChainThor blockchain events.
+// It enables subscriptions to blocks, transfers, events, and other updates via WebSocket.
+package wsclient
+
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/gorilla/websocket"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/thor"
+)
+
+const readTimeout = 60 * time.Second
+
+var ErrUnexpectedMsg = errors.New("unexpected message format")
+
+// Client represents a WebSocket client that connects to the VeChainThor blockchain via WebSocket
+// for subscribing to blockchain events and updates.
+type Client struct {
+	host   string
+	scheme string
+}
+
+// NewClient creates a new WebSocket Client from the provided URL.
+// The function parses the URL, determines the appropriate WebSocket scheme (ws or wss),
+// and returns the client or an error if the URL is invalid.
+func NewClient(url string) (*Client, error) {
+	var host string
+	var scheme string
+
+	// Determine the scheme (ws or wss) based on the URL.
+	if strings.Contains(url, "https://") || strings.Contains(url, "wss://") {
+		host = strings.TrimPrefix(strings.TrimPrefix(url, "https://"), "wss://")
+		scheme = "wss"
+	} else if strings.Contains(url, "http://") || strings.Contains(url, "ws://") {
+		host = strings.TrimPrefix(strings.TrimPrefix(url, "http://"), "ws://")
+		scheme = "ws"
+	} else {
+		return nil, fmt.Errorf("invalid url")
+	}
+
+	return &Client{
+		host:   strings.TrimSuffix(host, "/"),
+		scheme: scheme,
+	}, nil
+}
+
+// SubscribeEvents subscribes to blockchain events based on the provided query.
+// It returns a Subscription that streams event messages or an error if the connection fails.
+func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*Subscription[*api.EventMessage], error) {
+	queryValues := &url.Values{}
+	queryValues.Add("pos", pos)
+	if filter != nil {
+		if filter.Address != nil {
+			queryValues.Add("address", filter.Address.String())
+		}
+		if filter.Topic0 != nil {
+			queryValues.Add("topic0", filter.Topic0.String())
+		}
+		if filter.Topic1 != nil {
+			queryValues.Add("topic1", filter.Topic1.String())
+		}
+		if filter.Topic2 != nil {
+			queryValues.Add("topic2", filter.Topic2.String())
+		}
+		if filter.Topic3 != nil {
+			queryValues.Add("topic3", filter.Topic3.String())
+		}
+		if filter.Topic4 != nil {
+			queryValues.Add("topic4", filter.Topic4.String())
+		}
+	}
+	conn, _, err := c.Connect("/subscriptions/event", queryValues)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect - %w", err)
+	}
+
+	return subscribe[api.EventMessage](conn), nil
+}
+
+// SubscribeBlocks subscribes to block updates based on the provided query.
+// It returns a Subscription that streams block messages or an error if the connection fails.
+func (c *Client) SubscribeBlocks(pos string) (*Subscription[*api.BlockMessage], error) {
+	queryValues := &url.Values{}
+	queryValues.Add("pos", pos)
+	conn, _, err := c.Connect("/subscriptions/block", queryValues)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect - %w", err)
+	}
+
+	return subscribe[api.BlockMessage](conn), nil
+}
+
+// SubscribeTransfers subscribes to transfer events based on the provided query.
+// It returns a Subscription that streams transfer messages or an error if the connection fails.
+func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*Subscription[*api.TransferMessage], error) {
+	queryValues := &url.Values{}
+	queryValues.Add("pos", pos)
+	if filter != nil {
+		if filter.TxOrigin != nil {
+			queryValues.Add("txOrigin", filter.TxOrigin.String())
+		}
+		if filter.Sender != nil {
+			queryValues.Add("sender", filter.Sender.String())
+		}
+		if filter.Recipient != nil {
+			queryValues.Add("recipient", filter.Recipient.String())
+		}
+	}
+	conn, _, err := c.Connect("/subscriptions/transfer", queryValues)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect - %w", err)
+	}
+
+	return subscribe[api.TransferMessage](conn), nil
+}
+
+// SubscribeTxPool subscribes to pending transaction pool updates based on the provided query.
+// It returns a Subscription that streams pending transaction messages or an error if the connection fails.
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*Subscription[*api.PendingTxIDMessage], error) {
+	queryValues := &url.Values{}
+	if txID != nil {
+		queryValues.Add("id", txID.String())
+	}
+
+	conn, _, err := c.Connect("/subscriptions/txpool", queryValues)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect - %w", err)
+	}
+
+	return subscribe[api.PendingTxIDMessage](conn), nil
+}
+
+// SubscribeBeats2 subscribes to Beat2 messages based on the provided query.
+// It returns a Subscription that streams Beat2 messages or an error if the connection fails.
+func (c *Client) SubscribeBeats2(pos string) (*Subscription[*api.Beat2Message], error) {
+	queryValues := &url.Values{}
+	queryValues.Add("pos", pos)
+	conn, _, err := c.Connect("/subscriptions/beat2", queryValues)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect - %w", err)
+	}
+
+	return subscribe[api.Beat2Message](conn), nil
+}
+
+// subscribe starts a new subscription over the given WebSocket connection.
+// It returns a read-only channel that streams events of type T.
+func subscribe[T any](conn *websocket.Conn) *Subscription[*T] {
+	// Create a new channel for events
+	eventChan := make(chan EventWrapper[*T], 1_000)
+	var closed bool
+
+	// Start a goroutine to handle receiving messages from the WebSocket connection.
+	go func() {
+		defer close(eventChan)
+		defer conn.Close()
+
+		for {
+			conn.SetReadDeadline(time.Now().Add(readTimeout))
+			var data T
+			// Read a JSON message from the WebSocket and unmarshal it into the data.
+			err := conn.ReadJSON(&data)
+			if err != nil {
+				if !closed {
+					// Send an EventWrapper with the error to the channel.
+					eventChan <- EventWrapper[*T]{Error: fmt.Errorf("%w: %w", ErrUnexpectedMsg, err)}
+				}
+				return
+			}
+
+			eventChan <- EventWrapper[*T]{Data: &data}
+		}
+	}()
+
+	return &Subscription[*T]{
+		EventChan: eventChan,
+		Unsubscribe: func() error {
+			closed = true
+			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err != nil {
+				return fmt.Errorf("failed to issue close message: %w", err)
+			}
+			err = conn.Close()
+			if err != nil {
+				return fmt.Errorf("failed to close connections: %w", err)
+			}
+			return nil
+		},
+	}
+}
+
+// Connect establishes a WebSocket connection to the specified endpoint and query.
+// It returns the connection or an error if the connection fails.
+func (c *Client) Connect(endpoint string, queryValues *url.Values) (*websocket.Conn, int, error) {
+	u := url.URL{
+		Scheme: c.scheme,
+		Host:   c.host,
+		Path:   endpoint,
+	}
+
+	if queryValues != nil {
+		u.RawQuery = queryValues.Encode()
+	}
+
+	conn, res, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		if res != nil {
+			return nil, res.StatusCode, err
+		}
+		return nil, 0, err
+	}
+
+	conn.SetPingHandler(func(payload string) error {
+		// Make a best effort to send the pong message.
+		_ = conn.WriteControl(websocket.PongMessage, []byte(payload), time.Now().Add(time.Second))
+		conn.SetReadDeadline(time.Now().Add(readTimeout))
+		return nil
+	})
+	// TODO append to the connection pool
+	return conn, res.StatusCode, nil
+}

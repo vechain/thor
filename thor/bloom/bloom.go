@@ -10,12 +10,12 @@ package bloom
 import (
 	"encoding/binary"
 
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func distribute(hash uint32, k uint8, nBits uint32, cb func(index int, bit byte) bool) bool {
 	delta := (hash >> 17) | (hash << 15) // Rotate right 17 bits
-	for i := uint8(0); i < k; i++ {
+	for range k {
 		bitPos := hash % nBits
 		if !cb(int(bitPos/8), 1<<(bitPos%8)) {
 			return false
@@ -59,13 +59,9 @@ func (g *Generator) Add(key []byte) {
 // The generator will be reset right after Generate.
 func (g *Generator) Generate(bitsPerKey int, k uint8) *Filter {
 	// compute bloom filter size in bytes
-	nBytes := (len(g.hashes)*bitsPerKey + 7) / 8
-
 	// for small n, we can see a very high false positive rate.  Fix it
 	// by enforcing a minimum bloom filter length.
-	if nBytes < 8 {
-		nBytes = 8
-	}
+	nBytes := max((len(g.hashes)*bitsPerKey+7)/8, 8)
 
 	bits := make([]byte, nBytes)
 	// filter bit length

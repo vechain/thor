@@ -21,17 +21,17 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/dop251/goja"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tracers"
-	jsassets "github.com/vechain/thor/tracers/js/internal/tracers"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tracers"
+	jsassets "github.com/vechain/thor/v2/tracers/js/internal/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 var assetTracers = make(map[string]string)
@@ -59,9 +59,11 @@ func init() {
 // hex strings into big ints.
 var bigIntProgram = goja.MustCompile("bigInt", bigIntegerJS, false)
 
-type toBigFn = func(vm *goja.Runtime, val string) (goja.Value, error)
-type toBufFn = func(vm *goja.Runtime, val []byte) (goja.Value, error)
-type fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error)
+type (
+	toBigFn   = func(vm *goja.Runtime, val string) (goja.Value, error)
+	toBufFn   = func(vm *goja.Runtime, val []byte) (goja.Value, error)
+	fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error)
+)
 
 func toBuf(vm *goja.Runtime, bufType goja.Value, val []byte) (goja.Value, error) {
 	// bufType is usually Uint8Array. This is equivalent to `new Uint8Array(val)` in JS.
@@ -215,7 +217,7 @@ func (t *jsTracer) CaptureClauseEnd(restGas uint64) {
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, _ uint64, value *big.Int) {
 	t.env = env
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
 	t.dbValue = db.setupObject()
@@ -235,14 +237,24 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 		return
 	}
 	t.ctx["value"] = valueBig
-	t.ctx["block"] = t.vm.ToValue(env.Context.BlockNumber.Uint64())
+	t.ctx["block"] = t.vm.ToValue(env.BlockNumber.Uint64())
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	rules := env.ChainConfig().Rules(env.BlockNumber)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (t *jsTracer) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	_ []byte,
+	depth int,
+	err error,
+) {
 	if !t.traceStep {
 		return
 	}
@@ -279,7 +291,7 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memor
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *jsTracer) CaptureEnd(output []byte, _ uint64, err error) {
 	t.ctx["output"] = t.vm.ToValue(output)
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())
@@ -431,7 +443,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 			return nil
 		}
 		code = common.CopyBytes(code)
-		b := vm.CreateAddress2(addr, common.HexToHash(salt), crypto.Keccak256Hash(code).Bytes()).Bytes()
+		b := vm.CreateAddress2(addr, common.HexToHash(salt), thor.Keccak256(code).Bytes()).Bytes()
 		res, err := t.toBuf(jsvm, b)
 		if err != nil {
 			jsvm.Interrupt(err)
@@ -446,12 +458,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 			return false
 		}
 		addr := common.BytesToAddress(a)
-		for _, p := range t.activePrecompiles {
-			if p == addr {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(t.activePrecompiles, addr)
 	})
 	jsvm.Set("slice", func(slice goja.Value, start, end int) goja.Value {
 		b, err := t.fromBuf(jsvm, slice, false)
@@ -593,11 +600,11 @@ func (mo *memoryObj) Length() int {
 	return mo.memory.Len()
 }
 
-func (m *memoryObj) setupObject() *goja.Object {
-	o := m.vm.NewObject()
-	o.Set("slice", m.vm.ToValue(m.Slice))
-	o.Set("getUint", m.vm.ToValue(m.GetUint))
-	o.Set("length", m.vm.ToValue(m.Length))
+func (mo *memoryObj) setupObject() *goja.Object {
+	o := mo.vm.NewObject()
+	o.Set("slice", mo.vm.ToValue(mo.Slice))
+	o.Set("getUint", mo.vm.ToValue(mo.GetUint))
+	o.Set("length", mo.vm.ToValue(mo.Length))
 	return o
 }
 
@@ -779,12 +786,12 @@ func (co *contractObj) GetInput() goja.Value {
 	return res
 }
 
-func (c *contractObj) setupObject() *goja.Object {
-	o := c.vm.NewObject()
-	o.Set("getCaller", c.vm.ToValue(c.GetCaller))
-	o.Set("getAddress", c.vm.ToValue(c.GetAddress))
-	o.Set("getValue", c.vm.ToValue(c.GetValue))
-	o.Set("getInput", c.vm.ToValue(c.GetInput))
+func (co *contractObj) setupObject() *goja.Object {
+	o := co.vm.NewObject()
+	o.Set("getCaller", co.vm.ToValue(co.GetCaller))
+	o.Set("getAddress", co.vm.ToValue(co.GetAddress))
+	o.Set("getValue", co.vm.ToValue(co.GetValue))
+	o.Set("getInput", co.vm.ToValue(co.GetInput))
 	return o
 }
 

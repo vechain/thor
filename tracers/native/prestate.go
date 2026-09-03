@@ -24,13 +24,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
-//go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
+//go:generate go run github.com/fjl/gencodec@v0.1.1 -type account -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
 	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
@@ -92,14 +93,14 @@ func newPrestateTracer(cfg json.RawMessage) (tracers.Tracer, error) {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, _ []byte, _ uint64, _ *big.Int) {
 	t.env = env
 	t.create = create
 	t.to = to
 
 	t.lookupAccount(from)
 	t.lookupAccount(to)
-	t.lookupAccount(env.Context.Coinbase)
+	t.lookupAccount(env.Coinbase)
 	// tracer hooks run before value transfer, no need to touch balance
 	if create {
 		t.contractCreationCount++
@@ -110,7 +111,7 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *prestateTracer) CaptureEnd(_ []byte, _ uint64, _ error) {
 	if t.config.DiffMode {
 		return
 	}
@@ -128,7 +129,7 @@ func (t *prestateTracer) CaptureClauseStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
-func (t *prestateTracer) CaptureClauseEnd(restGas uint64) {
+func (t *prestateTracer) CaptureClauseEnd(_ uint64) {
 	if !t.config.DiffMode {
 		return
 	}
@@ -143,7 +144,7 @@ func (t *prestateTracer) CaptureClauseEnd(restGas uint64) {
 		newBalance := t.env.StateDB.GetBalance(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
-		energy, err := t.ctx.State.GetEnergy(thor.Address(addr), t.ctx.BlockTime)
+		energy, err := builtin.Energy.Native(t.ctx.State, t.ctx.BlockTime).Get(thor.Address(addr))
 		if err != nil {
 			// panic state errors, will be recovered by runtime
 			panic(err)
@@ -198,7 +199,17 @@ func (t *prestateTracer) CaptureClauseEnd(restGas uint64) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (t *prestateTracer) CaptureState(
+	_ uint64,
+	op vm.OpCode,
+	_, _ uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	_ []byte,
+	_ int,
+	err error,
+) {
 	if err != nil {
 		return
 	}
@@ -234,7 +245,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		if err != nil {
 			return
 		}
-		inithash := crypto.Keccak256(init)
+		inithash := thor.Keccak256(init).Bytes()
 		salt := stackData[stackLen-4]
 		addr := vm.CreateAddress2(contract.Address(), salt.Bytes32(), inithash)
 		t.lookupAccount(addr)
@@ -279,7 +290,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 
-	energy, err := t.ctx.State.GetEnergy(thor.Address(addr), t.ctx.BlockTime)
+	energy, err := builtin.Energy.Native(t.ctx.State, t.ctx.BlockTime).Get(thor.Address(addr))
 	if err != nil {
 		// panic state errors, will be recovered by runtime
 		panic(err)

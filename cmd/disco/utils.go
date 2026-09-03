@@ -6,13 +6,63 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
+	"fmt"
+	"io"
+	"log/slog"
+	"math"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	ethlog "github.com/ethereum/go-ethereum/log"
+	"github.com/mattn/go-isatty"
+
+	"github.com/vechain/thor/v2/log"
 )
+
+func initLogger(lvl int) *slog.LevelVar {
+	logLevel := log.FromLegacyLevel(lvl)
+	var level slog.LevelVar
+	level.Set(logLevel)
+	output := io.Writer(os.Stdout)
+	useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+	handler := log.NewTerminalHandlerWithLevel(output, &level, useColor)
+	log.SetDefault(log.NewLogger(handler))
+	ethlog.Root().SetHandler(&ethLogger{
+		logger: log.WithContext("pkg", "geth"),
+	})
+
+	return &level
+}
+
+type ethLogger struct {
+	logger log.Logger
+}
+
+func (h *ethLogger) Log(r *ethlog.Record) error {
+	switch r.Lvl {
+	case ethlog.LvlCrit:
+		h.logger.Crit(r.Msg)
+	case ethlog.LvlError:
+		h.logger.Error(r.Msg)
+	case ethlog.LvlWarn:
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlInfo:
+		h.logger.Info(r.Msg)
+	case ethlog.LvlDebug:
+		h.logger.Debug(r.Msg)
+	case ethlog.LvlTrace:
+		h.logger.Trace(r.Msg)
+	default:
+		break
+	}
+	return nil
+}
 
 func loadOrGenerateKeyFile(keyFile string) (key *ecdsa.PrivateKey, err error) {
 	if !filepath.IsAbs(keyFile) {
@@ -59,4 +109,30 @@ func mustHomeDir() string {
 	}
 
 	return filepath.Base(os.Args[0])
+}
+
+func readIntFromUInt64Flag(val uint64) (int, error) {
+	if val > math.MaxInt {
+		return 0, fmt.Errorf("value %d is too large", val)
+	}
+	i := int(val)
+
+	if i < 0 {
+		return 0, fmt.Errorf("invalid value %d ", val)
+	}
+
+	return i, nil
+}
+
+func handleExitSignal() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		exitSignalCh := make(chan os.Signal, 1)
+		signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)
+
+		sig := <-exitSignalCh
+		log.Info("exit signal received", "signal", sig)
+		cancel()
+	}()
+	return ctx
 }

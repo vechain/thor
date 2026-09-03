@@ -9,25 +9,26 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/xenv"
+
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 func init() {
 	defines := []struct {
 		name string
-		run  func(env *xenv.Environment) []interface{}
+		run  func(env *xenv.Environment) []any
 	}{
-		{"native_executor", func(env *xenv.Environment) []interface{} {
+		{"native_executor", func(env *xenv.Environment) []any {
 			env.UseGas(thor.SloadGas)
 			val, err := Params.Native(env.State()).Get(thor.KeyExecutorAddress)
 			if err != nil {
 				panic(err)
 			}
 			addr := thor.BytesToAddress(val.Bytes())
-			return []interface{}{addr}
+			return []any{addr}
 		}},
-		{"native_get", func(env *xenv.Environment) []interface{} {
+		{"native_get", func(env *xenv.Environment) []any {
 			var key common.Hash
 			env.ParseArgs(&key)
 
@@ -36,9 +37,9 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
-			return []interface{}{v}
+			return []any{v}
 		}},
-		{"native_set", func(env *xenv.Environment) []interface{} {
+		{"native_set", func(env *xenv.Environment) []any {
 			var args struct {
 				Key   common.Hash
 				Value *big.Int

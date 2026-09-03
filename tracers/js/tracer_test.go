@@ -27,29 +27,34 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 type account struct{}
 
-func (account) SubBalance(amount *big.Int)                          {}
-func (account) AddBalance(amount *big.Int)                          {}
-func (account) SetAddress(common.Address)                           {}
-func (account) Value() *big.Int                                     { return nil }
-func (account) SetBalance(*big.Int)                                 {}
-func (account) SetNonce(uint64)                                     {}
-func (account) Balance() *big.Int                                   { return nil }
-func (account) Address() common.Address                             { return common.Address{} }
-func (account) SetCode(common.Hash, []byte)                         {}
-func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
+func (account) SubBalance(_ *big.Int)                              {}
+func (account) AddBalance(_ *big.Int)                              {}
+func (account) SetAddress(_ common.Address)                        {}
+func (account) Value() *big.Int                                    { return nil }
+func (account) SetBalance(_ *big.Int)                              {}
+func (account) SetNonce(_ uint64)                                  {}
+func (account) Balance() *big.Int                                  { return nil }
+func (account) Address() common.Address                            { return common.Address{} }
+func (account) SetCode(_ common.Hash, _ []byte)                    {}
+func (account) ForEachStorage(_ func(key, value common.Hash) bool) {}
 
 type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64                       { return 1337 }
-func (*dummyStatedb) GetBalance(addr common.Address) *big.Int { return new(big.Int) }
+func (*dummyStatedb) GetRefund() uint64                                          { return 1337 }
+func (*dummyStatedb) GetBalance(addr common.Address) *big.Int                    { return new(big.Int) }
+func (*dummyStatedb) GetTransientState(common.Address, common.Hash) common.Hash  { return common.Hash{} }
+func (*dummyStatedb) SetTransientState(common.Address, common.Hash, common.Hash) {}
+func (*dummyStatedb) CreateContract(common.Address)                              {}
+func (*dummyStatedb) IsNewContract(common.Address) bool                          { return false }
 
 func testCtx() vm.Context {
 	return vm.Context{
@@ -153,7 +158,15 @@ func TestTracer(t *testing.T) {
 		},
 	} {
 		if have, err := execTracer(tt.code, tt.contract); tt.want != string(have) || tt.fail != err {
-			t.Errorf("testcase %d: expected return value to be \n'%s'\n\tgot\n'%s'\nerror to be\n'%s'\n\tgot\n'%s'\n\tcode: %v", i, tt.want, string(have), tt.fail, err, tt.code)
+			t.Errorf(
+				"testcase %d: expected return value to be \n'%s'\n\tgot\n'%s'\nerror to be\n'%s'\n\tgot\n'%s'\n\tcode: %v",
+				i,
+				tt.want,
+				string(have),
+				tt.fail,
+				err,
+				tt.code,
+			)
 		}
 	}
 }
@@ -203,7 +216,8 @@ func TestNoStepExec(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
+		// env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig,
+		// vm.Config{Tracer: tracer})
 		env := vm.NewEVM(vm.Context{
 			BlockNumber: big.NewInt(1),
 			GasPrice:    big.NewInt(100),
@@ -232,10 +246,25 @@ func TestNoStepExec(t *testing.T) {
 }
 
 func TestIsPrecompile(t *testing.T) {
-	cfg := &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), Ethash: new(params.EthashConfig), Clique: nil}
+	cfg := &params.ChainConfig{
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(100),
+		ConstantinopleBlock: big.NewInt(0),
+		Ethash:              new(params.EthashConfig),
+		Clique:              nil,
+	}
 	chaincfg := &vm.ChainConfig{ChainConfig: *cfg}
 	chaincfg.IstanbulBlock = big.NewInt(200)
-	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, err := newJsTracer(
+		"{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}",
+		nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +280,10 @@ func TestIsPrecompile(t *testing.T) {
 		t.Errorf("tracer should not consider blake2f as precompile in byzantium")
 	}
 
-	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, _ = newJsTracer(
+		"{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}",
+		nil,
+	)
 	res, err = runTrace(tracer, vm.Context{
 		BlockNumber: big.NewInt(250),
 		GasPrice:    big.NewInt(100000),
@@ -269,11 +301,17 @@ func TestEnterExit(t *testing.T) {
 	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", nil); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
 	}
-	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", nil); err != nil {
+	if _, err := newJsTracer(
+		"{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}",
+		nil,
+	); err != nil {
 		t.Fatal(err)
 	}
 	// test that the enter and exit method are correctly invoked and the values passed
-	tracer, err := newJsTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", nil)
+	tracer, err := newJsTracer(
+		"{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}",
+		nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +346,10 @@ func TestSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Test config value
-	tracer, err := newJsTracer("{config: null, setup: function(cfg) { this.config = JSON.parse(cfg) }, step: function() {}, fault: function() {}, result: function() { return this.config.foo }}", cfg)
+	tracer, err := newJsTracer(
+		"{config: null, setup: function(cfg) { this.config = JSON.parse(cfg) }, step: function() {}, fault: function() {}, result: function() { return this.config.foo }}",
+		cfg,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

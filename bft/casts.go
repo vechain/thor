@@ -8,14 +8,14 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/thor"
 )
 
 // casts stores the master's overall casts, maintaining the map of quality to checkpoint.
 type casts map[thor.Bytes32]uint32
 
-func (engine *BFTEngine) newCasts() error {
+func (engine *Engine) newCasts() error {
 	c := make(casts)
 
 	finalized := engine.Finalized()
@@ -34,15 +34,14 @@ func (engine *BFTEngine) newCasts() error {
 				return err
 			}
 
-			header := sum.Header
-			signer, _ := header.Signer()
+			signer, _ := sum.Header.Signer()
 			if signer == engine.master {
-				st, err := engine.computeState(header)
+				st, err := engine.computeState(sum)
 				if err != nil {
 					return err
 				}
 
-				checkpoint, err := chain.GetBlockID(getCheckPoint(header.Number()))
+				checkpoint, err := chain.GetBlockID(getCheckPoint(sum.Header.Number()))
 				if err != nil {
 					return err
 				}

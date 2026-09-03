@@ -7,81 +7,88 @@ package solo
 
 import (
 	"context"
-	"fmt"
+	"math/big"
+	"math/rand/v2"
+	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/inconshreveable/log15"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cmd/thor/bandwidth"
-	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
+
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
-var log = log15.New("pkg", "solo")
+var (
+	logger       = log.WithContext("pkg", "solo")
+	baseGasPrice = big.NewInt(1e13)
+)
+
+type Options struct {
+	GasLimit         uint64
+	SkipLogs         bool
+	MinTxPriorityFee uint64
+	OnDemand         bool
+}
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	repo      *chain.Repository
-	txPool    *txpool.TxPool
-	packer    *packer.Packer
-	logDB     *logdb.LogDB
-	gasLimit  uint64
-	bandwidth bandwidth.Bandwidth
-	onDemand  bool
-	skipLogs  bool
+	repo    *chain.Repository
+	stater  *state.Stater
+	txPool  TxPool
+	options Options
+	core    *Core // Core is used to pack blocks
+}
+
+type TxPool interface {
+	txpool.Pool
+	// Executables returns the transactions that can be executed
+	Executables() tx.Transactions
+	// Remove removes a transaction from the pool
+	Remove(txHash thor.Bytes32, txID thor.Bytes32) bool
 }
 
 // New returns Solo instance
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
-	logDB *logdb.LogDB,
-	txPool *txpool.TxPool,
-	gasLimit uint64,
-	onDemand bool,
-	skipLogs bool,
-	forkConfig thor.ForkConfig,
+	txPool TxPool,
+	options Options,
+	core *Core,
 ) *Solo {
 	return &Solo{
-		repo:   repo,
-		txPool: txPool,
-		packer: packer.New(
-			repo,
-			stater,
-			genesis.DevAccounts()[0].Address,
-			&genesis.DevAccounts()[0].Address,
-			forkConfig),
-		logDB:    logDB,
-		gasLimit: gasLimit,
-		skipLogs: skipLogs,
-		onDemand: onDemand,
+		repo:    repo,
+		stater:  stater,
+		txPool:  txPool,
+		options: options,
+		core:    core,
 	}
 }
 
 // Run runs the packer for solo
 func (s *Solo) Run(ctx context.Context) error {
-	goes := &co.Goes{}
+	goes := &sync.WaitGroup{}
 
 	defer func() {
 		<-ctx.Done()
 		goes.Wait()
 	}()
 
+	logger.Info("prepared to pack block")
+
+	if err := s.init(ctx); err != nil {
+		return err
+	}
+
 	goes.Go(func() {
 		s.loop(ctx)
 	})
-
-	log.Info("prepared to pack block")
 
 	return nil
 }
@@ -90,18 +97,15 @@ func (s *Solo) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("stopping interval packing service......")
+			logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			if left := uint64(time.Now().Unix()) % thor.BlockInterval; left == 0 {
-				if err := s.packing(s.txPool.Executables(), false); err != nil {
-					log.Error("failed to pack block", "err", err)
-				}
-			} else if s.onDemand {
-				pendingTxs := s.txPool.Executables()
-				if len(pendingTxs) > 0 {
-					if err := s.packing(pendingTxs, true); err != nil {
-						log.Error("failed to pack block", "err", err)
+			if left := uint64(time.Now().Unix()) % thor.BlockInterval(); left == 0 {
+				if txs, err := s.core.Pack(s.txPool.Executables(), false); err != nil {
+					logger.Error("failed to pack block", "err", err)
+				} else {
+					for _, tx := range txs {
+						s.txPool.Remove(tx.Hash(), tx.ID())
 					}
 				}
 			}
@@ -109,90 +113,61 @@ func (s *Solo) loop(ctx context.Context) {
 	}
 }
 
-func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
+// The init function initializes the chain parameters.
+func (s *Solo) init(ctx context.Context) error {
 	best := s.repo.BestBlockSummary()
-	now := uint64(time.Now().Unix())
-
-	var txsToRemove []*tx.Transaction
-	defer func() {
-		for _, tx := range txsToRemove {
-			s.txPool.Remove(tx.Hash(), tx.ID())
-		}
-	}()
-
-	if s.gasLimit == 0 {
-		suggested := s.bandwidth.SuggestGasLimit()
-		s.packer.SetTargetGasLimit(suggested)
-	}
-
-	flow, err := s.packer.Mock(best, now, s.gasLimit)
+	newState := s.stater.NewState(best.Root())
+	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyLegacyTxBaseGasPrice)
 	if err != nil {
-		return errors.WithMessage(err, "mock packer")
+		return errors.WithMessage(err, "failed to get the current base gas price")
 	}
-
-	startTime := mclock.Now()
-	for _, tx := range pendingTxs {
-		if err := flow.Adopt(tx); err != nil {
-			if packer.IsGasLimitReached(err) {
-				break
-			}
-			if packer.IsTxNotAdoptableNow(err) {
-				continue
-			}
-			txsToRemove = append(txsToRemove, tx)
-		}
-	}
-
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
-	if err != nil {
-		return errors.WithMessage(err, "pack")
-	}
-	execElapsed := mclock.Now() - startTime
-
-	// If there is no tx packed in the on-demanded block then skip
-	if onDemand && len(b.Transactions()) == 0 {
+	if currentBGP != nil && currentBGP.Cmp(baseGasPrice) == 0 {
 		return nil
 	}
 
-	if _, err := stage.Commit(); err != nil {
-		return errors.WithMessage(err, "commit state")
+	method, found := builtin.Params.ABI.MethodByName("set")
+	if !found {
+		return errors.New("Params ABI: set method not found")
 	}
 
-	// ignore fork when solo
-	if err := s.repo.AddBlock(b, receipts, 0); err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
-	realElapsed := mclock.Now() - startTime
-
-	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
-		return errors.WithMessage(err, "set best block")
+	data, err := method.EncodeInput(thor.KeyLegacyTxBaseGasPrice, baseGasPrice)
+	if err != nil {
+		return err
 	}
 
-	if !s.skipLogs {
-		w := s.logDB.NewWriter()
-		if err := w.Write(b, receipts); err != nil {
-			return errors.WithMessage(err, "write logs")
+	clause := tx.NewClause(&builtin.Params.Address).WithData(data)
+	baseGasPriceTx, err := s.newTx([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+	if err != nil {
+		return err
+	}
+
+	if !s.options.OnDemand {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(int64(thor.BlockInterval())-time.Now().Unix()%int64(thor.BlockInterval())) * time.Second):
 		}
-
-		if err := w.Commit(); err != nil {
-			return errors.WithMessage(err, "commit logs")
-		}
 	}
-
-	commitElapsed := mclock.Now() - startTime - execElapsed
-
-	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(realElapsed)); updated {
-		log.Debug("bandwidth updated", "gps", v)
+	if _, err := s.core.Pack(tx.Transactions{baseGasPriceTx}, false); err != nil {
+		return errors.WithMessage(err, "failed to pack base gas price transaction")
 	}
-
-	blockID := b.Header().ID()
-	log.Info("📦 new block packed",
-		"txs", len(receipts),
-		"mgas", float64(b.Header().GasUsed())/1000/1000,
-		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
-	)
-	log.Debug(b.String())
 
 	return nil
+}
+
+// newTx builds and signs a new transaction from the given clauses
+func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transaction, error) {
+	builder := new(tx.Builder).ChainTag(s.repo.ChainTag())
+	for _, c := range clauses {
+		builder.Clause(c)
+	}
+
+	trx := builder.BlockRef(tx.NewBlockRef(0)).
+		Expiration(math.MaxUint32).
+		Nonce(rand.Uint64()). //#nosec G404
+		DependsOn(nil).
+		Gas(1_000_000).
+		Build()
+
+	return tx.Sign(trx, from.PrivateKey)
 }

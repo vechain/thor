@@ -10,13 +10,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/thor"
 )
 
 // blocklist is a address list contains addresses that are blocked.
@@ -83,7 +82,7 @@ func (bl *blocklist) Fetch(ctx context.Context, url string, eTag *string) error 
 		return err
 	}
 	defer resp.Body.Close()
-	defer io.Copy(ioutil.Discard, resp.Body)
+	defer io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode == http.StatusNotModified {
 		return nil

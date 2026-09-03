@@ -6,12 +6,11 @@
 package builtin
 
 import (
-	"encoding/hex"
-
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/abi"
-	"github.com/vechain/thor/builtin/gen"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/builtin/gen"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type contract struct {
@@ -21,8 +20,15 @@ type contract struct {
 }
 
 func mustLoadContract(name string) *contract {
+	return mustLoadContractAt(name, thor.BytesToAddress([]byte(name)))
+}
+
+// mustLoadContractAt loads a builtin contract whose deployed address is fixed
+// (i.e. not derived from its name). Used for contracts that follow an
+// externally specified address such as EIP-2935 HISTORY_STORAGE.
+func mustLoadContractAt(name string, address thor.Address) *contract {
 	asset := "compiled/" + name + ".abi"
-	data := gen.MustAsset(asset)
+	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
 	if err != nil {
 		panic(errors.Wrap(err, "load ABI for '"+name+"'"))
@@ -30,7 +36,7 @@ func mustLoadContract(name string) *contract {
 
 	return &contract{
 		name,
-		thor.BytesToAddress([]byte(name)),
+		address,
 		abi,
 	}
 }
@@ -38,16 +44,20 @@ func mustLoadContract(name string) *contract {
 // RuntimeBytecodes load runtime byte codes.
 func (c *contract) RuntimeBytecodes() []byte {
 	asset := "compiled/" + c.name + ".bin-runtime"
-	data, err := hex.DecodeString(string(gen.MustAsset(asset)))
-	if err != nil {
-		panic(errors.Wrap(err, "load runtime byte code for '"+c.name+"'"))
-	}
+	data := gen.MustBIN(asset)
+	return data
+}
+
+// RawABI load raw ABI data.
+func (c *contract) RawABI() []byte {
+	asset := "compiled/" + c.name + ".abi"
+	data := gen.MustABI(asset)
 	return data
 }
 
 func (c *contract) NativeABI() *abi.ABI {
 	asset := "compiled/" + c.name + "Native.abi"
-	data := gen.MustAsset(asset)
+	data := gen.MustABI(asset)
 	abi, err := abi.New(data)
 	if err != nil {
 		panic(errors.Wrap(err, "load native ABI for '"+c.name+"'"))

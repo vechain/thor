@@ -7,61 +7,47 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"net"
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/p2psrv/discv5"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v3"
+
+	"github.com/vechain/thor/v2/cmd/thor/httpserver"
+	"github.com/vechain/thor/v2/metrics"
+	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/p2p/nat"
+	"github.com/vechain/thor/v2/p2p/netutil"
 )
 
 var (
-	version   string
-	gitCommit string
-	gitTag    string
+	version       string
+	gitCommit     string
+	gitTag        string
+	copyrightYear string
 
 	flags = []cli.Flag{
-		cli.StringFlag{
-			Name:  "addr",
-			Value: ":55555",
-			Usage: "listen address",
-		},
-		cli.StringFlag{
-			Name:  "keyfile",
-			Usage: "private key file path",
-			Value: defaultKeyFile(),
-		},
-		cli.StringFlag{
-			Name:  "keyhex",
-			Usage: "private key as hex",
-		},
-		cli.StringFlag{
-			Name:  "nat",
-			Value: "none",
-			Usage: "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
-		},
-		cli.StringFlag{
-			Name:  "netrestrict",
-			Usage: "restrict network communication to the given IP networks (CIDR masks)",
-		},
-		cli.IntFlag{
-			Name:  "verbosity",
-			Value: int(log.LvlWarn),
-			Usage: "log verbosity (0-9)",
-		},
+		addrFlag,
+		keyFileFlag,
+		keyHexFlag,
+		natFlag,
+		netRestrictFlag,
+		verbosityFlag,
+		enableMetricsFlag,
+		metricsAddrFlag,
 	}
 )
 
-func run(ctx *cli.Context) error {
-	logHandler := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
-	logHandler.Verbosity(log.Lvl(ctx.Int("verbosity")))
-	log.Root().SetHandler(logHandler)
+func run(_ context.Context, ctx *cli.Command) error {
+	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse verbosity flag")
+	}
+	initLogger(lvl)
 
 	natm, err := nat.Parse(ctx.String("nat"))
 	if err != nil {
@@ -108,13 +94,29 @@ func run(ctx *cli.Context) error {
 			realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
 		}
 	}
-	net, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
+	network, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
 	if err != nil {
 		return err
 	}
-	fmt.Println("Running", net.Self().String())
+	defer network.Close()
+	fmt.Println("Running", network.Self().String())
 
-	select {}
+	exitSignal := handleExitSignal()
+
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, closeFunc, err := httpserver.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		fmt.Println("metrics server listening", url)
+		defer closeFunc()
+		go pollMetrics(exitSignal, network)
+	}
+
+	<-exitSignal.Done()
+
+	return nil
 }
 
 func main() {
@@ -122,15 +124,15 @@ func main() {
 	if gitTag == "" {
 		versionMeta = "dev"
 	}
-	app := cli.App{
+	app := cli.Command{
 		Version:   fmt.Sprintf("%s-%s-%s", version, gitCommit, versionMeta),
 		Name:      "Disco",
 		Usage:     "VeChain Thor bootstrap node",
-		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
+		Copyright: fmt.Sprintf("2018-%s VeChain Foundation <https://vechain.org/>", copyrightYear),
 		Flags:     flags,
 		Action:    run,
 	}
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

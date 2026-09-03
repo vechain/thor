@@ -14,19 +14,19 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/p2psrv/discv5"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/p2p"
+	"github.com/vechain/thor/v2/p2p/discv5"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
-var log = log15.New("pkg", "comm")
+var logger = log.WithContext("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
@@ -39,7 +39,7 @@ type Communicator struct {
 	newBlockFeed   event.Feed
 	announcementCh chan *announcement
 	feedScope      event.SubscriptionScope
-	goes           co.Goes
+	goes           sync.WaitGroup
 	onceSynced     sync.Once
 }
 
@@ -72,10 +72,10 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 	delay := initSyncInterval
 	syncCount := 0
 
-	shouldSynced := func() bool {
+	isSynced := func() bool {
 		bestBlockTime := c.repo.BestBlockSummary().Header.Timestamp()
 		now := uint64(time.Now().Unix())
-		if bestBlockTime+thor.BlockInterval >= now {
+		if bestBlockTime+thor.BlockInterval() >= now {
 			return true
 		}
 		if syncCount > 2 {
@@ -91,7 +91,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			log.Debug("synchronization start")
+			logger.Debug("synchronization start")
 
 			best := c.repo.BestBlockSummary().Header
 			// choose peer which has the head block with higher total score
@@ -101,11 +101,11 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			})
 			if peer == nil {
 				if c.peerSet.Len() < 3 {
-					log.Debug("no suitable peer to sync")
+					logger.Debug("no suitable peer to sync")
 					break
 				}
 				// if more than 3 peers connected, we are assumed to be the best
-				log.Debug("synchronization done, best assumed")
+				logger.Debug("synchronization done, best assumed")
 			} else {
 				if err := download(ctx, c.repo, peer, best.Number(), handler); err != nil {
 					peer.logger.Debug("synchronization failed", "err", err)
@@ -115,9 +115,10 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			}
 			syncCount++
 
-			if shouldSynced() {
+			if isSynced() {
 				delay = syncInterval
 				c.onceSynced.Do(func() {
+					// once off - after a bootstrap the syncedCh trigger the peers.syncTxs
 					close(c.syncedCh)
 				})
 			}
@@ -133,7 +134,8 @@ func (c *Communicator) Protocols() []*p2p.Protocol {
 			Version: proto.Version,
 			Length:  proto.Length,
 			Run:     c.servePeer,
-		}}
+		},
+	}
 }
 
 // DiscTopic returns the topic for p2p network discovery.
@@ -168,7 +170,7 @@ func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 	var txsToSync txsToSync
 
-	return peer.Serve(func(msg *p2p.Msg, w func(interface{})) error {
+	return peer.Serve(func(msg *p2p.Msg, w func(any)) error {
 		return c.handleRPC(peer, msg, w, &txsToSync)
 	}, proto.MaxMsgSize)
 }
@@ -196,7 +198,7 @@ func (c *Communicator) runPeer(peer *Peer) {
 	if localClock < remoteClock {
 		diff = remoteClock - localClock
 	}
-	if diff > thor.BlockInterval*2 {
+	if diff > thor.BlockInterval()*2 {
 		peer.logger.Debug("failed to handshake", "err", "sys time diff too large")
 		return
 	}
@@ -238,7 +240,6 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	toAnnounce := peers[p:]
 
 	for _, peer := range toPropagate {
-		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlock(c.ctx, peer, blk); err != nil {
@@ -248,15 +249,15 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	}
 
 	for _, peer := range toAnnounce {
-		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-
 			if err := proto.NotifyNewBlockID(c.ctx, peer, blk.Header().ID()); err != nil {
 				peer.logger.Debug("failed to broadcast new block id", "err", err)
 			}
 		})
 	}
+
+	metricBlocksBroadcastedCounter().Add(1)
 }
 
 // PeerCount returns count of peers.

@@ -15,6 +15,18 @@ const (
 	Version    uint   = 1
 	Length     uint64 = 8
 	MaxMsgSize        = 10 * 1024 * 1024
+
+	// MaxGetTxsResultSize bounds the MsgGetTxs response before it is decoded.
+	// The sender caps a batch at maxTxSyncSize (100 KB, see comm/handle_rpc.go)
+	// and a single tx at txpool.MaxTxSize (64 KB), so 256 KB covers the last tx
+	// crossing the batch boundary. tx.Transactions is the only unbounded decode
+	// target among the responses, and so the only one that needs narrowing.
+	MaxGetTxsResultSize = 256 * 1024
+
+	// noResultSizeLimit opts out of per-call narrowing, leaving the response
+	// bounded only by MaxMsgSize in rpc.Serve. Used for fixed-width decode
+	// targets, and where no bound tighter than MaxMsgSize can be derived.
+	noResultSizeLimit = 0
 )
 
 // Protocol messages of thor

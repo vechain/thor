@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# pre-commit hook: scan staged changes for any 64-character hex strings (Ethereum private keys).
+# To bypass this check, set SAFE_TO_IGNORE_KEY=1 when running git commit.
+
+# 1) If the environment variable is set, skip the scan entirely.
+if [ -n "$SAFE_TO_IGNORE_KEY" ]; then
+  exit 0
+fi
+
+# 2) Scan only staged additions or modifications (no context lines) for any 64-hex-char run.
+if git diff --cached --diff-filter=AM -U0 | \
+     grep -E --color=never '^(\+[^\+]|-[^-]).*[0-9A-Fa-f]{64}'; then
+  echo
+  echo "✖ ERROR: Detected a 64-character hex string (possible private key) in staged changes. Commit aborted."
+  echo
+  exit 1
+fi
+
+exit 0

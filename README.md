@@ -1,204 +1,185 @@
-# VeChain Thor
 
-A general purpose blockchain highly compatible with Ethereum's ecosystem.
+<p align="center">
+  <a href="https://www.vechain.org/vechainthor/">
+    <picture style="padding: 80px;">
+        <img src="https://raw.githubusercontent.com/vechain/thor/refs/heads/master/docs/assets/banner.png" style="padding: 20px;">
+    </picture>
+  </a>
+</p>
 
-This is the first implementation written in golang.
+---
 
-[![Go](https://img.shields.io/badge/golang-%3E%3D1.17-orange.svg)](https://golang.org)
-[![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
-![GitHub Action Status](https://github.com/vechain/thor/actions/workflows/test.yaml/badge.svg)
-[![License](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://github.com/vechain/thor/blob/master/LICENSE)
-&nbsp;&nbsp; [![TG](https://img.shields.io/badge/chat-on%20telegram-blue)](https://t.me/VeChainDevCommunity)
+<p align="center">
+    <a href="https://golang.org"><img src="https://img.shields.io/github/go-mod/go-version/vechain/thor"/></a>
+    <a href="https://github.com/vechain/thor/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-LGPL%20v3-blue.svg"/></a>
+    <img src="https://img.shields.io/github/commits-since/vechain/thor/latest" />
+    <a href="https://hub.docker.com/r/vechain/thor"><img src="https://badgen.net/docker/pulls/vechain/thor?icon=docker&label=pulls"/></a>
+</p>
 
-## Table of contents
+<p align="center">
+    <a href="https://goreportcard.com/report/github.com/vechain/thor"><img src="https://goreportcard.com/badge/github.com/vechain/thor"/></a>
+    <img src="https://github.com/vechain/thor/actions/workflows/on-master-commit.yaml/badge.svg"/>
+    <img src="https://github.com/vechain/thor/actions/workflows/on-release.yaml/badge.svg"/>
+    <a href="https://codecov.io/gh/vechain/thor"><img src="https://codecov.io/gh/vechain/thor/graph/badge.svg?token=NniVYY7IAD"/></a>
+</p>
 
-* [Installation](#installation)
-  * [Requirements](#requirements)
-  * [Getting the source](#getting-the-source)
-  * [Building](#building)
-* [Running Thor](#running-thor)
-  * [Sub-commands](#sub-commands)
-* [Docker](#docker)
-* [Explorers](#explorers)
-* [Faucet](#testnet-faucet)
-* [RESTful API](#api)
-* [Acknowledgement](#acknowledgement)
-* [Contributing](#contributing)
+---
+
+# Thor: The VeChainThor Client
+
+Thor is the official Golang client for VeChainThor, the public blockchain powering the VeChain ecosystem. VeChainThor is designed for real-world adoption, enabling scalable, low-cost, and sustainable applications.
+
+> VeChainThor is currently up-to-date with the EVM's `shanghai` hardfork. Set [`evmVersion`](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target) to `shanghai` if you are using Solidity compiler version `0.8.25` or above.
+
+## Hardware Requirements
+
+| Resource  | Validator       | Public Full Node |
+|-----------|-----------------|------------------|
+| CPU       | 4 Core          | 8 Core           |
+| RAM       | 16 GB           | 64 GB            |
+| Bandwidth | 20 Mbit         | 20 Mbit          |
+| Disk      | 500 GB NVMe SSD | 1 TB SSD         |
+
+Minimum of 45,000 IOPS required for an approximate 30 hour sync time.
+
+## Sync Time
+
+Sync time from genesis to the latest mainnet block depends on hardware, configuration, and bandwidth. As at August 2025.
+
+### Validator
+
+| Build                                         | Sync Time            | AWS SKU                                                      |
+|-----------------------------------------------|----------------------|--------------------------------------------------------------|
+| 4 CPU, 32 GB, 10 Mbit, 937 NVMe SSD, 10K IOPS | 54 Hours, 08 Minutes | [I4g.xlarge](https://aws.amazon.com/ec2/instance-types/i4g/) |
+| 2 CPU, 16 GB, 10 Mbit, 468 NVMe SSD, 35K IOPS | 38 Hours, 41 Minutes | [I8g.large](https://aws.amazon.com/ec2/instance-types/i8g/)  |
+| 4 CPU, 32 GB, 10 Mbit, 937 NVMe SSD, 45K IOPS | 30 Hours, 00 Minutes | [I8g.xlarge](https://aws.amazon.com/ec2/instance-types/i8g/) |
+
+Note: The build used the `--skip-logs` command.
+
+### Public Full Node
+
+| Build                                          | Sync Time            | AWS SKU                                                       |
+|------------------------------------------------|----------------------|---------------------------------------------------------------|
+| 8 CPU, 64 GB, 12 Mbit, 1875 NVMe SSD, 15K IOPS | 59 Hours, 04 Minutes | [I4g.2xlarge](https://aws.amazon.com/ec2/instance-types/i4g)  |
+| 8 CPU, 64 GB, 12 Mbit, 1875 NVMe SSD, 42K IOPS | 32 Hours, 17 Minutes | [I8g.2xlarge](https://aws.amazon.com/ec2/instance-types/i8g/) |
+
+Note: The build used the `-disable-pruner` command.
 
 ## Installation
 
-### Requirements
+Use either the source or Docker instructions below to start a mainnet full node with the logs and pruner enabled. Becoming a validator requires additional steps, 
+meeting the endorsement criteria and being voted in. See [Becoming a Validator](https://github.com/vechain/thor/blob/master/docs/becoming_a_validator.md) for more details.
 
-Thor requires `Go` 1.17+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install).
+For more configuration options, see [Command Line Arguments](https://github.com/vechain/thor/blob/master/docs/command_line_arguments.md), and for a full description of the nodes types, see [Node Types](https://github.com/vechain/thor/blob/master/docs/node_types.md).
 
-### Getting the source
+### Build and Run from Source
+
+#### Prerequisites
+
+Thor requires <a href="https://golang.org"><img src="https://img.shields.io/github/go-mod/go-version/vechain/thor"/></a> and a C compiler to build. Install them using your preferred package manager before continuing.
+
+#### Commands
 
 Clone the Thor repo:
 
-```shell
+```sh
 git clone https://github.com/vechain/thor.git
+```
+
+Enter the Thor directory:
+
+```sh
 cd thor
 ```
 
-### Building
+Checkout the latest stable release:
 
-To build the main app `thor`, just run
+```sh
+git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
+```
 
-```shell
+Build Thor:
+
+```sh
 make
 ```
 
-or build the full suite:
+Run Thor:
 
-```shell
-make all
+```sh
+bin/thor --network mainnet
 ```
 
-If no errors are reported, all built executable binaries will appear in folder *bin*.
+Thor will begin syncing the mainnet and can be accessed at [http://localhost:8669/](http://localhost:8669/).
 
-## Running Thor
+### Build and Run with Docker
 
-Connect to VeChain's mainnet:
+#### Docker CLI
 
-```shell
-bin/thor --network main
+```html
+docker run -d \
+  -v <local-data-dir>/.org.vechain.thor:/home/thor/.org.vechain.thor \
+  -p 127.0.0.1:8669:8669 \
+  -p 11235:11235 \
+  -p 11235:11235/udp \
+  --name thor-node vechain/thor \
+    --network mainnet  \
+    --api-addr 0.0.0.0:8669
 ```
 
-Connect to VeChain's testnet:
+Thor will begin syncing the mainnet and can be accessed at [http://localhost:8669/](http://localhost:8669/).
 
-```shell
-bin/thor --network test
+#### Docker Compose
+
+Use the provided `docker-compose.yml` to launch a node with the same configuration:
+
+```yaml
+version: '3'
+
+services:
+  thor-node:
+    image: vechain/thor
+    container_name: thor-node
+    command: --network mainnet --api-addr 0.0.0.0:8669
+    volumes:
+      - thor-data:/home/thor
+    ports:
+      - "8669:8669"
+      - "11235:11235"
+      - "11235:11235/udp"
+
+volumes:
+  thor-data:
 ```
 
-or startup a custom network
+Thor will begin syncing the mainnet and can be accessed at [http://localhost:8669/](http://localhost:8669/).
 
-```shell
-bin/thor --network <custom-net-genesis.json>
-```
+## Documentation
 
-An example genesis config file can be found at [genesis/example.json](https://raw.githubusercontent.com/vechain/thor/master/genesis/example.json).
-
-To show usages of all command line options:
-
-```shell
-bin/thor -h
-```
-
-* `--network value`             the network to join (main|test) or path to genesis file
-* `--data-dir value`            directory for block-chain databases
-* `--cache value`               megabytes of ram allocated to internal caching (default: 2048)
-* `--beneficiary value`         address for block rewards
-* `--target-gas-limit value`    target block gas limit (adaptive if set to 0) (default: 0)
-* `--api-addr value`            API service listening address (default: "localhost:8669")
-* `--api-cors value`            comma separated list of domains from which to accept cross origin requests to API
-* `--api-timeout value`         API request timeout value in milliseconds (default: 10000)
-* `--api-call-gas-limit value`  limit contract call gas (default: 50000000)
-* `--api-backtrace-limit value` limit the distance between 'position' and best block for subscriptions APIs (default: 1000)
-* `--verbosity value`           log verbosity (0-9) (default: 3)
-* `--max-peers value`           maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)
-* `--p2p-port value`            P2P network listening port (default: 11235)
-* `--nat value`                 port mapping mechanism (any|none|upnp|pmp|extip:&lt;IP&gt;) (default: "none")
-* `--bootnode value`            comma separated list of bootnode IDs
-* `--skip-logs`                 skip writing event|transfer logs (/logs API will be disabled)
-* `--pprof`                     turn on go-pprof
-* `--disable-pruner`            disable state pruner to keep all history
-* `--help, -h`                  show help
-* `--version, -v`               print the version
-
-### Sub-commands
-
-* `solo`                client runs in solo mode for test & dev
-
-```shell
-# create new block when there is pending transaction
-bin/thor solo --on-demand
-
-# save blockchain data to disk(default to memory)
-bin/thor solo --persist
-
-# two options can work together
-bin/thor solo --persist --on-demand
-```
-
-* `master-key`          master key management
-
-```shell
-# print the master address
-bin/thor master-key
-
-# export master key to keystore
-bin/thor master-key --export > keystore.json
-
-
-# import master key from keystore
-cat keystore.json | bin/thor master-key --import
-```
-
-## Docker
-
-Docker is one quick way for running a vechain node:
-
-```shell
-docker run -d\
-  -v {path-to-your-data-directory}/.org.vechain.thor:/home/thor/.org.vechain.thor\
-  -p 127.0.0.1:8669:8669 -p 11235:11235 -p 11235:11235/udp\
-  --name thor-node vechain/thor --network test
-```
-
-Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without the flag.
-
-Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed the default user from `root` (UID: 0) to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
-
-## Explorers
-
-* [VeChain Explorer (Official)](https://explore.vechain.org)
-* [VeChainStats](https://vechainstats.com/)
-* [Insight](https://insight.vecha.in/)
-
-## Testnet faucet
-
-* [faucet.vecha.in](https://faucet.vecha.in) by *VeChain Foundation*
-
-## API
-
-Once `thor` has started, the online *OpenAPI* doc can be accessed in your browser. e.g. [http://localhost:8669/](http://localhost:8669) by default.
-
-[![Thorest](https://raw.githubusercontent.com/vechain/thor/master/thorest.png)](http://localhost:8669/)
-
-## Acknowledgement
-
-A special shout out to following projects:
-
-* [Ethereum](https://github.com/ethereum)
-* [Swagger](https://github.com/swagger-api)
+- [Becoming a Validator](https://github.com/vechain/thor/blob/master/docs/becoming_a_validator.md)
+- [Command Line Arguments](https://github.com/vechain/thor/blob/master/docs/command_line_arguments.md)
+- [Node Types](https://github.com/vechain/thor/blob/master/docs/node_types.md)
+- [Thor Solo](https://github.com/vechain/thor/blob/master/docs/thor_solo.md)
 
 ## Contributing
 
-Thank you so much for considering to help out with the source code! We welcome contributions from anyone on the internet, and are grateful for even the smallest of fixes!
+Contributions are welcome and appreciated!  
 
-Please fork, fix, commit and send a pull request for the maintainers to review and merge into the main code base.
+Please review our [Contribution Guidelines](https://github.com/vechain/thor/blob/master/docs/CONTRIBUTING.md) before submitting a PR.
 
-### Forking Thor
+## Security
 
-When you "Fork" the project, GitHub will make a copy of the project that is entirely yours; it lives in your namespace, and you can push to it.
+If you discover a security vulnerability, please report it according to our [Security Policy](https://github.com/vechain/thor/blob/master/docs/SECURITY.md).
 
-### Getting ready for a pull request
+## Acknowledgements
 
-Please check the following:
+Special thanks to the following projects:
 
-* Code must be adhere to the official Go Formatting guidelines.
-* Get the branch up to date, by merging in any recent changes from the master branch.
-
-### Making the pull request
-
-1. On the GitHub site, go to "Code". Then click the green "Compare and Review" button. Your branch is probably in the "Example Comparisons" list, so click on it. If not, select it for the "compare" branch.
-1. Make sure you are comparing your new branch to master. It probably won't be, since the front page is the latest release branch, rather than master now. So click the base branch and change it to master.
-1. Press Create Pull Request button.
-1. Provide a brief title.
-1. Explain the major changes you are asking to be code reviewed. Often it is useful to open a second tab in your browser where you can look through the diff yourself to remind yourself of all the changes you have made.
+- [Ethereum](https://github.com/ethereum)
+- [Go-Ethereum](https://github.com/ethereum/go-ethereum)
+- [Swagger](https://github.com/swagger-api)
+- [Stoplight Elements](https://github.com/stoplightio/elements)
 
 ## License
 
-VeChain Thor is licensed under the
-[GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also included
-in *LICENSE* file in repository.
+VeChainThor is licensed under the [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also available in the `LICENSE` file in this repository.

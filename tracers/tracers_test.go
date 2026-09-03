@@ -28,22 +28,24 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/tracers/logger"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
-	"github.com/vechain/thor/xenv"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/tracers/logger"
+	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vm"
+	"github.com/vechain/thor/v2/xenv"
 
 	// Force-load the tracer engines to trigger registration
-	_ "github.com/vechain/thor/tracers/js"
-	_ "github.com/vechain/thor/tracers/native"
+	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
 type callLog struct {
@@ -98,7 +100,7 @@ type traceTest struct {
 
 type callTest struct {
 	traceTest
-	Calls callFrame `json:"calls,omitempty"`
+	Calls callFrame `json:"calls"`
 }
 
 type diffState struct {
@@ -119,7 +121,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 	}
 
 	repo, _ := chain.NewRepository(db, gene)
-	st := state.New(db, gene.Header().StateRoot(), 0, 0, 0)
+	st := state.New(db, trie.Root{Hash: gene.Header().StateRoot()})
 	chain := repo.NewChain(gene.Header().ID())
 
 	for addr, account := range data.State {
@@ -168,10 +170,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 
 	leftOverGas := output.LeftOverGas
 	gasUsed := uint64(data.Context.Gas) - leftOverGas
-	refund := gasUsed / 2
-	if refund > output.RefundGas {
-		refund = output.RefundGas
-	}
+	refund := min(gasUsed/2, output.RefundGas)
 	leftOverGas += refund
 
 	tr.CaptureClauseEnd(leftOverGas)
@@ -236,7 +235,6 @@ func TestCallTracers(t *testing.T) {
 			}
 			assert.Equal(t, prestate(testData.State), pre)
 		})
-
 	}
 }
 
@@ -266,7 +264,6 @@ func TestPreStateTracers(t *testing.T) {
 			}
 			assert.Equal(t, testData.diffState, got)
 		})
-
 	}
 }
 
@@ -370,7 +367,7 @@ func TestInternals(t *testing.T) {
 			}
 
 			repo, _ := chain.NewRepository(db, gene)
-			st := state.New(db, gene.Header().StateRoot(), 0, 0, 0)
+			st := state.New(db, trie.Root{Hash: gene.Header().StateRoot()})
 			chain := repo.NewChain(gene.Header().ID())
 
 			st.SetCode(to, tc.code)
@@ -392,7 +389,7 @@ func TestInternals(t *testing.T) {
 			rt.SetVMConfig(vm.Config{Tracer: tr})
 
 			gas := uint64(80000)
-			clause := tx.NewClause(&to).WithValue((*big.Int)(big.NewInt(0)))
+			clause := tx.NewClause(&to).WithValue(big.NewInt(0))
 			// to remain the same with testcases from ethereum, here deduct intrinsic gas since ethereum captures gas including intrinsic and we don't
 			// we are capturing at clause level
 			exec, _ := rt.PrepareClause(clause, 0, gas-21000, &xenv.TransactionContext{
@@ -408,10 +405,7 @@ func TestInternals(t *testing.T) {
 
 			leftOverGas := output.LeftOverGas
 			gasUsed := gas - leftOverGas
-			refund := gasUsed / 2
-			if refund > output.RefundGas {
-				refund = output.RefundGas
-			}
+			refund := min(gasUsed/2, output.RefundGas)
 			leftOverGas += refund
 
 			tr.CaptureClauseEnd(leftOverGas)

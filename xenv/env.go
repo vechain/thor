@@ -12,12 +12,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/abi"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vm"
 )
 
 // BlockContext block context.
@@ -28,28 +29,32 @@ type BlockContext struct {
 	Time        uint64
 	GasLimit    uint64
 	TotalScore  uint64
+	BaseFee     *big.Int
 }
 
 // TransactionContext transaction context.
 type TransactionContext struct {
-	ID         thor.Bytes32
-	Origin     thor.Address
-	GasPayer   thor.Address
-	GasPrice   *big.Int
-	ProvedWork *big.Int
-	BlockRef   tx.BlockRef
-	Expiration uint32
+	ID          thor.Bytes32
+	Origin      thor.Address
+	GasPayer    thor.Address
+	GasPrice    *big.Int
+	ProvedWork  *big.Int
+	BlockRef    tx.BlockRef
+	Expiration  uint32
+	ClauseCount uint32
 }
 
 // Environment an env to execute native method.
 type Environment struct {
-	abi      *abi.Method
-	chain    *chain.Chain
-	state    *state.State
-	blockCtx *BlockContext
-	txCtx    *TransactionContext
-	evm      *vm.EVM
-	contract *vm.Contract
+	abi         *abi.Method
+	chain       *chain.Chain
+	state       *state.State
+	blockCtx    *BlockContext
+	txCtx       *TransactionContext
+	evm         *vm.EVM
+	contract    *vm.Contract
+	clauseIndex uint32
+	forkConfig  *thor.ForkConfig
 }
 
 // New create a new env.
@@ -58,18 +63,22 @@ func New(
 	chain *chain.Chain,
 	state *state.State,
 	blockCtx *BlockContext,
+	forkConfig *thor.ForkConfig,
 	txCtx *TransactionContext,
 	evm *vm.EVM,
 	contract *vm.Contract,
+	clauseIndex uint32,
 ) *Environment {
 	return &Environment{
-		abi:      abi,
-		chain:    chain,
-		state:    state,
-		blockCtx: blockCtx,
-		txCtx:    txCtx,
-		evm:      evm,
-		contract: contract,
+		abi:         abi,
+		chain:       chain,
+		state:       state,
+		forkConfig:  forkConfig,
+		blockCtx:    blockCtx,
+		txCtx:       txCtx,
+		evm:         evm,
+		contract:    contract,
+		clauseIndex: clauseIndex,
 	}
 }
 
@@ -79,6 +88,8 @@ func (env *Environment) TransactionContext() *TransactionContext { return env.tx
 func (env *Environment) BlockContext() *BlockContext             { return env.blockCtx }
 func (env *Environment) Caller() thor.Address                    { return thor.Address(env.contract.Caller()) }
 func (env *Environment) To() thor.Address                        { return thor.Address(env.contract.Address()) }
+func (env *Environment) ClauseIndex() uint32                     { return env.clauseIndex }
+func (env *Environment) ForkConfig() *thor.ForkConfig            { return env.forkConfig }
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {
@@ -86,14 +97,18 @@ func (env *Environment) UseGas(gas uint64) {
 	}
 }
 
-func (env *Environment) ParseArgs(val interface{}) {
+func (env *Environment) Revert(msg string) {
+	panic(&errReverted{message: msg})
+}
+
+func (env *Environment) ParseArgs(val any) {
 	if err := env.abi.DecodeInput(env.contract.Input, val); err != nil {
 		// as vm error
 		panic(errors.WithMessage(err, "decode native input"))
 	}
 }
 
-func (env *Environment) Log(abi *abi.Event, address thor.Address, topics []thor.Bytes32, args ...interface{}) {
+func (env *Environment) Log(abi *abi.Event, address thor.Address, topics []thor.Bytes32, args ...any) {
 	data, err := abi.Encode(args...)
 	if err != nil {
 		panic(errors.WithMessage(err, "encode native event"))
@@ -112,11 +127,15 @@ func (env *Environment) Log(abi *abi.Event, address thor.Address, topics []thor.
 	})
 }
 
-func (env *Environment) Call(proc func(env *Environment) []interface{}) (output []byte, err error) {
+func (env *Environment) Call(proc func(env *Environment) []any) (output []byte, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			if e == vm.ErrOutOfGas {
 				err = vm.ErrOutOfGas
+			} else if isReverted(e) {
+				revertErr := e.(*errReverted)
+				err = vm.ErrExecutionReverted
+				output = revertErr.Bytes()
 			} else {
 				panic(e)
 			}

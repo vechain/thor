@@ -23,7 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/vm"
 )
 
 type JSONLogger struct {
@@ -42,17 +43,37 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	return l
 }
 
-func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureStart(env *vm.EVM, _, _ common.Address, _ bool, _ []byte, _ uint64, _ *big.Int) {
 	l.env = env
 }
 
-func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
+func (l *JSONLogger) CaptureFault(
+	pc uint64,
+	op vm.OpCode,
+	gas uint64,
+	cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	depth int,
+	err error,
+) {
 	// TODO: Add rData to this interface as well
 	l.CaptureState(pc, op, gas, cost, memory, stack, contract, nil, depth, err)
 }
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (l *JSONLogger) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	_ *vm.Contract,
+	rData []byte,
+	depth int,
+	err error,
+) {
 	log := StructLog{
 		Pc:            pc,
 		Op:            op,
@@ -89,7 +110,7 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureEnter(_ vm.OpCode, _ common.Address, _ common.Address, _ []byte, _ uint64, _ *big.Int) {
 }
 
-func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (l *JSONLogger) CaptureExit(_ []byte, _ uint64, _ error) {}

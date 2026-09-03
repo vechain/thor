@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -66,6 +65,11 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Hex returns an EIP55-compliant hex string representation of the address.
+func (a Address) Hex() string {
+	return common.HexToAddress(a.String()).Hex()
+}
+
 // ParseAddress convert string presented address into Address type.
 func ParseAddress(s string) (Address, error) {
 	if len(s) == AddressLength*2 {
@@ -108,5 +112,5 @@ func CreateContractAddress(txID Bytes32, clauseIndex uint32, creationCount uint3
 	var b4_1, b4_2 [4]byte
 	binary.BigEndian.PutUint32(b4_1[:], clauseIndex)
 	binary.BigEndian.PutUint32(b4_2[:], creationCount)
-	return BytesToAddress(crypto.Keccak256(txID[:], b4_1[:], b4_2[:]))
+	return BytesToAddress(Keccak256(txID[:], b4_1[:], b4_2[:]).Bytes())
 }

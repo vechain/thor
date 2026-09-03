@@ -6,16 +6,20 @@
 package thor
 
 import (
+	"math"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/params"
 )
 
+/*
+ NOTE: any changes to gas limit or block interval may affect how the txIndex and blockNumber are stored in logdb/sequence.go:
+  - an increase in gas limit may require more bits for txIndex;
+  - if block frequency is increased, blockNumber will increment faster, potentially exhausting the allocated bits sooner than expected.
+*/
 // Constants of block chain.
 const (
-	BlockInterval uint64 = 10 // time interval between two consecutive blocks.
-
 	TxGas                     uint64 = 5000
 	ClauseGas                 uint64 = params.TxGas - TxGas
 	ClauseGasContractCreation uint64 = params.TxGasContractCreation - TxGas
@@ -23,34 +27,69 @@ const (
 	MinGasLimit          uint64 = 1000 * 1000
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
-	GetBalanceGas        uint64 = 400              //EIP158 gas table
+	GetBalanceGas        uint64 = 400              // EIP158 gas table
 	SloadGas             uint64 = 200              // EIP158 gas table
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
+	EcrecoverGas         uint64 = params.EcrecoverGas
 
-	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	MaxTxGasLimit             uint64 = 1 << 24                // 16,777,216 - EIP-7825 per-transaction gas cap
+	MaxTxWorkDelay            uint32 = 30                     // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	TolerableBlockPackingTime        = 500 * time.Millisecond // the indicator to adjust target block gas limit
+	MaxStateHistory                  = 65535                  // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
-	InitialMaxBlockProposers uint64 = 101
+	GasTargetPercentage      = 75                 // percentage of the block gas limit to determine the gas target
+	InitialBaseFee           = 10_000_000_000_000 // 10^13 wei, 0.00001 VTHO
+	BaseFeeChangeDenominator = 8                  // determines the percentage change in the base fee per block based on network utilization
 
-	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
+	MaxPosScore = 10000 // max total score after PoS fork
 
-	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
-
-	SeederInterval     = 8640 // blocks between two seeder epochs.
-	CheckpointInterval = 180  // blocks between two bft checkpoints.
+	MaxRLPBlockSize uint64 = 8_388_608 // maximum size of an RLP-encoded block
 )
 
 // Keys of governance params.
 var (
-	KeyExecutorAddress     = BytesToBytes32([]byte("executor"))
-	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
-	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
-	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
-	KeyMaxBlockProposers   = BytesToBytes32([]byte("max-block-proposers"))
+	KeyExecutorAddress           = BytesToBytes32([]byte("executor"))
+	KeyRewardRatio               = BytesToBytes32([]byte("reward-ratio"))
+	KeyValidatorRewardPercentage = BytesToBytes32([]byte("validator-reward-percentage"))
+	KeyLegacyTxBaseGasPrice      = BytesToBytes32([]byte("base-gas-price")) // the legacy tx default gas price
+	KeyProposerEndorsement       = BytesToBytes32([]byte("proposer-endorsement"))
+	KeyMaxBlockProposers         = BytesToBytes32([]byte("max-block-proposers"))
+	KeyCurveFactor               = BytesToBytes32([]byte("curve-factor")) // curve factor to define VTHO issuance after PoS
+	KeyDelegatorContractAddress  = BytesToBytes32([]byte("delegator-contract-address"))
+	// staker switches to control the pause of staker and stargate, last bit pauses the delegator contract, second-to-last bit pauses  the staker contract
+	KeyStakerSwitches = BytesToBytes32([]byte("staker-switches"))
 
-	InitialRewardRatio         = big.NewInt(3e17) // 30%
-	InitialBaseGasPrice        = big.NewInt(1e15)
-	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialMaxBlockProposers         uint64 = 101
+	InitialRewardRatio                      = big.NewInt(3e17) // 30%
+	InitialValidatorRewardPercentage        = 30               // 30%
+	InitialBaseGasPrice                     = big.NewInt(1e15)
+	InitialProposerEndorsement              = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialCurveFactor                      = big.NewInt(76800)
 
-	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
+	EnergyGrowthRate      = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
+	NumberOfBlocksPerYear = big.NewInt(8640 * 365) // number of blocks per year, non leap (365 days)
 )
+
+// GetMaxBlockProposers retrieves the max block proposers parameter with fallback to initial value
+// If capToInitial is true, values greater than InitialMaxBlockProposers are also capped (PoA)
+func GetMaxBlockProposers(params interface {
+	Get(Bytes32) (*big.Int, error)
+}, capToInitial bool,
+) (uint64, error) {
+	mbp, err := params.Get(KeyMaxBlockProposers)
+	if err != nil {
+		return 0, err
+	}
+
+	var maxBlockProposers uint64
+	if !mbp.IsUint64() {
+		maxBlockProposers = math.MaxUint64
+	} else {
+		maxBlockProposers = mbp.Uint64()
+	}
+	if maxBlockProposers == 0 || (capToInitial && maxBlockProposers > InitialMaxBlockProposers) {
+		maxBlockProposers = InitialMaxBlockProposers
+	}
+	return maxBlockProposers, nil
+}

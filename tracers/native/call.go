@@ -24,11 +24,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
-//go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
+//go:generate go run github.com/fjl/gencodec@v0.1.1 -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
 
 func init() {
 	tracers.DefaultDirectory.Register("callTracer", newCallTracer, false)
@@ -118,7 +119,7 @@ func newCallTracer(cfg json.RawMessage) (tracers.Tracer, error) {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) CaptureStart(_ *vm.EVM, from common.Address, to common.Address, create bool, input []byte, _ uint64, value *big.Int) {
 	toCopy := to
 	t.callstack[0] = callFrame{
 		Type:  vm.CALL,
@@ -134,12 +135,22 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *callTracer) CaptureEnd(output []byte, _ uint64, err error) {
 	t.callstack[0].processOutput(output, err)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (t *callTracer) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	_, _ uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	rData []byte,
+	depth int,
+	err error,
+) {
 	// skip if the previous op caused an error
 	if err != nil {
 		return
@@ -166,7 +177,7 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, mem
 		mStart := stackData[len(stackData)-1]
 		mSize := stackData[len(stackData)-2]
 		topics := make([]common.Hash, size)
-		for i := 0; i < size; i++ {
+		for i := range size {
 			topic := stackData[len(stackData)-2-(i+1)]
 			topics[i] = common.Hash(topic.Bytes32())
 		}
@@ -217,7 +228,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	// pop call
 	call := t.callstack[size-1]
 	t.callstack = t.callstack[:size-1]
-	size -= 1
+	size--
 
 	call.GasUsed = gasUsed
 	call.processOutput(output, err)

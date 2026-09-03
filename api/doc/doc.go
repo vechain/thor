@@ -8,11 +8,15 @@ package doc
 import (
 	"embed"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
-//go:embed swagger-ui thor.yaml
+// FS embeds the Open API specs and documentation.
+//
+//go:embed thor.yaml stoplight-ui swagger-ui icons
 var FS embed.FS
+var Thoryaml []byte
+
 var version string
 
 // Version open api version

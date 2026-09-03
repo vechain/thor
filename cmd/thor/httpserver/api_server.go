@@ -1,0 +1,177 @@
+// Copyright (c) 2018 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package httpserver
+
+import (
+	"net"
+	"net/http"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/blocks"
+	"github.com/vechain/thor/v2/api/debug"
+	"github.com/vechain/thor/v2/api/doc"
+	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/fees"
+	"github.com/vechain/thor/v2/api/middleware"
+	"github.com/vechain/thor/v2/api/node"
+	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/txpool"
+)
+
+var logger = log.WithContext("pkg", "api")
+
+const (
+	defaultFeeCacheSize     = 1024
+	defaultRequestBodyLimit = 200 * 1024 // 200KB
+	defaultMaxCriteriaCount = 10
+	defaultIdleTimeout      = 10 * time.Second
+)
+
+type APIConfig struct {
+	AllowedOrigins             string
+	BacktraceLimit             uint32
+	CallGasLimit               uint64
+	BatchDataMaxSize           uint64
+	SkipLogs                   bool
+	AllowCustomTracer          bool
+	EnableReqLogger            *atomic.Bool
+	EnableMetrics              bool
+	LogsLimit                  uint64
+	AllowedTracers             []string
+	SoloMode                   bool
+	EnableDeprecated           bool
+	EnableTxPool               *atomic.Bool
+	APIBacktraceLimit          int
+	PriorityIncreasePercentage int
+	Timeout                    int
+	SlowQueriesThreshold       int
+	Log5XXErrors               bool
+	MaxLogsOffset              uint64
+}
+
+func StartAPIServer(
+	addr string,
+	repo *chain.Repository,
+	stater *state.Stater,
+	txPool txpool.Pool,
+	logDB *logdb.LogDB,
+	bft bft.Committer,
+	nw api.Network,
+	forkConfig *thor.ForkConfig,
+	config APIConfig,
+) (string, func(), error) {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", nil, errors.Wrapf(err, "listen API addr [%v]", addr)
+	}
+
+	origins := strings.Split(strings.TrimSpace(config.AllowedOrigins), ",")
+	for i, o := range origins {
+		origins[i] = strings.ToLower(strings.TrimSpace(o))
+	}
+
+	router := mux.NewRouter()
+
+	// to serve stoplight, swagger and api docs
+	router.Path("/doc/thor.yaml").HandlerFunc(
+		func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "application/x-yaml")
+			w.Write(doc.Thoryaml)
+		})
+
+	router.PathPrefix("/doc").Handler(
+		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
+	)
+
+	// redirect stoplight-ui
+	router.Path("/").HandlerFunc(
+		func(w http.ResponseWriter, req *http.Request) {
+			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
+		})
+
+	accounts.New(repo, stater, config.CallGasLimit, config.BatchDataMaxSize, forkConfig, bft, config.EnableDeprecated).Mount(router, "/accounts")
+	if !config.SkipLogs {
+		events.New(repo, logDB, config.LogsLimit, config.MaxLogsOffset, defaultMaxCriteriaCount).Mount(router, "/logs/event")
+		transfers.New(repo, logDB, config.LogsLimit, config.MaxLogsOffset, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
+	}
+	blocks.New(repo, bft).Mount(router, "/blocks")
+	transactions.New(repo, txPool).Mount(router, "/transactions")
+	debug.New(repo, stater, forkConfig, bft,
+		config.CallGasLimit,
+		config.AllowCustomTracer,
+		config.AllowedTracers,
+		config.SoloMode,
+	).Mount(router, "/debug")
+	node.New(nw, txPool, config.EnableTxPool).Mount(router, "/node")
+	fees.New(repo, bft, forkConfig, stater, fees.Config{
+		APIBacktraceLimit:          config.APIBacktraceLimit,
+		PriorityIncreasePercentage: config.PriorityIncreasePercentage,
+		FixedCacheSize:             defaultFeeCacheSize,
+	}).Mount(router, "/fees")
+	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
+	subs.Mount(router, "/subscriptions")
+
+	// middlewares
+	// body limit and timeout
+	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
+	if config.Timeout > 0 {
+		router.Use(middleware.HandleAPITimeout(time.Duration(config.Timeout) * time.Millisecond))
+	}
+
+	// metrics and request logger should be configured as soon as possible
+	slowQueriesThreshold := time.Duration(config.SlowQueriesThreshold) * time.Millisecond
+	router.Use(middleware.RequestLoggerMiddleware(logger, config.EnableReqLogger, slowQueriesThreshold, config.Log5XXErrors))
+	if config.EnableMetrics {
+		router.Use(middleware.MetricsMiddleware)
+	}
+	router.Use(middleware.HandlePanics(config.Log5XXErrors))
+
+	router.Use(middleware.HandleXGenesisID(repo.GenesisBlock().Header().ID()))
+	router.Use(middleware.HandleXThorestVersion)
+
+	router.Use(handlers.CompressHandler)
+	handler := handlers.CORS(
+		handlers.AllowedOrigins(origins),
+		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
+		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
+	)(router)
+	// IdleTimeout is set explicitly because http.Server otherwise falls back to
+	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read
+	// budget. No WriteTimeout: it would abort honest large responses (/logs,
+	// expanded blocks) mid-transfer on slow links.
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: time.Second,
+		ReadTimeout:       5 * time.Second,
+		IdleTimeout:       defaultIdleTimeout,
+	}
+	var goes sync.WaitGroup
+	goes.Go(func() {
+		srv.Serve(listener)
+	})
+	return "http://" + listener.Addr().String() + "/", func() {
+		srv.Close()
+		subs.Close()
+		goes.Wait()
+	}, nil
+}

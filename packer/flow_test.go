@@ -1,0 +1,646 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package packer_test
+
+import (
+	"fmt"
+	"math"
+	"math/big"
+	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+)
+
+func createTx(
+	txType tx.Type,
+	chainTag byte,
+	gasPriceCoef uint8,
+	expiration uint32,
+	gas uint64,
+	nonce uint64,
+	dependsOn *thor.Bytes32,
+	clause *tx.Clause,
+	br tx.BlockRef,
+) *tx.Transaction {
+	builder := tx.NewBuilder(txType).
+		ChainTag(chainTag).
+		GasPriceCoef(gasPriceCoef).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).
+		Expiration(expiration).
+		Gas(gas).
+		Nonce(nonce).
+		DependsOn(dependsOn).
+		Clause(clause).
+		BlockRef(br)
+
+	transaction := builder.Build()
+
+	signature, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+
+	return transaction.WithSignature(signature)
+}
+
+func TestAdopt(t *testing.T) {
+	// Setup environment
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g, forkConfig := genesis.NewDevnet()
+
+	// Build genesis block
+	b, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b)
+
+	// Common transaction setup
+	chainTag := repo.ChainTag()
+	addr := thor.BytesToAddress([]byte("to"))
+	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	// Create and adopt two transactions
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, forkConfig, 0)
+	sum, err := repo.GetBlockSummary(b.Header().ID())
+	if err != nil {
+		t.Fatal("Error getting block summary:", err)
+	}
+
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal("Error scheduling:", err)
+	}
+
+	tx1 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	if err := flow.Adopt(tx1); err != nil {
+		t.Fatal("Error adopting tx1:", err)
+	}
+
+	tx2 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
+	if err := flow.Adopt(tx2); err != nil {
+		t.Fatal("Error adopting tx2:", err)
+	}
+
+	// Repeat transaction
+	expectedErrorMessage := "known tx"
+	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test dependency that does not exist
+	tx3 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
+	expectedErrorMessage = "tx not adoptable now"
+	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test Getters
+	flow.ParentHeader()
+	flow.When()
+	flow.TotalScore()
+}
+
+func TestAdoptTypedTxs(t *testing.T) {
+	fc := &thor.SoloFork
+	fc.HAYABUSA = math.MaxUint32
+	// Setup environment
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
+		ForkConfig: fc,
+		GasLimit:   thor.MaxTxGasLimit * 2,
+	})
+
+	// Build genesis block
+	b, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b)
+
+	// Common transaction setup
+	chainTag := repo.ChainTag()
+	addr := thor.BytesToAddress([]byte("to"))
+	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	// Create and adopt two transactions
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, fc, 0)
+	sum, err := repo.GetBlockSummary(b.Header().ID())
+	if err != nil {
+		t.Fatal("Error getting block summary:", err)
+	}
+
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal("Error scheduling:", err)
+	}
+
+	tx1 := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	if err := flow.Adopt(tx1); err != nil {
+		t.Fatal("Error adopting tx1:", err)
+	}
+
+	tx2 := createTx(tx.TypeDynamicFee, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)(tx1.ID().Bytes()), clause, tx.NewBlockRef(0))
+	if err := flow.Adopt(tx2); err != nil {
+		t.Fatal("Error adopting tx2:", err)
+	}
+
+	// Repeat transaction
+	expectedErrorMessage := "known tx"
+	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test dependency that does not exist
+	tx3 := createTx(tx.TypeDynamicFee, chainTag, 1, 10, 21000, 2, (*thor.Bytes32)((thor.Bytes32{0x1}).Bytes()), clause, tx.NewBlockRef(0))
+	expectedErrorMessage = "tx not adoptable now"
+	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// INTERSTELLAR active: over-limit tx should be rejected by EIP-7825.
+	txOverLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit+1, 3, nil, clause, tx.NewBlockRef(0))
+	err = flow.Adopt(txOverLimit)
+	assert.Equal(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+
+	// INTERSTELLAR active: at-limit tx should not fail for EIP-7825.
+	txAtLimit := createTx(tx.TypeLegacy, chainTag, 1, 10, thor.MaxTxGasLimit, 4, nil, clause, tx.NewBlockRef(0))
+	err = flow.Adopt(txAtLimit)
+	if err != nil {
+		assert.NotEqual(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+	}
+}
+
+func TestPack(t *testing.T) {
+	db := muxdb.NewMem()
+	g, forkConfig := genesis.NewDevnet()
+
+	stater := state.NewStater(db)
+	parent, _, _, _ := g.Build(stater)
+
+	repo, _ := chain.NewRepository(db, parent)
+
+	proposer := genesis.DevAccounts()[0]
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig, 0)
+	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
+
+	flow.Pack(proposer.PrivateKey, 0, false)
+
+	// Test with shouldVote
+	flow.Pack(proposer.PrivateKey, 0, true)
+
+	// Test wrong private key
+	expectedErrorMessage := "private key mismatch"
+	if _, _, _, err := flow.Pack(genesis.DevAccounts()[1].PrivateKey, 0, false); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+}
+
+func TestPackAfterGalacticaFork(t *testing.T) {
+	db := muxdb.NewMem()
+	g, _ := genesis.NewDevnet()
+
+	stater := state.NewStater(db)
+	parent, _, _, _ := g.Build(stater)
+
+	repo, _ := chain.NewRepository(db, parent)
+
+	forkConfig := thor.NoFork
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP214 = 0
+	forkConfig.FINALITY = 0
+	forkConfig.GALACTICA = 2
+
+	proposer := genesis.DevAccounts()[0]
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, &forkConfig, 0)
+	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval())
+
+	// Block 1: Galactica is not enabled
+	block, stg, receipts, err := flow.Pack(proposer.PrivateKey, 0, false)
+	assert.Nil(t, err)
+	assert.Equal(t, uint32(1), block.Header().Number())
+	assert.Nil(t, block.Header().BaseFee())
+
+	if _, err := stg.Commit(); err != nil {
+		t.Fatal("Error committing state:", err)
+	}
+	if err := repo.AddBlock(block, receipts, 0, true); err != nil {
+		t.Fatal("Error adding block:", err)
+	}
+
+	// Block 2: Galactica is enabled
+	parentSum, _ = repo.GetBlockSummary(block.Header().ID())
+	flow, _ = p.Schedule(parentSum, block.Header().Timestamp()+100*thor.BlockInterval())
+	block, _, _, err = flow.Pack(proposer.PrivateKey, 0, false)
+	assert.Nil(t, err)
+	assert.Equal(t, uint32(2), block.Header().Number())
+	assert.Equal(t, big.NewInt(thor.InitialBaseFee), block.Header().BaseFee())
+
+	// Adopt a tx which has not enough max fee to cover for base fee
+	badTx := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(repo.ChainTag()).
+		Gas(21000).
+		MaxFeePerGas(big.NewInt(thor.InitialBaseFee - 1)).
+		MaxPriorityFeePerGas(common.Big1).
+		Expiration(100).
+		Build()
+	badTx = tx.MustSign(badTx, genesis.DevAccounts()[0].PrivateKey)
+	expectedErrorMessage := "tx not adoptable now: gas price is less than block base fee"
+	if err := flow.Adopt(badTx); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+}
+
+func TestAdoptErr(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	launchTime := uint64(1526400000)
+
+	config := &thor.NoFork
+	config.BLOCKLIST = 0
+
+	g := new(genesis.Builder).
+		GasLimit(0).
+		Timestamp(launchTime).
+		ForkConfig(config).
+		State(func(state *state.State) error {
+			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+			builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(genesis.DevAccounts()[0].Address[:]))
+			for _, acc := range genesis.DevAccounts() {
+				state.SetBalance(acc.Address, bal)
+				state.SetEnergy(acc.Address, bal, launchTime)
+				builtin.Authority.Native(state).Add(acc.Address, acc.Address, thor.Bytes32{})
+			}
+			return nil
+		})
+
+	// Build genesis block
+	b, _, _, _ := g.Build(stater)
+
+	repo, _ := chain.NewRepository(db, b)
+
+	// Common transaction setup
+	addr := thor.BytesToAddress([]byte("to"))
+	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, config, 0)
+	sum, _ := repo.GetBlockSummary(b.Header().ID())
+
+	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
+
+	// Test chain tag mismatch
+	tx1 := createTx(tx.TypeLegacy, byte(0xFF), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+	expectedErrorMessage := "bad tx: chain tag mismatch"
+	if err := flow.Adopt(tx1); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test wrong block reference
+	tx2 := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(1000))
+	expectedErrorMessage = "tx not adoptable now"
+	if err := flow.Adopt(tx2); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test exceeded gas limit
+	tx3 := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 0, 1, 1, nil, clause, tx.NewBlockRef(1))
+	expectedErrorMessage = "gas limit reached"
+	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+	// Test origin blacklisted
+	builder := new(tx.Builder).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(0).
+		Gas(10e18).
+		Nonce(nonce).
+		Clause(clause).
+		BlockRef(tx.NewBlockRef(1))
+	tx4 := tx.MustSign(builder.Build(), genesis.DevAccounts()[9].PrivateKey)
+
+	expectedErrorMessage = "bad tx: tx origin blocked"
+	if err := flow.Adopt(tx4); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// Test delegator blacklisted
+	builder = new(tx.Builder).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(0).
+		Gas(10e18).
+		Nonce(nonce).
+		Clause(clause).
+		Features(tx.Features(0x01)).
+		BlockRef(tx.NewBlockRef(1))
+	tx5 := tx.MustSignDelegated(builder.Build(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)
+
+	expectedErrorMessage = "bad tx: tx delegator blocked"
+	if err := flow.Adopt(tx5); err.Error() != expectedErrorMessage {
+		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
+	}
+
+	// INTERSTELLAR inactive: over-limit tx should not return EIP-7825 error.
+	txOverLimitPreFork := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 10, thor.MaxTxGasLimit+1, 2, nil, clause, tx.NewBlockRef(0))
+	err := flow.Adopt(txOverLimitPreFork)
+	if err != nil {
+		assert.NotEqual(t, "bad tx: tx gas limit exceeds the maximum allowed", err.Error())
+	}
+}
+
+func TestAdoptErrorAfterGalactica(t *testing.T) {
+	forks := thor.ForkConfig{GALACTICA: 2, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32}
+	chain, err := testchain.NewWithFork(&forks, 180)
+	assert.NoError(t, err)
+
+	// Try to adopt a dyn fee tx before galactica fork activates - FAILS
+	tr := tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+
+	expectedErrMsg := "unable to adopt tx into block: bad tx: invalid tx type"
+	assert.Equal(t, expectedErrMsg, err.Error())
+
+	// Try to adopt a legacy tx - SUCCESS
+	tr = tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+	assert.NoError(t, err)
+
+	// Try to adopt a dyn fee tx after galactica fork activates - SUCCESS
+	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).MaxFeePerGas(big.NewInt(thor.InitialBaseFee)).Gas(21000).Expiration(100).Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+	assert.NoError(t, err)
+
+	// Try to adopt a dyn fee tx with max fee per gas less than base fee - FAILS
+	best, err := chain.BestBlock()
+	assert.NoError(t, err)
+	expectedBaseFee := galactica.CalcBaseFee(best.Header(), &forks)
+	notEnoughBaseFee := new(big.Int).Sub(expectedBaseFee, common.Big1)
+
+	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(notEnoughBaseFee).Gas(21000).Expiration(100).Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+	expectedErrMsg = "unable to adopt tx into block: tx not adoptable now: gas price is less than block base fee"
+	assert.Equal(t, expectedErrMsg, err.Error())
+
+	// Try to adopt a dyn fee with just the right amount of max fee per gas - SUCCESS
+	tr = tx.NewBuilder(tx.TypeDynamicFee).ChainTag(chain.Repo().ChainTag()).Nonce(2).MaxFeePerGas(expectedBaseFee).Gas(21000).Expiration(100).Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+	assert.NoError(t, err)
+
+	// Try to adopt a dyn fee with max fee = base fee + maxPriorityFee
+	best, err = chain.BestBlock()
+	assert.NoError(t, err)
+	expectedBaseFee = galactica.CalcBaseFee(best.Header(), &forks)
+	maxPriorityFee := big.NewInt(10_000)
+	maxFee := new(big.Int).Add(expectedBaseFee, maxPriorityFee)
+	tr = tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(3).
+		MaxFeePerGas(maxFee).
+		MaxPriorityFeePerGas(maxPriorityFee).
+		Gas(21000).
+		Expiration(100).
+		Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+	assert.NoError(t, err)
+}
+
+func TestAdoptAfterGalacticaLowerBaseFeeThreshold(t *testing.T) {
+	chain, err := testchain.NewWithFork(&thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32}, 180)
+	assert.NoError(t, err)
+
+	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+	assert.NoError(t, err)
+
+	for i := range 10000 {
+		best, err := chain.BestBlock()
+		assert.NoError(t, err)
+		expectedBaseFee := galactica.CalcBaseFee(best.Header(), &thor.ForkConfig{})
+		tr = tx.NewBuilder(tx.TypeDynamicFee).
+			ChainTag(chain.Repo().ChainTag()).
+			Nonce(uint64(i + 2)).
+			MaxFeePerGas(expectedBaseFee).
+			Gas(21000).
+			Expiration(1000000).
+			Build()
+		tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+		err = chain.MintBlock(tr)
+		assert.NoError(t, err)
+	}
+	best, _ := chain.BestBlock()
+	fmt.Println(best.Header().BaseFee())
+}
+
+func TestAdoptAfterGalacticaEffectivePriorityFee(t *testing.T) {
+	config := genesis.DevConfig{
+		ForkConfig:   &thor.ForkConfig{GALACTICA: 1, HAYABUSA: math.MaxUint32, INTERSTELLAR: math.MaxUint32},
+		BaseGasPrice: new(big.Int).Add(big.NewInt(1), big.NewInt(thor.InitialBaseFee)),
+	}
+	chain, err := testchain.NewIntegrationTestChain(config, 180)
+	assert.NoError(t, err)
+
+	// Mint a block to activate Galactica fork
+	tr := tx.NewBuilder(tx.TypeLegacy).ChainTag(chain.Repo().ChainTag()).Gas(21000).Expiration(100).Build()
+	tr = tx.MustSign(tr, genesis.DevAccounts()[0].PrivateKey)
+	err = chain.MintBlock(tr)
+	assert.NoError(t, err)
+
+	// Create a transaction with dynamic fee type, but without max priority fee
+	best := chain.Repo().BestBlockSummary()
+	baseFee := galactica.CalcBaseFee(best.Header, &thor.ForkConfig{})
+	txNoPriorityFee := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(2).
+		MaxFeePerGas(baseFee).
+		Gas(21000).
+		Expiration(100).
+		Build()
+	txNoPriorityFee = tx.MustSign(txNoPriorityFee, genesis.DevAccounts()[0].PrivateKey)
+
+	// Create a transaction with dynamic fee type and max priority fee
+	maxPriorityFeePerGas := big.NewInt(990000000000002)
+	txPriorityFee := tx.NewBuilder(tx.TypeDynamicFee).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(2).
+		MaxFeePerGas(new(big.Int).Add(baseFee, maxPriorityFeePerGas)).
+		MaxPriorityFeePerGas(maxPriorityFeePerGas).
+		Gas(21000).
+		Expiration(100).
+		Build()
+	txPriorityFee = tx.MustSign(txPriorityFee, genesis.DevAccounts()[0].PrivateKey)
+
+	// Create a legacy transaction
+	txLegacy := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(1).
+		Gas(21000).
+		Expiration(100).
+		GasPriceCoef(0).
+		Build()
+	txLegacy = tx.MustSign(txLegacy, genesis.DevAccounts()[0].PrivateKey)
+
+	// Create a legacy transaction with "fees" (gas price coef)
+	txLegacyWithGasPriceCoef := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(chain.Repo().ChainTag()).
+		Nonce(3).
+		Gas(21000).
+		Expiration(100).
+		GasPriceCoef(1).
+		Build()
+	txLegacyWithGasPriceCoef = tx.MustSign(txLegacyWithGasPriceCoef, genesis.DevAccounts()[0].PrivateKey)
+
+	// Last parameter is true, which means that all txs require max priority fee
+	proposer := genesis.DevAccounts()[0]
+	pckr := packer.New(chain.Repo(), chain.Stater(), proposer.Address, &proposer.Address, config.ForkConfig, 990000000000001)
+
+	flow, _ := pckr.Schedule(best, uint64(time.Now().Unix()))
+
+	expectedErrorMessage := "bad tx: effective priority fee too low"
+	assert.ErrorContainsf(t, flow.Adopt(txNoPriorityFee), expectedErrorMessage, "Expected error message: '%s'", expectedErrorMessage)
+	assert.ErrorContainsf(t, flow.Adopt(txLegacy), expectedErrorMessage, "Expected error message: '%s'", expectedErrorMessage)
+
+	err = flow.Adopt(txPriorityFee)
+	assert.NoError(t, err)
+
+	err = flow.Adopt(txLegacyWithGasPriceCoef)
+	assert.NoError(t, err)
+}
+
+func TestAdoptBlockSizeLimit(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = math.MaxUint32
+
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
+		ForkConfig: &fc,
+		GasLimit:   thor.MaxTxGasLimit * 2,
+	})
+
+	b, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b)
+
+	chainTag := repo.ChainTag()
+	addr := thor.BytesToAddress([]byte("to"))
+	proposer := genesis.DevAccounts()[0]
+
+	t.Run("large tx rejected by block size limit after INTERSTELLAR", func(t *testing.T) {
+		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
+		sum, err := repo.GetBlockSummary(b.Header().ID())
+		assert.NoError(t, err)
+
+		flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+		assert.NoError(t, err)
+
+		largeData := make([]byte, thor.MaxRLPBlockSize)
+		clause := tx.NewClause(&addr).WithData(largeData)
+		largeTx := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+
+		err = flow.Adopt(largeTx)
+		assert.True(t, packer.IsBlockSizeLimitReached(err))
+	})
+
+	t.Run("large tx accepted before INTERSTELLAR (no block size limit)", func(t *testing.T) {
+		preForkConfig := fc
+		preForkConfig.INTERSTELLAR = math.MaxUint32
+
+		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &preForkConfig, 0)
+		sum, err := repo.GetBlockSummary(b.Header().ID())
+		assert.NoError(t, err)
+
+		flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+		assert.NoError(t, err)
+
+		largeData := make([]byte, thor.MaxRLPBlockSize)
+		clause := tx.NewClause(&addr).WithData(largeData)
+		largeTx := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+
+		err = flow.Adopt(largeTx)
+		assert.False(t, packer.IsBlockSizeLimitReached(err))
+	})
+
+	t.Run("normal tx accepted after INTERSTELLAR", func(t *testing.T) {
+		pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
+		sum, err := repo.GetBlockSummary(b.Header().ID())
+		assert.NoError(t, err)
+
+		flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+		assert.NoError(t, err)
+
+		clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+		normalTx := createTx(tx.TypeLegacy, chainTag, 1, 10, 21000, 1, nil, clause, tx.NewBlockRef(0))
+
+		err = flow.Adopt(normalTx)
+		assert.NoError(t, err)
+	})
+}
+
+func TestBlockSizeBufferZoneSufficiency(t *testing.T) {
+	fc := thor.SoloFork
+	fc.HAYABUSA = math.MaxUint32
+
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
+		ForkConfig: &fc,
+		GasLimit:   math.MaxUint64,
+	})
+
+	b, _, _, err := g.Build(stater)
+	require.NoError(t, err)
+	repo, err := chain.NewRepository(db, b)
+	require.NoError(t, err)
+
+	proposer := genesis.DevAccounts()[0]
+	pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &fc, 0)
+	sum, err := repo.GetBlockSummary(b.Header().ID())
+	require.NoError(t, err)
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	require.NoError(t, err)
+
+	chainTag := repo.ChainTag()
+	addr := thor.BytesToAddress([]byte("to"))
+	data := make([]byte, 100_000)
+
+	var adopted int
+	for nonce := uint64(1); ; nonce++ {
+		clause := tx.NewClause(&addr).WithData(data)
+		trx := createTx(tx.TypeLegacy, chainTag, 1, 10, 500_000, nonce, nil, clause, tx.NewBlockRef(0))
+		err := flow.Adopt(trx)
+		if packer.IsBlockSizeLimitReached(err) {
+			break
+		}
+		require.NoError(t, err)
+		adopted++
+	}
+
+	blk, _, _, err := flow.Pack(proposer.PrivateKey, 0, false)
+	require.NoError(t, err)
+
+	assert.LessOrEqual(t, uint64(blk.Size()), thor.MaxRLPBlockSize,
+		"packed block RLP size %d exceeds MaxRLPBlockSize %d", blk.Size(), thor.MaxRLPBlockSize)
+}

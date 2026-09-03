@@ -7,57 +7,101 @@ package node
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+
+	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
-const gasLimitSoftLimit uint64 = 30_000_000
+const gasLimitSoftLimit uint64 = 40_000_000
+
+// txAdopter is the subset of *packer.Flow that adoptTxs uses.
+type txAdopter interface {
+	Adopt(*tx.Transaction) error
+	When() uint64
+}
+
+// adoptTxs adopts txs into flow, stopping once the wall-clock deadline
+// (flow.When()) is reached. now returns the current unix time in seconds
+// (injected for testability). It returns the txs that failed to adopt, for
+// removal from the pool.
+func adoptTxs(flow txAdopter, txs tx.Transactions, now func() uint64) []*tx.Transaction {
+	deadline := flow.When()
+
+	var txsToRemove []*tx.Transaction
+	for i, t := range txs {
+		// Try at least one tx before the deadline applies, so a slightly late
+		// proposer still packs a non-empty block. Checking here (not at the loop
+		// end) also covers the not-adoptable "continue" path.
+		if i > 0 && now() >= deadline {
+			logger.Warn("adopt stopped", "reason", "deadline")
+			break
+		}
+		if err := flow.Adopt(t); err != nil {
+			if packer.IsGasLimitReached(err) || packer.IsBlockSizeLimitReached(err) {
+				break
+			}
+			if packer.IsTxNotAdoptableNow(err) {
+				continue
+			}
+			txsToRemove = append(txsToRemove, t)
+		}
+	}
+	return txsToRemove
+}
 
 func (n *Node) packerLoop(ctx context.Context) {
-	log.Debug("enter packer loop")
-	defer log.Debug("leave packer loop")
+	logger.Debug("enter packer loop")
+	defer logger.Debug("leave packer loop")
 
-	log.Info("waiting for synchronization...")
+	logger.Info("waiting for synchronization...")
 	select {
 	case <-ctx.Done():
 		return
 	case <-n.comm.Synced():
 	}
-	log.Info("synchronization process done")
+	n.initialSynced = true
+	logger.Info("synchronization process done")
 
 	var (
 		authorized bool
 		ticker     = n.repo.NewTicker()
 	)
 
-	n.packer.SetTargetGasLimit(n.targetGasLimit)
+	n.packer.SetTargetGasLimit(n.options.TargetGasLimit)
 
 	for {
 		now := uint64(time.Now().Unix())
 
-		if n.targetGasLimit == 0 {
+		if n.options.TargetGasLimit == 0 {
 			// no preset, use suggested
-			suggested := n.bandwidth.SuggestGasLimit()
 			// apply soft limit in adaptive mode
-			if suggested > gasLimitSoftLimit {
-				suggested = gasLimitSoftLimit
-			}
+			suggested := min(n.bandwidth.SuggestGasLimit(), gasLimitSoftLimit)
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
+		base := now
+		// a block proposer will be given higher priority in the range of (slotTime, slotTime+2*thor.BlockInterval)
+		// and here we left at maximum 3 second as buffer for packing and broadcasting the block
+		buff := min(thor.BlockInterval()/2, uint64(3))
+		parentTime := n.repo.BestBlockSummary().Header.Timestamp()
+		// if now is in the prioritized window, use the optimal timestamp as base to schedule next time slot
+		if now > parentTime && now < parentTime+3*thor.BlockInterval()-buff {
+			base = parentTime + thor.BlockInterval()
+		}
+		// otherwise, use now as base
+		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), base)
 		if err != nil {
 			if authorized {
+				// if was authorized before, now mark as not authorized and log the error
 				authorized = false
-				log.Warn("unable to pack block", "err", err)
+				logger.Warn("unable to pack block", "err", err)
 			}
 			select {
 			case <-ctx.Done():
@@ -69,16 +113,16 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		if !authorized {
 			authorized = true
-			log.Info("prepared to pack block")
+			logger.Info("prepared to pack block")
 		}
-		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
+		logger.Info("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second, "score", flow.TotalScore()-flow.ParentHeader().TotalScore())
 
 		for {
-			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
+			if uint64(time.Now().Unix())+thor.BlockInterval()/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
-				if err := n.pack(flow); err != nil {
-					log.Error("failed to pack block", "err", err)
+				if err := n.doPack(flow); err != nil {
+					logger.Error("failed to pack block", "err", err)
 				}
 				break
 			}
@@ -97,7 +141,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 				if (best.Number() == flow.ParentHeader().Number() && s1 != s2) ||
 					best.TotalScore() > flow.TotalScore() {
-					log.Debug("re-schedule packer due to new best block")
+					logger.Debug("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
 				}
 			}
@@ -106,102 +150,71 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) error {
-	txs := n.txPool.Executables()
+func (n *Node) doPack(flow *packer.Flow) error {
+	err := n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+		return n.proposeAndCommit(flow, conflicts)
+	})
+	updatePackMetrics(err == nil)
+
+	return err
+}
+
+func (n *Node) proposeAndCommit(flow *packer.Flow, conflicts uint32) (err error) {
 	var txsToRemove []*tx.Transaction
 	defer func() {
-		for _, tx := range txsToRemove {
-			n.txPool.Remove(tx.Hash(), tx.ID())
+		if err == nil {
+			cleanupTransactions(txsToRemove, n.txPool)
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
-		var (
-			startTime  = mclock.Now()
-			logEnabled = !n.skipLogs && !n.logDBFailed
-			oldBest    = n.repo.BestBlockSummary()
-		)
+	ctx := &blockExecContext{
+		prevBest:   n.repo.BestBlockSummary().Header,
+		conflicts:  conflicts,
+		startTime:  mclock.Now(),
+		stats:      &blockStats{},
+		packing:    true,
+		becomeBest: true,
+	}
 
-		// adopt txs
-		for _, tx := range txs {
-			if err := flow.Adopt(tx); err != nil {
-				if packer.IsGasLimitReached(err) {
-					break
-				}
-				if packer.IsTxNotAdoptableNow(err) {
-					continue
-				}
-				txsToRemove = append(txsToRemove, tx)
-			}
-		}
+	// adopt txs, bounded by the slot deadline
+	txsToRemove = adoptTxs(flow, n.txPool.Executables(), func() uint64 { return uint64(time.Now().Unix()) })
 
-		var shouldVote bool
-		if flow.Number() >= n.forkConfig.FINALITY {
-			var err error
-			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
-			if err != nil {
-				return errors.Wrap(err, "get vote")
-			}
-		}
-
-		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
+	var shouldVote bool
+	if thor.IsForked(flow.Number(), n.forkConfig.FINALITY) {
+		shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 		if err != nil {
-			return errors.Wrap(err, "failed to pack block")
+			return errors.Wrap(err, "get vote")
 		}
-		execElapsed := mclock.Now() - startTime
+	}
 
-		// write logs
-		if logEnabled {
-			if n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
-				return errors.Wrap(err, "write logs")
-			}
-		}
+	// pack the new block
+	ctx.newBlock, ctx.stage, ctx.receipts, err = flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
+	if err != nil {
+		return errors.Wrap(err, "failed to pack block")
+	}
 
-		// commit the state
-		if _, err := stage.Commit(); err != nil {
-			return errors.Wrap(err, "commit state")
-		}
+	err = n.commitBlock(ctx)
+	if err != nil {
+		return err
+	}
 
-		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
-			return errors.Wrap(err, "add block")
-		}
+	n.comm.BroadcastBlock(ctx.newBlock)
+	logger.Info("📦 new block packed", ctx.stats.LogContext(ctx.newBlock.Header())...)
+	n.postBlockProcessing(ctx.newBlock, ctx.conflicts)
 
-		// commit block in bft engine
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
-				return errors.Wrap(err, "bft commits")
-			}
-		}
-		realElapsed := mclock.Now() - startTime
+	return nil
+}
 
-		// sync the log-writing task
-		if logEnabled {
-			if err := n.logWorker.Sync(); err != nil {
-				log.Warn("failed to write logs", "err", err)
-				n.logDBFailed = true
-			}
-		}
+func cleanupTransactions(txsToRemove []*tx.Transaction, txPool txpool.Pool) {
+	for _, tx := range txsToRemove {
+		txPool.Remove(tx.Hash(), tx.ID())
+	}
+}
 
-		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
-			return err
-		}
-
-		n.processFork(newBlock, oldBest.Header.ID())
-		commitElapsed := mclock.Now() - startTime - execElapsed
-
-		n.comm.BroadcastBlock(newBlock)
-		log.Info("📦 new block packed",
-			"txs", len(receipts),
-			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
-			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-			"id", shortID(newBlock.Header().ID()),
-		)
-
-		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			log.Debug("bandwidth updated", "gps", v)
-		}
-		return nil
-	})
+func updatePackMetrics(success bool) {
+	successLabel := "false"
+	if success {
+		successLabel = "true"
+	}
+	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": successLabel})
 }

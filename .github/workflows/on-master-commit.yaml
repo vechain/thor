@@ -1,0 +1,132 @@
+name: Master / Release CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'release/*'
+      - 'releases/*'
+
+concurrency:
+    group: 'master-commit-ci'
+    cancel-in-progress: false
+
+jobs:
+  run-unit-tests:
+    name: Run Unit Tests
+    uses: ./.github/workflows/test.yaml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  license-check:
+    name: License Check
+    uses: ./.github/workflows/license-check.yaml
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint-go.yaml
+
+  module-check:
+    name: Go Module Check
+    uses: ./.github/workflows/go-mod-check.yaml
+
+  scan-workflows:
+    name: Scan Workflows
+    uses: ./.github/workflows/scan-workflows.yaml
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      issues: write
+      pull-requests: write
+    secrets:
+      ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
+
+  thor-docker-test-suite:
+    uses: ./.github/workflows/thor-docker-test-suite.yaml
+    secrets:
+      DRAUPNIR_TOKEN: ${{ secrets.DRAUPNIR_TOKEN }}
+
+  run-rosetta-tests:
+    name: Rosetta Tests
+    uses: ./.github/workflows/test-rosetta.yaml
+    with:
+      thor_version: ${{ github.sha }}
+
+  generate-tags:
+    name: Generate Docker Tags
+    runs-on: ubuntu-latest
+    outputs:
+      tag_date: ${{ steps.tag_date.outputs.tag_date }}
+      short_sha: ${{ steps.short_sha.outputs.short_sha }}
+      clean_ref_name: ${{ steps.clean_ref_name.outputs.clean_ref_name }}
+    steps:
+      - name: Generate Tag Date
+        id: tag_date
+        run: echo "tag_date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
+      - name: Generate Short SHA
+        id: short_sha
+        run: echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> "$GITHUB_OUTPUT"
+      - name: Clean Ref Name
+        id: clean_ref_name
+        # replace '/' with '-' in the case of release branches
+        run: echo "clean_ref_name=$(echo $GITHUB_REF_NAME | sed 's/\//-/g')" >> "$GITHUB_OUTPUT"
+
+  publish-docker-image:
+    name: Publish Docker Image
+    uses: ./.github/workflows/publish-docker-images.yaml
+    secrets: inherit
+    needs:
+      - run-unit-tests
+      - thor-docker-test-suite
+      - generate-tags
+      - lint
+      - license-check
+    permissions:
+      contents: read
+      packages: write
+    with:
+      images: |
+        ghcr.io/${{ github.repository }}
+      tags: |
+        type=raw,value=${{ needs.generate-tags.outputs.clean_ref_name }}-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
+        type=raw,value=${{ needs.generate-tags.outputs.clean_ref_name }}-latest
+
+  notify-slack:
+    name: Notify Slack
+    needs:
+      - publish-docker-image
+      - generate-tags
+      - license-check
+      - lint
+      - module-check
+      - run-unit-tests
+      - thor-docker-test-suite
+    if: github.ref_name == 'master' && always() && (
+      needs.publish-docker-image.result != 'success' || 
+      needs.run-unit-tests.result != 'success' || 
+      needs.lint.result != 'success' || 
+      needs.thor-docker-test-suite.result != 'success' || 
+      needs.license-check.result != 'success' || 
+      needs.module-check.result != 'success')
+    uses: ./.github/workflows/notify-slack.yaml
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    with:
+      payload: |
+        {
+          "unit-test-status": "${{ needs.run-unit-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+          "docker-publish-status": "${{ needs.publish-docker-image.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+          "commit-message": ${{ toJSON(github.event.head_commit.message) }},
+          "commit-url": "${{ github.event.head_commit.url }}",
+          "e2e-test-status": "${{ needs.thor-docker-test-suite.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+          "branch": "${{ github.ref }}",
+          "repository": "${{ github.repository }}",
+          "commit-author": "${{ github.event.head_commit.author.name }}",
+          "lint-status": "${{ needs.lint.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+          "license-check": "${{ needs.license-check.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+          "module-check": "${{ needs.module-check.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
+        }

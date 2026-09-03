@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	"strings"
 	"sync/atomic"
@@ -30,9 +31,14 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
+
+func init() {
+	tracers.DefaultDirectory.Register("structLoggerTracer", NewStructLogger, false)
+}
 
 // Storage represents a contract's storage.
 type Storage map[common.Hash]common.Hash
@@ -40,9 +46,7 @@ type Storage map[common.Hash]common.Hash
 // Copy duplicates the current storage.
 func (s Storage) Copy() Storage {
 	cpy := make(Storage, len(s))
-	for key, value := range s {
-		cpy[key] = value
-	}
+	maps.Copy(cpy, s)
 	return cpy
 }
 
@@ -56,7 +60,7 @@ type Config struct {
 	Limit            int  // maximum length of output, but zero means unlimited
 }
 
-//go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
+//go:generate go run github.com/fjl/gencodec@v0.1.1 -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
@@ -119,7 +123,7 @@ type StructLogger struct {
 }
 
 // NewStructLogger returns a new logger
-func NewStructLogger(cfg json.RawMessage) (*StructLogger, error) {
+func NewStructLogger(cfg json.RawMessage) (tracers.Tracer, error) {
 	var config Config
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -150,7 +154,17 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (l *StructLogger) CaptureState(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	rData []byte,
+	depth int,
+	err error,
+) {
 	// If tracing was interrupted, set the error and stop
 	if stop := l.interrupt.Load(); stop != nil && stop.(bool) {
 		return
@@ -214,7 +228,16 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, m
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault
 // while running an opcode.
-func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
+func (l *StructLogger) CaptureFault(
+	pc uint64,
+	op vm.OpCode,
+	gas, cost uint64,
+	memory *vm.Memory,
+	stack *vm.Stack,
+	contract *vm.Contract,
+	depth int,
+	err error,
+) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -229,13 +252,13 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	}
 }
 
-func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *StructLogger) CaptureEnter(_ vm.OpCode, _ common.Address, _ common.Address, _ []byte, _ uint64, _ *big.Int) {
 }
 
-func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (l *StructLogger) CaptureExit(_ []byte, _ uint64, _ error) {
 }
 
-func (l *StructLogger) SetContext(ctx *tracers.Context) {
+func (l *StructLogger) SetContext(_ *tracers.Context) {
 }
 
 func (l *StructLogger) GetResult() (json.RawMessage, error) {
@@ -328,7 +351,7 @@ func WriteLogs(writer io.Writer, logs []*types.Log) {
 	}
 }
 
-type mdLogger struct {
+type MDLogger struct {
 	out io.Writer
 	cfg *Config
 	env *vm.EVM
@@ -336,15 +359,15 @@ type mdLogger struct {
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
 // for human readability, and is also a valid markdown table
-func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
-	l := &mdLogger{out: writer, cfg: cfg}
+func NewMarkdownLogger(cfg *Config, writer io.Writer) *MDLogger {
+	l := &MDLogger{out: writer, cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
 	return l
 }
 
-func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *MDLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	if !create {
 		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
@@ -363,13 +386,14 @@ func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 }
 
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
+func (t *MDLogger) CaptureState(pc uint64, op vm.OpCode, _, cost uint64, _ *vm.Memory, stack *vm.Stack, _ *vm.Contract, _ []byte, _ int, err error) {
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
 	if !t.cfg.DisableStack {
 		// format stack
-		var a []string
-		for _, elem := range stack.Data() {
+		stackData := stack.Data()
+		a := make([]string, 0, len(stackData))
+		for _, elem := range stackData {
 			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
@@ -382,23 +406,23 @@ func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memor
 	}
 }
 
-func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
+func (t *MDLogger) CaptureFault(pc uint64, op vm.OpCode, _, _ uint64, _ *vm.Memory, _ *vm.Stack, _ *vm.Contract, _ int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
-func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *MDLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
 }
 
-func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *MDLogger) CaptureEnter(_ vm.OpCode, _ common.Address, _ common.Address, _ []byte, _ uint64, _ *big.Int) {
 }
 
-func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (t *MDLogger) CaptureExit(_ []byte, _ uint64, _ error) {}
 
-func (*mdLogger) CaptureClauseStart(gasLimit uint64) {}
+func (*MDLogger) CaptureClauseStart(_ uint64) {}
 
-func (*mdLogger) CaptureClauseEnd(restGas uint64) {}
+func (*MDLogger) CaptureClauseEnd(_ uint64) {}
 
 // ExecutionResult groups all structured logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction
@@ -446,20 +470,20 @@ func formatLogs(logs []StructLog) []StructLogRes {
 			}
 			formatted[index].Stack = &stack
 		}
-		if trace.ReturnData != nil && len(trace.ReturnData) > 0 {
+		if len(trace.ReturnData) > 0 {
 			formatted[index].ReturnData = hexutil.Bytes(trace.ReturnData).String()
 		}
 		if trace.Memory != nil {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
 			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+				memory = append(memory, hex.EncodeToString(trace.Memory[i:i+32]))
 			}
 			formatted[index].Memory = &memory
 		}
 		if trace.Storage != nil {
 			storage := make(map[string]string)
 			for i, storageValue := range trace.Storage {
-				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+				storage[hex.EncodeToString(i[:])] = hex.EncodeToString(storageValue[:])
 			}
 			formatted[index].Storage = &storage
 		}

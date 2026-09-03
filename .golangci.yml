@@ -1,0 +1,76 @@
+version: "2"
+run:
+  tests: true
+  timeout: 10m
+linters:
+  default: none
+  enable:
+    - bidichk
+    - copyloopvar
+    - durationcheck
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+    - whitespace
+  settings:
+    gosec:
+      excludes:
+        - G115
+        - G406
+        - G507
+    revive:
+      rules:
+        - name: var-naming
+          arguments:
+            - []
+            - []
+            - - upperCaseConst: true
+          severity: warning
+          disabled: false
+          exclude:
+            - "builtin/staker/types/*"
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - path: vm/contracts.go
+        text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      - p2p/*
+issues:
+  max-issues-per-linter: 1000
+formatters:
+  enable:
+    - goimports
+    - gofmt
+    - gofumpt
+    - golines
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/vechain/thor
+    golines:
+      max-len: 160
+      tab-len: 4
+      reformat-tags: false
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      - p2p/*

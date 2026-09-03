@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -28,8 +26,6 @@ type (
 	stackValidationFunc func(*Stack) error
 	memorySizeFunc      func(*Stack) (size uint64, overflow bool)
 )
-
-var errGasUintOverflow = errors.New("gas uint64 overflow")
 
 type operation struct {
 	// execute is the operation function
@@ -54,11 +50,88 @@ var (
 	byzantiumInstructionSet      = NewByzantiumInstructionSet()
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
+	shanghaiInstructionSet       = NewShanghaiInstructionSet()
+	osakaInstructionSet          = NewOsakaInstructionSet()
 )
 
-type JumpTable *[256]*operation
+type JumpTable [256]*operation
 
-func NewIstanbulInstructionSet() JumpTable {
+// NewOsakaInstructionSet returns the frontier, homestead
+// byzantium, constantinople, istanbul, london, shanghai, cancun, prague and osaka instructions.
+func NewOsakaInstructionSet() *JumpTable {
+	instructionSet := NewPragueInstructionSet()
+
+	instructionSet[CLZ] = &operation{
+		execute:       opCLZ,
+		gasCost:       constGasFunc(GasFastStep),
+		validateStack: makeStackFunc(1, 1),
+	}
+	return instructionSet
+}
+
+func NewPragueInstructionSet() *JumpTable {
+	instructionSet := NewCancunInstructionSet()
+	return instructionSet
+}
+
+// NewCancunInstructionSet returns the frontier, homestead
+// byzantium, constantinople, istanbul, london, shanghai and cancun instructions.
+func NewCancunInstructionSet() *JumpTable {
+	instructionSet := NewShanghaiInstructionSet()
+	instructionSet[SELFDESTRUCT] = &operation{
+		execute:       opSuicide6780,
+		gasCost:       gasSuicide3529,
+		validateStack: makeStackFunc(1, 0),
+		halts:         true,
+		writes:        true,
+	}
+	instructionSet[TLOAD] = &operation{
+		execute:       opTload,
+		gasCost:       constGasFunc(WarmStorageReadCost),
+		validateStack: makeStackFunc(1, 1),
+	}
+	instructionSet[TSTORE] = &operation{
+		execute:       opTstore,
+		gasCost:       constGasFunc(WarmStorageReadCost),
+		validateStack: makeStackFunc(2, 0),
+		writes:        true,
+	}
+	instructionSet[MCOPY] = &operation{
+		execute:       opMcopy,
+		gasCost:       gasMcopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryMcopy,
+	}
+	return instructionSet
+}
+
+// NewShanghaiInstructionSet returns the frontier, homestead
+// byzantium, constantinople , istanbul, london and shanghai instructions.
+func NewShanghaiInstructionSet() *JumpTable {
+	instructionSet := NewLondonInstructionSet()
+	instructionSet[PUSH0] = &operation{ // PUSH0 instruction
+		execute:       opPush0,
+		gasCost:       constGasFunc(GasQuickStep),
+		validateStack: makeStackFunc(0, 1),
+	}
+	return instructionSet
+}
+
+// NewLondonInstructionSet returns the frontier, homestead, byzantium,
+// constantinople, istanbul and london instructions.
+func NewLondonInstructionSet() *JumpTable {
+	instructionSet := NewIstanbulInstructionSet()
+	instructionSet[BASEFEE] = &operation{ // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
+		execute:       opBaseFee,
+		gasCost:       constGasFunc(GasQuickStep),
+		validateStack: makeStackFunc(0, 1),
+	}
+	return instructionSet
+}
+
+// NewIstanbulInstructionSet returns the frontier, homestead
+// byzantium, constantinople and istanbul instructions.
+func NewIstanbulInstructionSet() *JumpTable {
 	instructionSet := NewConstantinopleInstructionSet()
 	// ChainID opcode
 	instructionSet[CHAINID] = &operation{
@@ -78,8 +151,8 @@ func NewIstanbulInstructionSet() JumpTable {
 }
 
 // NewConstantinopleInstructionSet returns the frontier, homestead
-// byzantium and contantinople instructions.
-func NewConstantinopleInstructionSet() JumpTable {
+// byzantium and constantinople instructions.
+func NewConstantinopleInstructionSet() *JumpTable {
 	// instructions that can be executed during the byzantium phase.
 	instructionSet := NewByzantiumInstructionSet()
 	instructionSet[SHL] = &operation{
@@ -115,7 +188,7 @@ func NewConstantinopleInstructionSet() JumpTable {
 
 // NewByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
-func NewByzantiumInstructionSet() JumpTable {
+func NewByzantiumInstructionSet() *JumpTable {
 	// instructions that can be executed during the homestead phase.
 	instructionSet := NewHomesteadInstructionSet()
 	instructionSet[STATICCALL] = &operation{
@@ -149,7 +222,7 @@ func NewByzantiumInstructionSet() JumpTable {
 
 // NewHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
-func NewHomesteadInstructionSet() JumpTable {
+func NewHomesteadInstructionSet() *JumpTable {
 	instructionSet := NewFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = &operation{
 		execute:       opDelegateCall,
@@ -163,8 +236,8 @@ func NewHomesteadInstructionSet() JumpTable {
 
 // NewFrontierInstructionSet returns the frontier instructions
 // that can be executed during the frontier phase.
-func NewFrontierInstructionSet() JumpTable {
-	return &[256]*operation{
+func NewFrontierInstructionSet() *JumpTable {
+	instructionSet := JumpTable{
 		STOP: {
 			execute:       opStop,
 			gasCost:       constGasFunc(0),
@@ -843,4 +916,5 @@ func NewFrontierInstructionSet() JumpTable {
 			writes:        true,
 		},
 	}
+	return &instructionSet
 }

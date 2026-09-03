@@ -6,17 +6,18 @@
 package comm
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/p2psrv/rpc"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/p2p"
+	"github.com/vechain/thor/v2/p2p/discover"
+	"github.com/vechain/thor/v2/p2psrv/rpc"
+	"github.com/vechain/thor/v2/thor"
 )
 
 const (
@@ -24,15 +25,11 @@ const (
 	maxKnownBlocks = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // Peer extends p2p.Peer with RPC integrated.
 type Peer struct {
 	*p2p.Peer
 	*rpc.RPC
-	logger log15.Logger
+	logger log.Logger
 
 	createdTime mclock.AbsTime
 	knownTxs    *lru.Cache
@@ -49,7 +46,7 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	if peer.Inbound() {
 		dir = "inbound"
 	}
-	ctx := []interface{}{
+	ctx := []any{
 		"peer", peer,
 		"dir", dir,
 	}
@@ -58,7 +55,7 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
 		Peer:        peer,
 		RPC:         rpc.New(peer, rw),
-		logger:      log.New(ctx...),
+		logger:      logger.New(ctx...),
 		createdTime: mclock.Now(),
 		knownTxs:    knownTxs,
 		knownBlocks: knownBlocks,
@@ -84,7 +81,7 @@ func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 // MarkTransaction marks a transaction to known.
 func (p *Peer) MarkTransaction(hash thor.Bytes32) {
 	// that's 10~100 block intervals
-	expiration := mclock.AbsTime(time.Second * time.Duration(thor.BlockInterval*uint64(rand.Intn(91)+10)))
+	expiration := mclock.AbsTime(time.Second * time.Duration(thor.BlockInterval()*uint64(rand.N(91)+10))) //#nosec G404
 
 	deadline := mclock.Now() + expiration
 	p.knownTxs.Add(hash, deadline)
@@ -183,7 +180,7 @@ func (ps *PeerSet) Slice() Peers {
 	defer ps.lock.Unlock()
 
 	ret := make(Peers, len(ps.m))
-	perm := rand.Perm(len(ps.m))
+	perm := rand.Perm(len(ps.m)) // #nosec G404
 	i := 0
 	for _, s := range ps.m {
 		// randomly

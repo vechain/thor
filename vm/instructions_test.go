@@ -18,13 +18,27 @@ package vm
 
 import (
 	"bytes"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/runtime/statedb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
+
+type contractRef struct {
+	addr common.Address
+}
+
+func (c contractRef) Address() common.Address {
+	return c.addr
+}
 
 type twoOperandTest struct {
 	x        string
@@ -145,39 +159,167 @@ func TestSAR(t *testing.T) {
 	testTwoOperandOp(t, tests, opSAR)
 }
 
+func TestCLZ(t *testing.T) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		pc    = uint64(0)
+	)
+
+	tests := []struct {
+		input    string
+		expected uint64
+	}{
+		{"0000000000000000000000000000000000000000000000000000000000000000", 256},
+		{"0000000000000000000000000000000000000000000000000000000000000001", 255},
+		{"00000000000000000000000000000000000000000000000000000000000006ff", 245},
+		{"000000000000000000000000000000000000000000000000000000ffffffffff", 216},
+		{"4000000000000000000000000000000000000000000000000000000000000000", 1},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 1},
+		{"8000000000000000000000000000000000000000000000000000000000000000", 0},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0},
+	}
+
+	for _, tc := range tests {
+		val := new(uint256.Int).SetBytes(common.FromHex(tc.input))
+		stack.push(val)
+		opCLZ(&pc, env, nil, nil, stack)
+
+		result := stack.pop()
+		if got := result.Uint64(); got != tc.expected {
+			t.Errorf("clz(0x%s) = %d; want %d", tc.input, got, tc.expected)
+		}
+	}
+}
+
 func TestSGT(t *testing.T) {
 	tests := []twoOperandTest{
-
-		{"0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb",
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd",
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
 	}
 	testTwoOperandOp(t, tests, opSgt)
 }
 
 func TestSLT(t *testing.T) {
 	tests := []twoOperandTest{
-		{"0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"0000000000000000000000000000000000000000000000000000000000000001", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"8000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "0000000000000000000000000000000000000000000000000000000000000000"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb", "0000000000000000000000000000000000000000000000000000000000000001"},
+		{
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"0000000000000000000000000000000000000000000000000000000000000001",
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"8000000000000000000000000000000000000000000000000000000000000001",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb",
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd",
+			"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd",
+			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb",
+			"0000000000000000000000000000000000000000000000000000000000000001",
+		},
 	}
 	testTwoOperandOp(t, tests, opSlt)
 }
@@ -193,8 +335,8 @@ func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contr
 		byteArgs[i] = common.Hex2Bytes(arg)
 	}
 	pc := uint64(0)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+
+	for bench.Loop() {
 		for _, arg := range byteArgs {
 			a := new(uint256.Int).SetBytes(arg)
 			stack.push(a)
@@ -340,11 +482,13 @@ func BenchmarkOpEq(b *testing.B) {
 
 	opBenchmark(b, opEq, x, y)
 }
+
 func BenchmarkOpEq2(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201fffffffe"
 	opBenchmark(b, opEq, x, y)
 }
+
 func BenchmarkOpAnd(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
@@ -395,21 +539,113 @@ func BenchmarkOpSHL(b *testing.B) {
 
 	opBenchmark(b, opSHL, x, y)
 }
+
 func BenchmarkOpSHR(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "ff"
 
 	opBenchmark(b, opSHR, x, y)
 }
+
 func BenchmarkOpSAR(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "ff"
 
 	opBenchmark(b, opSAR, x, y)
 }
+
+func BenchmarkOpCLZ(b *testing.B) {
+	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
+	opBenchmark(b, opCLZ, x)
+}
+
 func BenchmarkOpIsZero(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	opBenchmark(b, opIszero, x)
+}
+
+func TestOpMstore(t *testing.T) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+
+	mem.Resize(64)
+	pc := uint64(0)
+	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
+	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
+	stack.push(new(uint256.Int))
+	opMstore(&pc, env, nil, mem, stack)
+	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
+		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
+	}
+	stack.push(new(uint256.Int).SetUint64(0x1))
+	stack.push(new(uint256.Int))
+	opMstore(&pc, env, nil, mem, stack)
+	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+		t.Fatalf("Mstore failed to overwrite previous value")
+	}
+}
+
+func BenchmarkOpMstore(bench *testing.B) {
+	var (
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+
+	mem.Resize(64)
+	pc := uint64(0)
+	memStart := new(uint256.Int)
+	value := new(uint256.Int).SetUint64(0x1337)
+
+	for bench.Loop() {
+		stack.push(value)
+		stack.push(memStart)
+		opMstore(&pc, env, nil, mem, stack)
+	}
+}
+
+func TestOpTstore(t *testing.T) {
+	var (
+		db          = muxdb.NewMem()
+		state       = state.New(db, trie.Root{Hash: thor.Bytes32{}})
+		stateDB     = statedb.New(state)
+		env         = NewEVM(Context{}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+		stack       = newstack()
+		mem         = NewMemory()
+		caller      = common.Address{0}
+		to          = common.Address{1}
+		contractRef = contractRef{caller}
+		contract    = NewContract(contractRef, AccountRef(to), big.NewInt(0), 0)
+		value       = common.Hex2Bytes("abcdef00000000000000abba000000000deaf000000c0de00100000000133700")
+	)
+
+	// Add a stateObject for the caller and the contract being called
+	stateDB.CreateAccount(caller)
+	stateDB.CreateAccount(to)
+
+	pc := uint64(0)
+	// push the value to the stack
+	stack.push(new(uint256.Int).SetBytes(value))
+	// push the location to the stack
+	stack.push(new(uint256.Int))
+	opTstore(&pc, env, contract, mem, stack)
+	// there should be no elements on the stack after TSTORE
+	if stack.len() != 0 {
+		t.Fatal("stack wrong size")
+	}
+	// push the location to the stack
+	stack.push(new(uint256.Int))
+	opTload(&pc, env, contract, mem, stack) // there should be one element on the stack after TLOAD
+	if stack.len() != 1 {
+		t.Fatal("stack wrong size")
+	}
+	val := stack.peek()
+	if !bytes.Equal(val.Bytes(), value) {
+		t.Fatal("incorrect element read from transient storage")
+	}
 }
 
 func TestCreate2Addreses(t *testing.T) {
@@ -464,13 +700,12 @@ func TestCreate2Addreses(t *testing.T) {
 			expected: "0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0",
 		},
 	} {
-
 		origin := common.BytesToAddress(common.FromHex(tt.origin))
 		salt := common.BytesToHash(common.FromHex(tt.salt))
 		code := common.FromHex(tt.code)
-		codeHash := crypto.Keccak256(code)
+		codeHash := thor.Keccak256(code).Bytes()
 		// THOR: Cannot use crypto.CreateAddress2 function.
-		// v1.8.14 -> v1.8.27 depedency issue. See patch.go file.
+		// v1.8.14 -> v1.8.27 dependency issue. See patch.go file.
 		address := CreateAddress2(origin, salt, codeHash)
 		/*
 			stack          := newstack()
@@ -485,6 +720,141 @@ func TestCreate2Addreses(t *testing.T) {
 		if !bytes.Equal(expected.Bytes(), address.Bytes()) {
 			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
 		}
+	}
+}
 
+// suicideCall records a single OnSuicideContract invocation.
+type suicideCall struct {
+	contract       common.Address
+	receiver       common.Address
+	shouldDestruct bool
+}
+
+// suicideSpy returns an OnSuicideContractFunc that only records its calls,
+// with no state/log side effects. OnSuicideContract's actual transfer and
+// event semantics live in runtime.OnSuicideContract (runtime/runtime.go)
+// and are covered by runtime/selfdestruct_transfer_test.go. The vm package
+// cannot import runtime (import cycle), so it must not re-implement that
+// logic here as a test double -- doing so only tests a copy of itself and
+// misses real regressions. This test is scoped to opcode dispatch only:
+// which shouldDestruct value each opcode passes, and whether Suicide() is
+// called.
+func suicideSpy(calls *[]suicideCall) OnSuicideContractFunc {
+	return func(_ *EVM, contract, receiver common.Address, shouldDestruct bool) {
+		*calls = append(*calls, suicideCall{contract, receiver, shouldDestruct})
+	}
+}
+
+// TestOpSuicide covers the legacy SELFDESTRUCT dispatch: OnSuicideContract
+// is always called with shouldDestruct == true, and the account is always
+// destroyed.
+func TestOpSuicide(t *testing.T) {
+	var (
+		db            = muxdb.NewMem()
+		state         = state.New(db, trie.Root{})
+		stateDB       = statedb.New(state)
+		contractAddr  = common.HexToAddress("0x02")
+		tokenReceiver = common.HexToAddress("0x03")
+		calls         []suicideCall
+	)
+
+	evm := NewEVM(Context{
+		BlockNumber:       big.NewInt(1),
+		GasPrice:          big.NewInt(1),
+		OnSuicideContract: suicideSpy(&calls),
+	}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+
+	state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
+	state.SetCode(thor.Address(contractAddr), []byte("code"))
+
+	stack := newstack()
+	stack.push(new(uint256.Int).SetBytes(tokenReceiver.Bytes()))
+
+	contract := NewContract(AccountRef(contractAddr), AccountRef(contractAddr), big.NewInt(0), 0)
+	if _, err := opSuicide(nil, evm, contract, nil, stack); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(calls) != 1 {
+		t.Fatalf("expected OnSuicideContract to be called once, got %d", len(calls))
+	}
+	if got := calls[0]; got.contract != contractAddr || got.receiver != tokenReceiver || !got.shouldDestruct {
+		t.Fatalf("unexpected callback args: %+v", got)
+	}
+
+	if !evm.StateDB.Empty(contractAddr) {
+		t.Fatalf("expected legacy SELFDESTRUCT to always destroy the account")
+	}
+}
+
+// TestOpSuicide6780 covers the EIP-6780 SELFDESTRUCT dispatch: shouldDestruct
+// must reflect whether the contract was created within the current
+// execution (StateDB.IsNewContract), and Suicide() must be called if and
+// only if shouldDestruct is true -- for both a different receiver and a
+// self receiver.
+func TestOpSuicide6780(t *testing.T) {
+	masterAddress := common.HexToAddress("0x01")
+	contractAddr := common.HexToAddress("0x02")
+	tokenReceiver := common.HexToAddress("0x03")
+
+	tests := []struct {
+		name           string
+		createInClause bool // simulates the contract having been created within this execution (IsNewContract)
+		receiver       common.Address
+	}{
+		{name: "pre-existing contract, different receiver", createInClause: false, receiver: tokenReceiver},
+		{name: "created in this clause, different receiver", createInClause: true, receiver: tokenReceiver},
+		{name: "pre-existing contract, self receiver", createInClause: false, receiver: contractAddr},
+		{name: "created in this clause, self receiver", createInClause: true, receiver: contractAddr},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				db      = muxdb.NewMem()
+				state   = state.New(db, trie.Root{})
+				stateDB = statedb.New(state)
+				calls   []suicideCall
+			)
+
+			evm := NewEVM(Context{
+				BlockNumber:       big.NewInt(1),
+				GasPrice:          big.NewInt(1),
+				OnSuicideContract: suicideSpy(&calls),
+			}, stateDB, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
+
+			if tc.createInClause {
+				evm.StateDB.CreateContract(contractAddr)
+			}
+			state.SetStorage(thor.Address(contractAddr), thor.BytesToBytes32([]byte("key1")), thor.BytesToBytes32([]byte("value1")))
+			state.SetBalance(thor.Address(contractAddr), big.NewInt(100))
+			state.SetEnergy(thor.Address(contractAddr), big.NewInt(100), 1)
+			state.SetMaster(thor.Address(contractAddr), thor.Address(masterAddress))
+			state.SetCode(thor.Address(contractAddr), []byte("code"))
+
+			stack := newstack()
+			stack.push(new(uint256.Int).SetBytes(tc.receiver.Bytes()))
+
+			contract := NewContract(AccountRef(masterAddress), AccountRef(contractAddr), big.NewInt(0), 0)
+			if _, err := opSuicide6780(nil, evm, contract, nil, stack); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(calls) != 1 {
+				t.Fatalf("expected OnSuicideContract to be called once, got %d", len(calls))
+			}
+			got := calls[0]
+			if got.contract != contractAddr || got.receiver != tc.receiver {
+				t.Fatalf("unexpected callback args: %+v", got)
+			}
+			if got.shouldDestruct != tc.createInClause {
+				t.Fatalf("shouldDestruct = %v, want %v (createInClause)", got.shouldDestruct, tc.createInClause)
+			}
+
+			destroyed := evm.StateDB.Empty(contractAddr)
+			if destroyed != tc.createInClause {
+				t.Fatalf("account destroyed = %v, want %v (createInClause)", destroyed, tc.createInClause)
+			}
+		})
 	}
 }

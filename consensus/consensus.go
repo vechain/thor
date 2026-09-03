@@ -10,15 +10,16 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/golang-lru/simplelru"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/poa"
 
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/xenv"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/scheduler"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 // Consensus check whether the block is verified,
@@ -26,32 +27,37 @@ import (
 type Consensus struct {
 	repo                 *chain.Repository
 	stater               *state.Stater
-	seeder               *poa.Seeder
-	forkConfig           thor.ForkConfig
+	seeder               *scheduler.Seeder
+	forkConfig           *thor.ForkConfig
 	correctReceiptsRoots map[string]string
-	candidatesCache      *simplelru.LRU
+	validatorsCache      *simplelru.LRU
 }
 
 // New create a Consensus instance.
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig) *Consensus {
-	candidatesCache, _ := simplelru.NewLRU(16, nil)
+func New(repo *chain.Repository, stater *state.Stater, forkConfig *thor.ForkConfig) *Consensus {
+	validatorsCache, _ := simplelru.NewLRU(16, nil)
 	return &Consensus{
 		repo:                 repo,
 		stater:               stater,
-		seeder:               poa.NewSeeder(repo),
+		seeder:               scheduler.NewSeeder(repo),
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
-		candidatesCache:      candidatesCache,
+		validatorsCache:      validatorsCache,
 	}
 }
 
 // Process process a block.
-func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) Process(
+	parentSummary *chain.BlockSummary,
+	blk *block.Block,
+	nowTimestamp uint64,
+	blockConflicts uint32,
+) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
-	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.Conflicts, parentSummary.SteadyNum)
+	state := c.stater.NewState(parentSummary.Root())
 
 	var features tx.Features
-	if header.Number() >= c.forkConfig.VIP191 {
+	if thor.IsForked(header.Number(), c.forkConfig.VIP191) {
 		features |= tx.DelegationFeature
 	}
 
@@ -67,7 +73,7 @@ func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block,
 	return stage, receipts, nil
 }
 
-func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*runtime.Runtime, error) {
+func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipValidation bool) (*runtime.Runtime, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, err
@@ -79,9 +85,20 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		}
 		return nil, errors.New("parent block is missing")
 	}
-	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.Conflicts, parentSummary.SteadyNum)
-	if !skipPoA {
-		if _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
+	state := c.stater.NewState(parentSummary.Root())
+
+	if !skipValidation {
+		staker := builtin.Staker.Native(state)
+		dPosStatus, err := staker.SyncPOS(c.forkConfig, header.Number())
+		if err != nil {
+			return nil, err
+		}
+		if dPosStatus.Active {
+			_, err = c.validateStakingProposer(header, parentSummary.Header, staker)
+		} else {
+			_, err = c.validateAuthorityProposer(header, parentSummary.Header, state)
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -96,6 +113,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
+			BaseFee:     header.BaseFee(),
 		},
 		c.forkConfig), nil
 }

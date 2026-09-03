@@ -9,30 +9,32 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/thor"
 )
 
-//Event represents tx.Event that can be stored in db.
+// Event represents tx.Event that can be stored in db.
 type Event struct {
 	BlockNumber uint32
-	Index       uint32
+	LogIndex    uint32
 	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
-	TxOrigin    thor.Address //contract caller
+	TxIndex     uint32
+	TxOrigin    thor.Address // contract caller
 	ClauseIndex uint32
 	Address     thor.Address // always a contract address
 	Topics      [5]*thor.Bytes32
 	Data        []byte
 }
 
-//Transfer represents tx.Transfer that can be stored in db.
+// Transfer represents tx.Transfer that can be stored in db.
 type Transfer struct {
 	BlockNumber uint32
-	Index       uint32
+	LogIndex    uint32
 	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
+	TxIndex     uint32
 	TxOrigin    thor.Address
 	ClauseIndex uint32
 	Sender      thor.Address
@@ -62,7 +64,7 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
+func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.Address != nil {
 		cond += " AND address = " + refIDQuery
@@ -71,27 +73,27 @@ func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
 	for i, topic := range c.Topics {
 		if topic != nil {
 			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
-			args = append(args, topic.Bytes())
+			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}
 	return
 }
 
-//EventFilter filter
+// EventFilter filter
 type EventFilter struct {
 	CriteriaSet []*EventCriteria
 	Range       *Range
 	Options     *Options
-	Order       Order //default asc
+	Order       Order // default asc
 }
 
 type TransferCriteria struct {
-	TxOrigin  *thor.Address //who send transaction
-	Sender    *thor.Address //who transferred tokens
-	Recipient *thor.Address //who recieved tokens
+	TxOrigin  *thor.Address // who send transaction
+	Sender    *thor.Address // who transferred tokens
+	Recipient *thor.Address // who received tokens
 }
 
-func (c *TransferCriteria) toWhereCondition() (cond string, args []interface{}) {
+func (c *TransferCriteria) toWhereCondition() (cond string, args []any) {
 	cond = "1"
 	if c.TxOrigin != nil {
 		cond += " AND txOrigin = " + refIDQuery
@@ -112,5 +114,5 @@ type TransferFilter struct {
 	CriteriaSet []*TransferCriteria
 	Range       *Range
 	Options     *Options
-	Order       Order //default asc
+	Order       Order // default asc
 }

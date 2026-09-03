@@ -8,32 +8,55 @@ import (
 	"sort"
 	"sync/atomic"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/cache"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/kv"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/cache"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const dataStoreName = "bft.engine"
 
-var finalizedKey = []byte("finalized")
+var (
+	finalizedKey = []byte("finalized")
+	logger       = log.WithContext("pkg", "bft")
+)
 
-// BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
+type Committer interface {
+	Finalized() thor.Bytes32
+	Justified() (thor.Bytes32, error)
+	Accepts(parentID thor.Bytes32) (bool, error)
+	// Select chooses between the given block and the current best; header +
+	// conflicts address the block's post-housekeep state before it is persisted.
+	Select(header *block.Header, conflicts uint32) (bool, error)
+	CommitBlock(header *block.Header, conflicts uint32, isPacking bool) error
+	ShouldVote(parentID thor.Bytes32) (bool, error)
+}
+
+type justified struct {
+	search thor.Bytes32
+	value  thor.Bytes32
+}
+
+// Engine tracks all votes of blocks, computes the finalized checkpoint.
 // Not thread-safe!
-type BFTEngine struct {
+type Engine struct {
 	repo       *chain.Repository
 	data       kv.Store
 	stater     *state.Stater
-	forkConfig thor.ForkConfig
+	forkConfig *thor.ForkConfig
 	master     thor.Address
 	casts      casts
 	finalized  atomic.Value
+	justified  atomic.Value
 	caches     struct {
 		state     *lru.Cache
 		quality   *lru.Cache
@@ -42,8 +65,8 @@ type BFTEngine struct {
 }
 
 // NewEngine creates a new bft engine.
-func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.ForkConfig, master thor.Address) (*BFTEngine, error) {
-	engine := BFTEngine{
+func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig *thor.ForkConfig, master thor.Address) (*Engine, error) {
+	engine := Engine{
 		repo:       repo,
 		data:       mainDB.NewStore(dataStoreName),
 		stater:     state.NewStater(mainDB),
@@ -55,6 +78,7 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 	engine.caches.quality, _ = lru.New(16)
 	engine.caches.justifier = cache.NewPrioCache(16)
 
+	// Restore finalized block, if any
 	if val, err := engine.data.Get(finalizedKey); err != nil {
 		if !engine.data.IsNotFound(err) {
 			return nil, err
@@ -67,13 +91,173 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 	return &engine, nil
 }
 
+// Resync recomputes and persists BFT quality for every storePoint from the first
+// post-HAYABUSA+HayabusaTP epoch to head, correcting values left out of sync by the
+// pre-housekeep threshold. Idempotent via currentResyncVersion.
+//
+// onProgress, if non-nil, is called with (0, total) before the first storePoint and
+// (done, total) after each; the final call has done == total.
+func (engine *Engine) Resync(onProgress func(done, total uint32)) error {
+	version, err := loadResyncVersion(engine.data)
+	if err != nil {
+		return errors.Wrap(err, "load resync version")
+	}
+	if version >= currentResyncVersion {
+		return nil
+	}
+
+	logger.Info("running bft resync", "version", currentResyncVersion)
+
+	// Drop all caches so stale entries can't leak into recomputation. Quality cache
+	// included: relying on in-order write-back is fragile and a cold cache is cheap.
+	engine.caches.state.Purge()
+	engine.caches.quality.Purge()
+	engine.caches.justifier = cache.NewPrioCache(16)
+
+	head := engine.repo.BestBlockSummary()
+	headNum := head.Header.Number()
+
+	// PoS vote weights apply after HAYABUSA+HayabusaTP(); start at that block's
+	// storePoint. Covering one pre-PoS epoch is harmless — quality is unchanged.
+	firstPosBlock := engine.forkConfig.HAYABUSA + thor.HayabusaTP()
+	if firstPosBlock > headNum {
+		if err := saveResyncVersion(engine.data, currentResyncVersion); err != nil {
+			return errors.Wrap(err, "save resync version")
+		}
+		return nil
+	}
+
+	start := getStorePoint(firstPosBlock)
+	total := (headNum-start)/thor.EpochLength() + 1
+
+	chain := engine.repo.NewChain(head.Header.ID())
+
+	if onProgress != nil {
+		onProgress(0, total)
+	}
+
+	var done, mismatches uint32
+	for sp := start; sp <= headNum; sp += thor.EpochLength() {
+		storeID, err := chain.GetBlockID(sp)
+		if err != nil {
+			return errors.Wrapf(err, "get block id at storePoint %d", sp)
+		}
+
+		sum, err := engine.repo.GetBlockSummary(storeID)
+		if err != nil {
+			return errors.Wrapf(err, "get block summary at storePoint %d", sp)
+		}
+
+		engine.caches.state.Remove(storeID)
+
+		prevQuality, prevErr := loadQuality(engine.data, storeID)
+		hasPrev := prevErr == nil
+		if prevErr != nil && !engine.data.IsNotFound(prevErr) {
+			return errors.Wrapf(prevErr, "load prev quality at storePoint %d", sp)
+		}
+
+		st, err := engine.computeState(sum)
+		if err != nil {
+			return errors.Wrapf(err, "compute state at storePoint %d", sp)
+		}
+
+		if hasPrev && prevQuality != st.Quality {
+			mismatches++
+			logger.Warn("bft resync: quality mismatch",
+				"storePoint", sp, "id", storeID, "stored", prevQuality, "recomputed", st.Quality)
+		}
+
+		if err := saveQuality(engine.data, storeID, st.Quality); err != nil {
+			return errors.Wrapf(err, "save quality at storePoint %d", sp)
+		}
+		engine.caches.quality.Add(storeID, st.Quality)
+
+		// Advance finalized forward only. Skip when storeID is in finalized's epoch
+		// or earlier: findCheckpointByQuality would underflow or miss the target
+		// (already absorbed by the current finalized).
+		if st.Committed && st.Quality > 1 && getCheckPoint(block.Number(storeID)) > block.Number(engine.Finalized()) {
+			id, err := engine.findCheckpointByQuality(st.Quality-1, engine.Finalized(), storeID)
+			if err != nil {
+				return errors.Wrapf(err, "find checkpoint by quality at storePoint %d", sp)
+			}
+			if block.Number(id) > block.Number(engine.Finalized()) {
+				if err := engine.data.Put(finalizedKey, id[:]); err != nil {
+					return err
+				}
+				engine.finalized.Store(id)
+			}
+		}
+
+		done++
+		if onProgress != nil {
+			onProgress(done, total)
+		}
+		logger.Debug("bft resync: storePoint processed", "num", sp, "quality", st.Quality)
+	}
+
+	if err := saveResyncVersion(engine.data, currentResyncVersion); err != nil {
+		return errors.Wrap(err, "save resync version")
+	}
+
+	logger.Info("bft resync done", "version", currentResyncVersion, "total", total, "mismatches", mismatches)
+	return nil
+}
+
 // Finalized returns the finalized checkpoint.
-func (engine *BFTEngine) Finalized() thor.Bytes32 {
+func (engine *Engine) Finalized() thor.Bytes32 {
 	return engine.finalized.Load().(thor.Bytes32)
 }
 
+// Justified returns the justified checkpoint.
+func (engine *Engine) Justified() (thor.Bytes32, error) {
+	head := engine.repo.BestBlockSummary().Header
+	finalized := engine.Finalized()
+
+	// if head is in the first epoch and not concluded yet
+	if head.Number() < getCheckPoint(engine.forkConfig.FINALITY)+thor.EpochLength()-1 {
+		return finalized, nil
+	}
+
+	// find the recent concluded checkpoint
+	concluded := getCheckPoint(head.Number())
+	if head.Number() < getStorePoint(head.Number()) {
+		concluded -= thor.EpochLength()
+	}
+
+	headChain := engine.repo.NewChain(head.ID())
+
+	// storeID is the block id where an epoch concluded
+	storeID, err := headChain.GetBlockID(getStorePoint(concluded))
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	if val := engine.justified.Load(); val != nil && storeID == val.(justified).search {
+		return val.(justified).value, nil
+	}
+
+	quality, err := engine.getQuality(storeID)
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	// if the quality is 0, then the epoch is not justified
+	// this is possible for the starting epochs
+	if quality == 0 {
+		return finalized, nil
+	}
+
+	checkpoint, err := engine.findCheckpointByQuality(quality, finalized, storeID)
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	engine.justified.Store(justified{search: storeID, value: checkpoint})
+	return checkpoint, nil
+}
+
 // Accepts checks if the given block is on the same branch of finalized checkpoint.
-func (engine *BFTEngine) Accepts(parentID thor.Bytes32) (bool, error) {
+func (engine *Engine) Accepts(parentID thor.Bytes32) (bool, error) {
 	finalized := engine.Finalized()
 
 	if block.Number(finalized) != 0 {
@@ -84,13 +268,15 @@ func (engine *BFTEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 }
 
 // Select selects between the new block and the current best, return true if new one is better.
-func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
-	newSt, err := engine.computeState(header)
+// header + conflicts address the new block's post-housekeep state before it is persisted.
+func (engine *Engine) Select(header *block.Header, conflicts uint32) (bool, error) {
+	newSum := &chain.BlockSummary{Header: header, Conflicts: conflicts}
+	newSt, err := engine.computeState(newSum)
 	if err != nil {
 		return false, err
 	}
 
-	best := engine.repo.BestBlockSummary().Header
+	best := engine.repo.BestBlockSummary()
 	bestSt, err := engine.computeState(best)
 	if err != nil {
 		return false, err
@@ -100,14 +286,19 @@ func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
 		return newSt.Quality > bestSt.Quality, nil
 	}
 
-	return header.BetterThan(best), nil
+	return header.BetterThan(best.Header), nil
 }
 
 // CommitBlock commits bft state to storage.
-func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error {
+func (engine *Engine) CommitBlock(header *block.Header, conflicts uint32, isPacking bool) error {
+	// The block is already persisted by this point (CommitBlock runs after
+	// repo.AddBlock); header + conflicts address its post-housekeep state the
+	// same way Select does, without a repo lookup.
+	sum := &chain.BlockSummary{Header: header, Conflicts: conflicts}
+
 	// save quality and finalized at the end of each round
 	if getStorePoint(header.Number()) == header.Number() {
-		state, err := engine.computeState(header)
+		state, err := engine.computeState(sum)
 		if err != nil {
 			return err
 		}
@@ -118,7 +309,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 		engine.caches.quality.Add(header.ID(), state.Quality)
 
 		if state.Committed && state.Quality > 1 {
-			id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), header.ParentID())
+			id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), header.ID())
 			if err != nil {
 				return err
 			}
@@ -127,12 +318,13 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 				return err
 			}
 			engine.finalized.Store(id)
+			metricBlocksCommitted().Add(1)
 		}
 	}
 
 	// mark voted if packing
 	if isPacking {
-		state, err := engine.computeState(header)
+		state, err := engine.computeState(sum)
 		if err != nil {
 			return err
 		}
@@ -149,7 +341,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 
 // ShouldVote decides if vote COM for a given parent block ID.
 // Packer only.
-func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
+func (engine *Engine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	// laze init casts
 	if engine.casts == nil {
 		if err := engine.newCasts(); err != nil {
@@ -158,7 +350,7 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	}
 
 	// do not vote COM at the first round
-	if absRound := (block.Number(parentID)+1)/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
+	if absRound := (block.Number(parentID)+1)/thor.EpochLength() - engine.forkConfig.FINALITY/thor.EpochLength(); absRound == 0 {
 		return false, nil
 	}
 
@@ -166,7 +358,7 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	st, err := engine.computeState(sum.Header)
+	st, err := engine.computeState(sum)
 	if err != nil {
 		return false, err
 	}
@@ -176,17 +368,23 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 
 	headQuality := st.Quality
 	finalized := engine.Finalized()
+	chain := engine.repo.NewChain(parentID)
 	// most recent justified checkpoint
 	var recentJC thor.Bytes32
 	if st.Justified {
 		// if justified in this round, use this round's checkpoint
-		checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckPoint(block.Number(parentID)))
+		checkpoint, err := chain.GetBlockID(getCheckPoint(block.Number(parentID)))
 		if err != nil {
 			return false, err
 		}
 		recentJC = checkpoint
 	} else {
-		checkpoint, err := engine.findCheckpointByQuality(headQuality, finalized, parentID)
+		// if current round is not justified, find the most recent justified checkpoint
+		prev, err := chain.GetBlockID(getStorePoint(block.Number(parentID) - thor.EpochLength()))
+		if err != nil {
+			return false, err
+		}
+		checkpoint, err := engine.findCheckpointByQuality(headQuality, finalized, prev)
 		if err != nil {
 			return false, err
 		}
@@ -211,20 +409,22 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 			if !includes {
 				return false, nil
 			}
-
 		}
 	}
 
 	return true, nil
 }
 
-// computeState computes the bft state regarding the given block header.
-func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
+// computeState computes the bft state for sum back to the closest checkpoint.
+// sum may describe a not-yet-persisted block (during bft.Select); Header + Conflicts
+// still address its post-housekeep state.
+func (engine *Engine) computeState(sum *chain.BlockSummary) (*bftState, error) {
+	header := sum.Header
 	if cached, ok := engine.caches.state.Get(header.ID()); ok {
 		return cached.(*bftState), nil
 	}
 
-	if header.Number() == 0 || header.Number() < engine.forkConfig.FINALITY {
+	if header.Number() == 0 || !thor.IsForked(header.Number(), engine.forkConfig.FINALITY) {
 		return &bftState{}, nil
 	}
 
@@ -234,36 +434,54 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 	)
 
 	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
-		js = interface{}(entry.Entry.Value).(*justifier)
+		js = (entry.Value).(*justifier)
 		end = header.Number()
 	} else {
 		// create a new vote set if cache missed or new block is checkpoint
 		var err error
-		js, err = engine.newJustifier(header.ParentID())
+		js, err = engine.newJustifier(sum)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create vote set")
 		}
 		end = js.checkpoint
 	}
 
-	h := header
-	for {
-		if h.Number() < engine.forkConfig.FINALITY {
-			break
-		}
+	// Weights only change at Housekeep, so weighing every vote against the
+	// checkpoint's post-housekeep state matches each block's parent state — except
+	// the checkpoint block itself, whose parent state holds stale weights.
+	var weightState *state.State
+	if js.posActive {
+		weightState = engine.stater.NewState(js.weightRoot)
+	}
 
+	h := header
+	// stop iterating at the genesis block, whose signer is the zero address
+	for h.Number() > 0 && thor.IsForked(h.Number(), engine.forkConfig.FINALITY) {
 		signer, _ := h.Signer()
-		js.AddBlock(h.ID(), signer, h.COM())
+
+		var weight uint64
+		if js.posActive {
+			validator, err := builtin.Staker.Native(weightState).GetValidation(signer)
+			if err != nil {
+				return nil, err
+			}
+
+			if validator == nil {
+				return nil, errors.Errorf("signer %s absent from committee at block %d", signer, h.Number())
+			}
+			weight = validator.Weight
+		}
+		js.AddBlock(signer, h.COM(), weight)
 
 		if h.Number() <= end {
 			break
 		}
 
-		sum, err := engine.repo.GetBlockSummary(h.ParentID())
+		parentBlockSummary, err := engine.repo.GetBlockSummary(h.ParentID())
 		if err != nil {
 			return nil, err
 		}
-		h = sum.Header
+		h = parentBlockSummary.Header
 	}
 
 	st := js.Summarize()
@@ -273,7 +491,8 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 }
 
 // findCheckpointByQuality finds the first checkpoint reaches the given quality.
-func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, parentID thor.Bytes32) (blockID thor.Bytes32, err error) {
+// It is caller's responsibility to ensure the epoch that headID belongs to is concluded.
+func (engine *Engine) findCheckpointByQuality(target uint32, finalized, headID thor.Bytes32) (blockID thor.Bytes32, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -281,21 +500,27 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 		}
 	}()
 
+	// Guard uint32 underflow below: callers must search forward from finalized.
+	if block.Number(headID) < block.Number(finalized) {
+		return thor.Bytes32{}, errors.New("headID precedes finalized")
+	}
+
 	searchStart := block.Number(finalized)
 	if searchStart == 0 {
 		searchStart = getCheckPoint(engine.forkConfig.FINALITY)
 	}
 
-	c := engine.repo.NewChain(parentID)
+	c := engine.repo.NewChain(headID)
 	get := func(i int) (uint32, error) {
-		id, err := c.GetBlockID(getStorePoint(searchStart + uint32(i)*thor.CheckpointInterval))
+		id, err := c.GetBlockID(getStorePoint(searchStart + uint32(i)*thor.EpochLength()))
 		if err != nil {
 			return 0, err
 		}
 		return engine.getQuality(id)
 	}
 
-	n := int((block.Number(parentID) + 1 - searchStart) / thor.CheckpointInterval)
+	// sort.Search searches from [0, n)
+	n := int((block.Number(headID)-searchStart)/thor.EpochLength()) + 1
 	num := sort.Search(n, func(i int) bool {
 		quality, err := get(i)
 		if err != nil {
@@ -305,6 +530,7 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 		return quality >= target
 	})
 
+	// n means not found for sort.Search
 	if num == n {
 		return thor.Bytes32{}, errors.New("failed find the block by quality")
 	}
@@ -318,24 +544,32 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 		return thor.Bytes32{}, errors.New("failed to find the block by quality")
 	}
 
-	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
+	return c.GetBlockID(searchStart + uint32(num)*thor.EpochLength())
 }
 
-func (engine *BFTEngine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
-	state := engine.stater.NewState(sum.Header.StateRoot(), sum.Header.Number(), sum.Conflicts, sum.SteadyNum)
-	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+func (engine *Engine) getTotalWeight(sum *chain.BlockSummary) (uint64, error) {
+	state := engine.stater.NewState(sum.Root())
+	staker := builtin.Staker.Native(state)
+
+	// Get total weight including delegations
+	_, totalWeight, err := staker.LockedStake()
 	if err != nil {
 		return 0, err
 	}
-	mbp := params.Uint64()
-	if mbp == 0 || mbp > thor.InitialMaxBlockProposers {
-		mbp = thor.InitialMaxBlockProposers
+
+	if totalWeight == 0 {
+		return 0, errors.New("total weight is zero or nil")
 	}
 
-	return mbp, nil
+	return totalWeight, nil
 }
 
-func (engine *BFTEngine) getQuality(id thor.Bytes32) (quality uint32, err error) {
+func (engine *Engine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
+	state := engine.stater.NewState(sum.Root())
+	return thor.GetMaxBlockProposers(builtin.Params.Native(state), true)
+}
+
+func (engine *Engine) getQuality(id thor.Bytes32) (quality uint32, err error) {
 	if cached, ok := engine.caches.quality.Get(id); ok {
 		return cached.(uint32), nil
 	}
@@ -355,7 +589,7 @@ func (engine *BFTEngine) getQuality(id thor.Bytes32) (quality uint32, err error)
 }
 
 func getCheckPoint(blockNum uint32) uint32 {
-	return blockNum / thor.CheckpointInterval * thor.CheckpointInterval
+	return blockNum / thor.EpochLength() * thor.EpochLength()
 }
 
 func isCheckPoint(blockNum uint32) bool {
@@ -364,5 +598,168 @@ func isCheckPoint(blockNum uint32) bool {
 
 // save quality at the end of round
 func getStorePoint(blockNum uint32) uint32 {
-	return getCheckPoint(blockNum) + thor.CheckpointInterval - 1
+	return getCheckPoint(blockNum) + thor.EpochLength() - 1
+}
+
+type mockedEngine thor.Bytes32
+
+func (e *mockedEngine) Finalized() thor.Bytes32 {
+	return thor.Bytes32(*e)
+}
+
+func (e *mockedEngine) Justified() (thor.Bytes32, error) {
+	return thor.Bytes32(*e), nil
+}
+
+// NewMockedEngine returns a new mocked engine. Which just
+// returns the genesisID for both finalized and justified.
+func NewMockedEngine(genesisID thor.Bytes32) Committer {
+	me := mockedEngine(genesisID)
+	return &me
+}
+
+func (e *mockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
+	return true, nil
+}
+
+func (e *mockedEngine) Select(_ *block.Header, _ uint32) (bool, error) {
+	return true, nil
+}
+
+func (e *mockedEngine) CommitBlock(_ *block.Header, _ uint32, _ bool) error {
+	return nil
+}
+
+func (e *mockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
+	return true, nil
+}
+
+// soloMockedEngine is a mocked BFT engine for solo mode that simulates real world BFT engine behavior.
+// It assumes every epoch is committed.
+//
+// Design rationale:
+//   - In solo mode, there's no actual BFT consensus, so we simulate finality by assuming every epoch is committed.
+//   - Finalized block is determined by: finalized = current_checkpoint - 2*EpochLength
+//   - Justified block is determined by: justified = current_checkpoint - 1*EpochLength
+//   - This matches the real BFT engine behavior where finalized = findCheckpointByQuality(quality-1) when quality > 1
+type soloMockedEngine struct {
+	repo       repositoryReader
+	forkConfig *thor.ForkConfig // Used to get FINALITY threshold
+}
+
+// repositoryReader defines the minimal interface needed from chain.Repository
+// to query blockchain state for finality determination.
+type repositoryReader interface {
+	BestBlockSummary() *chain.BlockSummary
+	GenesisBlock() *block.Block
+	NewChain(head thor.Bytes32) *chain.Chain
+}
+
+// Finalized returns the block ID considered "finalized" in solo mode.
+// Assumes every epoch is committed and calculates finalized as current_checkpoint - 2*EpochLength.
+func (e *soloMockedEngine) Finalized() thor.Bytes32 {
+	best := e.repo.BestBlockSummary()
+	bestNum := best.Header.Number()
+
+	// Before FINALITY activation, return genesis
+	if !thor.IsForked(bestNum, e.forkConfig.FINALITY) {
+		return e.repo.GenesisBlock().Header().ID()
+	}
+
+	// Calculate current checkpoint
+	currentCheckpoint := getCheckPoint(bestNum)
+	finalityCheckpoint := getCheckPoint(e.forkConfig.FINALITY)
+
+	// Need at least 2 complete epochs to finalize (quality > 1)
+	// finalized = currentCheckpoint - 2 * EpochLength
+	minCheckpointForFinalize := finalityCheckpoint + 2*thor.EpochLength()
+	if currentCheckpoint < minCheckpointForFinalize {
+		return e.repo.GenesisBlock().Header().ID()
+	}
+
+	// Finalized checkpoint = current checkpoint - 2 epochs
+	finalizedCheckpoint := currentCheckpoint - 2*thor.EpochLength()
+
+	// Get the block ID at the finalized checkpoint
+	chain := e.repo.NewChain(best.Header.ID())
+	finalizedID, err := chain.GetBlockID(finalizedCheckpoint)
+	if err != nil {
+		return e.repo.GenesisBlock().Header().ID()
+	}
+
+	return finalizedID
+}
+
+// Justified returns the justified checkpoint. In solo mode, assumes every epoch
+// is justified and returns the previous complete epoch's checkpoint.
+func (e *soloMockedEngine) Justified() (thor.Bytes32, error) {
+	best := e.repo.BestBlockSummary()
+	bestNum := best.Header.Number()
+
+	// Before FINALITY activation, return genesis
+	if !thor.IsForked(bestNum, e.forkConfig.FINALITY) {
+		return e.repo.GenesisBlock().Header().ID(), nil
+	}
+
+	// Calculate current checkpoint
+	currentCheckpoint := getCheckPoint(bestNum)
+	finalityCheckpoint := getCheckPoint(e.forkConfig.FINALITY)
+
+	// If still in the first epoch (or before), return genesis
+	if currentCheckpoint <= finalityCheckpoint {
+		return e.repo.GenesisBlock().Header().ID(), nil
+	}
+
+	// Justified = previous epoch's checkpoint (current - 1 epoch)
+	justifiedCheckpoint := currentCheckpoint - thor.EpochLength()
+
+	chain := e.repo.NewChain(best.Header.ID())
+	justifiedID, err := chain.GetBlockID(justifiedCheckpoint)
+	if err != nil {
+		return e.repo.GenesisBlock().Header().ID(), nil
+	}
+
+	return justifiedID, nil
+}
+
+// Accepts always returns true in solo mode since there's no competing chains
+// or validation needed - the single node accepts all blocks it produces.
+func (e *soloMockedEngine) Accepts(parentID thor.Bytes32) (bool, error) {
+	return true, nil
+}
+
+// Select always returns true in solo mode since there's no fork choice rule
+// needed - the single node always extends its own chain.
+func (e *soloMockedEngine) Select(_ *block.Header, _ uint32) (bool, error) {
+	return true, nil
+}
+
+// CommitBlock is a no-op in solo mode since there's no BFT voting or
+// commitment protocol needed.
+func (e *soloMockedEngine) CommitBlock(_ *block.Header, _ uint32, _ bool) error {
+	return nil
+}
+
+// ShouldVote always returns false in solo mode since there's no voting
+// mechanism - the single node produces blocks without consensus votes.
+func (e *soloMockedEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
+	return false, nil
+}
+
+// NewSoloMockedEngine creates a new mocked BFT engine for solo mode that
+// simulates quality-based finality to enable pruning.
+//
+// In solo mode, we assume every epoch is committed (quality increments by 1
+// each epoch). Finalized block is determined by: finalized = current_checkpoint - 2*EpochLength
+// This matches the real BFT engine behavior where finalized = findCheckpointByQuality(quality-1)
+// when quality > 1.
+//
+// Parameters:
+//   - repo: The blockchain repository to query for block information
+//   - forkConfig: Fork configuration containing FINALITY threshold
+func NewSoloMockedEngine(repo repositoryReader, forkConfig *thor.ForkConfig) Committer {
+	return &soloMockedEngine{
+		repo:       repo,
+		forkConfig: forkConfig,
+	}
 }

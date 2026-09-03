@@ -7,65 +7,110 @@ package transfers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api/events"
-	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/logdb"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/restutil"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/logdb"
 )
 
 type Transfers struct {
-	repo *chain.Repository
-	db   *logdb.LogDB
+	repo             *chain.Repository
+	db               *logdb.LogDB
+	maxLimit         uint64
+	maxOffset        uint64
+	maxCriteriaCount int
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB) *Transfers {
+func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uint64, maxCriteriaCount int) *Transfers {
 	return &Transfers{
 		repo,
 		db,
+		maxLimit,
+		maxOffset,
+		maxCriteriaCount,
 	}
 }
 
-//Filter query logs with option
-func (t *Transfers) filter(ctx context.Context, filter *TransferFilter) ([]*FilteredTransfer, error) {
-	rng, err := events.ConvertRange(t.repo.NewBestChain(), filter.Range)
+// Filter query logs with option. Rows are returned in their logdb form; the
+// conversion to the response shape is deferred to the response writer so only one
+// converted transfer exists at a time.
+func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*logdb.Transfer, error) {
+	rng, err := api.ConvertRange(t.repo.NewBestChain(), filter.Range)
 	if err != nil {
 		return nil, err
 	}
 
-	transfers, err := t.db.FilterTransfers(ctx, &logdb.TransferFilter{
+	return t.db.FilterTransfers(ctx, &logdb.TransferFilter{
 		CriteriaSet: filter.CriteriaSet,
 		Range:       rng,
-		Options:     filter.Options,
-		Order:       filter.Order,
+		Options: &logdb.Options{
+			Offset: filter.Options.Offset,
+			Limit:  *filter.Options.Limit,
+		},
+		Order: filter.Order,
 	})
-	if err != nil {
-		return nil, err
-	}
-	tLogs := make([]*FilteredTransfer, len(transfers))
-	for i, trans := range transfers {
-		tLogs[i] = convertTransfer(trans)
-	}
-	return tLogs, nil
 }
 
 func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
-	var filter TransferFilter
-	if err := utils.ParseJSON(req.Body, &filter); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
+	var filter api.TransferFilter
+	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	tLogs, err := t.filter(req.Context(), &filter)
+	if err := filter.Options.Validate(t.maxLimit, t.maxOffset); err != nil {
+		return restutil.Forbidden(err)
+	}
+	if err := filter.Range.Validate(); err != nil {
+		return restutil.BadRequest(err)
+	}
+	// reject null element in CriteriaSet, {} will be unmarshaled to default value and will be accepted/handled by the filter engine
+	for i, criterion := range filter.CriteriaSet {
+		if criterion == nil {
+			return restutil.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
+		}
+	}
+	if len(filter.CriteriaSet) > t.maxCriteriaCount {
+		return restutil.BadRequest(fmt.Errorf(
+			"number of criteria in criteriaSet: %d cannot be greater than: %d",
+			len(filter.CriteriaSet),
+			t.maxCriteriaCount),
+		)
+	}
+	if filter.Options == nil {
+		filter.Options = &api.Options{}
+	}
+	if filter.Options.Limit == nil {
+		// if filter.Options.Limit is nil, set to the default limit +1
+		// to detect whether there are more logs than the default limit
+		limit := t.maxLimit + 1
+		filter.Options.Limit = &limit
+	}
+
+	transfers, err := t.filter(req.Context(), &filter)
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, tLogs)
+
+	// ensure the result size is less than the configured limit
+	if len(transfers) > int(t.maxLimit) {
+		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.maxLimit))
+	}
+
+	return restutil.WriteJSONArray(w, len(transfers), func(i int) *api.FilteredTransfer {
+		return api.ConvertTransfer(transfers[i], filter.Options.IncludeIndexes)
+	})
 }
 
 func (t *Transfers) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogs))
+	sub.Path("").
+		Methods(http.MethodPost).
+		Name("POST /logs/transfer").
+		HandlerFunc(restutil.WrapHandlerFunc(t.handleFilterTransferLogs))
 }

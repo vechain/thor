@@ -12,13 +12,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
+	"slices"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vrf"
+
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vrf"
 )
 
 // Header contains almost all information about a block, except block body.
@@ -84,6 +87,14 @@ func (h *Header) GasUsed() uint64 {
 	return h.body.GasUsed
 }
 
+// BaseFee returns base fee of this block.
+func (h *Header) BaseFee() *big.Int {
+	if h.body.Extension.BaseFee == nil {
+		return nil
+	}
+	return new(big.Int).Set(h.body.Extension.BaseFee)
+}
+
 // Beneficiary returns reward recipient.
 func (h *Header) Beneficiary() thor.Address {
 	return h.body.Beneficiary
@@ -137,31 +148,39 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	defer func() { h.cache.signingHash.Store(hash) }()
 
 	return thor.Blake2bFn(func(w io.Writer) {
-		rlp.Encode(w, []interface{}{
-			&h.body.ParentID,
-			h.body.Timestamp,
-			h.body.GasLimit,
-			&h.body.Beneficiary,
-
-			h.body.GasUsed,
-			h.body.TotalScore,
-
-			&h.body.TxsRootFeatures,
-			&h.body.StateRoot,
-			&h.body.ReceiptsRoot,
-		})
+		rlp.Encode(w, h.signingFields())
 	})
+}
+
+func (h *Header) signingFields() []any {
+	fields := []any{
+		h.body.ParentID,
+		h.body.Timestamp,
+		h.body.GasLimit,
+		h.body.Beneficiary,
+
+		h.body.GasUsed,
+		h.body.TotalScore,
+
+		&h.body.TxsRootFeatures,
+		h.body.StateRoot,
+		h.body.ReceiptsRoot,
+	}
+	if h.body.Extension.BaseFee != nil {
+		fields = append(fields, &h.body.Extension)
+	}
+	return fields
 }
 
 // Signature returns signature.
 func (h *Header) Signature() []byte {
-	return append([]byte(nil), h.body.Signature...)
+	return slices.Clone(h.body.Signature)
 }
 
 // withSignature create a new Header object with signature set.
 func (h *Header) withSignature(sig []byte) *Header {
 	cpy := Header{body: h.body}
-	cpy.body.Signature = append([]byte(nil), sig...)
+	cpy.body.Signature = slices.Clone(sig)
 	return &cpy
 }
 
@@ -260,7 +279,8 @@ func (h *Header) String() string {
 		signerStr = signer.String()
 	}
 
-	return fmt.Sprintf(`Header(%v):
+	return fmt.Sprintf(
+		`Header(%v):
 	Number:         %v
 	ParentID:       %v
 	Timestamp:      %v
@@ -268,6 +288,7 @@ func (h *Header) String() string {
 	Beneficiary:    %v
 	GasLimit:       %v
 	GasUsed:        %v
+	BaseFee:		%v
 	TotalScore:     %v
 	TxsRoot:        %v
 	TxsFeatures:    %v
@@ -275,9 +296,25 @@ func (h *Header) String() string {
 	ReceiptsRoot:   %v
 	Alpha:          0x%x
 	COM:            %v
-	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
-		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.COM, h.body.Signature)
+	Signature:      0x%x`,
+		h.ID(),
+		h.Number(),
+		h.body.ParentID,
+		h.body.Timestamp,
+		signerStr,
+		h.body.Beneficiary,
+		h.body.GasLimit,
+		h.body.GasUsed,
+		h.body.Extension.BaseFee,
+		h.body.TotalScore,
+		h.body.TxsRootFeatures.Root,
+		h.body.TxsRootFeatures.Features,
+		h.body.StateRoot,
+		h.body.ReceiptsRoot,
+		h.body.Extension.Alpha,
+		h.body.Extension.COM,
+		h.body.Signature,
+	)
 }
 
 // BetterThan return if this block is better than other one.

@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package statedb_test
+package statedb
 
 import (
 	"bytes"
@@ -19,10 +19,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/runtime/statedb"
-	State "github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/vechain/thor/v2/muxdb"
+	State "github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestSnapshotRandom(t *testing.T) {
@@ -56,7 +58,7 @@ type snapshotTest struct {
 
 type testAction struct {
 	name   string
-	fn     func(testAction, *statedb.StateDB)
+	fn     func(testAction, *StateDB)
 	args   []int64
 	noAddr bool
 }
@@ -66,21 +68,21 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 	actions := []testAction{
 		{
 			name: "AddBalance",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				s.AddBalance(addr, big.NewInt(a.args[0]))
 			},
 			args: make([]int64, 1),
 		},
 		{
 			name: "SetNonce",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				s.SetNonce(addr, uint64(a.args[0]))
 			},
 			args: make([]int64, 1),
 		},
 		{
 			name: "SetState",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
 				binary.BigEndian.PutUint16(val[:], uint16(a.args[1]))
@@ -90,7 +92,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 		{
 			name: "SetCode",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				code := make([]byte, 16)
 				binary.BigEndian.PutUint64(code, uint64(a.args[0]))
 				binary.BigEndian.PutUint64(code[8:], uint64(a.args[1]))
@@ -100,19 +102,19 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 		{
 			name: "CreateAccount",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(_ testAction, s *StateDB) {
 				s.CreateAccount(addr)
 			},
 		},
 		{
 			name: "Suicide",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(_ testAction, s *StateDB) {
 				s.Suicide(addr)
 			},
 		},
 		{
 			name: "AddRefund",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				s.AddRefund(uint64(a.args[0]))
 			},
 			args:   make([]int64, 1),
@@ -120,7 +122,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 		{
 			name: "AddLog",
-			fn: func(a testAction, s *statedb.StateDB) {
+			fn: func(a testAction, s *StateDB) {
 				data := make([]byte, 2)
 				binary.BigEndian.PutUint16(data, uint16(a.args[0]))
 				s.AddLog(&types.Log{Address: addr, Data: data})
@@ -134,7 +136,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		nameargs = append(nameargs, addr.Hex())
 	}
 	for _, i := range action.args {
-		action.args[i] = rand.Int63n(100)
+		action.args[i] = rand.Int63n(100) //#nosec G404
 		nameargs = append(nameargs, fmt.Sprint(action.args[i]))
 	}
 	action.name += strings.Join(nameargs, ", ")
@@ -185,8 +187,8 @@ func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
 		db           = muxdb.NewMem()
-		state        = State.New(db, thor.Bytes32{}, 0, 0, 0)
-		stateDB      = statedb.New(state)
+		state        = State.New(db, trie.Root{})
+		stateDB      = New(state)
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
@@ -200,8 +202,8 @@ func (test *snapshotTest) run() bool {
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		state := State.New(db, thor.Bytes32{}, 0, 0, 0)
-		checkStateDB := statedb.New(state)
+		state := State.New(db, trie.Root{})
+		checkStateDB := New(state)
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkStateDB)
 		}
@@ -215,10 +217,10 @@ func (test *snapshotTest) run() bool {
 }
 
 // checkEqual checks that methods of state and checkstate return the same values.
-func (test *snapshotTest) checkEqual(state, checkstate *statedb.StateDB) error {
+func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 	for _, addr := range test.addrs {
 		var err error
-		checkeq := func(op string, a, b interface{}) bool {
+		checkeq := func(op string, a, b any) bool {
 			if err == nil && !reflect.DeepEqual(a, b) {
 				err = fmt.Errorf("got %s(%s) == %v, want %v", op, addr.Hex(), a, b)
 				return false
@@ -244,4 +246,53 @@ func (test *snapshotTest) checkEqual(state, checkstate *statedb.StateDB) error {
 			state.GetRefund(), checkstate.GetRefund())
 	}
 	return nil
+}
+
+func TestTransientState(t *testing.T) {
+	addr := common.Address{0x1}
+	key := common.BytesToHash([]byte("key1"))
+	v1 := common.BytesToHash([]byte("value1"))
+	v2 := common.BytesToHash([]byte("value2"))
+
+	db := muxdb.NewMem()
+	state := State.NewStater(db).NewState(trie.Root{})
+
+	stateDB := New(state)
+	val := stateDB.GetTransientState(addr, key)
+	assert.Equal(t, common.Hash{}, val)
+
+	stateDB.SetTransientState(addr, key, v1)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v1, val)
+
+	snap := stateDB.Snapshot()
+	stateDB.SetTransientState(addr, key, v2)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v2, val)
+
+	stateDB.RevertToSnapshot(snap)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v1, val)
+
+	stateDB.SetTransientState(addr, key, v2)
+	val = stateDB.GetTransientState(addr, key)
+	assert.Equal(t, v2, val)
+}
+
+func TestCreateContract(t *testing.T) {
+	addr := common.Address{0x1}
+	stateDB := New(State.New(muxdb.NewMem(), trie.Root{}))
+	assert.False(t, stateDB.IsNewContract(addr))
+	stateDB.CreateContract(addr)
+	assert.True(t, stateDB.IsNewContract(addr))
+
+	rev := stateDB.Snapshot()
+	addr2 := common.Address{0x2}
+	assert.False(t, stateDB.IsNewContract(addr2))
+	stateDB.CreateContract(addr2)
+	assert.True(t, stateDB.IsNewContract(addr2))
+
+	stateDB.RevertToSnapshot(rev)
+	assert.False(t, stateDB.IsNewContract(addr2))
+	assert.True(t, stateDB.IsNewContract(addr))
 }

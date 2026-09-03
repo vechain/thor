@@ -21,7 +21,7 @@ var vrf = ecvrf.New(&ecvrf.Config{
 	SuiteString: 0xfe,
 	Cofactor:    0x01,
 	NewHasher:   sha256.New,
-	Decompress: func(c elliptic.Curve, pk []byte) (x, y *big.Int) {
+	Decompress: func(_ elliptic.Curve, pk []byte) (x, y *big.Int) {
 		return secp256k1.DecompressPubkey(pk)
 	},
 })

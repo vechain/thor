@@ -20,7 +20,7 @@ func Parallel(cb func(chan<- func())) <-chan struct{} {
 	done := make(chan struct{})
 
 	nGo := int32(numCPU)
-	for i := 0; i < numCPU; i++ {
+	for range numCPU {
 		go func() {
 			for work := range queue {
 				work()

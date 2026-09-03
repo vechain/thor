@@ -6,24 +6,28 @@
 package blocks
 
 import (
+	"encoding/hex"
+	"fmt"
 	"net/http"
-	"strconv"
 
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
+
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/restutil"
+	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type Blocks struct {
 	repo *chain.Repository
-	bft  BFTEngine
+	bft  bft.Committer
 }
 
-func New(repo *chain.Repository, bft BFTEngine) *Blocks {
+func New(repo *chain.Repository, bft bft.Committer) *Blocks {
 	return &Blocks{
 		repo,
 		bft,
@@ -31,21 +35,39 @@ func New(repo *chain.Repository, bft BFTEngine) *Blocks {
 }
 
 func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
-	revision, err := b.parseRevision(mux.Vars(req)["revision"])
+	revision, err := restutil.ParseRevision(mux.Vars(req)["revision"], false)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		return restutil.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	expanded := req.URL.Query().Get("expanded")
-	if expanded != "" && expanded != "false" && expanded != "true" {
-		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
+	raw, err := restutil.StringToBoolean(req.URL.Query().Get("raw"), false)
+	if err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "raw"))
+	}
+	expanded, err := restutil.StringToBoolean(req.URL.Query().Get("expanded"), false)
+	if err != nil {
+		return restutil.BadRequest(errors.WithMessage(err, "expanded"))
 	}
 
-	summary, err := b.getBlockSummary(revision)
+	if raw && expanded {
+		return restutil.BadRequest(errors.WithMessage(errors.New("Raw and Expanded are mutually exclusive"), "raw&expanded"))
+	}
+
+	summary, err := restutil.GetSummary(revision, b.repo, b.bft)
 	if err != nil {
 		if b.repo.IsNotFound(err) {
-			return utils.WriteJSON(w, nil)
+			return restutil.WriteJSON(w, nil)
 		}
 		return err
+	}
+
+	if raw {
+		rlpEncoded, err := rlp.EncodeToBytes(summary.Header)
+		if err != nil {
+			return err
+		}
+		return restutil.WriteJSON(w, &api.JSONRawBlockSummary{
+			Raw: fmt.Sprintf("0x%s", hex.EncodeToString(rlpEncoded)),
+		})
 	}
 
 	isTrunk, err := b.isTrunk(summary.Header.ID(), summary.Header.Number())
@@ -61,8 +83,8 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		}
 	}
 
-	jSummary := buildJSONBlockSummary(summary, isTrunk, isFinalized)
-	if expanded == "true" {
+	jSummary := api.BuildJSONBlockSummary(summary, isTrunk, isFinalized)
+	if expanded {
 		txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
 		if err != nil {
 			return err
@@ -72,60 +94,30 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 			return err
 		}
 
-		return utils.WriteJSON(w, &JSONExpandedBlock{
-			jSummary,
-			buildJSONEmbeddedTxs(txs, receipts),
+		return restutil.WriteJSON(w, &api.JSONExpandedBlock{
+			JSONBlockSummary: jSummary,
+			Transactions:     api.BuildJSONEmbeddedTxs(txs, receipts),
 		})
 	}
 
-	return utils.WriteJSON(w, &JSONCollapsedBlock{
-		jSummary,
-		summary.Txs,
+	return restutil.WriteJSON(w, &api.JSONCollapsedBlock{
+		JSONBlockSummary: jSummary,
+		Transactions:     summary.Txs,
 	})
 }
 
-func (b *Blocks) parseRevision(revision string) (interface{}, error) {
-	if revision == "" || revision == "best" {
-		return nil, nil
-	}
-	if revision == "finalized" {
-		return revision, nil
-	}
-	if len(revision) == 66 || len(revision) == 64 {
-		blockID, err := thor.ParseBytes32(revision)
-		if err != nil {
-			return nil, err
-		}
-		return blockID, nil
-	}
-	n, err := strconv.ParseUint(revision, 0, 0)
-	if err != nil {
-		return nil, err
-	}
-	if n > math.MaxUint32 {
-		return nil, errors.New("block number out of max uint32")
-	}
-	return uint32(n), err
-}
-
-func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, err error) {
-	var id thor.Bytes32
-	switch revision := revision.(type) {
-	case thor.Bytes32:
-		id = revision
-	case uint32:
-		id, err = b.repo.NewBestChain().GetBlockID(revision)
-		if err != nil {
-			return
-		}
-	case string:
-		id = b.bft.Finalized()
-	default:
-		id = b.repo.BestBlockSummary().Header.ID()
-	}
-	return b.repo.GetBlockSummary(id)
-}
-
+// Returns true or false for a given blockId based on the current state of chain. If the block for a given number is
+// found it compares id with provided id, if the block is not found returns false. There are couple of possible scenarios
+// here:
+//  1. Block number in future - returns false
+//  2. Block number is on canonical chain - returns true
+//     3.a. Node is currently on a side chain and returns true for block ID1 and block number X - returns true
+//     3.b. After some time node converges to canonical chain and re-org mechanism sets different block id ID2 for block
+//     number X - returns false (it is possible that couple of seconds before same node was returning true for block ID2)
+//     4.a. Node is currently on a side chain and returns false for block ID3 and block number Y - returns false
+//     4.b. After some time node converges to canonical chain and re-org mechanism sets different block id ID3 for block
+//     number Y - returns true (it is possible that couple of seconds before same node was returning false for block ID3)
+//  5. Node has never seen a block from side chain so it returns false for block which was never seen
 func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
 	idByNum, err := b.repo.NewBestChain().GetBlockID(blkNum)
 	if err != nil {
@@ -136,5 +128,8 @@ func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
 
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
-	sub.Path("/{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
+	sub.Path("/{revision}").
+		Methods(http.MethodGet).
+		Name("GET /blocks/{revision}").
+		HandlerFunc(restutil.WrapHandlerFunc(b.handleGetBlock))
 }

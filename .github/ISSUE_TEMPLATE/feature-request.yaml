@@ -1,0 +1,23 @@
+name: "💡 Feature Request"
+description: Create a new issue for a feature request or enhancement.
+title: "💡<feature | enhancement> | <domain> - <title>"
+labels: [
+  "feature"
+]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: "Summary"
+      description: Provide a brief explanation of the feature.
+      placeholder: Describe the feature you would like to see implemented.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Motivation"
+      description: Why do you need this feature?
+      placeholder: Explain why you need this feature.
+    validations:
+      required: true

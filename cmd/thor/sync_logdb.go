@@ -6,20 +6,23 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"math/big"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"gopkg.in/cheggaaa/pb.v1"
+
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
@@ -62,7 +65,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	}
 
 	var (
-		goes    co.Goes
+		goes    sync.WaitGroup
 		pumpErr error
 		ch      = make(chan *block.Block, 1000)
 		cancel  func()
@@ -206,7 +209,7 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 	)
 
 	var (
-		goes    co.Goes
+		goes    sync.WaitGroup
 		pumpErr error
 		ch      = make(chan *block.Block, 512)
 		cancel  func()
@@ -272,12 +275,12 @@ func verifyLogDBPerBlock(
 	block *block.Block,
 	receipts tx.Receipts,
 	eventLogs []*logdb.Event,
-	transferLogs []*logdb.Transfer) error {
-
+	transferLogs []*logdb.Transfer,
+) error {
 	convertTopics := func(topics []thor.Bytes32) (r [5]*thor.Bytes32) {
 		for i, t := range topics {
-			t := t
-			r[i] = &t
+			topic := t
+			r[i] = &topic
 		}
 		return
 	}
@@ -285,10 +288,15 @@ func verifyLogDBPerBlock(
 	n := block.Header().Number()
 	id := block.Header().ID()
 	ts := block.Header().Timestamp()
+	evCount := 0
+	trCount := 0
 
 	var expectedEvLogs []*logdb.Event
 	var expectedTrLogs []*logdb.Transfer
 	txs := block.Transactions()
+
+	evCount = 0
+	trCount = 0
 	for txIndex, r := range receipts {
 		tx := txs[txIndex]
 		origin, _ := tx.Origin()
@@ -301,7 +309,7 @@ func verifyLogDBPerBlock(
 				}
 				expectedEvLogs = append(expectedEvLogs, &logdb.Event{
 					BlockNumber: n,
-					Index:       uint32(len(expectedEvLogs)),
+					LogIndex:    uint32(evCount),
 					BlockID:     id,
 					BlockTime:   ts,
 					TxID:        tx.ID(),
@@ -310,12 +318,14 @@ func verifyLogDBPerBlock(
 					Address:     ev.Address,
 					Topics:      convertTopics(ev.Topics),
 					Data:        data,
+					TxIndex:     uint32(txIndex),
 				})
+				evCount++
 			}
 			for _, tr := range output.Transfers {
 				expectedTrLogs = append(expectedTrLogs, &logdb.Transfer{
 					BlockNumber: n,
-					Index:       uint32(len(expectedTrLogs)),
+					LogIndex:    uint32(trCount),
 					BlockID:     id,
 					BlockTime:   ts,
 					TxID:        tx.ID(),
@@ -324,16 +334,18 @@ func verifyLogDBPerBlock(
 					Sender:      tr.Sender,
 					Recipient:   tr.Recipient,
 					Amount:      tr.Amount,
+					TxIndex:     uint32(txIndex),
 				})
+				trCount++
 			}
 		}
 	}
-	if !reflect.DeepEqual(eventLogs, expectedEvLogs) {
+	if !equalEvents(eventLogs, expectedEvLogs) {
 		fmt.Println("\nDiff event logs")
 		fmt.Println(jsonDiff(expectedEvLogs, eventLogs))
 		return errors.New("incorrect logs")
 	}
-	if !reflect.DeepEqual(transferLogs, expectedTrLogs) {
+	if !equalTransfers(transferLogs, expectedTrLogs) {
 		fmt.Println("\nDiff transfer logs")
 		fmt.Println(jsonDiff(expectedTrLogs, transferLogs))
 		return errors.New("incorrect logs")
@@ -341,7 +353,133 @@ func verifyLogDBPerBlock(
 	return nil
 }
 
-func jsonDiff(expected, actual interface{}) string {
+// equalEvents performs a statically typed comparison of two Event slices
+func equalEvents(a, b []*logdb.Event) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !equalEvent(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// equalEvent performs a statically typed comparison of two Event pointers
+func equalEvent(a, b *logdb.Event) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	// fast-fail on all primitive fields
+	if a.BlockNumber != b.BlockNumber ||
+		a.LogIndex != b.LogIndex ||
+		a.BlockTime != b.BlockTime ||
+		a.TxIndex != b.TxIndex ||
+		a.ClauseIndex != b.ClauseIndex {
+		return false
+	}
+
+	// compare IDs and addresses via byte-level equality
+	if !bytes.Equal(a.BlockID.Bytes(), b.BlockID.Bytes()) ||
+		!bytes.Equal(a.TxID.Bytes(), b.TxID.Bytes()) ||
+		!bytes.Equal(a.TxOrigin.Bytes(), b.TxOrigin.Bytes()) ||
+		!bytes.Equal(a.Address.Bytes(), b.Address.Bytes()) {
+		return false
+	}
+
+	// topics: nil vs non-nil are unequal, otherwise byte-compare the contents
+	if !equalTopics(a.Topics, b.Topics) {
+		return false
+	}
+
+	// distinguish nil vs empty slice (reflect.DeepEqual would treat them unequal)
+	if (a.Data == nil) != (b.Data == nil) {
+		return false
+	}
+	if !bytes.Equal(a.Data, b.Data) {
+		return false
+	}
+
+	return true
+}
+
+// equalTopics compares two [5]*Bytes32 arrays, distinguishing nil pointers
+// and falling back to a byte-level compare of the 32-byte contents.
+func equalTopics(a, b [5]*thor.Bytes32) bool {
+	for i := range a {
+		if a[i] == nil || b[i] == nil {
+			if a[i] != b[i] {
+				return false
+			}
+			continue
+		}
+		if !bytes.Equal(a[i].Bytes(), b[i].Bytes()) {
+			return false
+		}
+	}
+	return true
+}
+
+// equalTransfers performs a statically typed comparison of two Transfer slices
+func equalTransfers(a, b []*logdb.Transfer) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !equalTransfer(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// equalTransfer performs a statically typed comparison of two Transfer pointers
+// and treats nil Amount as zero for semantic equality.
+func equalTransfer(a, b *logdb.Transfer) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	// fast-fail on primitive fields
+	if a.BlockNumber != b.BlockNumber ||
+		a.LogIndex != b.LogIndex ||
+		a.BlockTime != b.BlockTime ||
+		a.TxIndex != b.TxIndex ||
+		a.ClauseIndex != b.ClauseIndex {
+		return false
+	}
+
+	// compare IDs and addresses via byte-level equality
+	if !bytes.Equal(a.BlockID.Bytes(), b.BlockID.Bytes()) ||
+		!bytes.Equal(a.TxID.Bytes(), b.TxID.Bytes()) ||
+		!bytes.Equal(a.TxOrigin.Bytes(), b.TxOrigin.Bytes()) ||
+		!bytes.Equal(a.Sender.Bytes(), b.Sender.Bytes()) ||
+		!bytes.Equal(a.Recipient.Bytes(), b.Recipient.Bytes()) {
+		return false
+	}
+
+	// normalize nil<->zero for Amount
+	var aAmt, bAmt *big.Int
+	if a.Amount == nil || a.Amount.Sign() == 0 {
+		aAmt = big.NewInt(0)
+	} else {
+		aAmt = a.Amount
+	}
+	if b.Amount == nil || b.Amount.Sign() == 0 {
+		bAmt = big.NewInt(0)
+	} else {
+		bAmt = b.Amount
+	}
+	if aAmt.Cmp(bAmt) != 0 {
+		return false
+	}
+
+	return true
+}
+
+func jsonDiff(expected, actual any) string {
 	e, _ := json.MarshalIndent(expected, "", "  ")
 	a, _ := json.MarshalIndent(actual, "", "  ")
 	diff, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
@@ -373,12 +511,10 @@ func pumpBlockAndReceipts(ctx context.Context, repo *chain.Repository, headID th
 			select {
 			case <-co.Parallel(func(queue chan<- func()) {
 				for _, b := range buf {
-					h := b.Header()
 					queue <- func() {
-						h.ID()
+						b.Header().ID()
 					}
 					for _, tx := range b.Transactions() {
-						tx := tx
 						queue <- func() {
 							tx.ID()
 						}

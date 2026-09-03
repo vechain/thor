@@ -12,19 +12,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/xenv"
+
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
-func M(a ...interface{}) []interface{} {
+func M(a ...any) []any {
 	return a
 }
 
@@ -39,6 +40,7 @@ func approverEvent(approver thor.Address, action string) *tx.Event {
 		Data:    data,
 	}
 }
+
 func proposalEvent(id thor.Bytes32, action string) *tx.Event {
 	ev, _ := builtin.Executor.ABI.EventByName("Proposal")
 	var b32 thor.Bytes32
@@ -74,10 +76,10 @@ func initExectorTest() *ctest {
 	})
 
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 	chain := repo.NewChain(b0.Header().ID())
 
-	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, &thor.NoFork)
 
 	return &ctest{
 		rt:  rt,
@@ -89,8 +91,8 @@ func initExectorTest() *ctest {
 func TestExecutorApprover(t *testing.T) {
 	test := initExectorTest()
 	var approvers []thor.Address
-	for i := 0; i < 7; i++ {
-		approvers = append(approvers, thor.BytesToAddress([]byte(fmt.Sprintf("approver%d", i))))
+	for i := range 7 {
+		approvers = append(approvers, thor.BytesToAddress(fmt.Appendf(nil, "approver%d", i)))
 	}
 
 	for _, a := range approvers {
@@ -143,7 +145,6 @@ func TestExecutorApprover(t *testing.T) {
 }
 
 func TestExecutorVotingContract(t *testing.T) {
-
 	test := initExectorTest()
 	voting := thor.BytesToAddress([]byte("voting"))
 	test.Case("attachVotingContract", voting).
@@ -195,7 +196,7 @@ func TestExecutorProposal(t *testing.T) {
 	proposalID := func() thor.Bytes32 {
 		var b8 [8]byte
 		binary.BigEndian.PutUint64(b8[:], test.rt.Context().Time)
-		return thor.Bytes32(crypto.Keccak256Hash(b8[:], approver[:]))
+		return thor.Keccak256(b8[:], approver[:])
 	}()
 	test.Case("propose", target, data).
 		Caller(approver).

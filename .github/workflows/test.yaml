@@ -1,32 +1,116 @@
-name: Test
+name: Unit Tests
 
-on: [push, pull_request]
+on:
+  # Should only be used by other workflows
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+permissions:
+  contents: read
 
 jobs:
+  # Cross-platform build and test coverage. Linux is covered by the
+  # test_race and test_coverage jobs below.
   unit_tests:
+    name: unit_tests (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
-        go-version: [1.20.x]
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - go-version: 1.17.x
-            os: ubuntu-latest
-          - go-version: 1.18.x
-            os: ubuntu-latest
-          - go-version: 1.19.x
-            os: ubuntu-latest 
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
 
       - name: Make all
         run: make all
-      
+
+      # GOTESTFLAGS=-count=1 bypasses Go's test result cache
       - name: Make Test
-        run: make test
+        id: unit-test
+        run: make test GOTESTFLAGS=-count=1
+
+  # Race detection runs on arm64: linux/arm64 is a release target, and its
+  # weaker memory model can surface races that amd64 hides.
+  test_race:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Make Test Race
+        run: make test-race
+
+  test_coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Make Coverage
+        run: make test-coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ github.repository == 'vechain/thor' }}
+        with:
+          fail_ci_if_error: true
+          files: ./coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  solo-test:
+    strategy:
+        matrix:
+            args:
+              - 'solo'
+              - 'solo --on-demand'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Make all
+        run: make thor
+
+      - name: Start Solo
+        run: bin/thor ${{matrix.args}} > thor-solo.log 2>&1 &
+
+      - name: Wait for block 1
+        run: |
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8669/blocks/1 || true)
+            if [ "$status" -eq 200 ]; then
+              echo "✅ Healthcheck passed"
+              exit 0
+            fi
+            echo "Healthcheck failed (status: $status). Retrying in 1s..."
+            sleep 1
+          done
+          echo "❌ Healthcheck failed after 30 attempts"
+          exit 1
+
+      - name: Print Logs
+        if: failure()
+        run: cat thor-solo.log
