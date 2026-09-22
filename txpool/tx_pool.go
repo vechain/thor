@@ -258,17 +258,23 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	}
 
 	headSummary := p.repo.BestBlockSummary()
+	var inserted bool
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-		err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable)
+		inserted, err = p.addWhenSynced(newTx, txObj, headSummary, rejectNonExecutable)
 	} else {
-		err = p.addWhenNotSynced(newTx, txObj)
+		inserted, err = p.addWhenNotSynced(newTx, txObj)
 	}
 	if err != nil {
 		return err
 	}
 
-	atomic.AddUint32(&p.addedAfterWash, 1)
-	addTxPoolMetric(txObj, 1)
+	// inserted is false when a concurrent add of the same hash won the race in
+	// p.all.Add (see its doc comment) - nothing new entered the pool, so there's
+	// nothing to count here; the winning call already accounted for it.
+	if inserted {
+		atomic.AddUint32(&p.addedAfterWash, 1)
+		addTxPoolMetric(txObj, 1)
+	}
 
 	return nil
 }
@@ -322,14 +328,14 @@ func (p *TxPool) addWhenSynced(
 	txObj *TxObject,
 	headSummary *chain.BlockSummary,
 	rejectNonExecutable bool,
-) error {
+) (bool, error) {
 	state := p.stater.NewState(headSummary.Root())
 	executable, pricing, err := txObj.Evaluate(
 		p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header,
 		p.forkConfig, p.baseFeeCache.Get(headSummary.Header), false,
 	)
 	if err != nil {
-		return txRejectedError{err.Error()}
+		return false, txRejectedError{err.Error()}
 	}
 
 	var candidatePGP *big.Int
@@ -340,26 +346,26 @@ func (p *TxPool) addWhenSynced(
 	// Check pool limits and priority for remote transactions
 	if !txObj.localSubmitted() {
 		if p.all.Len() >= p.options.Limit*15/10 {
-			return txRejectedError{"pool is full"}
+			return false, txRejectedError{"pool is full"}
 		} else if p.all.Len() >= p.options.Limit*12/10 {
 			if !p.checkTxPriority(executable, candidatePGP) {
-				return txRejectedError{"pool is full"}
+				return false, txRejectedError{"pool is full"}
 			}
 		}
 	}
 
 	if rejectNonExecutable && !executable {
-		return txRejectedError{"tx is not executable"}
+		return false, txRejectedError{"tx is not executable"}
 	}
 
 	// Check non-executable pool limit (20% of total)
 	if !executable {
 		if p.all.Len()-len(p.Executables()) >= p.options.Limit*2/10 {
-			return txRejectedError{"non executable pool is full"}
+			return false, txRejectedError{"non executable pool is full"}
 		}
 	}
 
-	if err := p.all.Add(txObj, executable, pricing, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
+	inserted, err := p.all.Add(txObj, executable, pricing, p.options.LimitPerAccount, func(payer thor.Address, needs *big.Int) error {
 		// check payer's balance
 		balance, err := builtin.Energy.Native(state, headSummary.Header.Timestamp()+thor.BlockInterval()).Get(payer)
 		if err != nil {
@@ -371,8 +377,9 @@ func (p *TxPool) addWhenSynced(
 		}
 
 		return nil
-	}); err != nil {
-		return txRejectedError{err.Error()}
+	})
+	if err != nil {
+		return false, txRejectedError{err.Error()}
 	}
 
 	p.goes.Go(func() {
@@ -380,20 +387,21 @@ func (p *TxPool) addWhenSynced(
 	})
 	logger.Trace("tx added", "id", newTx.ID(), "executable", executable)
 
-	return nil
+	return inserted, nil
 }
 
 // addWhenNotSynced handles transaction addition when the chain is not synced.
-func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error {
+func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) (bool, error) {
 	// we skip steps that rely on head block when chain is not synced,
 	// but check the pool's limit
 	if p.all.Len() >= p.options.Limit {
-		return txRejectedError{"pool is full"}
+		return false, txRejectedError{"pool is full"}
 	}
 
 	// skip pending cost check when chain is not synced
-	if err := p.all.Add(txObj, false, nil, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil }); err != nil {
-		return txRejectedError{err.Error()}
+	inserted, err := p.all.Add(txObj, false, nil, p.options.LimitPerAccount, func(_ thor.Address, _ *big.Int) error { return nil })
+	if err != nil {
+		return false, txRejectedError{err.Error()}
 	}
 
 	logger.Trace("tx added", "id", newTx.ID())
@@ -401,7 +409,7 @@ func (p *TxPool) addWhenNotSynced(newTx *tx.Transaction, txObj *TxObject) error 
 		p.txFeed.Send(&TxEvent{newTx, nil})
 	})
 
-	return nil
+	return inserted, nil
 }
 
 // Add adds a new tx into pool.

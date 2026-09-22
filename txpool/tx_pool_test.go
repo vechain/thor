@@ -633,17 +633,13 @@ func TestWashTxs(t *testing.T) {
 
 	tx2 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 	txObj2, _ := ResolveTx(tx2, false)
-	assert.Nil(
-		t,
-		pool.all.Add(txObj2, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil }),
-	) // this tx will participate in the wash out.
+	_, err = pool.all.Add(txObj2, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+	assert.Nil(t, err) // this tx will participate in the wash out.
 
 	tx3 := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
 	txObj3, _ := ResolveTx(tx3, false)
-	assert.Nil(
-		t,
-		pool.all.Add(txObj3, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil }),
-	) // this tx will participate in the wash out.
+	_, err = pool.all.Add(txObj3, false, nil, LIMIT_PER_ACCOUNT, func(_ thor.Address, _ *big.Int) error { return nil })
+	assert.Nil(t, err) // this tx will participate in the wash out.
 
 	txs, washed, err := pool.wash(pool.repo.BestBlockSummary(), false)
 	assert.Nil(t, err)
