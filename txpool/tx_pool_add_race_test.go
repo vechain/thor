@@ -51,12 +51,10 @@ func TestConcurrentAddSameTxDoesNotDoubleCountMetric(t *testing.T) {
 	var wg sync.WaitGroup
 	ready := make(chan struct{})
 	for range numRacers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-ready // maximize the race window: all goroutines fire together
 			_ = pool.Add(trx)
-		}()
+		})
 	}
 	close(ready)
 	wg.Wait()
