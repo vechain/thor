@@ -39,11 +39,10 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-// Add inserts txObj, returning whether it was newly inserted (false + nil
-// error means the hash already existed). Callers must gate "tx added"
-// bookkeeping on this, not on err == nil - an unlocked pre-check like
-// ContainsHash can race with a concurrent Add of the same hash, and this is
-// how the losing caller tells itself apart from the winner.
+// Add inserts txObj under lock, returning whether it performed the insert.
+// A hash that already exists returns (false, nil) without modifying the map,
+// so concurrent callers adding the same hash must distinguish winner from
+// loser by this return value - both get a nil error.
 func (m *txObjectMap) Add(
 	txObj *TxObject, executable bool, pricing *txPricing,
 	limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error,

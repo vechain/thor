@@ -268,9 +268,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		return err
 	}
 
-	// inserted is false when a concurrent add of the same hash won the race in
-	// p.all.Add (see its doc comment) - nothing new entered the pool, so there's
-	// nothing to count here; the winning call already accounted for it.
+	// Metrics and wash-trigger accounting apply only to the call that actually
+	// inserted the tx (see txObjectMap.Add).
 	if inserted {
 		atomic.AddUint32(&p.addedAfterWash, 1)
 		addTxPoolMetric(txObj, 1)

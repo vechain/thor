@@ -16,20 +16,10 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-// TestConcurrentAddSameTxDoesNotDoubleCountMetric reproduces the scenario a
-// well-connected node sees constantly in production: the same transaction
-// gossiped in from several peers at nearly the same moment, so multiple
-// goroutines call Add with an identical hash concurrently.
-//
-// Before the fix, TxPool.add's unlocked ContainsHash pre-check could let more
-// than one goroutine reach p.all.Add for the same hash; only one would
-// actually insert (the lock inside Add correctly dedups), but every caller
-// that observed a nil error - including the no-op "already exists" case -
-// unconditionally incremented the thor_metrics_txpool_current_tx_count gauge.
-// Only one real object ever exists to be removed later, so every extra
-// increment was a permanent leak with no corresponding future decrement.
-//
-// Run with -race to also confirm no data race is introduced by the fix.
+// TestConcurrentAddSameTxDoesNotDoubleCountMetric fires the same tx hash from
+// many goroutines at once, as happens when several peers gossip it in around
+// the same moment, and checks that only the one goroutine that actually
+// inserts it increments thor_metrics_txpool_current_tx_count.
 func TestConcurrentAddSameTxDoesNotDoubleCountMetric(t *testing.T) {
 	metrics.InitializePrometheusMetrics()
 
@@ -64,10 +54,8 @@ func TestConcurrentAddSameTxDoesNotDoubleCountMetric(t *testing.T) {
 	after := sumGaugeValues(t, "thor_metrics_txpool_current_tx_count")
 	assert.Equal(t, float64(1), after-before, "gauge must count the single real insertion exactly once, not once per racing caller")
 
-	// thor_metrics_txpool_current_tx_count is a process-wide singleton (see
-	// above) - remove the one real tx we added so this test doesn't leave a
-	// permanent +1 behind for other tests in this package that read the same
-	// gauge with an absolute (not delta) assertion.
+	// Remove the tx so this run doesn't leave a permanent +1 on the shared
+	// gauge for other tests in this package that assert its absolute value.
 	pool.Remove(trx.Hash(), trx.ID())
 }
 
