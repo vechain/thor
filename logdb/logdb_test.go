@@ -568,14 +568,12 @@ func TestStatementCacheRace(t *testing.T) {
 
 	// Test concurrent access to different queries
 	for i := range numGoroutines {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			query := "SELECT " + string(rune('0'+id%10))
+		wg.Go(func() {
+			query := "SELECT " + string(rune('0'+i%10))
 			stmt, err := cache.Prepare(query)
 			assert.NoError(t, err)
 			assert.NotNil(t, stmt)
-		}(i)
+		})
 	}
 
 	wg.Wait()
