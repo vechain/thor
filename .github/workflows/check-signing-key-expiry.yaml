@@ -1,0 +1,93 @@
+name: Check Signing Key Expiry
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    # Daily at 09:00 UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check Signing Key Expiry
+    runs-on: ubuntu-latest
+    outputs:
+      message: ${{ steps.expiry.outputs.message }}
+      notify: ${{ steps.expiry.outputs.notify }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Read signing subkey expiry
+        id: expiry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Latest-expiring non-revoked subkey with signing (s) capability.
+          read -r expiry keyid < <(gpg --show-keys --with-colons docs/release-signing-key.asc \
+            | awk -F: '$1=="sub" && $2!="r" && $12 ~ /s/ { print $7, $5 }' \
+            | sort -n | tail -1) || true
+
+          if [ -z "${expiry:-}" ]; then
+            {
+              echo "message=Could not read the release signing key expiry from docs/release-signing-key.asc"
+              echo "notify=true"
+            } >> "$GITHUB_OUTPUT"
+            echo "::error::no signing subkey with expiry found"
+            exit 1
+          fi
+
+          days=$(( (expiry - $(date +%s)) / 86400 ))
+          expires_on=$(date -u -d @"$expiry" +%Y-%m-%d)
+
+          # Thresholds rather than exact days, so a skipped scheduled run
+          # delays an alert instead of losing it. Daily in the last week,
+          # weekly inside the last 30 days, daily again once expired.
+          notify=false
+          if [ "$days" -le 7 ] || { [ "$days" -le 30 ] && [ $(( days % 7 )) -eq 0 ]; }; then
+            notify=true
+          fi
+
+          {
+            echo "message=Release signing key expires on $expires_on ($days days left)"
+            echo "notify=$notify"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Release signing key"
+            echo
+            echo "| Signing subkey | Expires on | Days left |"
+            echo "|---|---|---|"
+            echo "| \`$keyid\` | **$expires_on** | $days |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$days" -le 0 ]; then
+            echo "::error::signing subkey expired on $expires_on"
+            exit 1
+          fi
+
+  notify-slack:
+    name: Notify Slack
+    needs: check
+    if: always() && needs.check.outputs.notify == 'true'
+    uses: ./.github/workflows/notify-slack.yaml
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    with:
+      payload: |
+        {
+          "unit-test-status": ":alert: ${{ needs.check.outputs.message }}",
+          "docker-publish-status": ":fast_forward: Skipped",
+          "commit-message": "Rotate the signing subkey: see the signing key runbook (Operations space in Confluence)",
+          "commit-url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+          "e2e-test-status": ":fast_forward: Skipped",
+          "branch": "${{ github.ref }}",
+          "repository": "${{ github.repository }}",
+          "commit-author": "check-signing-key-expiry",
+          "lint-status": ":fast_forward: Skipped",
+          "license-check": ":fast_forward: Skipped",
+          "module-check": ":fast_forward: Skipped"
+        }
