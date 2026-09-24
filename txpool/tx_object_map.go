@@ -39,27 +39,31 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
+// Add inserts txObj under lock, returning whether it performed the insert.
+// A hash that already exists returns (false, nil) without modifying the map,
+// so concurrent callers adding the same hash must distinguish winner from
+// loser by this return value - both get a nil error.
 func (m *txObjectMap) Add(
 	txObj *TxObject, executable bool, pricing *txPricing,
 	limitPerAccount int, validatePayer func(payer thor.Address, needs *big.Int) error,
-) error {
+) (bool, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	hash := txObj.Hash()
 	if _, found := m.mapByHash[hash]; found {
-		return nil
+		return false, nil
 	}
 
 	if m.quota[txObj.Origin()] >= limitPerAccount {
 		metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "account"})
-		return errors.New("account quota exceeded")
+		return false, errors.New("account quota exceeded")
 	}
 	delegator := txObj.Delegator()
 	if delegator != nil {
 		if m.quota[*delegator] >= limitPerAccount {
 			metricAccountQuotaExceeded().AddWithLabel(1, map[string]string{"type": "delegator"})
-			return errors.New("delegator quota exceeded")
+			return false, errors.New("delegator quota exceeded")
 		}
 	}
 
@@ -81,7 +85,7 @@ func (m *txObjectMap) Add(
 			cost = new(big.Int).Add(pending, txObj.Cost())
 		}
 		if err := validatePayer(payer, cost); err != nil {
-			return err
+			return false, err
 		}
 	}
 
@@ -94,7 +98,7 @@ func (m *txObjectMap) Add(
 	}
 	m.mapByHash[hash] = txObj
 	m.mapByID[txObj.ID()] = txObj
-	return nil
+	return true, nil
 }
 
 func (m *txObjectMap) GetByID(id thor.Bytes32) *TxObject {
