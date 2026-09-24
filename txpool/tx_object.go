@@ -198,8 +198,8 @@ func (o *TxObject) Evaluate(
 
 	var feeCeiling, priorityCeiling *big.Int
 	if o.Type() == tx.TypeLegacy {
-		ogp := o.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
-		feeCeiling, priorityCeiling = ogp, ogp
+		feeCeiling = o.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+		priorityCeiling = o.EffectiveGasPrice(baseFee, legacyTxBaseGasPrice)
 	} else {
 		feeCeiling, priorityCeiling = o.MaxFeePerGas(), o.MaxPriorityFeePerGas()
 	}

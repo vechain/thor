@@ -487,6 +487,12 @@ func TestBaseFeeRefreshMatchesCanonical(t *testing.T) {
 			assert.Equal(t, 1, provedWork.Sign(), "legacy provedWork must be nonzero to exercise the work-included ceiling")
 		}
 
+		// Evaluate()'s own priorityGasPrice (before any refresh) must already match the
+		// canonical EffectivePriorityFeePerGas, i.e. the pool's sort key and the reward
+		// formula agree on the legacy proved-work cap.
+		wantEvaluate := txObj.EffectivePriorityFeePerGas(baseFee0, lbgp, provedWork)
+		assert.Equal(t, 0, wantEvaluate.Cmp(pricing.priorityGasPrice), "type=%v evaluate", txType)
+
 		// At multiple baseFees, the refresh result must equal the canonical
 		// EffectivePriorityFeePerGas computed with the (possibly nonzero) provedWork.
 		for _, bf := range []*big.Int{big.NewInt(0), big.NewInt(1), new(big.Int).Set(baseFee0), new(big.Int).Mul(baseFee0, big.NewInt(3))} {
