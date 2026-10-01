@@ -16,7 +16,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
@@ -82,7 +81,7 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 	}
 
 	var receipt *api.Receipt
-	err = test.Retry(func() error {
+	err = retry(func() error {
 		if receipt, err = client.TransactionReceipt(res.ID); err != nil {
 			return err
 		}
@@ -133,4 +132,20 @@ func (c *Contract) ABI() *ethabi.ABI {
 // Client returns the underlying HTTP client.
 func (c *Contract) Client() *thorclient.Client {
 	return c.client
+}
+
+// retry calls fn every retryPeriod until it succeeds or maxWaitTime has
+// passed, and then returns its last error.
+func retry(fn func() error, retryPeriod, maxWaitTime time.Duration) error {
+	startTime := time.Now()
+	for {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		if time.Since(startTime) > maxWaitTime {
+			return fmt.Errorf("retry timeout, latest err: %w", err)
+		}
+		time.Sleep(retryPeriod)
+	}
 }

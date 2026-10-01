@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -332,7 +331,7 @@ func TestClient_GetNilBlock(t *testing.T) {
 
 func TestClient_GetTransaction(t *testing.T) {
 	txID := thor.Bytes32{0x01}
-	expectedTx := &transactions.Transaction{ID: txID}
+	expectedTx := &api.Transaction{ID: txID}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/transactions/"+txID.String(), r.URL.Path)
@@ -555,7 +554,7 @@ func TestClient_GetTxPool(t *testing.T) {
 	})
 
 	t.Run("GetTxPoolWithExpandedTransactions", func(t *testing.T) {
-		expectedTxs := []*transactions.Transaction{
+		expectedTxs := []*api.Transaction{
 			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
 			{ID: thor.Bytes32{0x04, 0x05, 0x06}},
 		}
@@ -600,7 +599,7 @@ func TestClient_GetTxPool(t *testing.T) {
 
 	t.Run("GetTxPoolWithExpandedAndOrigin", func(t *testing.T) {
 		origin := thor.Address{0x01, 0x02, 0x03}
-		expectedTxs := []*transactions.Transaction{
+		expectedTxs := []*api.Transaction{
 			{ID: thor.Bytes32{0x01, 0x02, 0x03}},
 		}
 
@@ -715,7 +714,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name: "Transaction",
 			path: "/transactions/" + txID.String(),
-			function: func(client *Client) (*transactions.Transaction, error) {
+			function: func(client *Client) (*api.Transaction, error) {
 				return client.GetTransaction(&txID, BestRevision, false)
 			},
 		},

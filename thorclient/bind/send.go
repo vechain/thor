@@ -10,13 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	mathrand "math/rand/v2"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
@@ -126,7 +126,7 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 		opts.BlockRef = &ref
 	}
 	if opts.Nonce == nil {
-		nonce := datagen.RandUint64()
+		nonce := mathrand.Uint64() //#nosec G404 -- a nonce only needs to be unique, not unpredictable
 		opts.Nonce = &nonce
 	}
 	if txType == tx.TypeDynamicFee && opts.MaxFeePerGas == nil {

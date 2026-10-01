@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -83,7 +84,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		}
 	}
 
-	jSummary := api.BuildJSONBlockSummary(summary, isTrunk, isFinalized)
+	jSummary := convert.BuildJSONBlockSummary(summary, isTrunk, isFinalized)
 	if expanded {
 		txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
 		if err != nil {
@@ -96,7 +97,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 
 		return restutil.WriteJSON(w, &api.JSONExpandedBlock{
 			JSONBlockSummary: jSummary,
-			Transactions:     api.BuildJSONEmbeddedTxs(txs, receipts),
+			Transactions:     convert.BuildJSONEmbeddedTxs(txs, receipts),
 		})
 	}
 

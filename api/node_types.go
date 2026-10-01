@@ -6,13 +6,8 @@
 package api
 
 import (
-	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 )
-
-type Network interface {
-	PeersStats() []*comm.PeerStats
-}
 
 type Status struct {
 	Amount uint `json:"amount"`
@@ -26,23 +21,4 @@ type PeerStats struct {
 	NetAddr     string       `json:"netAddr"`
 	Inbound     bool         `json:"inbound"`
 	Duration    uint64       `json:"duration"`
-}
-
-func ConvertPeersStats(ss []*comm.PeerStats) []*PeerStats {
-	if len(ss) == 0 {
-		return nil
-	}
-	peersStats := make([]*PeerStats, len(ss))
-	for i, peerStats := range ss {
-		peersStats[i] = &PeerStats{
-			Name:        peerStats.Name,
-			BestBlockID: peerStats.BestBlockID,
-			TotalScore:  peerStats.TotalScore,
-			PeerID:      peerStats.PeerID,
-			NetAddr:     peerStats.NetAddr,
-			Inbound:     peerStats.Inbound,
-			Duration:    peerStats.Duration,
-		}
-	}
-	return peersStats
 }

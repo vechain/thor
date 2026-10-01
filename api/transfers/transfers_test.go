@@ -69,10 +69,10 @@ func TestOption(t *testing.T) {
 
 	tclient = thorclient.New(ts.URL)
 	filter := api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		CriteriaSet: make([]*api.TransferCriteria, 0),
 		Range:       nil,
 		Options:     &api.Options{Limit: new(uint64(6))},
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
@@ -106,10 +106,10 @@ func TestOption(t *testing.T) {
 	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
 
 	filter = api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		CriteriaSet: make([]*api.TransferCriteria, 0),
 		Range:       nil,
 		Options:     &api.Options{Offset: defaultLogOffset, Limit: new(uint64(0))},
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
@@ -150,10 +150,10 @@ func TestOptionalData(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := api.TransferFilter{
-				CriteriaSet: make([]*logdb.TransferCriteria, 0),
+				CriteriaSet: make([]*api.TransferCriteria, 0),
 				Range:       nil,
 				Options:     &api.Options{Limit: new(uint64(5)), IncludeIndexes: tc.includeIndexes},
-				Order:       logdb.DESC,
+				Order:       api.DESC,
 			}
 
 			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
@@ -204,10 +204,10 @@ func testTransferBadRequest(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 
-	criteriaSet := make([]*logdb.TransferCriteria, 11)
+	criteriaSet := make([]*api.TransferCriteria, 11)
 	origin := thor.BytesToAddress([]byte("address"))
 	for i := range 11 {
-		criteriaSet[i] = &logdb.TransferCriteria{
+		criteriaSet[i] = &api.TransferCriteria{
 			TxOrigin: &origin,
 		}
 	}
@@ -216,7 +216,7 @@ func testTransferBadRequest(t *testing.T) {
 		CriteriaSet: criteriaSet,
 		Range:       nil,
 		Options:     &api.Options{Limit: new(uint64(6))},
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
@@ -227,10 +227,10 @@ func testTransferBadRequest(t *testing.T) {
 
 func testTransferWithEmptyDb(t *testing.T) {
 	emptyFilter := api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		CriteriaSet: make([]*api.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
@@ -246,10 +246,10 @@ func testTransferWithEmptyDb(t *testing.T) {
 
 func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 	emptyFilter := api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
+		CriteriaSet: make([]*api.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
@@ -331,9 +331,9 @@ func TestTransfersResponseEncodingUnchanged(t *testing.T) {
 
 	for _, includeIndexes := range []bool{false, true} {
 		filter := api.TransferFilter{
-			CriteriaSet: make([]*logdb.TransferCriteria, 0),
+			CriteriaSet: make([]*api.TransferCriteria, 0),
 			Options:     &api.Options{Limit: new(defaultLogLimit), IncludeIndexes: includeIndexes},
-			Order:       logdb.DESC,
+			Order:       api.DESC,
 		}
 
 		res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", filter)
@@ -360,8 +360,8 @@ func TestTransfersEmptyResultIsEmptyArray(t *testing.T) {
 	tclient = thorclient.New(ts.URL)
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", api.TransferFilter{
-		CriteriaSet: make([]*logdb.TransferCriteria, 0),
-		Order:       logdb.DESC,
+		CriteriaSet: make([]*api.TransferCriteria, 0),
+		Order:       api.DESC,
 	})
 	require.NoError(t, err)
 

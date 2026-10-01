@@ -7,6 +7,7 @@ linters:
   enable:
     - bidichk
     - copyloopvar
+    - depguard
     - durationcheck
     - gosec
     - govet
@@ -18,6 +19,58 @@ linters:
     - unused
     - whitespace
   settings:
+    depguard:
+      rules:
+        # The root api package holds the REST/WS wire types only (tx is needed by
+        # RawTx.Decode and the subscription filter Match methods).
+        api-types:
+          list-mode: strict
+          files:
+            - "**/api/*.go"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/vechain/thor/v2/thor
+            - github.com/ethereum/go-ethereum/common
+            - github.com/vechain/thor/v2/tx
+        # Client-side packages must not depend on node internals.
+        # thorclient/deps_test.go checks the same list transitively.
+        light-client:
+          files:
+            - "**/thorclient/**"
+            - "**/builtin/contracts/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/vechain/thor/v2/api/
+              desc: api subpackages (handlers, convert) are server-side; use the root api package
+            - pkg: github.com/vechain/thor/v2/builtin$
+              desc: pulls in state; use builtin/contracts
+            - pkg: github.com/vechain/thor/v2/builtin/staker
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/bft
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/chain
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/cmd
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/comm
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/logdb
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/muxdb
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/p2p
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/runtime
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/state
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/test
+              desc: test helpers; not for library code
+            - pkg: github.com/vechain/thor/v2/txpool
+              desc: node internal
+            - pkg: github.com/vechain/thor/v2/vm
+              desc: node internal
     gosec:
       excludes:
         - G115

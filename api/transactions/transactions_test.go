@@ -88,7 +88,7 @@ func TestTransaction(t *testing.T) {
 
 func getLegacyTx(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, "/transactions/"+legacyTx.ID().String(), 200)
-	var rtx *transactions.Transaction
+	var rtx *api.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func getLegacyTx(t *testing.T) {
 
 func getDynamicFeeTx(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, "/transactions/"+dynFeeTx.ID().String(), 200)
-	var rtx *transactions.Transaction
+	var rtx *api.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func getTransactionByIDTxNotFound(t *testing.T) {
 
 func getTransactionByIDPendingTxNotFound(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, "/transactions/"+mempoolTx.ID().String()+"?pending=true", 200)
-	var rtx *transactions.Transaction
+	var rtx *api.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +438,7 @@ func initTransactionServer(t *testing.T) {
 	ts = httptest.NewServer(router)
 }
 
-func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {
+func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *api.Transaction) {
 	origin, err := expectedTx.Origin()
 	if err != nil {
 		t.Fatal(err)

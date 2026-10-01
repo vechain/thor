@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transactions
+package convert
 
 import (
 	"math/big"
@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -39,8 +38,8 @@ func TestConvertLegacyTransaction_Success(t *testing.T) {
 
 	result := ConvertTransaction(transaction, header)
 	// Common fields
-	clause := api.ConvertClause(cla)
-	clause2 := api.ConvertClause(cla2)
+	clause := ConvertClause(cla)
+	clause2 := ConvertClause(cla2)
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)
@@ -82,8 +81,8 @@ func TestConvertDynTransaction_Success(t *testing.T) {
 
 	result := ConvertTransaction(transaction, header)
 	// Common fields
-	clause := api.ConvertClause(cla)
-	clause2 := api.ConvertClause(cla2)
+	clause := ConvertClause(cla)
+	clause2 := ConvertClause(cla2)
 	assert.Equal(t, transaction.Type(), result.Type)
 	assert.Equal(t, hexutil.Encode(br[:]), result.BlockRef)
 	assert.Equal(t, transaction.ChainTag(), result.ChainTag)

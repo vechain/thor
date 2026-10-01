@@ -11,7 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -23,7 +23,7 @@ type Prototype struct {
 }
 
 func NewPrototype(client *thorclient.Client) (*Prototype, error) {
-	contract, err := bind.NewContract(client, builtin.Prototype.RawABI(), &builtin.Prototype.Address)
+	contract, err := bind.NewContract(client, contracts.Prototype.RawABI(), &contracts.Prototype.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prototype contract: %w", err)
 	}

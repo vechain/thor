@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -70,14 +71,14 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	}, nil
 }
 
-func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*Transaction, error) {
+func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*api.Transaction, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
 		if t.repo.IsNotFound(err) {
 			if allowPending {
 				if pending := t.pool.Get(txID); pending != nil {
-					return ConvertTransaction(pending, nil), nil
+					return convert.ConvertTransaction(pending, nil), nil
 				}
 			}
 			return nil, nil
@@ -89,7 +90,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 	if err != nil {
 		return nil, err
 	}
-	return ConvertTransaction(tx, header), nil
+	return convert.ConvertTransaction(tx, header), nil
 }
 
 // GetTransactionReceiptByID get tx's receipt
@@ -113,7 +114,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	return api.ConvertReceipt(receipt, header, tx)
+	return convert.ConvertReceipt(receipt, header, tx)
 }
 
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
