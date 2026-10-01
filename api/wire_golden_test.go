@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -456,7 +455,7 @@ func TestGoldenTransaction(t *testing.T) {
 	delegator := thor.BytesToAddress([]byte{2})
 	dependsOn := thor.BytesToBytes32([]byte{3})
 	to := thor.BytesToAddress([]byte{4})
-	golden(t, "transaction", &transactions.Transaction{
+	golden(t, "transaction", &api.Transaction{
 		ID:                   thor.BytesToBytes32([]byte{5}),
 		Type:                 1,
 		ChainTag:             2,
@@ -478,7 +477,7 @@ func TestGoldenTransaction(t *testing.T) {
 			BlockTimestamp: 16,
 		},
 	})
-	golden(t, "transaction_min", &transactions.Transaction{})
+	golden(t, "transaction_min", &api.Transaction{})
 }
 
 func TestGoldenRawTransaction(t *testing.T) {

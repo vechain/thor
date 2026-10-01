@@ -11,31 +11,11 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
-type Transaction struct {
-	ID                   thor.Bytes32          `json:"id"`
-	Type                 uint8                 `json:"type"`
-	ChainTag             byte                  `json:"chainTag"`
-	BlockRef             string                `json:"blockRef"`
-	Expiration           uint32                `json:"expiration"`
-	Clauses              api.Clauses           `json:"clauses"`
-	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
-	Gas                  uint64                `json:"gas"`
-	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
-	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
-	Origin               thor.Address          `json:"origin"`
-	Delegator            *thor.Address         `json:"delegator"`
-	Nonce                math.HexOrDecimal64   `json:"nonce"`
-	DependsOn            *thor.Bytes32         `json:"dependsOn"`
-	Size                 uint32                `json:"size"`
-	Meta                 *api.TxMeta           `json:"meta"`
-}
-
 // ConvertTransaction convert a raw transaction into a json format transaction
-func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction {
+func ConvertTransaction(trx *tx.Transaction, header *block.Header) *api.Transaction {
 	// tx origin
 	origin, _ := trx.Origin()
 	delegator, _ := trx.Delegator()
@@ -46,7 +26,7 @@ func ConvertTransaction(trx *tx.Transaction, header *block.Header) *Transaction 
 		cls[i] = &clause
 	}
 	br := trx.BlockRef()
-	t := &Transaction{
+	t := &api.Transaction{
 		ChainTag:   trx.ChainTag(),
 		Type:       trx.Type(),
 		ID:         trx.ID(),

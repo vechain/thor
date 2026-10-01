@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/thorclient/wsclient"
@@ -516,7 +515,7 @@ func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts .
 //   - opts: Optional parameters (Pending)
 //
 // Returns:
-//   - *transactions.Transaction: Complete transaction information with metadata
+//   - *api.Transaction: Complete transaction information with metadata
 //   - error: Error if the request fails, transaction ID is invalid, or transaction not found
 //
 // Example:
@@ -529,7 +528,7 @@ func (c *Client) RawAccountStorage(addr *thor.Address, key *thor.Bytes32, opts .
 //	if tx != nil && tx.Meta == nil {
 //		fmt.Println("Transaction is pending")
 //	}
-func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*transactions.Transaction, error) {
+func (c *Client) Transaction(id *thor.Bytes32, opts ...Option) (*api.Transaction, error) {
 	options := applyHeadOptions(opts)
 	return c.httpConn.GetTransaction(id, options.revision, options.pending)
 }
@@ -1411,7 +1410,7 @@ func (c *Client) PoolTransactionIDs(origin *thor.Address) ([]*thor.Bytes32, erro
 
 // PoolTransactions retrieves expanded transactions from the transaction pool.
 // If origin is provided, filters transactions by sender address.
-func (c *Client) PoolTransactions(origin *thor.Address) ([]*transactions.Transaction, error) {
+func (c *Client) PoolTransactions(origin *thor.Address) ([]*api.Transaction, error) {
 	return c.httpConn.GetExpandedTxPool(origin)
 }
 

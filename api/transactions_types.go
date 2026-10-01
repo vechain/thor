@@ -42,6 +42,25 @@ type TxMeta struct {
 	BlockTimestamp uint64       `json:"blockTimestamp"`
 }
 
+type Transaction struct {
+	ID                   thor.Bytes32          `json:"id"`
+	Type                 uint8                 `json:"type"`
+	ChainTag             byte                  `json:"chainTag"`
+	BlockRef             string                `json:"blockRef"`
+	Expiration           uint32                `json:"expiration"`
+	Clauses              Clauses               `json:"clauses"`
+	GasPriceCoef         *uint8                `json:"gasPriceCoef,omitempty"`
+	Gas                  uint64                `json:"gas"`
+	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
+	Origin               thor.Address          `json:"origin"`
+	Delegator            *thor.Address         `json:"delegator"`
+	Nonce                math.HexOrDecimal64   `json:"nonce"`
+	DependsOn            *thor.Bytes32         `json:"dependsOn"`
+	Size                 uint32                `json:"size"`
+	Meta                 *TxMeta               `json:"meta"`
+}
+
 type ReceiptMeta struct {
 	BlockID        thor.Bytes32 `json:"blockID"`
 	BlockNumber    uint32       `json:"blockNumber"`
