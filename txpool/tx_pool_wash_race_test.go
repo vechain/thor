@@ -49,9 +49,7 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 	// the time all workers join, every worker-added tx has had a matching
 	// Remove call (whether or not wash got to it first).
 	for w := range numAddRemoveWorkers {
-		wg.Add(1)
-		go func(workerIdx int) {
-			defer wg.Done()
+		wg.Go(func() {
 			i := 0
 			for {
 				select {
@@ -59,13 +57,13 @@ func TestConcurrentWashAddRemove(t *testing.T) {
 					return
 				default:
 				}
-				acc := devAccounts[(workerIdx+i)%len(devAccounts)]
+				acc := devAccounts[(w+i)%len(devAccounts)]
 				trx := newTx(tx.TypeLegacy, pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 				_ = pool.Add(trx)
 				pool.Remove(trx.Hash(), trx.ID())
 				i++
 			}
-		}(w)
+		})
 	}
 
 	// Wash workers: repeatedly evaluate/evict/promote against the churning

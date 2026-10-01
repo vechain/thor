@@ -63,15 +63,14 @@ func benchAddRemove(b *testing.B, workers, perWorker int, withWash bool) {
 	var wg sync.WaitGroup
 	per := b.N / workers
 	for w := range workers {
-		wg.Add(1)
-		go func(set []*tx.Transaction) {
-			defer wg.Done()
+		set := sets[w]
+		wg.Go(func() {
 			for i := range per {
 				trx := set[i%len(set)]
 				_ = pool.Add(trx)                 // publishes pricing snapshot (atomic Store) + bookkeeping (map lock)
 				pool.Remove(trx.Hash(), trx.ID()) // reads Cost()/Payer() (atomic Load) + bookkeeping (map lock)
 			}
-		}(sets[w])
+		})
 	}
 	wg.Wait()
 

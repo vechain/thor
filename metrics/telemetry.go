@@ -102,14 +102,7 @@ func GaugeVec(name string, labels []string) GaugeVecMeter {
 // - it allow metrics to be defined and used package wide (using var)
 // - it avoid metrics definition to determine the singleton to use (noop vs prometheus)
 func LazyLoad[T any](f func() T) func() T {
-	var result T
-	var once sync.Once
-	return func() T {
-		once.Do(func() {
-			result = f()
-		})
-		return result
-	}
+	return sync.OnceValue(f)
 }
 
 func LazyLoadHistogram(name string, buckets []int64) func() HistogramMeter {

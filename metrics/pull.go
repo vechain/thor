@@ -6,7 +6,7 @@
 package metrics
 
 import (
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -160,7 +160,7 @@ func sortedLabels(labels map[string]string) (names, values []string) {
 	for k := range labels {
 		names = append(names, k)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	values = make([]string, len(names))
 	for i, n := range names {
 		values[i] = labels[n]

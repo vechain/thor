@@ -44,17 +44,15 @@ func TestMessageCache_GetOrAdd(t *testing.T) {
 	counter := atomic.Int32{}
 	wg := sync.WaitGroup{}
 	for range 100 {
-		wg.Add(1)
 		start := time.Now().Add(20 * time.Millisecond)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			time.Sleep(time.Until(start))
 			_, added, err := cache.GetOrAdd(blk0.Header().ID(), handler(blk0))
 			assert.NoError(t, err)
 			if added {
 				counter.Add(1)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	assert.Equal(t, counter.Load(), int32(1))
