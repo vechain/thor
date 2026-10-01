@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -22,7 +22,7 @@ import (
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
-func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder) {
+func DebugRevert(t *testing.T, receipt *dto.Receipt, sender *bind.MethodBuilder) {
 	if receipt == nil {
 		require.Fail(t, "receipt is nil")
 		return
@@ -40,7 +40,7 @@ func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder)
 	}
 }
 
-func ExpectRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder, expectedMessage string) {
+func ExpectRevert(t *testing.T, receipt *dto.Receipt, sender *bind.MethodBuilder, expectedMessage string) {
 	if receipt == nil {
 		require.Fail(t, "receipt is nil")
 		return

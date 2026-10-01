@@ -17,7 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -91,10 +91,10 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 		return err
 	}
 
-	return restutil.WriteJSON(w, &api.GetCodeResult{Code: hexutil.Encode(code)})
+	return restutil.WriteJSON(w, &dto.GetCodeResult{Code: hexutil.Encode(code)})
 }
 
-func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*api.Account, error) {
+func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*dto.Account, error) {
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *st
 		return nil, err
 	}
 
-	return &api.Account{
+	return &dto.Account{
 		Balance: (*math.HexOrDecimal256)(b),
 		Energy:  (*math.HexOrDecimal256)(energy),
 		HasCode: len(code) != 0,
@@ -183,7 +183,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	return restutil.WriteJSON(w, &api.GetStorageResult{Value: storage.String()})
+	return restutil.WriteJSON(w, &dto.GetStorageResult{Value: storage.String()})
 }
 
 func (a *Accounts) getRawStorage(addr thor.Address, key thor.Bytes32, state *state.State) ([]byte, error) {
@@ -205,11 +205,11 @@ func (a *Accounts) handleGetRawStorage(w http.ResponseWriter, req *http.Request)
 		return err
 	}
 
-	return restutil.WriteJSON(w, &api.GetStorageResult{Value: hexutil.Encode(storage)})
+	return restutil.WriteJSON(w, &dto.GetStorageResult{Value: hexutil.Encode(storage)})
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	callData := &api.CallData{}
+	callData := &dto.CallData{}
 	if err := restutil.ParseJSON(req.Body, &callData); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -232,9 +232,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		}
 		addr = &address
 	}
-	batchCallData := &api.BatchCallData{
-		Clauses: api.Clauses{
-			&api.Clause{
+	batchCallData := &dto.BatchCallData{
+		Clauses: dto.Clauses{
+			&dto.Clause{
 				To:    addr,
 				Value: callData.Value,
 				Data:  callData.Data,
@@ -252,7 +252,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 }
 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
-	var batchCallData api.BatchCallData
+	var batchCallData dto.BatchCallData
 	if err := restutil.ParseJSON(req.Body, &batchCallData); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -282,10 +282,10 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 
 func (a *Accounts) batchCall(
 	ctx context.Context,
-	batchCallData *api.BatchCallData,
+	batchCallData *dto.BatchCallData,
 	header *block.Header,
 	st *state.State,
-) (results api.BatchCallResults, err error) {
+) (results dto.BatchCallResults, err error) {
 	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
@@ -304,7 +304,7 @@ func (a *Accounts) batchCall(
 		},
 		a.forkConfig)
 
-	results = make(api.BatchCallResults, 0)
+	results = make(dto.BatchCallResults, 0)
 	var accumulatedSize int
 
 	for i, clause := range clauses {
@@ -353,7 +353,7 @@ func (a *Accounts) batchCall(
 				fmt.Errorf("batch call data exceeds limit of %d bytes", a.batchDataMaxSize))
 		}
 
-		result := api.ConvertCallResultWithInputGas(out, gas)
+		result := ConvertCallResult(out, gas-out.LeftOverGas)
 		results = append(results, result)
 
 		if out.VMErr != nil {
@@ -365,7 +365,7 @@ func (a *Accounts) batchCall(
 	return results, nil
 }
 
-func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
+func (a *Accounts) handleBatchCallData(batchCallData *dto.BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
 	if batchCallData.Gas > a.callGasLimit {
 		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))
 	} else if batchCallData.Gas == 0 {

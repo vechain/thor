@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 
 	"github.com/stretchr/testify/require"
 
@@ -37,7 +37,7 @@ func txOpts() *bind.TxOptions {
 	}
 }
 
-func newRange(receipt *api.Receipt) bind.FilterOption {
+func newRange(receipt *dto.Receipt) bind.FilterOption {
 	block := uint64(receipt.Meta.BlockNumber)
 	return bind.FilterBlocks(block, block)
 }

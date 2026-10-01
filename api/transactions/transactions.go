@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -31,7 +31,7 @@ func New(repo *chain.Repository, pool txpool.Pool) *Transactions {
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*api.RawTransaction, error) {
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*dto.RawTransaction, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -42,8 +42,8 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 					if err != nil {
 						return nil, err
 					}
-					return &api.RawTransaction{
-						RawTx: api.RawTx{Raw: hexutil.Encode(raw)},
+					return &dto.RawTransaction{
+						RawTx: dto.RawTx{Raw: hexutil.Encode(raw)},
 					}, nil
 				}
 			}
@@ -60,9 +60,9 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	if err != nil {
 		return nil, err
 	}
-	return &api.RawTransaction{
-		RawTx: api.RawTx{Raw: hexutil.Encode(raw)},
-		Meta: &api.TxMeta{
+	return &dto.RawTransaction{
+		RawTx: dto.RawTx{Raw: hexutil.Encode(raw)},
+		Meta: &dto.TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
 			BlockTimestamp: header.Timestamp(),
@@ -70,7 +70,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 	}, nil
 }
 
-func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*Transaction, error) {
+func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*dto.Transaction, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -93,7 +93,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 }
 
 // GetTransactionReceiptByID get tx's receipt
-func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.Bytes32) (*api.Receipt, error) {
+func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.Bytes32) (*dto.Receipt, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
@@ -113,11 +113,11 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	return api.ConvertReceipt(receipt, header, tx)
+	return ConvertReceipt(receipt, header, tx)
 }
 
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
-	var rawTx *api.RawTx
+	var rawTx *dto.RawTx
 	if err := restutil.ParseJSON(req.Body, &rawTx); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -139,7 +139,7 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return err
 	}
 	txID := tx.ID()
-	return restutil.WriteJSON(w, &api.SendTxResult{ID: &txID})
+	return restutil.WriteJSON(w, &dto.SendTxResult{ID: &txID})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {

@@ -13,7 +13,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
@@ -40,25 +41,29 @@ func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uin
 // Filter query logs with option. Rows are returned in their logdb form; the
 // conversion to the response shape is deferred to the response writer so only one
 // converted transfer exists at a time.
-func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*logdb.Transfer, error) {
-	rng, err := api.ConvertRange(t.repo.NewBestChain(), filter.Range)
+func (t *Transfers) filter(ctx context.Context, filter *dto.TransferFilter) ([]*logdb.Transfer, error) {
+	rng, err := convert.ConvertRange(t.repo.NewBestChain(), filter.Range)
 	if err != nil {
 		return nil, err
 	}
 
+	criteria := convert.MapSlice(filter.CriteriaSet, func(c *dto.TransferCriteria) *logdb.TransferCriteria {
+		return &logdb.TransferCriteria{TxOrigin: c.TxOrigin, Sender: c.Sender, Recipient: c.Recipient}
+	})
+
 	return t.db.FilterTransfers(ctx, &logdb.TransferFilter{
-		CriteriaSet: filter.CriteriaSet,
+		CriteriaSet: criteria,
 		Range:       rng,
 		Options: &logdb.Options{
 			Offset: filter.Options.Offset,
 			Limit:  *filter.Options.Limit,
 		},
-		Order: filter.Order,
+		Order: logdb.Order(filter.Order),
 	})
 }
 
 func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
-	var filter api.TransferFilter
+	var filter dto.TransferFilter
 	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -82,7 +87,7 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		)
 	}
 	if filter.Options == nil {
-		filter.Options = &api.Options{}
+		filter.Options = &dto.Options{}
 	}
 	if filter.Options.Limit == nil {
 		// if filter.Options.Limit is nil, set to the default limit +1
@@ -101,8 +106,8 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.maxLimit))
 	}
 
-	return restutil.WriteJSONArray(w, len(transfers), func(i int) *api.FilteredTransfer {
-		return api.ConvertTransfer(transfers[i], filter.Options.IncludeIndexes)
+	return restutil.WriteJSONArray(w, len(transfers), func(i int) *dto.FilteredTransfer {
+		return ConvertTransfer(transfers[i], filter.Options.IncludeIndexes)
 	})
 }
 

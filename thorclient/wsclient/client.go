@@ -16,7 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -57,7 +57,7 @@ func NewClient(url string) (*Client, error) {
 
 // SubscribeEvents subscribes to blockchain events based on the provided query.
 // It returns a Subscription that streams event messages or an error if the connection fails.
-func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter) (*Subscription[*api.EventMessage], error) {
+func (c *Client) SubscribeEvents(pos string, filter *dto.SubscriptionEventFilter) (*Subscription[*dto.EventMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	if filter != nil {
@@ -85,12 +85,12 @@ func (c *Client) SubscribeEvents(pos string, filter *api.SubscriptionEventFilter
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[api.EventMessage](conn), nil
+	return subscribe[dto.EventMessage](conn), nil
 }
 
 // SubscribeBlocks subscribes to block updates based on the provided query.
 // It returns a Subscription that streams block messages or an error if the connection fails.
-func (c *Client) SubscribeBlocks(pos string) (*Subscription[*api.BlockMessage], error) {
+func (c *Client) SubscribeBlocks(pos string) (*Subscription[*dto.BlockMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	conn, _, err := c.Connect("/subscriptions/block", queryValues)
@@ -98,12 +98,12 @@ func (c *Client) SubscribeBlocks(pos string) (*Subscription[*api.BlockMessage], 
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[api.BlockMessage](conn), nil
+	return subscribe[dto.BlockMessage](conn), nil
 }
 
 // SubscribeTransfers subscribes to transfer events based on the provided query.
 // It returns a Subscription that streams transfer messages or an error if the connection fails.
-func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransferFilter) (*Subscription[*api.TransferMessage], error) {
+func (c *Client) SubscribeTransfers(pos string, filter *dto.SubscriptionTransferFilter) (*Subscription[*dto.TransferMessage], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	if filter != nil {
@@ -122,12 +122,12 @@ func (c *Client) SubscribeTransfers(pos string, filter *api.SubscriptionTransfer
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[api.TransferMessage](conn), nil
+	return subscribe[dto.TransferMessage](conn), nil
 }
 
 // SubscribeTxPool subscribes to pending transaction pool updates based on the provided query.
 // It returns a Subscription that streams pending transaction messages or an error if the connection fails.
-func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*Subscription[*api.PendingTxIDMessage], error) {
+func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*Subscription[*dto.PendingTxIDMessage], error) {
 	queryValues := &url.Values{}
 	if txID != nil {
 		queryValues.Add("id", txID.String())
@@ -138,12 +138,12 @@ func (c *Client) SubscribeTxPool(txID *thor.Bytes32) (*Subscription[*api.Pending
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[api.PendingTxIDMessage](conn), nil
+	return subscribe[dto.PendingTxIDMessage](conn), nil
 }
 
 // SubscribeBeats2 subscribes to Beat2 messages based on the provided query.
 // It returns a Subscription that streams Beat2 messages or an error if the connection fails.
-func (c *Client) SubscribeBeats2(pos string) (*Subscription[*api.Beat2Message], error) {
+func (c *Client) SubscribeBeats2(pos string) (*Subscription[*dto.Beat2Message], error) {
 	queryValues := &url.Values{}
 	queryValues.Add("pos", pos)
 	conn, _, err := c.Connect("/subscriptions/beat2", queryValues)
@@ -151,7 +151,7 @@ func (c *Client) SubscribeBeats2(pos string) (*Subscription[*api.Beat2Message], 
 		return nil, fmt.Errorf("unable to connect - %w", err)
 	}
 
-	return subscribe[api.Beat2Message](conn), nil
+	return subscribe[dto.Beat2Message](conn), nil
 }
 
 // subscribe starts a new subscription over the given WebSocket connection.

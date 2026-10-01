@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/muxdb"
@@ -56,13 +56,13 @@ func signedBlock(t *testing.T, parent *block.Block, ts uint64) *block.Block {
 func TestBeat2Reader_ReadReorg(t *testing.T) {
 	repo, b1, b2, b2x := newReorgTestRepo(t)
 
-	reader := newBeat2Reader(repo, b1.Header().ID(), newMessageCache[api.Beat2Message](10))
+	reader := newBeat2Reader(repo, b1.Header().ID(), newMessageCache[dto.Beat2Message](10))
 
 	msgs, ok, err := reader.Read()
 	require.NoError(t, err)
 	assert.True(t, ok)
 	require.Len(t, msgs, 1)
-	canonical := msgs[0].(api.Beat2Message)
+	canonical := msgs[0].(dto.Beat2Message)
 	assert.Equal(t, b2.Header().ID(), canonical.ID)
 	assert.False(t, canonical.Obsolete)
 
@@ -74,14 +74,14 @@ func TestBeat2Reader_ReadReorg(t *testing.T) {
 	assert.True(t, ok)
 	require.Len(t, msgs, 2)
 
-	rolledBack := msgs[0].(api.Beat2Message)
+	rolledBack := msgs[0].(dto.Beat2Message)
 	assert.Equal(t, b2.Header().ID(), rolledBack.ID)
 	assert.True(t, rolledBack.Obsolete, "the re-emission of b2 must carry the rollback signal")
 	// the rest of the message is unchanged by the reorg
 	assert.Equal(t, canonical.Bloom, rolledBack.Bloom)
 	assert.Equal(t, canonical.K, rolledBack.K)
 
-	newHead := msgs[1].(api.Beat2Message)
+	newHead := msgs[1].(dto.Beat2Message)
 	assert.Equal(t, b2x.Header().ID(), newHead.ID)
 	assert.False(t, newHead.Obsolete)
 }
@@ -91,14 +91,14 @@ func TestBeat2Reader_ReadReorg(t *testing.T) {
 func TestBeat2Reader_ReadSharedCacheAfterReorg(t *testing.T) {
 	repo, b1, _, b2x := newReorgTestRepo(t)
 	require.NoError(t, repo.AddBlock(b2x, nil, 1, false))
-	sharedCache := newMessageCache[api.Beat2Message](10)
+	sharedCache := newMessageCache[dto.Beat2Message](10)
 
 	// a subscriber positioned on the dead branch sees b2x obsolete
 	first := newBeat2Reader(repo, b2x.Header().ID(), sharedCache)
 	msgs, _, err := first.Read()
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
-	assert.True(t, msgs[0].(api.Beat2Message).Obsolete)
+	assert.True(t, msgs[0].(dto.Beat2Message).Obsolete)
 
 	// the branch holding b2x then becomes the best chain
 	b3x := signedBlock(t, b2x, 31)
@@ -109,7 +109,7 @@ func TestBeat2Reader_ReadSharedCacheAfterReorg(t *testing.T) {
 	msgs, _, err = second.Read()
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
-	canonical := msgs[0].(api.Beat2Message)
+	canonical := msgs[0].(dto.Beat2Message)
 	assert.Equal(t, b2x.Header().ID(), canonical.ID)
 	assert.False(t, canonical.Obsolete, "a canonical block must not inherit a cached rollback signal")
 }
@@ -117,12 +117,12 @@ func TestBeat2Reader_ReadSharedCacheAfterReorg(t *testing.T) {
 func TestBeatReader_ReadReorg(t *testing.T) {
 	repo, b1, b2, b2x := newReorgTestRepo(t)
 
-	reader := newBeatReader(repo, b1.Header().ID(), newMessageCache[api.BeatMessage](10))
+	reader := newBeatReader(repo, b1.Header().ID(), newMessageCache[dto.BeatMessage](10))
 
 	msgs, _, err := reader.Read()
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
-	assert.False(t, msgs[0].(api.BeatMessage).Obsolete)
+	assert.False(t, msgs[0].(dto.BeatMessage).Obsolete)
 
 	require.NoError(t, repo.AddBlock(b2x, nil, 1, true))
 
@@ -130,8 +130,8 @@ func TestBeatReader_ReadReorg(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
 
-	rolledBack := msgs[0].(api.BeatMessage)
+	rolledBack := msgs[0].(dto.BeatMessage)
 	assert.Equal(t, b2.Header().ID(), rolledBack.ID)
 	assert.True(t, rolledBack.Obsolete, "the re-emission of b2 must carry the rollback signal")
-	assert.False(t, msgs[1].(api.BeatMessage).Obsolete)
+	assert.False(t, msgs[1].(dto.BeatMessage).Obsolete)
 }

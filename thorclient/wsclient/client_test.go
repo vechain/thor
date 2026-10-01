@@ -16,14 +16,14 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
 
 func TestClient_SubscribeEvents(t *testing.T) {
 	pos := "best"
-	expectedEvent := &api.EventMessage{}
+	expectedEvent := &dto.EventMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/event", r.URL.Path)
@@ -48,7 +48,7 @@ func TestClient_SubscribeEvents(t *testing.T) {
 
 func TestClient_SubscribeBlocks(t *testing.T) {
 	pos := "best"
-	expectedBlock := &api.BlockMessage{}
+	expectedBlock := &dto.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
@@ -73,7 +73,7 @@ func TestClient_SubscribeBlocks(t *testing.T) {
 
 func TestClient_SubscribeTransfers(t *testing.T) {
 	pos := "best"
-	expectedTransfer := &api.TransferMessage{}
+	expectedTransfer := &dto.TransferMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/transfer", r.URL.Path)
@@ -99,7 +99,7 @@ func TestClient_SubscribeTransfers(t *testing.T) {
 
 func TestClient_SubscribeTxPool(t *testing.T) {
 	txID := datagen.RandomHash()
-	expectedPendingTxID := &api.PendingTxIDMessage{}
+	expectedPendingTxID := &dto.PendingTxIDMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/txpool", r.URL.Path)
@@ -124,7 +124,7 @@ func TestClient_SubscribeTxPool(t *testing.T) {
 
 func TestClient_SubscribeBeats2(t *testing.T) {
 	pos := "best"
-	expectedBeat2 := &api.Beat2Message{}
+	expectedBeat2 := &dto.Beat2Message{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/beat2", r.URL.Path)
@@ -207,12 +207,12 @@ func TestClient_SubscribeError(t *testing.T) {
 		{
 			name:          "SubscribeEvents",
 			subscribeFunc: client.SubscribeEvents,
-			args:          []any{pos, (*api.SubscriptionEventFilter)(nil)}, // pos and a nil EventFilter
+			args:          []any{pos, (*dto.SubscriptionEventFilter)(nil)}, // pos and a nil EventFilter
 		},
 		{
 			name:          "SubscribeTransfers",
 			subscribeFunc: client.SubscribeTransfers,
-			args:          []any{pos, (*api.SubscriptionTransferFilter)(nil)}, // pos and a nil TransferFilter
+			args:          []any{pos, (*dto.SubscriptionTransferFilter)(nil)}, // pos and a nil TransferFilter
 		},
 		{
 			name:          "SubscribeTxPool",
@@ -287,7 +287,7 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 
 func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 	pos := "best"
-	expectedBlock := &api.BlockMessage{}
+	expectedBlock := &dto.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
@@ -324,7 +324,7 @@ func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
 
 func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 	pos := "best"
-	expectedBlock := &api.BlockMessage{}
+	expectedBlock := &dto.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)
@@ -376,7 +376,7 @@ func TestClient_SubscribeBlocks_ClientShutdown(t *testing.T) {
 
 func TestClient_SubscribeBlocks_ClientShutdown_LongBlocks(t *testing.T) {
 	pos := "best"
-	expectedBlock := &api.BlockMessage{}
+	expectedBlock := &dto.BlockMessage{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/subscriptions/block", r.URL.Path)

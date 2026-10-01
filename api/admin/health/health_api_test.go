@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/test/testchain"
@@ -39,7 +39,7 @@ func TestHealth(t *testing.T) {
 	initAPIServer(t)
 
 	_, masterAddr := masterNode()
-	var healthStatus api.HealthStatus
+	var healthStatus dto.HealthStatus
 	respBody, statusCode := httpGet(t, ts.URL+"/health")
 	require.NoError(t, json.Unmarshal(respBody, &healthStatus))
 	assert.False(t, healthStatus.Healthy)

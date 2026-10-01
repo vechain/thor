@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -99,9 +99,9 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 		}
 		caller := b.signer.Address()
 		simulation, err := b.op.contract.client.InspectClauses(
-			&api.BatchCallData{
+			&dto.BatchCallData{
 				Caller:  &caller,
-				Clauses: api.Clauses{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
+				Clauses: dto.Clauses{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
 			}, thorclient.Revision("best"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to simulate clauses (%s): %w", b.op.String(), err)
@@ -167,7 +167,7 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 }
 
 // SubmitAndConfirm implements SendBuilder.Receipt.
-func (b *SendBuilder) SubmitAndConfirm(ctx context.Context) (*api.Receipt, *tx.Transaction, error) {
+func (b *SendBuilder) SubmitAndConfirm(ctx context.Context) (*dto.Receipt, *tx.Transaction, error) {
 	transaction, err := b.Submit()
 	if err != nil {
 		return nil, nil, err

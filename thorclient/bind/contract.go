@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/vechain/thor/v2/abi/ethabi"
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -81,7 +81,7 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 		return nil, err
 	}
 
-	var receipt *api.Receipt
+	var receipt *dto.Receipt
 	err = test.Retry(func() error {
 		if receipt, err = client.TransactionReceipt(res.ID); err != nil {
 			return err

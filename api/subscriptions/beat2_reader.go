@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thor/bloom"
@@ -20,10 +20,10 @@ import (
 type beat2Reader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
-	cache       *messageCache[api.Beat2Message]
+	cache       *messageCache[dto.Beat2Message]
 }
 
-func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[api.Beat2Message]) *beat2Reader {
+func newBeat2Reader(repo *chain.Repository, position thor.Bytes32, cache *messageCache[dto.Beat2Message]) *beat2Reader {
 	return &beat2Reader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
@@ -52,8 +52,8 @@ func (br *beat2Reader) Read() ([]any, bool, error) {
 	return msgs, len(blocks) > 0, nil
 }
 
-func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (api.Beat2Message, error) {
-	return func() (api.Beat2Message, error) {
+func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (dto.Beat2Message, error) {
+	return func() (dto.Beat2Message, error) {
 		bloomGenerator := &bloom.Generator{}
 
 		bloomAdd := func(key []byte) {
@@ -67,7 +67,7 @@ func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (
 		header := block.Header()
 		receipts, err := br.repo.GetBlockReceipts(header.ID())
 		if err != nil {
-			return api.Beat2Message{}, err
+			return dto.Beat2Message{}, err
 		}
 		txs := block.Transactions()
 		for i, receipt := range receipts {
@@ -94,7 +94,7 @@ func (br *beat2Reader) generateBeat2Message(block *chain.ExtendedBlock) func() (
 		const bitsPerKey = 20
 		filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
 
-		beat2 := api.Beat2Message{
+		beat2 := dto.Beat2Message{
 			Number:        header.Number(),
 			ID:            header.ID(),
 			ParentID:      header.ParentID(),

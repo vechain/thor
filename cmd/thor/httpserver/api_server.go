@@ -17,7 +17,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -76,7 +75,7 @@ func StartAPIServer(
 	txPool txpool.Pool,
 	logDB *logdb.LogDB,
 	bft bft.Committer,
-	nw api.Network,
+	nw node.Network,
 	forkConfig *thor.ForkConfig,
 	config APIConfig,
 ) (string, func(), error) {

@@ -12,21 +12,26 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
+type Network interface {
+	PeersStats() []*comm.PeerStats
+}
+
 type Node struct {
 	pool         txpool.Pool
-	nw           api.Network
+	nw           Network
 	enableTxpool *atomic.Bool
 }
 
-func New(nw api.Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
+func New(nw Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
 	return &Node{
 		pool,
 		nw,
@@ -34,8 +39,27 @@ func New(nw api.Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
 	}
 }
 
-func (n *Node) PeersStats() []*api.PeerStats {
-	return api.ConvertPeersStats(n.nw.PeersStats())
+func ConvertPeersStats(ss []*comm.PeerStats) []*dto.PeerStats {
+	if len(ss) == 0 {
+		return nil
+	}
+	peersStats := make([]*dto.PeerStats, len(ss))
+	for i, peerStats := range ss {
+		peersStats[i] = &dto.PeerStats{
+			Name:        peerStats.Name,
+			BestBlockID: peerStats.BestBlockID,
+			TotalScore:  peerStats.TotalScore,
+			PeerID:      peerStats.PeerID,
+			NetAddr:     peerStats.NetAddr,
+			Inbound:     peerStats.Inbound,
+			Duration:    peerStats.Duration,
+		}
+	}
+	return peersStats
+}
+
+func (n *Node) PeersStats() []*dto.PeerStats {
+	return ConvertPeersStats(n.nw.PeersStats())
 }
 
 func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
@@ -63,7 +87,7 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	if expanded {
-		trxs := make([]transactions.Transaction, len(filteredTransactions))
+		trxs := make([]dto.Transaction, len(filteredTransactions))
 		for index, trx := range filteredTransactions {
 			convertedTx := transactions.ConvertTransaction(trx, nil)
 			trxs[index] = *convertedTx
@@ -82,7 +106,7 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 
 func (n *Node) handleGetTxpoolStatus(w http.ResponseWriter, req *http.Request) error {
 	total := n.pool.Len()
-	status := api.Status{
+	status := dto.TxPoolStatus{
 		Amount: uint(total),
 	}
 	return restutil.WriteJSON(w, status)
