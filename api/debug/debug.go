@@ -21,6 +21,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -281,21 +282,7 @@ func (d *Debug) traceCall(
 	gas uint64,
 	clause *tx.Clause,
 ) (any, error) {
-	signer, _ := header.Signer()
-
-	rt := runtime.New(
-		d.repo.NewChain(header.ParentID()),
-		st,
-		&xenv.BlockContext{
-			Beneficiary: header.Beneficiary(),
-			Signer:      signer,
-			Number:      header.Number(),
-			Time:        header.Timestamp(),
-			GasLimit:    header.GasLimit(),
-			TotalScore:  header.TotalScore(),
-			BaseFee:     header.BaseFee(),
-		},
-		d.forkConfig)
+	rt := runtime.New(d.repo.NewChain(header.ParentID()), st, convert.BuildBlockContext(header), d.forkConfig)
 
 	tracer.SetContext(&tracers.Context{
 		BlockID:   header.ID(),
@@ -483,44 +470,19 @@ func (d *Debug) parseTarget(target string) (block *block.Block, txID thor.Bytes3
 }
 
 func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
-	gas := opt.Gas
-	if opt.Gas > d.callGasLimit {
-		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))
-	} else if opt.Gas == 0 {
-		gas = d.callGasLimit
+	gas, err := convert.CallGas(opt.Gas, d.callGasLimit)
+	if err != nil {
+		return nil, 0, nil, err
 	}
-
-	txCtx := xenv.TransactionContext{
-		ClauseCount: 1,
-		Expiration:  opt.Expiration,
-	}
-	if opt.GasPrice == nil {
-		txCtx.GasPrice = new(big.Int)
-	} else {
-		txCtx.GasPrice = (*big.Int)(opt.GasPrice)
-	}
-	if opt.Caller == nil {
-		txCtx.Origin = thor.Address{}
-	} else {
-		txCtx.Origin = *opt.Caller
-	}
-	if opt.GasPayer == nil {
-		txCtx.GasPayer = thor.Address{}
-	} else {
-		txCtx.GasPayer = *opt.GasPayer
-	}
-	if opt.ProvedWork == nil {
-		txCtx.ProvedWork = new(big.Int)
-	} else {
-		txCtx.ProvedWork = (*big.Int)(opt.ProvedWork)
-	}
-
-	if len(opt.BlockRef) > 0 {
-		blkRef, err := restutil.ParseBlockRef(opt.BlockRef)
-		if err != nil {
-			return nil, 0, nil, err
-		}
-		txCtx.BlockRef = blkRef
+	txCtx, err := convert.BuildCallTxContext(
+		1,
+		opt.GasPrice, opt.ProvedWork,
+		opt.Caller, opt.GasPayer,
+		opt.Expiration,
+		opt.BlockRef,
+	)
+	if err != nil {
+		return nil, 0, nil, err
 	}
 
 	var value *big.Int
@@ -531,7 +493,6 @@ func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.Transacti
 	}
 
 	var data []byte
-	var err error
 	if opt.Data != "" {
 		data, err = hexutil.Decode(opt.Data)
 		if err != nil {
@@ -540,7 +501,7 @@ func (d *Debug) handleTraceCallOption(opt *api.TraceCallOption) (*xenv.Transacti
 	}
 
 	clause := tx.NewClause(opt.To).WithValue(value).WithData(data)
-	return &txCtx, gas, clause, nil
+	return txCtx, gas, clause, nil
 }
 
 func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
