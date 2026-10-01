@@ -116,6 +116,8 @@ func ConvertSubscriptionEvent(header *block.Header, tx *tx.Transaction, clauseIn
 	if err != nil {
 		return nil, err
 	}
+	topics := make([]thor.Bytes32, len(event.Topics))
+	copy(topics, event.Topics)
 	return &EventMessage{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
@@ -127,7 +129,7 @@ func ConvertSubscriptionEvent(header *block.Header, tx *tx.Transaction, clauseIn
 			TxOrigin:       signer,
 			ClauseIndex:    clauseIndex,
 		},
-		Topics:   event.Topics,
+		Topics:   topics,
 		Obsolete: obsolete,
 	}, nil
 }
