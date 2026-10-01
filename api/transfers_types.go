@@ -19,11 +19,32 @@ type FilteredTransfer struct {
 	Meta      LogMeta               `json:"meta"`
 }
 
+// TransferCriteria has the same fields as logdb.TransferCriteria and, like it, no
+// json tags: keys are matched case-insensitively and encoded by field name.
+type TransferCriteria struct {
+	TxOrigin  *thor.Address // who send transaction
+	Sender    *thor.Address // who transferred tokens
+	Recipient *thor.Address // who received tokens
+}
+
 type TransferFilter struct {
-	CriteriaSet []*logdb.TransferCriteria `json:"criteriaSet,omitempty"`
-	Range       *Range                    `json:"range,omitempty"`
-	Options     *Options                  `json:"options,omitempty"`
-	Order       logdb.Order               `json:"order,omitempty"`
+	CriteriaSet []*TransferCriteria `json:"criteriaSet,omitempty"`
+	Range       *Range              `json:"range,omitempty"`
+	Options     *Options            `json:"options,omitempty"`
+	Order       Order               `json:"order,omitempty"`
+}
+
+// ConvertTransferCriteria maps request criteria to logdb criteria, keeping nil
+// as nil and an empty set as empty.
+func ConvertTransferCriteria(cs []*TransferCriteria) []*logdb.TransferCriteria {
+	if cs == nil {
+		return nil
+	}
+	criteria := make([]*logdb.TransferCriteria, len(cs))
+	for i, c := range cs {
+		criteria[i] = &logdb.TransferCriteria{TxOrigin: c.TxOrigin, Sender: c.Sender, Recipient: c.Recipient}
+	}
+	return criteria
 }
 
 func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {

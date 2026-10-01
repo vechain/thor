@@ -47,13 +47,13 @@ func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*
 	}
 
 	return t.db.FilterTransfers(ctx, &logdb.TransferFilter{
-		CriteriaSet: filter.CriteriaSet,
+		CriteriaSet: api.ConvertTransferCriteria(filter.CriteriaSet),
 		Range:       rng,
 		Options: &logdb.Options{
 			Offset: filter.Options.Offset,
 			Limit:  *filter.Options.Limit,
 		},
-		Order: filter.Order,
+		Order: logdb.Order(filter.Order),
 	})
 }
 

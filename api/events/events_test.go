@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -91,7 +90,7 @@ func TestOptionalIndexes(t *testing.T) {
 				CriteriaSet: make([]*api.EventCriteria, 0),
 				Range:       nil,
 				Options:     &api.Options{Limit: new(uint64(6)), IncludeIndexes: tc.includeIndexes},
-				Order:       logdb.DESC,
+				Order:       api.DESC,
 			}
 
 			res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
@@ -146,7 +145,7 @@ func TestOption(t *testing.T) {
 		CriteriaSet: make([]*api.EventCriteria, 0),
 		Range:       nil,
 		Options:     &api.Options{Limit: new(uint64(6))},
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
@@ -194,7 +193,7 @@ func TestOption(t *testing.T) {
 		CriteriaSet: criteriaSet,
 		Range:       &api.Range{From: &from},
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
@@ -206,7 +205,7 @@ func TestOption(t *testing.T) {
 		CriteriaSet: make([]*api.EventCriteria, 0),
 		Range:       nil,
 		Options:     &api.Options{Offset: defaultLogOffset, Limit: new(uint64(0))},
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
@@ -240,7 +239,7 @@ func TestZeroFrom(t *testing.T) {
 		CriteriaSet: criteria,
 		Range:       &api.Range{From: &from},
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
@@ -288,7 +287,7 @@ func testEventWithEmptyDb(t *testing.T) {
 		CriteriaSet: make([]*api.EventCriteria, 0),
 		Range:       nil,
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", emptyFilter)
@@ -307,7 +306,7 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 		CriteriaSet: make([]*api.EventCriteria, 0),
 		Range:       nil,
 		Options:     nil,
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	}
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", emptyFilter)
@@ -389,7 +388,7 @@ func TestEventsResponseEncodingUnchanged(t *testing.T) {
 		filter := api.EventFilter{
 			CriteriaSet: make([]*api.EventCriteria, 0),
 			Options:     &api.Options{Limit: new(defaultLogLimit), IncludeIndexes: includeIndexes},
-			Order:       logdb.DESC,
+			Order:       api.DESC,
 		}
 
 		res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", filter)
@@ -416,7 +415,7 @@ func TestEventsEmptyResultIsEmptyArray(t *testing.T) {
 
 	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", api.EventFilter{
 		CriteriaSet: make([]*api.EventCriteria, 0),
-		Order:       logdb.DESC,
+		Order:       api.DESC,
 	})
 	require.NoError(t, err)
 

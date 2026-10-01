@@ -15,18 +15,23 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
+type Network interface {
+	PeersStats() []*comm.PeerStats
+}
+
 type Node struct {
 	pool         txpool.Pool
-	nw           api.Network
+	nw           Network
 	enableTxpool *atomic.Bool
 }
 
-func New(nw api.Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
+func New(nw Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
 	return &Node{
 		pool,
 		nw,

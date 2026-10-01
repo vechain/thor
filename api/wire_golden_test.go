@@ -19,7 +19,6 @@ import (
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -595,7 +594,7 @@ func TestTransferCriteriaUnmarshalCasing(t *testing.T) {
 		`{"txOrigin":"0x0000000000000000000000000000000000000001","sender":"0x0000000000000000000000000000000000000002","recipient":"0x0000000000000000000000000000000000000003"}`,
 		`{"TxOrigin":"0x0000000000000000000000000000000000000001","Sender":"0x0000000000000000000000000000000000000002","Recipient":"0x0000000000000000000000000000000000000003"}`,
 	} {
-		var c logdb.TransferCriteria
+		var c api.TransferCriteria
 		require.NoError(t, json.Unmarshal([]byte(in), &c))
 		require.Equal(t, thor.BytesToAddress([]byte{1}), *c.TxOrigin)
 		require.Equal(t, thor.BytesToAddress([]byte{2}), *c.Sender)

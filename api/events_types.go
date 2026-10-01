@@ -87,11 +87,19 @@ func (o *Options) Validate(limit uint64, offset uint64) error {
 	return nil
 }
 
+// Order is the result order of a log query. It has the same values as logdb.Order.
+type Order string
+
+const (
+	ASC  Order = "asc"
+	DESC Order = "desc"
+)
+
 type EventFilter struct {
 	CriteriaSet []*EventCriteria `json:"criteriaSet,omitempty"`
 	Range       *Range           `json:"range,omitempty"`
 	Options     *Options         `json:"options,omitempty"`
-	Order       logdb.Order      `json:"order,omitempty"`
+	Order       Order            `json:"order,omitempty"`
 }
 
 func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
@@ -106,7 +114,7 @@ func ConvertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFi
 			// validated or default value set at the API level
 			Limit: *filter.Options.Limit,
 		},
-		Order: filter.Order,
+		Order: logdb.Order(filter.Order),
 	}
 	if len(filter.CriteriaSet) > 0 {
 		f.CriteriaSet = make([]*logdb.EventCriteria, len(filter.CriteriaSet))

@@ -10,10 +10,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-type Network interface {
-	PeersStats() []*comm.PeerStats
-}
-
 type Status struct {
 	Amount uint `json:"amount"`
 }
