@@ -34,6 +34,7 @@ func TestDependencyClosure(t *testing.T) {
 		"p2p",
 		"runtime",
 		"state",
+		"test",
 		"txpool",
 		"vm",
 	}

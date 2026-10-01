@@ -65,6 +65,8 @@ linters:
               desc: node internal
             - pkg: github.com/vechain/thor/v2/state
               desc: node internal
+            - pkg: github.com/vechain/thor/v2/test
+              desc: test helpers; not for library code
             - pkg: github.com/vechain/thor/v2/txpool
               desc: node internal
             - pkg: github.com/vechain/thor/v2/vm
