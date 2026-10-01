@@ -61,6 +61,40 @@ func TestTransfers(t *testing.T) {
 	testTransferWithBlocks(t, blocksToInsert)
 }
 
+func TestOrderValidation(t *testing.T) {
+	db := createDb(t)
+	initTransferServer(t, db, defaultLogLimit, defaultLogOffset)
+	insertBlocks(t, db, 3)
+	defer ts.Close()
+	tclient = thorclient.New(ts.URL)
+
+	post := func(order string) ([]byte, int) {
+		res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", []byte(`{"order": "`+order+`"}`))
+		require.NoError(t, err)
+		return res, statusCode
+	}
+
+	asc, code := post("asc")
+	require.Equal(t, http.StatusOK, code)
+	desc, code := post("desc")
+	require.Equal(t, http.StatusOK, code)
+	upper, code := post("DESC")
+	require.Equal(t, http.StatusOK, code)
+
+	var ascLogs, descLogs []*api.FilteredTransfer
+	require.NoError(t, json.Unmarshal(asc, &ascLogs))
+	require.NoError(t, json.Unmarshal(desc, &descLogs))
+	require.Greater(t, len(ascLogs), 1)
+	require.Equal(t, len(ascLogs), len(descLogs))
+	assert.Equal(t, ascLogs[0].Meta.BlockNumber, descLogs[len(descLogs)-1].Meta.BlockNumber)
+	assert.NotEqual(t, ascLogs[0].Meta.BlockNumber, descLogs[0].Meta.BlockNumber)
+	assert.JSONEq(t, string(desc), string(upper))
+
+	res, code := post("xyz")
+	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Contains(t, string(res), "filter.Order must be either 'asc' or 'desc'")
+}
+
 func TestOption(t *testing.T) {
 	db := createDb(t)
 	initTransferServer(t, db, 5, 100)
