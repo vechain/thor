@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
@@ -41,13 +42,13 @@ func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uin
 // conversion to the response shape is deferred to the response writer so only one
 // converted transfer exists at a time.
 func (t *Transfers) filter(ctx context.Context, filter *api.TransferFilter) ([]*logdb.Transfer, error) {
-	rng, err := api.ConvertRange(t.repo.NewBestChain(), filter.Range)
+	rng, err := convert.ConvertRange(t.repo.NewBestChain(), filter.Range)
 	if err != nil {
 		return nil, err
 	}
 
 	return t.db.FilterTransfers(ctx, &logdb.TransferFilter{
-		CriteriaSet: api.ConvertTransferCriteria(filter.CriteriaSet),
+		CriteriaSet: convert.ConvertTransferCriteria(filter.CriteriaSet),
 		Range:       rng,
 		Options: &logdb.Options{
 			Offset: filter.Options.Offset,
@@ -102,7 +103,7 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	}
 
 	return restutil.WriteJSONArray(w, len(transfers), func(i int) *api.FilteredTransfer {
-		return api.ConvertTransfer(transfers[i], filter.Options.IncludeIndexes)
+		return convert.ConvertTransfer(transfers[i], filter.Options.IncludeIndexes)
 	})
 }
 

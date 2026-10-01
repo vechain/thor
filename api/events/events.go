@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
@@ -42,7 +43,7 @@ func New(repo *chain.Repository, db *logdb.LogDB, maxLimit uint64, maxOffset uin
 // is deferred to the response writer so only one converted event exists at a time.
 func (e *Events) filter(ctx context.Context, ef *api.EventFilter) ([]*logdb.Event, error) {
 	chain := e.repo.NewBestChain()
-	filter, err := api.ConvertEventFilter(chain, ef)
+	filter, err := convert.ConvertEventFilter(chain, ef)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	}
 
 	return restutil.WriteJSONArray(w, len(events), func(i int) *api.FilteredEvent {
-		return api.ConvertEvent(events[i], filter.Options.IncludeIndexes)
+		return convert.ConvertEvent(events[i], filter.Options.IncludeIndexes)
 	})
 }
 

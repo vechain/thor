@@ -7,6 +7,7 @@ package subscriptions
 
 import (
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -41,7 +42,7 @@ func (er *eventReader) Read() ([]any, bool, error) {
 			for j, output := range receipt.Outputs {
 				for _, event := range output.Events {
 					if er.filter.Match(event) {
-						msg, err := api.ConvertSubscriptionEvent(block.Header(), txs[i], uint32(j), event, block.Obsolete)
+						msg, err := convert.ConvertSubscriptionEvent(block.Header(), txs[i], uint32(j), event, block.Obsolete)
 						if err != nil {
 							return nil, false, err
 						}

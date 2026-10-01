@@ -6,11 +6,8 @@
 package api
 
 import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/block"
-	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -37,40 +34,6 @@ type BlockMessage struct {
 	Obsolete      bool                  `json:"obsolete"`
 }
 
-func ConvertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
-	header := b.Header()
-	signer, err := header.Signer()
-	if err != nil {
-		return nil, err
-	}
-
-	txs := b.Transactions()
-	txIDs := make([]thor.Bytes32, len(txs))
-	for i, tx := range txs {
-		txIDs[i] = tx.ID()
-	}
-	return &BlockMessage{
-		Number:        header.Number(),
-		ID:            header.ID(),
-		ParentID:      header.ParentID(),
-		Timestamp:     header.Timestamp(),
-		TotalScore:    header.TotalScore(),
-		GasLimit:      header.GasLimit(),
-		GasUsed:       header.GasUsed(),
-		BaseFeePerGas: (*math.HexOrDecimal256)(header.BaseFee()),
-		Beneficiary:   header.Beneficiary(),
-		Signer:        signer,
-		Size:          uint32(b.Size()),
-		StateRoot:     header.StateRoot(),
-		ReceiptsRoot:  header.ReceiptsRoot(),
-		TxsRoot:       header.TxsRoot(),
-		TxsFeatures:   uint32(header.TxsFeatures()),
-		COM:           header.COM(),
-		Transactions:  txIDs,
-		Obsolete:      b.Obsolete,
-	}, nil
-}
-
 // TransferMessage transfer piped by websocket
 type TransferMessage struct {
 	Sender    thor.Address          `json:"sender"`
@@ -80,28 +43,6 @@ type TransferMessage struct {
 	Obsolete  bool                  `json:"obsolete"`
 }
 
-func ConvertSubscriptionTransfer(header *block.Header, tx *tx.Transaction, clauseIndex uint32, transfer *tx.Transfer, obsolete bool) (*TransferMessage, error) {
-	origin, err := tx.Origin()
-	if err != nil {
-		return nil, err
-	}
-
-	return &TransferMessage{
-		Sender:    transfer.Sender,
-		Recipient: transfer.Recipient,
-		Amount:    (*math.HexOrDecimal256)(transfer.Amount),
-		Meta: LogMeta{
-			BlockID:        header.ID(),
-			BlockNumber:    header.Number(),
-			BlockTimestamp: header.Timestamp(),
-			TxID:           tx.ID(),
-			TxOrigin:       origin,
-			ClauseIndex:    clauseIndex,
-		},
-		Obsolete: obsolete,
-	}, nil
-}
-
 // EventMessage event piped by websocket
 type EventMessage struct {
 	Address  thor.Address   `json:"address"`
@@ -109,27 +50,6 @@ type EventMessage struct {
 	Data     string         `json:"data"`
 	Meta     LogMeta        `json:"meta"`
 	Obsolete bool           `json:"obsolete"`
-}
-
-func ConvertSubscriptionEvent(header *block.Header, tx *tx.Transaction, clauseIndex uint32, event *tx.Event, obsolete bool) (*EventMessage, error) {
-	signer, err := tx.Origin()
-	if err != nil {
-		return nil, err
-	}
-	return &EventMessage{
-		Address: event.Address,
-		Data:    hexutil.Encode(event.Data),
-		Meta: LogMeta{
-			BlockID:        header.ID(),
-			BlockNumber:    header.Number(),
-			BlockTimestamp: header.Timestamp(),
-			TxID:           tx.ID(),
-			TxOrigin:       signer,
-			ClauseIndex:    clauseIndex,
-		},
-		Topics:   event.Topics,
-		Obsolete: obsolete,
-	}, nil
 }
 
 // SubscriptionEventFilter contains options for contract event filtering.

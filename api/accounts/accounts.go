@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -353,7 +354,7 @@ func (a *Accounts) batchCall(
 				fmt.Errorf("batch call data exceeds limit of %d bytes", a.batchDataMaxSize))
 		}
 
-		result := api.ConvertCallResultWithInputGas(out, gas)
+		result := convert.ConvertCallResultWithInputGas(out, gas)
 		results = append(results, result)
 
 		if out.VMErr != nil {
