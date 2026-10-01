@@ -7,6 +7,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -157,6 +158,18 @@ func (r *Range) Validate() error {
 	}
 
 	return nil
+}
+
+// NormalizeOrder accepts "asc"/"desc" case-insensitively and returns asc for an empty order.
+func NormalizeOrder(o logdb.Order) (logdb.Order, error) {
+	switch lower := logdb.Order(strings.ToLower(string(o))); lower {
+	case "":
+		return logdb.ASC, nil
+	case logdb.ASC, logdb.DESC:
+		return lower, nil
+	default:
+		return "", fmt.Errorf("filter.Order must be either 'asc' or 'desc', got '%s'", o)
+	}
 }
 
 var emptyRange = logdb.Range{

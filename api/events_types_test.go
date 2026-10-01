@@ -437,3 +437,31 @@ func TestConvertRange_WithEvents(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeOrder(t *testing.T) {
+	tests := []struct {
+		in      logdb.Order
+		want    logdb.Order
+		wantErr bool
+	}{
+		{"", logdb.ASC, false},
+		{"asc", logdb.ASC, false},
+		{"desc", logdb.DESC, false},
+		{"DESC", logdb.DESC, false},
+		{"Asc", logdb.ASC, false},
+		{"xyz", "", true},
+		{"descending", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.in), func(t *testing.T) {
+			got, err := NormalizeOrder(tt.in)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "filter.Order must be either 'asc' or 'desc'")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
