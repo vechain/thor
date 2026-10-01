@@ -7,7 +7,6 @@ package events
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -55,43 +54,19 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err := restutil.ParseJSON(req.Body, &filter); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
-	if err := filter.Options.Validate(e.maxLimit, e.maxOffset); err != nil {
-		return restutil.Forbidden(err)
+	options, err := restutil.PrepareLogFilter(filter.Options, filter.Range, filter.CriteriaSet, e.maxLimit, e.maxOffset, e.maxCriteriaCount)
+	if err != nil {
+		return err
 	}
-	if err := filter.Range.Validate(); err != nil {
-		return restutil.BadRequest(err)
-	}
-	// reject null element in CriteriaSet, {} will be unmarshaled to default value and will be accepted/handled by the filter engine
-	for i, criterion := range filter.CriteriaSet {
-		if criterion == nil {
-			return restutil.BadRequest(fmt.Errorf("criteriaSet[%d]: null not allowed", i))
-		}
-	}
-	if len(filter.CriteriaSet) > e.maxCriteriaCount {
-		return restutil.BadRequest(fmt.Errorf(
-			"number of criteria in criteriaSet: %d cannot be greater than: %d",
-			len(filter.CriteriaSet),
-			e.maxCriteriaCount),
-		)
-	}
-	if filter.Options == nil {
-		filter.Options = &api.Options{}
-	}
-	if filter.Options.Limit == nil {
-		// if filter.Options.Limit is nil, set to the default limit +1
-		// to detect whether there are more logs than the default limit
-		limit := e.maxLimit + 1
-		filter.Options.Limit = &limit
-	}
+	filter.Options = options
 
 	events, err := e.filter(req.Context(), &filter)
 	if err != nil {
 		return err
 	}
 
-	// ensure the result size is less than the configured limit
-	if len(events) > int(e.maxLimit) {
-		return restutil.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.maxLimit))
+	if err := restutil.CheckLogCount(len(events), e.maxLimit); err != nil {
+		return err
 	}
 
 	return restutil.WriteJSONArray(w, len(events), func(i int) *api.FilteredEvent {
