@@ -33,6 +33,16 @@ var (
 		Usage:   "private key as hex",
 		Sources: envVar("KEYHEX"),
 	}
+	bootnodeFlag = &cli.StringSliceFlag{
+		Name:    "bootnode",
+		Usage:   "enode url of a bootnode to bootstrap the discovery from, can be repeated or comma separated",
+		Sources: envVar("BOOTNODE"),
+	}
+	nodeDBFlag = &cli.StringFlag{
+		Name:    "nodedb",
+		Usage:   "directory to persist the discovered peers, empty means in-memory only",
+		Sources: envVar("NODEDB"),
+	}
 	natFlag = &cli.StringFlag{
 		Name:    "nat",
 		Value:   "none",

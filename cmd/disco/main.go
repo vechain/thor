@@ -34,6 +34,8 @@ var (
 		addrFlag,
 		keyFileFlag,
 		keyHexFlag,
+		bootnodeFlag,
+		nodeDBFlag,
 		natFlag,
 		netRestrictFlag,
 		verbosityFlag,
@@ -66,6 +68,16 @@ func run(_ context.Context, ctx *cli.Command) error {
 		}
 	}
 
+	bootnodes, err := parseBootnodes(ctx.StringSlice(bootnodeFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "-bootnode")
+	}
+
+	nodeDBPath, err := resolveNodeDBPath(ctx.String(nodeDBFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "-nodedb")
+	}
+
 	netrestrict := ctx.String("netrestrict")
 	var restrictList *netutil.Netlist
 	if netrestrict != "" {
@@ -94,11 +106,20 @@ func run(_ context.Context, ctx *cli.Command) error {
 			realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
 		}
 	}
-	network, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
+	network, err := discv5.ListenUDP(key, conn, realAddr, nodeDBPath, restrictList)
 	if err != nil {
 		return err
 	}
 	defer network.Close()
+	if len(bootnodes) > 0 {
+		if err := network.SetFallbackNodes(bootnodes); err != nil {
+			return errors.Wrap(err, "-bootnode")
+		}
+		fmt.Println("Bootstrapping from", len(bootnodes), "bootnode(s)")
+	}
+	if nodeDBPath != "" {
+		fmt.Println("Peers persisted at", nodeDBPath)
+	}
 	fmt.Println("Running", network.Self().String())
 
 	exitSignal := handleExitSignal()

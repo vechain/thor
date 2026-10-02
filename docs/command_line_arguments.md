@@ -78,6 +78,8 @@ bin/disco -h
 | `--addr`        | The to listen on (default: ":55555").                                                   |
 | `--keyfile`     | The path to the private key file of the discovery node.                                 |
 | `--keyhex`      | The hex-encoded private key of the discovery node.                                      |
+| `--bootnode`    | Enode url of a bootnode to bootstrap the discovery from, repeatable or comma separated. |
+| `--nodedb`      | Directory to persist the discovered peers, empty means in-memory only.                  |
 | `--nat`         | The port mapping mechanism (any \| none \| upnp \| pmp \| extip:<IP>) (default: "none") |
 | `--netrestrict` | Restrict network communication to the given IP networks (CIDR masks)                    |
 | `--verbosity`   | The log level for the discovery node (0-9) (default: 2).                                |

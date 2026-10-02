@@ -409,6 +409,12 @@ func (net *Network) loop() {
 
 	statsDump := time.NewTicker(10 * time.Second)
 
+	// Bring the peers left in the database by a previous run back into the
+	// table right away, instead of waiting for the first refresh tick.
+	if net.db != nil {
+		net.addSeeds(net.db.querySeeds(seedCount, seedMaxAge))
+	}
+
 loop:
 	for {
 		resetNextTicket()
@@ -677,37 +683,38 @@ loop:
 // Everything below runs on the Network.loop goroutine
 // and can modify Node, Table and Network at any time without locking.
 
+// addSeeds force-adds the given nodes to the table and starts verifying the
+// ones which are not known yet. Force-adding makes sure Lookup has something to
+// work with, unverifiable nodes are dropped again later on.
+func (net *Network) addSeeds(seeds []*Node) {
+	for _, n := range seeds {
+		age := "unknown"
+		if net.db != nil {
+			age = time.Since(net.db.lastPong(n.ID)).String()
+		}
+		log.Debug("Found seed node", "id", n.ID, "addr", n.addr(), "age", age)
+		n = net.internNodeFromDB(n)
+		if n.state == unknown {
+			net.transition(n, verifyinit)
+		}
+		net.tab.add(n)
+	}
+}
+
 func (net *Network) refresh(done chan<- struct{}) {
 	var seeds []*Node
 	if net.db != nil {
 		seeds = net.db.querySeeds(seedCount, seedMaxAge)
 	}
-	if len(seeds) == 0 {
-		seeds = net.nursery
-	}
+	// The fallback nodes are always kept, they are the only way back in when
+	// every peer of the previous run is gone.
+	seeds = append(seeds, net.nursery...)
 	if len(seeds) == 0 {
 		log.Trace("no seed nodes found")
 		time.AfterFunc(time.Second*10, func() { close(done) })
 		return
 	}
-	for _, n := range seeds {
-		log.Debug("", "msg", log.Lazy{Fn: func() string {
-			var age string
-			if net.db != nil {
-				age = time.Since(net.db.lastPong(n.ID)).String()
-			} else {
-				age = "unknown"
-			}
-			return fmt.Sprintf("seed node (age %s): %v", age, n)
-		}})
-		n = net.internNodeFromDB(n)
-		if n.state == unknown {
-			net.transition(n, verifyinit)
-		}
-		// Force-add the seed node so Lookup does something.
-		// It will be deleted again if verification fails.
-		net.tab.add(n)
-	}
+	net.addSeeds(seeds)
 	// Start self lookup to fill up the buckets.
 	go func() {
 		net.Lookup(net.tab.self.ID)
@@ -972,6 +979,9 @@ func init() {
 		enter: func(net *Network, n *Node) {
 			n.queryTimeouts = 0
 			n.startNextQuery(net)
+			// Persist the verified node, so that it can be used as a seed
+			// after a restart.
+			net.persistNode(n)
 			// Insert into the table and start revalidation of the last node
 			// in the bucket if it is full.
 			last := net.tab.add(n)
@@ -1142,6 +1152,22 @@ func (net *Network) handlePing(n *Node, pkt *ingressPacket) {
 	}
 	ticketToPong(t, pong)
 	net.conn.send(n, pongPacket, pong)
+}
+
+// persistNode saves a node which passed the endpoint verification into the node
+// database, along with the time it was last seen alive. It is a no-op when the
+// network runs without a database.
+func (net *Network) persistNode(n *Node) {
+	if net.db == nil {
+		return
+	}
+	if err := net.db.updateNode(n); err != nil {
+		log.Debug("Failed to persist node", "id", n.ID, "err", err)
+		return
+	}
+	if err := net.db.updateLastPong(n.ID, time.Now()); err != nil {
+		log.Debug("Failed to persist last pong", "id", n.ID, "err", err)
+	}
 }
 
 func (net *Network) handleKnownPong(n *Node, pkt *ingressPacket) error {
