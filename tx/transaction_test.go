@@ -615,6 +615,63 @@ func TestEffectivePriorityFeePerGas(t *testing.T) {
 	assert.Equal(t, effectivePriorityFeePerGas, new(big.Int).Sub(trx.MaxFeePerGas(), baseFee))
 }
 
+// TestEffectivePriorityFeePerGas_LegacyRewardCap covers the VIP-251 legacy
+// reward cap: the validator reward can never exceed gasPrice (EffectiveGasPrice),
+// regardless of base-gas-price/proved-work/base-fee.
+func TestEffectivePriorityFeePerGas_LegacyRewardCap(t *testing.T) {
+	trx := GetMockTx(TypeLegacy) // Gas=21000, GasPriceCoef=128, BlockRef number=0 (no work decay)
+
+	// (a) no-mint invariant: reward never exceeds gasPrice.
+	cases := []struct {
+		baseGasPrice *big.Int
+		provedWork   *big.Int
+		baseFee      *big.Int
+	}{
+		{big.NewInt(thor.InitialBaseFee), big.NewInt(0), big.NewInt(thor.InitialBaseFee)},
+		{big.NewInt(thor.InitialBaseFee), big.NewInt(1000 * 21000), big.NewInt(thor.InitialBaseFee)}, // wgas == gas
+		{thor.InitialBaseGasPrice, big.NewInt(1000 * 1000), big.NewInt(thor.InitialBaseFee)},         // small work, high base-gas-price
+		{thor.InitialBaseGasPrice, big.NewInt(1000 * 21000 * 100), big.NewInt(thor.InitialBaseFee)},  // saturated work, high base-gas-price
+	}
+	for _, c := range cases {
+		gasPrice := trx.EffectiveGasPrice(c.baseFee, c.baseGasPrice)
+		reward := trx.EffectivePriorityFeePerGas(c.baseFee, c.baseGasPrice, c.provedWork)
+		assert.True(t, reward.Cmp(gasPrice) <= 0,
+			"reward must never exceed gasPrice: baseGasPrice=%v provedWork=%v baseFee=%v got=%v gasPrice=%v",
+			c.baseGasPrice, c.provedWork, c.baseFee, reward, gasPrice)
+	}
+
+	// bonus > baseFee (base-gas-price 1e15, baseFee 1e13, work saturated): reward
+	// hits the cap exactly at gasPrice.
+	baseGasPrice := thor.InitialBaseGasPrice
+	baseFee := big.NewInt(thor.InitialBaseFee)
+	provedWork := big.NewInt(1000 * 21000 * 100)
+	gasPrice := trx.EffectiveGasPrice(baseFee, baseGasPrice)
+	reward := trx.EffectivePriorityFeePerGas(baseFee, baseGasPrice, provedWork)
+	assert.Equal(t, gasPrice, reward)
+
+	// (b) public-net equivalence: base-gas-price == baseFee == 1e13 (post-Galactica
+	// mainnet/testnet history), the cap never binds so the new formula reproduces
+	// the old overallGasPrice - baseFee for any proved work.
+	pubBaseGasPrice := big.NewInt(thor.InitialBaseFee)
+	pubBaseFee := big.NewInt(thor.InitialBaseFee)
+	for _, work := range []*big.Int{big.NewInt(0), big.NewInt(1000), big.NewInt(1000 * 21000), big.NewInt(1000 * 21000 * 100)} {
+		overallGasPrice := trx.OverallGasPrice(pubBaseGasPrice, work)
+		want := new(big.Int).Sub(overallGasPrice, pubBaseFee)
+		got := trx.EffectivePriorityFeePerGas(pubBaseFee, pubBaseGasPrice, work)
+		assert.Equal(t, want, got, "public-net params must reproduce pre-cap formula for work=%v", work)
+	}
+
+	// (c) no work: reward = gasPrice - baseFee (plain EIP-1559).
+	baseGasPrice2 := big.NewInt(thor.InitialBaseFee)
+	baseFee2 := big.NewInt(thor.InitialBaseFee / 2)
+	gasPrice2 := trx.EffectiveGasPrice(baseFee2, baseGasPrice2)
+	reward2 := trx.EffectivePriorityFeePerGas(baseFee2, baseGasPrice2, big.NewInt(0))
+	assert.Equal(t, new(big.Int).Sub(gasPrice2, baseFee2), reward2)
+
+	// (d) dynamic-fee transactions are untouched by the legacy cap — already
+	// exercised end to end by TestEffectivePriorityFeePerGas above.
+}
+
 func TestHashCoverage(t *testing.T) {
 	for _, txType := range []Type{TypeLegacy, TypeDynamicFee} {
 		trx := GetMockTx(txType)
