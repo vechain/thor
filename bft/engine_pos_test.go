@@ -31,10 +31,6 @@ var (
 	defaultEpochLength = uint32(180)
 )
 
-func init() {
-	defaultFC.FINALITY = 0
-}
-
 func toWei(vet uint64) *big.Int {
 	return new(big.Int).Mul(new(big.Int).SetUint64(vet), big.NewInt(1e18))
 }
