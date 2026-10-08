@@ -323,7 +323,7 @@ func TestAdoptErr(t *testing.T) {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
-	thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+	t.Cleanup(thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()}))
 	// Test origin blacklisted
 	builder := new(tx.Builder).
 		ChainTag(repo.ChainTag()).

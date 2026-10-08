@@ -489,10 +489,13 @@ func IsOriginBlocked(origin Address) bool {
 	return blocklist[origin]
 }
 
-// MockBlocklist mock the blocklist
-func MockBlocklist(list []string) {
+// MockBlocklist replaces the blocklist with list and returns a function that
+// restores the previous one. Intended for tests: t.Cleanup(thor.MockBlocklist(...)).
+func MockBlocklist(list []string) (restore func()) {
+	prev := blocklist
 	blocklist = make(map[Address]bool)
 	for _, str := range list {
 		blocklist[MustParseAddress(str)] = true
 	}
+	return func() { blocklist = prev }
 }
