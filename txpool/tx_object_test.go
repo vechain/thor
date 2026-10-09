@@ -466,9 +466,9 @@ func TestBaseFeeRefreshMatchesCanonical(t *testing.T) {
 			// A raw nonzero UnprovedWork() is not enough: workToGas() divides by
 			// workPerGas(=1000) and floors, so a "nonzero" work below that threshold
 			// still yields wgas=0 and collapses back to the no-work ceiling. Mine a
-			// nonce with comfortably large work so the work-included branch of
-			// OverallGasPrice actually kicks in.
-			trx = mineLegacyTxWithWork(t, repo.ChainTag(), blockRef, 100, genesis.DevAccounts()[0], big.NewInt(50000))
+			// nonce with work large enough that the proved-work bonus exceeds the base
+			// fee, so the legacy reward cap binds at a realistic base fee.
+			trx = mineLegacyTxWithWork(t, repo.ChainTag(), blockRef, 100, genesis.DevAccounts()[0], big.NewInt(1_000_000))
 		} else {
 			trx = newTx(txType, repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 		}
@@ -485,6 +485,8 @@ func TestBaseFeeRefreshMatchesCanonical(t *testing.T) {
 		assert.Nil(t, err)
 		if txType == tx.TypeLegacy {
 			assert.Equal(t, 1, provedWork.Sign(), "legacy provedWork must be nonzero to exercise the work-included ceiling")
+			uncapped := new(big.Int).Sub(txObj.OverallGasPrice(lbgp, provedWork), baseFee0)
+			assert.Equal(t, 1, uncapped.Cmp(txObj.EffectiveGasPrice(baseFee0, lbgp)), "legacy reward cap must bind at baseFee0")
 		}
 
 		// Evaluate()'s own priorityGasPrice (before any refresh) must already match the
