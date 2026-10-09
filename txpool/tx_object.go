@@ -33,13 +33,14 @@ type txPricing struct {
 	payer *thor.Address // payer of the tx, either origin, delegator, or on-chain delegation payer
 	cost  *big.Int      // total tx cost the payer needs to pay before execution(gas price * gas)
 
-	// basic unit of tip price for the validator, before GALACTICA it's the overallGasPrice(provedWork included) and validator
-	// gets <reward-ratio>% of the tip, after GALACTICA it's the effective priority fee per gas and validator gets 100% of the tip
+	// basic unit of tip price for the validator, after GALACTICA it's the effective priority fee per gas and validator gets
+	// 100% of the tip. Before GALACTICA it's the gasPrice for legacy txs, proved work is not counted although the reward
+	// (<reward-ratio>% of the overallGasPrice) includes it.
 	priorityGasPrice *big.Int
 
 	// base-fee-independent ceilings, cached so priorityGasPrice can be refreshed by pure
-	// arithmetic on a base-fee change (no ProvedWork / chain lookup). legacy: both equal
-	// OverallGasPrice(with provedWork); dynamic-fee: MaxFeePerGas / MaxPriorityFeePerGas.
+	// arithmetic on a base-fee change (no ProvedWork / chain lookup). legacy: OverallGasPrice
+	// (with provedWork) / gasPrice; dynamic-fee: MaxFeePerGas / MaxPriorityFeePerGas.
 	feeCeiling      *big.Int
 	priorityCeiling *big.Int
 }
@@ -190,7 +191,7 @@ func (o *TxObject) Evaluate(
 	if err != nil {
 		return false, nil, err
 	}
-	// normalize the base fee here, set to 0 to make the func EffectivePriorityFeePerGas return overallGasPrice for before GALACTICA txs
+	// normalize the base fee here, set to 0 for before GALACTICA txs, so legacy txs are priced at their gasPrice.
 	// before GALACTICA, the baseFeeCache.Get will return nil just like the Header.BaseFee
 	if baseFee == nil {
 		baseFee = big.NewInt(0)
@@ -198,8 +199,8 @@ func (o *TxObject) Evaluate(
 
 	var feeCeiling, priorityCeiling *big.Int
 	if o.Type() == tx.TypeLegacy {
-		ogp := o.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
-		feeCeiling, priorityCeiling = ogp, ogp
+		feeCeiling = o.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+		priorityCeiling = o.EffectiveGasPrice(baseFee, legacyTxBaseGasPrice)
 	} else {
 		feeCeiling, priorityCeiling = o.MaxFeePerGas(), o.MaxPriorityFeePerGas()
 	}

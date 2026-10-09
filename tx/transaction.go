@@ -464,8 +464,9 @@ func (t *Transaction) EffectiveGasPrice(baseFee *big.Int, legacyTxBaseGasPrice *
 }
 
 // EffectivePriorityFeePerGas returns the effective priority fee per gas for the transaction. If maxFeePerGas is less than
-// baseFee, an error is returned. For legacy transactions, the overall gas price which includes the proved work is used as both
-// maxPriorityFeePerGas and maxFeePerGas.
+// baseFee, an error is returned. For legacy transactions, the overall gas price which includes the proved work is used as
+// maxFeePerGas, while maxPriorityFeePerGas is capped at what the signer is charged (EffectiveGasPrice), so the reward
+// never exceeds the payment and no VTHO is minted.
 // It is caller's responsibility to ensure the fields are passed correctly.
 func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseGasPrice *big.Int, provedWork *big.Int) *big.Int {
 	var (
@@ -474,9 +475,12 @@ func (t *Transaction) EffectivePriorityFeePerGas(baseFee *big.Int, legacyTxBaseG
 	)
 
 	if t.Type() == TypeLegacy {
-		overallGasPrice := t.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
-		maxPriorityFeePerGas = overallGasPrice
-		maxFeePerGas = overallGasPrice
+		maxFeePerGas = t.OverallGasPrice(legacyTxBaseGasPrice, provedWork)
+		// cap the validator reward at what the signer is charged
+		// (EffectiveGasPrice), so no VTHO is minted regardless of
+		// base-gas-price. Proved work redirects at most one base fee per gas
+		// from burn to the validator.
+		maxPriorityFeePerGas = t.body.(*legacyTransaction).gasPrice(legacyTxBaseGasPrice)
 	} else {
 		maxPriorityFeePerGas = t.body.maxPriorityFeePerGas()
 		maxFeePerGas = t.body.maxFeePerGas()
