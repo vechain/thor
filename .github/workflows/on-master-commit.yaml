@@ -42,8 +42,6 @@ jobs:
       checks: write
       issues: write
       pull-requests: write
-    secrets:
-      ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
 
   thor-docker-test-suite:
     uses: ./.github/workflows/thor-docker-test-suite.yaml

@@ -250,12 +250,12 @@ func TestStakerContract_Native_CheckStake(t *testing.T) {
 		delegator  = thor.Address{}
 	)
 
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	fc.HAYABUSA = 1
 	hayabusaTP := uint32(2)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	var err error
-	thorChain, err := testchain.NewWithFork(fc, 180)
+	thorChain, err := testchain.NewWithFork(&fc, 180)
 	assert.NoError(t, err)
 	assert.NoError(t, thorChain.MintBlock())
 	assert.NoError(t, thorChain.MintBlock())
@@ -394,7 +394,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		minStake    = staker.MinStake
 	)
 
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	fc.HAYABUSA = 0
 	hayabusaTP := uint32(0)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
@@ -431,7 +431,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		state.SetBalance(rich, big.NewInt(0).Mul(big.NewInt(6000e6), big.NewInt(1e18)))
 		state.SetBalance(delegator, big.NewInt(0).Mul(big.NewInt(6000e6), big.NewInt(1e18)))
 
-		status, err := stakerNative.SyncPOS(fc, 0)
+		status, err := stakerNative.SyncPOS(&fc, 0)
 		if err != nil {
 			return err
 		}
@@ -470,7 +470,7 @@ func TestStakerContract_PauseSwitches(t *testing.T) {
 		repo.NewBestChain(),
 		state,
 		&xenv.BlockContext{Time: bestSummary.Header.Timestamp()},
-		fc,
+		&fc,
 	)
 
 	test := &ctest{

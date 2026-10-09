@@ -129,29 +129,25 @@ func TestConcurrentAccess(t *testing.T) {
 
 	// Add concurrent writers
 	for i := range workers {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
+		wg.Go(func() {
 			var keyBuf []byte
 			for j := range operations {
-				blob := []byte{byte(id), byte(j)}
-				ver := trie.Version{Major: uint32(id), Minor: uint32(j)}
-				cache.AddNodeBlob(&keyBuf, "test", []byte{byte(id)}, ver, blob, true)
+				blob := []byte{byte(i), byte(j)}
+				ver := trie.Version{Major: uint32(i), Minor: uint32(j)}
+				cache.AddNodeBlob(&keyBuf, "test", []byte{byte(i)}, ver, blob, true)
 			}
-		}(i)
+		})
 	}
 
 	// Add concurrent readers
 	for i := range workers {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
+		wg.Go(func() {
 			var keyBuf []byte
 			for j := range operations {
-				ver := trie.Version{Major: uint32(id), Minor: uint32(j)}
-				cache.GetNodeBlob(&keyBuf, "test", []byte{byte(id)}, ver, false)
+				ver := trie.Version{Major: uint32(i), Minor: uint32(j)}
+				cache.GetNodeBlob(&keyBuf, "test", []byte{byte(i)}, ver, false)
 			}
-		}(i)
+		})
 	}
 
 	wg.Wait()

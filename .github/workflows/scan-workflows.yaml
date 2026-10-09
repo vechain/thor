@@ -2,9 +2,6 @@ name: Zizmor Scan
 
 on:
   workflow_call:
-    secrets:
-      ZIZMOR_TOKEN:
-        required: true
 
 permissions: { }
 
@@ -22,4 +19,5 @@ jobs:
       issues: write
       pull-requests: write
     secrets:
-      ZIZMOR_TOKEN: ${{ secrets.ZIZMOR_TOKEN }}
+      # zizmor's online audits only read public action repositories.
+      ZIZMOR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

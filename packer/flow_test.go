@@ -115,13 +115,13 @@ func TestAdopt(t *testing.T) {
 }
 
 func TestAdoptTypedTxs(t *testing.T) {
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	fc.HAYABUSA = math.MaxUint32
 	// Setup environment
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
-		ForkConfig: fc,
+		ForkConfig: &fc,
 		GasLimit:   thor.MaxTxGasLimit * 2,
 	})
 
@@ -135,7 +135,7 @@ func TestAdoptTypedTxs(t *testing.T) {
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
 	// Create and adopt two transactions
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, fc, 0)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &fc, 0)
 	sum, err := repo.GetBlockSummary(b.Header().ID())
 	if err != nil {
 		t.Fatal("Error getting block summary:", err)
@@ -210,7 +210,7 @@ func TestPack(t *testing.T) {
 
 func TestPackAfterGalacticaFork(t *testing.T) {
 	db := muxdb.NewMem()
-	g, _ := genesis.NewDevnet()
+	g := newPoADevnet()
 
 	stater := state.NewStater(db)
 	parent, _, _, _ := g.Build(stater)
@@ -269,13 +269,13 @@ func TestAdoptErr(t *testing.T) {
 	stater := state.NewStater(db)
 	launchTime := uint64(1526400000)
 
-	config := &thor.NoFork
+	config := thor.NoFork
 	config.BLOCKLIST = 0
 
 	g := new(genesis.Builder).
 		GasLimit(0).
 		Timestamp(launchTime).
-		ForkConfig(config).
+		ForkConfig(&config).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
@@ -297,7 +297,7 @@ func TestAdoptErr(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("to"))
 	clause := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 
-	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, config, 0)
+	pkr := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, &config, 0)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 
 	flow, _ := pkr.Schedule(sum, uint64(time.Now().Unix()))
@@ -323,7 +323,7 @@ func TestAdoptErr(t *testing.T) {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
 
-	thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+	t.Cleanup(thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()}))
 	// Test origin blacklisted
 	builder := new(tx.Builder).
 		ChainTag(repo.ChainTag()).

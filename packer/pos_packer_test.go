@@ -21,14 +21,14 @@ import (
 )
 
 func TestFlow_Schedule_POS(t *testing.T) {
-	forkConfig := &thor.SoloFork
+	forkConfig := thor.SoloFork
 	forkConfig.HAYABUSA = 2
 	forkConfig.BLOCKLIST = math.MaxUint32
 	cfg := genesis.SoloConfig
 	cfg.EpochLength = 1
 
 	devConfig := genesis.DevConfig{
-		ForkConfig: forkConfig,
+		ForkConfig: &forkConfig,
 		Config:     &cfg,
 	}
 
@@ -88,12 +88,12 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &thor.SoloFork
+			cfg := thor.SoloFork
 			cfg.HAYABUSA = tc.hayabusa
 			hayabusaTP := uint32(1)
 			thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 
-			chain, err := testchain.NewWithFork(cfg, 10)
+			chain, err := testchain.NewWithFork(&cfg, 10)
 			assert.NoError(t, err)
 
 			require.NoError(t, chain.MintBlock())
@@ -113,14 +113,14 @@ func TestPacker_StopsEnergyAtHardfork(t *testing.T) {
 }
 
 func TestFlow_Revert(t *testing.T) {
-	forkConfig := &thor.SoloFork
+	forkConfig := thor.SoloFork
 	forkConfig.HAYABUSA = 2
 	forkConfig.BLOCKLIST = math.MaxUint32
 	cfg := genesis.SoloConfig
 	cfg.EpochLength = 1
 
 	devConfig := genesis.DevConfig{
-		ForkConfig: forkConfig,
+		ForkConfig: &forkConfig,
 		Config:     &cfg,
 	}
 

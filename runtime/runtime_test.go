@@ -880,12 +880,12 @@ func TestEVMFunction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := muxdb.NewMem()
-			forkConfig := &thor.SoloFork
+			forkConfig := thor.SoloFork
 			forkConfig.HAYABUSA = 1
 			hayabusaTP := uint32(1)
 			cfg := genesis.SoloConfig
 			cfg.HayabusaTP = &hayabusaTP
-			g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: forkConfig, Config: &cfg})
+			g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &forkConfig, Config: &cfg})
 			stater := state.NewStater(db)
 			b0, _, _, _ := g.Build(stater)
 			repo, _ := chain.NewRepository(db, b0)
@@ -1123,13 +1123,13 @@ func TestExecuteTransactionFailure(t *testing.T) {
 
 func TestExecuteTransaction(t *testing.T) {
 	db := muxdb.NewMem()
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	fc.HAYABUSA = math.MaxUint32
 	fc.GALACTICA = 1
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
-		ForkConfig: fc,
+		ForkConfig: &fc,
 	})
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
@@ -1175,7 +1175,7 @@ func TestExecuteTransaction(t *testing.T) {
 		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, &fc)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
 
@@ -1213,7 +1213,7 @@ func TestExecuteTransaction(t *testing.T) {
 			repo.NewChain(b0.Header().ID()),
 			st,
 			&xenv.BlockContext{GasLimit: b0.Header().GasLimit(), BaseFee: big.NewInt(thor.InitialBaseFee)},
-			fc,
+			&fc,
 		)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
@@ -1252,7 +1252,7 @@ func TestExecuteTransaction(t *testing.T) {
 			repo.NewChain(b0.Header().ID()),
 			st,
 			&xenv.BlockContext{GasLimit: b0.Header().GasLimit(), BaseFee: big.NewInt(thor.InitialBaseFee)},
-			fc,
+			&fc,
 		)
 		receipt, err := rt.ExecuteTransaction(dynTx)
 		assert.Nil(t, err)
@@ -1382,7 +1382,10 @@ func TestExecuteTransactionPreHayabusa(t *testing.T) {
 
 	db := muxdb.NewMem()
 
-	g, forkConfig := genesis.NewDevnet()
+	forkConfig := thor.SoloFork
+	forkConfig.HAYABUSA = math.MaxUint32
+	forkConfig.GALACTICA = 1
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &forkConfig, Config: &genesis.SoloConfig})
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -1400,7 +1403,7 @@ func TestExecuteTransactionPreHayabusa(t *testing.T) {
 
 	tx := GetMockTx(repo, t)
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, forkConfig)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, &forkConfig)
 
 	receipt, err := rt.ExecuteTransaction(tx)
 	if err != nil {
@@ -1531,12 +1534,12 @@ func TestLegacyRewardCapNoMint(t *testing.T) {
 
 func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 	db := muxdb.NewMem()
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	fc.HAYABUSA = math.MaxUint32
 
-	g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: fc})
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &fc})
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 	repo, _ := chain.NewRepository(db, b0)
@@ -1555,7 +1558,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 			GasLimit: thor.MaxTxGasLimit + 100,
 			Number:   1,
 		}
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, &fc)
 		_, err := rt.ExecuteTransaction(trx)
 		assert.ErrorContains(t, err, "tx gas limit exceeds the maximum allowed")
 	})
@@ -1575,7 +1578,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 			Number:   1,
 			BaseFee:  big.NewInt(thor.InitialBaseFee),
 		}
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, &fc)
 		receipt, err := rt.ExecuteTransaction(trx)
 		assert.NoError(t, err)
 		assert.NotNil(t, receipt)
@@ -1625,7 +1628,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 			Number:   1,
 			BaseFee:  big.NewInt(thor.InitialBaseFee),
 		}
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, &fc)
 		_, err := rt.ExecuteTransaction(trx)
 		assert.ErrorContains(t, err, "tx gas limit exceeds the maximum allowed")
 	})
