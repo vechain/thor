@@ -7,6 +7,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -360,4 +361,29 @@ func TestTransferFilter_Match(t *testing.T) {
 		Amount:    big.NewInt(100),
 	}
 	assert.False(t, filter.Match(transfer, origin))
+}
+
+func TestConvertSubscriptionEventNilTopics(t *testing.T) {
+	transaction := tx.MustSign(
+		tx.NewBuilder(tx.TypeLegacy).Gas(21000).Build(),
+		genesis.DevAccounts()[0].PrivateKey,
+	)
+	blk := new(block.Builder).Transaction(transaction).Build()
+
+	event := &tx.Event{Address: thor.BytesToAddress([]byte("address")), Topics: nil}
+	eventMessage, err := ConvertSubscriptionEvent(blk.Header(), transaction, 0, event, false)
+	assert.NoError(t, err)
+	assert.NotNil(t, eventMessage.Topics)
+	assert.Len(t, eventMessage.Topics, 0)
+
+	data, err := json.Marshal(eventMessage)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), `"topics":[]`)
+
+	// result must not alias the original topics
+	event.Topics = []thor.Bytes32{{0x01}}
+	eventMessage, err = ConvertSubscriptionEvent(blk.Header(), transaction, 0, event, false)
+	assert.NoError(t, err)
+	eventMessage.Topics[0] = thor.Bytes32{0xff}
+	assert.Equal(t, thor.Bytes32{0x01}, event.Topics[0])
 }
