@@ -202,7 +202,7 @@ func TestBlocklist(t *testing.T) {
 		INTERSTELLAR: math.MaxUint32,
 	}
 
-	thor.MockBlocklist([]string{a0.Address.String()})
+	t.Cleanup(thor.MockBlocklist([]string{a0.Address.String()}))
 
 	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig, 0)
