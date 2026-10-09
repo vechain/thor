@@ -122,7 +122,7 @@ func HighStakingPeriod() uint32 { return highStakingPeriod }
 // default value is 1 day
 func CooldownPeriod() uint32 { return cooldownPeriod }
 
-// default value is 14 days
+// default value is 7 days
 func HayabusaTP() uint32 { return hayabusaTP }
 
 // default value is 3 days

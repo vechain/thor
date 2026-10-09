@@ -39,8 +39,9 @@ func getFlowAndNode(t *testing.T, forkConfig *thor.ForkConfig) (*packer.Flow, *N
 	launchTime := uint64(now) - thor.BlockInterval()
 
 	if forkConfig == nil {
-		forkConfig = &thor.SoloFork
-		forkConfig.HAYABUSA = 1
+		fc := thor.SoloFork
+		fc.HAYABUSA = 1
+		forkConfig = &fc
 	}
 
 	builder := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: forkConfig, LaunchTime: launchTime})
@@ -161,9 +162,10 @@ func TestUpdatePackMetrics(t *testing.T) {
 }
 
 func TestCleanupTransactions_WithTransactions(t *testing.T) {
-	forkConfig := &thor.SoloFork
+	forkConfig := thor.SoloFork
+	forkConfig.HAYABUSA = 1
 	forkConfig.GALACTICA = 1000
-	_, n := getFlowAndNode(t, forkConfig)
+	_, n := getFlowAndNode(t, &forkConfig)
 
 	bbSum := n.repo.BestBlockSummary()
 

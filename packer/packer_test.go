@@ -30,6 +30,13 @@ func M(args ...any) []any {
 	return args
 }
 
+// newPoADevnet returns a devnet genesis with HAYABUSA disabled, so the dev account is a PoA authority.
+func newPoADevnet() *genesis.Genesis {
+	fc := thor.SoloFork
+	fc.HAYABUSA = math.MaxUint32
+	return genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &fc, Config: &genesis.SoloConfig})
+}
+
 type txIterator struct {
 	chainTag byte
 	i        int
@@ -68,7 +75,7 @@ func (ti *txIterator) OnProcessed(_ thor.Bytes32, _ error) {
 func TestP(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g, _ := genesis.NewDevnet()
+	g := newPoADevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)
@@ -183,7 +190,7 @@ func TestForkVIP191(t *testing.T) {
 func TestBlocklist(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g, _ := genesis.NewDevnet()
+	g := newPoADevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)
