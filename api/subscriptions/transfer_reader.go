@@ -7,6 +7,7 @@ package subscriptions
 
 import (
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -45,7 +46,7 @@ func (tr *transferReader) Read() ([]any, bool, error) {
 						return nil, false, err
 					}
 					if tr.filter.Match(transfer, origin) {
-						msg, err := api.ConvertSubscriptionTransfer(block.Header(), txs[i], uint32(j), transfer, block.Obsolete)
+						msg, err := convert.ConvertSubscriptionTransfer(block.Header(), txs[i], uint32(j), transfer, block.Obsolete)
 						if err != nil {
 							return nil, false, err
 						}

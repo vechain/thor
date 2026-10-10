@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/v2/test/testnode"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
@@ -98,7 +97,7 @@ func TestRevision(t *testing.T) {
 }
 
 func TestGetTransaction(t *testing.T) {
-	expectedTx := &transactions.Transaction{
+	expectedTx := &api.Transaction{
 		ID: thor.BytesToBytes32([]byte("txid1")),
 	}
 
@@ -210,7 +209,7 @@ func TestClient_DebugReverted_VMError(t *testing.T) {
 }
 
 func TestClient_SanitizeURL(t *testing.T) {
-	expectedTx := &transactions.Transaction{
+	expectedTx := &api.Transaction{
 		ID:       thor.BytesToBytes32([]byte("txid12345678901234567890123456789012")),
 		Type:     tx.TypeLegacy,
 		ChainTag: 0x27,

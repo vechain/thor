@@ -8,7 +8,6 @@ package api
 import (
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -19,33 +18,17 @@ type FilteredTransfer struct {
 	Meta      LogMeta               `json:"meta"`
 }
 
-type TransferFilter struct {
-	CriteriaSet []*logdb.TransferCriteria `json:"criteriaSet,omitempty"`
-	Range       *Range                    `json:"range,omitempty"`
-	Options     *Options                  `json:"options,omitempty"`
-	Order       logdb.Order               `json:"order,omitempty"`
+// TransferCriteria has the same fields as logdb.TransferCriteria and, like it, no
+// json tags: keys are matched case-insensitively and encoded by field name.
+type TransferCriteria struct {
+	TxOrigin  *thor.Address // who send transaction
+	Sender    *thor.Address // who transferred tokens
+	Recipient *thor.Address // who received tokens
 }
 
-func ConvertTransfer(transfer *logdb.Transfer, addIndexes bool) *FilteredTransfer {
-	v := math.HexOrDecimal256(*transfer.Amount)
-	ft := &FilteredTransfer{
-		Sender:    transfer.Sender,
-		Recipient: transfer.Recipient,
-		Amount:    &v,
-		Meta: LogMeta{
-			BlockID:        transfer.BlockID,
-			BlockNumber:    transfer.BlockNumber,
-			BlockTimestamp: transfer.BlockTime,
-			TxID:           transfer.TxID,
-			TxOrigin:       transfer.TxOrigin,
-			ClauseIndex:    transfer.ClauseIndex,
-		},
-	}
-
-	if addIndexes {
-		ft.Meta.TxIndex = &transfer.TxIndex
-		ft.Meta.LogIndex = &transfer.LogIndex
-	}
-
-	return ft
+type TransferFilter struct {
+	CriteriaSet []*TransferCriteria `json:"criteriaSet,omitempty"`
+	Range       *Range              `json:"range,omitempty"`
+	Options     *Options            `json:"options,omitempty"`
+	Order       Order               `json:"order,omitempty"`
 }

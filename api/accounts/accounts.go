@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
@@ -291,18 +292,7 @@ func (a *Accounts) batchCall(
 		return nil, err
 	}
 
-	signer, _ := header.Signer()
-	rt := runtime.New(a.repo.NewChain(header.ParentID()), st,
-		&xenv.BlockContext{
-			Beneficiary: header.Beneficiary(),
-			Signer:      signer,
-			Number:      header.Number(),
-			Time:        header.Timestamp(),
-			GasLimit:    header.GasLimit(),
-			TotalScore:  header.TotalScore(),
-			BaseFee:     header.BaseFee(),
-		},
-		a.forkConfig)
+	rt := runtime.New(a.repo.NewChain(header.ParentID()), st, convert.BuildBlockContext(header), a.forkConfig)
 
 	results = make(api.BatchCallResults, 0)
 	var accumulatedSize int
@@ -353,7 +343,7 @@ func (a *Accounts) batchCall(
 				fmt.Errorf("batch call data exceeds limit of %d bytes", a.batchDataMaxSize))
 		}
 
-		result := api.ConvertCallResultWithInputGas(out, gas)
+		result := convert.ConvertCallResultWithInputGas(out, gas)
 		results = append(results, result)
 
 		if out.VMErr != nil {
@@ -366,46 +356,17 @@ func (a *Accounts) batchCall(
 }
 
 func (a *Accounts) handleBatchCallData(batchCallData *api.BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
-	if batchCallData.Gas > a.callGasLimit {
-		return nil, 0, nil, restutil.Forbidden(errors.New("gas: exceeds limit"))
-	} else if batchCallData.Gas == 0 {
-		gas = a.callGasLimit
-	} else {
-		gas = batchCallData.Gas
+	if gas, err = convert.CallGas(batchCallData.Gas, a.callGasLimit); err != nil {
+		return nil, 0, nil, err
 	}
-
-	txCtx = &xenv.TransactionContext{
-		ClauseCount: uint32(len(batchCallData.Clauses)),
-		Expiration:  batchCallData.Expiration,
-	}
-
-	if batchCallData.GasPrice == nil {
-		txCtx.GasPrice = new(big.Int)
-	} else {
-		txCtx.GasPrice = (*big.Int)(batchCallData.GasPrice)
-	}
-	if batchCallData.Caller == nil {
-		txCtx.Origin = thor.Address{}
-	} else {
-		txCtx.Origin = *batchCallData.Caller
-	}
-	if batchCallData.GasPayer == nil {
-		txCtx.GasPayer = thor.Address{}
-	} else {
-		txCtx.GasPayer = *batchCallData.GasPayer
-	}
-	if batchCallData.ProvedWork == nil {
-		txCtx.ProvedWork = new(big.Int)
-	} else {
-		txCtx.ProvedWork = (*big.Int)(batchCallData.ProvedWork)
-	}
-
-	if len(batchCallData.BlockRef) > 0 {
-		blkRef, err := restutil.ParseBlockRef(batchCallData.BlockRef)
-		if err != nil {
-			return nil, 0, nil, err
-		}
-		txCtx.BlockRef = blkRef
+	if txCtx, err = convert.BuildCallTxContext(
+		uint32(len(batchCallData.Clauses)),
+		batchCallData.GasPrice, batchCallData.ProvedWork,
+		batchCallData.Caller, batchCallData.GasPayer,
+		batchCallData.Expiration,
+		batchCallData.BlockRef,
+	); err != nil {
+		return nil, 0, nil, err
 	}
 
 	clauses = make([]*tx.Clause, len(batchCallData.Clauses))

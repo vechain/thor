@@ -3,10 +3,12 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package api
+package convert
 
 import (
 	"testing"
+
+	"github.com/vechain/thor/v2/api"
 
 	"github.com/stretchr/testify/assert"
 
@@ -16,7 +18,7 @@ import (
 func TestConvertPeersStats(t *testing.T) {
 	// Test case 1: Empty input slice
 	ss := []*comm.PeerStats{}
-	expected := []*PeerStats(nil)
+	expected := []*api.PeerStats(nil)
 	assert.Equal(t, expected, ConvertPeersStats(ss))
 
 	// Test case 2: Non-empty input slice
@@ -42,7 +44,7 @@ func TestConvertPeersStats(t *testing.T) {
 			Duration:    20,
 		},
 	}
-	expected = []*PeerStats{
+	expected = []*api.PeerStats{
 		{
 			Name:        "peer1",
 			BestBlockID: bestBlock1,

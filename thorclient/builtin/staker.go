@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -44,7 +44,7 @@ type Staker struct {
 }
 
 func NewStaker(client *thorclient.Client) (*Staker, error) {
-	contract, err := bind.NewContract(client, builtin.Staker.RawABI(), &builtin.Staker.Address)
+	contract, err := bind.NewContract(client, contracts.Staker.RawABI(), &contracts.Staker.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staker contract: %w", err)
 	}

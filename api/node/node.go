@@ -13,20 +13,25 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/convert"
 	"github.com/vechain/thor/v2/api/restutil"
-	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
+type Network interface {
+	PeersStats() []*comm.PeerStats
+}
+
 type Node struct {
 	pool         txpool.Pool
-	nw           api.Network
+	nw           Network
 	enableTxpool *atomic.Bool
 }
 
-func New(nw api.Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
+func New(nw Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
 	return &Node{
 		pool,
 		nw,
@@ -35,7 +40,7 @@ func New(nw api.Network, pool txpool.Pool, enableTxpool *atomic.Bool) *Node {
 }
 
 func (n *Node) PeersStats() []*api.PeerStats {
-	return api.ConvertPeersStats(n.nw.PeersStats())
+	return convert.ConvertPeersStats(n.nw.PeersStats())
 }
 
 func (n *Node) handleNetwork(w http.ResponseWriter, _ *http.Request) error {
@@ -63,9 +68,9 @@ func (n *Node) handleGetTransactions(w http.ResponseWriter, req *http.Request) e
 	}
 
 	if expanded {
-		trxs := make([]transactions.Transaction, len(filteredTransactions))
+		trxs := make([]api.Transaction, len(filteredTransactions))
 		for index, trx := range filteredTransactions {
-			convertedTx := transactions.ConvertTransaction(trx, nil)
+			convertedTx := convert.ConvertTransaction(trx, nil)
 			trxs[index] = *convertedTx
 		}
 

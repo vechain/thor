@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -153,7 +152,7 @@ func (c *Client) GetRawAccountStorage(addr *thor.Address, key *thor.Bytes32, rev
 }
 
 // GetTransaction retrieves the transaction details by the transaction ID, along with options for head and pending status.
-func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool) (*transactions.Transaction, error) {
+func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool) (*api.Transaction, error) {
 	url := c.url + "/transactions/" + txID.String() + "?"
 	if isPending {
 		url += "pending=true&"
@@ -167,7 +166,7 @@ func (c *Client) GetTransaction(txID *thor.Bytes32, head string, isPending bool)
 		return nil, fmt.Errorf("unable to retrieve transaction - %w", err)
 	}
 
-	var tx transactions.Transaction
+	var tx api.Transaction
 	if err = json.Unmarshal(body, &tx); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal transaction - %w", err)
 	}
@@ -421,7 +420,7 @@ func (c *Client) GetTxPool(origin *thor.Address) ([]*thor.Bytes32, error) {
 }
 
 // GetExpandedTxPool retrieves expanded transactions from the transaction pool.
-func (c *Client) GetExpandedTxPool(origin *thor.Address) ([]*transactions.Transaction, error) {
+func (c *Client) GetExpandedTxPool(origin *thor.Address) ([]*api.Transaction, error) {
 	url := c.url + "/node/txpool?expanded=true"
 
 	if origin != nil {
@@ -433,7 +432,7 @@ func (c *Client) GetExpandedTxPool(origin *thor.Address) ([]*transactions.Transa
 		return nil, fmt.Errorf("unable to get expanded txpool - %w", err)
 	}
 
-	var transactions []*transactions.Transaction
+	var transactions []*api.Transaction
 	if err = json.Unmarshal(body, &transactions); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal expanded txpool transactions - %w", err)
 	}
