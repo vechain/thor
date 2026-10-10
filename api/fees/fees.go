@@ -17,7 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
@@ -161,7 +161,7 @@ func (f *Fees) handleGetFeesHistory(w http.ResponseWriter, req *http.Request) er
 		return err
 	}
 
-	return restutil.WriteJSON(w, &api.FeesHistory{
+	return restutil.WriteJSON(w, &dto.FeesHistory{
 		OldestBlock:   oldestBlockRevision,
 		BaseFeePerGas: baseFees,
 		GasUsedRatio:  gasUsedRatios,
@@ -180,7 +180,7 @@ func (f *Fees) handleGetPriority(w http.ResponseWriter, _ *http.Request) error {
 		}
 	}
 
-	return restutil.WriteJSON(w, &api.FeesPriority{
+	return restutil.WriteJSON(w, &dto.FeesPriority{
 		MaxPriorityFeePerGas: priorityFee,
 	})
 }

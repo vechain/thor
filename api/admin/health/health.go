@@ -8,7 +8,7 @@ package health
 import (
 	"time"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/comm"
@@ -41,7 +41,7 @@ func (h *Health) isNodeConnectedP2P(peerCount int, minPeerCount int) bool {
 	return peerCount >= minPeerCount
 }
 
-func (h *Health) Status(blockTolerance time.Duration, minPeerCount int, master *node.Master) (*api.HealthStatus, error) {
+func (h *Health) Status(blockTolerance time.Duration, minPeerCount int, master *node.Master) (*dto.HealthStatus, error) {
 	// Fetch the best block details
 	bestBlock := h.repo.BestBlockSummary()
 	bestBlockTimestamp := time.Unix(int64(bestBlock.Header.Timestamp()), 0)
@@ -76,7 +76,7 @@ func (h *Health) Status(blockTolerance time.Duration, minPeerCount int, master *
 	}
 
 	// Return the current status
-	return &api.HealthStatus{
+	return &dto.HealthStatus{
 		Healthy:              healthy,
 		BestBlockTime:        &bestBlockTimestamp,
 		IsNetworkProgressing: networkProgressing,

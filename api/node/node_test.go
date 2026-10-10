@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/tx"
@@ -111,7 +111,7 @@ func testGetTransactions(t *testing.T) {
 
 func testGetTransactionsExpanded(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, "/node/txpool?expanded=true", 200)
-	var txResponse []transactions.Transaction
+	var txResponse []dto.Transaction
 	err := json.Unmarshal(res, &txResponse)
 	require.NoError(t, err)
 	assert.NotNil(t, txResponse)

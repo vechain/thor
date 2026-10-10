@@ -20,8 +20,7 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/testnode"
 
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
@@ -31,8 +30,8 @@ func TestConvertToBatchCallData(t *testing.T) {
 	// Test case 1: Empty transaction
 	tx1 := tx.NewBuilder(tx.TypeLegacy).Build()
 	addr1 := &thor.Address{}
-	expected1 := &api.BatchCallData{
-		Clauses:    make(api.Clauses, 0),
+	expected1 := &dto.BatchCallData{
+		Clauses:    make(dto.Clauses, 0),
 		Gas:        0,
 		ProvedWork: nil,
 		Caller:     addr1,
@@ -98,8 +97,10 @@ func TestRevision(t *testing.T) {
 }
 
 func TestGetTransaction(t *testing.T) {
-	expectedTx := &transactions.Transaction{
-		ID: thor.BytesToBytes32([]byte("txid1")),
+	expectedTx := &dto.Transaction{
+		TransactionBase: dto.TransactionBase{
+			ID: thor.BytesToBytes32([]byte("txid1")),
+		},
 	}
 
 	for _, tc := range []struct {
@@ -210,15 +211,17 @@ func TestClient_DebugReverted_VMError(t *testing.T) {
 }
 
 func TestClient_SanitizeURL(t *testing.T) {
-	expectedTx := &transactions.Transaction{
-		ID:       thor.BytesToBytes32([]byte("txid12345678901234567890123456789012")),
-		Type:     tx.TypeLegacy,
-		ChainTag: 0x27,
-		Clauses:  make(api.Clauses, 0),
-		Gas:      21000,
-		Origin:   thor.Address{},
-		Nonce:    0,
-		Size:     100,
+	expectedTx := &dto.Transaction{
+		TransactionBase: dto.TransactionBase{
+			ID:       thor.BytesToBytes32([]byte("txid12345678901234567890123456789012")),
+			Type:     tx.TypeLegacy,
+			ChainTag: 0x27,
+			Clauses:  make(dto.Clauses, 0),
+			Gas:      21000,
+			Origin:   thor.Address{},
+			Nonce:    0,
+			Size:     100,
+		},
 	}
 
 	for _, tc := range []struct {

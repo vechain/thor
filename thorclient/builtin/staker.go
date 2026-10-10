@@ -13,12 +13,12 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/v2/abi"
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -44,7 +44,7 @@ type Staker struct {
 }
 
 func NewStaker(client *thorclient.Client) (*Staker, error) {
-	contract, err := bind.NewContract(client, builtin.Staker.RawABI(), &builtin.Staker.Address)
+	contract, err := bind.NewContract(client, contracts.Staker.RawABI(), &contracts.Staker.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staker contract: %w", err)
 	}
@@ -346,7 +346,7 @@ type ValidationQueuedEvent struct {
 	Endorser thor.Address
 	Period   uint32
 	Stake    *big.Int
-	Log      api.FilteredEvent
+	Log      dto.FilteredEvent
 }
 
 type ValidatorQueuedEvent struct {
@@ -355,7 +355,7 @@ type ValidatorQueuedEvent struct {
 	ValidationID thor.Address
 	Stake        *big.Int
 	Period       uint32
-	Log          api.FilteredEvent
+	Log          dto.FilteredEvent
 }
 
 func (s *Staker) FilterValidatorQueued(opts ...bind.FilterOption) ([]ValidationQueuedEvent, error) {
@@ -402,7 +402,7 @@ func (s *Staker) FilterValidatorQueued(opts ...bind.FilterOption) ([]ValidationQ
 
 type ValidationSignaledExitEvent struct {
 	Node thor.Address
-	Log  api.FilteredEvent
+	Log  dto.FilteredEvent
 }
 
 func (s *Staker) FilterValidationSignaledExit(opts ...bind.FilterOption) ([]ValidationSignaledExitEvent, error) {
@@ -429,7 +429,7 @@ type DelegationAddedEvent struct {
 	DelegationID *big.Int
 	Stake        *big.Int
 	Multiplier   uint8
-	Log          api.FilteredEvent
+	Log          dto.FilteredEvent
 }
 
 func (s *Staker) FilterDelegationAdded(opts ...bind.FilterOption) ([]DelegationAddedEvent, error) {
@@ -476,7 +476,7 @@ func (s *Staker) FilterDelegationAdded(opts ...bind.FilterOption) ([]DelegationA
 
 type DelegationSignaledExitEvent struct {
 	DelegationID *big.Int
-	Log          api.FilteredEvent
+	Log          dto.FilteredEvent
 }
 
 func (s *Staker) FilterDelegationSignaledExit(opts ...bind.FilterOption) ([]DelegationSignaledExitEvent, error) {
@@ -500,7 +500,7 @@ func (s *Staker) FilterDelegationSignaledExit(opts ...bind.FilterOption) ([]Dele
 type DelegationWithdrawnEvent struct {
 	DelegationID *big.Int
 	Stake        *big.Int
-	Log          api.FilteredEvent
+	Log          dto.FilteredEvent
 }
 
 func (s *Staker) FilterDelegationWithdrawn(opts ...bind.FilterOption) ([]DelegationWithdrawnEvent, error) {
@@ -544,7 +544,7 @@ func (s *Staker) FilterDelegationWithdrawn(opts ...bind.FilterOption) ([]Delegat
 type StakeIncreasedEvent struct {
 	Validator thor.Address
 	Added     *big.Int
-	Log       api.FilteredEvent
+	Log       dto.FilteredEvent
 }
 
 func (s *Staker) FilterStakeIncreased(opts ...bind.FilterOption) ([]StakeIncreasedEvent, error) {
@@ -588,7 +588,7 @@ func (s *Staker) FilterStakeIncreased(opts ...bind.FilterOption) ([]StakeIncreas
 type StakeDecreasedEvent struct {
 	Validator thor.Address
 	Removed   *big.Int
-	Log       api.FilteredEvent
+	Log       dto.FilteredEvent
 }
 
 func (s *Staker) FilterStakeDecreased(opts ...bind.FilterOption) ([]StakeDecreasedEvent, error) {
@@ -632,7 +632,7 @@ func (s *Staker) FilterStakeDecreased(opts ...bind.FilterOption) ([]StakeDecreas
 type BeneficiarySetEvent struct {
 	Validator   thor.Address
 	Beneficiary thor.Address
-	Log         api.FilteredEvent
+	Log         dto.FilteredEvent
 }
 
 func (s *Staker) FilterBeneficiarySet(opts ...bind.FilterOption) ([]BeneficiarySetEvent, error) {
@@ -676,7 +676,7 @@ func (s *Staker) FilterBeneficiarySet(opts ...bind.FilterOption) ([]BeneficiaryS
 type ValidationWithdrawnEvent struct {
 	Validator thor.Address
 	Stake     *big.Int
-	Log       api.FilteredEvent
+	Log       dto.FilteredEvent
 }
 
 func (s *Staker) FilterValidationWithdrawn(opts ...bind.FilterOption) ([]ValidationWithdrawnEvent, error) {

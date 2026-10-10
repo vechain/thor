@@ -12,8 +12,8 @@ import (
 
 	"github.com/vechain/thor/v2/abi"
 
-	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/api/dto"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -25,7 +25,7 @@ type Authority struct {
 }
 
 func NewAuthority(client *thorclient.Client) (*Authority, error) {
-	base, err := bind.NewContract(client, builtin.Authority.RawABI(), &builtin.Authority.Address)
+	base, err := bind.NewContract(client, contracts.Authority.RawABI(), &contracts.Authority.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authority contract: %w", err)
 	}
@@ -116,7 +116,7 @@ func (a *Authority) Revoke(nodeMaster thor.Address) *bind.MethodBuilder {
 type CandidateEvent struct {
 	NodeMaster thor.Address
 	Action     thor.Bytes32
-	Log        api.FilteredEvent
+	Log        dto.FilteredEvent
 }
 
 // FilterCandidate filters Candidate events within the given block range

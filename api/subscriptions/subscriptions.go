@@ -15,7 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -35,8 +35,8 @@ type Subscriptions struct {
 	pendingTx         *pendingTx
 	done              chan struct{}
 	wg                sync.WaitGroup
-	beat2Cache        *messageCache[api.Beat2Message]
-	beatCache         *messageCache[api.BeatMessage]
+	beat2Cache        *messageCache[dto.Beat2Message]
+	beatCache         *messageCache[dto.BeatMessage]
 }
 
 type msgReader interface {
@@ -74,8 +74,8 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		},
 		pendingTx:  newPendingTx(txpool),
 		done:       make(chan struct{}),
-		beat2Cache: newMessageCache[api.Beat2Message](backtraceLimit),
-		beatCache:  newMessageCache[api.BeatMessage](backtraceLimit),
+		beat2Cache: newMessageCache[dto.Beat2Message](backtraceLimit),
+		beatCache:  newMessageCache[dto.BeatMessage](backtraceLimit),
 	}
 	sub.wg.Go(func() {
 		sub.pendingTx.DispatchLoop(sub.done)
@@ -121,7 +121,7 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, restutil.BadRequest(errors.WithMessage(err, "t4"))
 	}
-	eventFilter := &api.SubscriptionEventFilter{
+	eventFilter := &dto.SubscriptionEventFilter{
 		Address: address,
 		Topic0:  t0,
 		Topic1:  t1,
@@ -149,7 +149,7 @@ func (s *Subscriptions) handleTransferReader(_ http.ResponseWriter, req *http.Re
 	if err != nil {
 		return nil, restutil.BadRequest(errors.WithMessage(err, "recipient"))
 	}
-	transferFilter := &api.SubscriptionTransferFilter{
+	transferFilter := &dto.SubscriptionTransferFilter{
 		TxOrigin:  txOrigin,
 		Sender:    sender,
 		Recipient: recipient,
@@ -199,7 +199,7 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	for {
 		select {
 		case tx := <-txCh:
-			if err = conn.WriteJSON(&api.PendingTxIDMessage{ID: tx.ID()}); err != nil {
+			if err = conn.WriteJSON(&dto.PendingTxIDMessage{ID: tx.ID()}); err != nil {
 				// likely conn has failed
 				return nil
 			}

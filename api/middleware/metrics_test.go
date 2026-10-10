@@ -27,8 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/metrics"
@@ -192,17 +192,17 @@ func TestBatchCallResponseSizeLimit(t *testing.T) {
 	// Create a batch call with 10 clauses
 	// Each call returns ~66 bytes hex, total: 10 × 66 = 660 bytes
 	// This exceeds our 200 byte limit
-	clauses := make(api.Clauses, 10)
+	clauses := make(dto.Clauses, 10)
 	for i := range 10 {
 		// balanceOf(address) signature
 		data := "0x70a08231" + "0000000000000000000000000000000000000000000000000000000000000000"
-		clauses[i] = &api.Clause{
+		clauses[i] = &dto.Clause{
 			To:   &energyAddr,
 			Data: data,
 		}
 	}
 
-	reqBody := &api.BatchCallData{
+	reqBody := &dto.BatchCallData{
 		Clauses: clauses,
 		Gas:     50000000,
 	}

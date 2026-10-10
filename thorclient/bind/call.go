@@ -14,7 +14,7 @@ import (
 
 	"github.com/vechain/thor/v2/abi/ethabi"
 
-	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/dto"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
@@ -63,16 +63,16 @@ func (b *CallBuilder) ExecuteInto(result any) error {
 }
 
 // Execute implements CallBuilder.Execute.
-func (b *CallBuilder) Execute() (*api.CallResult, error) {
+func (b *CallBuilder) Execute() (*dto.CallResult, error) {
 	// Build the clause
 	clause, err := b.op.Clause()
 	if err != nil {
 		return nil, err
 	}
 
-	body := &api.BatchCallData{
+	body := &dto.BatchCallData{
 		Caller: b.caller,
-		Clauses: api.Clauses{
+		Clauses: dto.Clauses{
 			{
 				To:    b.op.contract.addr,
 				Data:  hexutil.Encode(clause.Data()),
@@ -81,7 +81,7 @@ func (b *CallBuilder) Execute() (*api.CallResult, error) {
 		},
 	}
 
-	var res []*api.CallResult
+	var res []*dto.CallResult
 	res, err = b.op.contract.client.InspectClauses(body, thorclient.Revision(b.rev))
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect clauses (%s): %w", b.op.String(), err)

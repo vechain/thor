@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	contracts "github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thorclient/bind"

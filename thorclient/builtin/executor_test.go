@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	builtinpkg "github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/builtin/contracts"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -113,7 +113,7 @@ func TestExecutor_NegativePaths(t *testing.T) {
 	node, client := newTestNode(t, true)
 	defer node.Stop()
 
-	badContract, err := bind.NewContract(client, builtinpkg.Energy.RawABI(), &builtinpkg.Executor.Address)
+	badContract, err := bind.NewContract(client, contracts.Energy.RawABI(), &contracts.Executor.Address)
 	require.NoError(t, err)
 	bad := &Executor{contract: badContract}
 
