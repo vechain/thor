@@ -136,10 +136,12 @@ func buildJSONOutput(txID thor.Bytes32, index uint32, c *tx.Clause, o *tx.Output
 		jo.ContractAddress = &addr
 	}
 	for _, e := range o.Events {
+		topics := make([]thor.Bytes32, len(e.Topics))
+		copy(topics, e.Topics)
 		jo.Events = append(jo.Events, &JSONEvent{
 			Address: e.Address,
 			Data:    hexutil.Encode(e.Data),
-			Topics:  e.Topics,
+			Topics:  topics,
 		})
 	}
 	for _, t := range o.Transfers {
