@@ -283,7 +283,10 @@ FROM (%v) e
 		subQuery += ")"
 	}
 
-	// if there is limit option, set order inside subquery
+	// Options set: order and LIMIT are applied together in the subquery, so LIMIT takes the ordered window.
+	// The outer query keeps that order because s is a co-routine on the left side of a LEFT JOIN, so SQLite
+	// always drives the join from it. An outer ORDER BY would add a temp b-tree sort (~4%) for no change;
+	// test case "query events with limit with desc" guards this.
 	if filter.Options != nil {
 		if filter.Order == DESC {
 			subQuery += " ORDER BY seq DESC "
@@ -297,7 +300,6 @@ FROM (%v) e
 	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN event e ON s.seq = e.seq"
 
 	eventQuery := fmt.Sprintf(query, subQuery)
-	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
 			eventQuery += " ORDER BY seq DESC "
@@ -357,7 +359,10 @@ FROM (%v) t
 		subQuery += ")"
 	}
 
-	// if there is limit option, set order inside subquery
+	// Options set: order and LIMIT are applied together in the subquery, so LIMIT takes the ordered window.
+	// The outer query keeps that order because s is a co-routine on the left side of a LEFT JOIN, so SQLite
+	// always drives the join from it. An outer ORDER BY would add a temp b-tree sort (~4%) for no change;
+	// test case "query transfers with limit with desc" guards this.
 	if filter.Options != nil {
 		if filter.Order == DESC {
 			subQuery += " ORDER BY seq DESC"
@@ -370,7 +375,6 @@ FROM (%v) t
 
 	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN transfer e ON s.seq = e.seq"
 	transferQuery := fmt.Sprintf(query, subQuery)
-	// if there is no limit option, set order outside
 	if filter.Options == nil {
 		if filter.Order == DESC {
 			transferQuery += " ORDER BY seq DESC "
