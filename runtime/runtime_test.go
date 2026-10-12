@@ -1460,6 +1460,78 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
 }
 
+// TestLegacyRewardCapNoMint executes a post-GALACTICA legacy tx whose proved-work bonus
+// exceeds the base fee: the beneficiary must not receive more energy than the payer pays.
+func TestLegacyRewardCapNoMint(t *testing.T) {
+	origin := genesis.DevAccounts()[0]
+	beneficiary := thor.BytesToAddress([]byte("beneficiary"))
+	baseGasPrice := big.NewInt(1e15)
+	baseFee := big.NewInt(thor.InitialBaseFee)
+
+	db := muxdb.NewMem()
+	g, _ := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	require.NoError(t, err)
+	repo, err := chain.NewRepository(db, b0)
+	require.NoError(t, err)
+
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	require.NoError(t, builtin.Params.Native(st).Set(thor.KeyLegacyTxBaseGasPrice, baseGasPrice))
+
+	// work 1e6 gives wgas >= 1000, a bonus of at least 1e15*1000/21000 > baseFee
+	builder := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(repo.ChainTag()).
+		BlockRef(tx.NewBlockRefFromID(b0.Header().ID())).
+		Expiration(100).
+		Gas(21000).
+		GasPriceCoef(128)
+	evalWork := builder.Build().EvaluateWork(origin.Address)
+	nonce := uint64(0)
+	for evalWork(nonce).Cmp(big.NewInt(1_000_000)) < 0 {
+		nonce++
+	}
+	trx := tx.MustSign(builder.Nonce(nonce).Build(), origin.PrivateKey)
+
+	fc := thor.NoFork
+	fc.GALACTICA = 0
+	ctx := &xenv.BlockContext{
+		Beneficiary: beneficiary,
+		Number:      1,
+		Time:        b0.Header().Timestamp() + thor.BlockInterval(),
+		GasLimit:    b0.Header().GasLimit(),
+		BaseFee:     baseFee,
+	}
+	bestChain := repo.NewChain(b0.Header().ID())
+	rt := runtime.New(bestChain, st, ctx, &fc)
+
+	energy := builtin.Energy.Native(st, ctx.Time)
+	payerBefore, err := energy.Get(origin.Address)
+	require.NoError(t, err)
+	beneficiaryBefore, err := energy.Get(beneficiary)
+	require.NoError(t, err)
+
+	receipt, err := rt.ExecuteTransaction(trx)
+	require.NoError(t, err)
+
+	// the cap binds: the uncapped reward would exceed what the payer is charged
+	provedWork, err := trx.ProvedWork(ctx.Number, bestChain.GetBlockID)
+	require.NoError(t, err)
+	uncapped := new(big.Int).Sub(trx.OverallGasPrice(baseGasPrice, provedWork), baseFee)
+	uncapped.Mul(uncapped, new(big.Int).SetUint64(receipt.GasUsed))
+	require.Equal(t, 1, uncapped.Cmp(receipt.Paid))
+
+	payerAfter, err := energy.Get(origin.Address)
+	require.NoError(t, err)
+	beneficiaryAfter, err := energy.Get(beneficiary)
+	require.NoError(t, err)
+
+	paid := new(big.Int).Sub(payerBefore, payerAfter)
+	rewarded := new(big.Int).Sub(beneficiaryAfter, beneficiaryBefore)
+	assert.Equal(t, receipt.Paid, paid)
+	assert.Equal(t, receipt.Reward, rewarded)
+	assert.Equal(t, receipt.Paid, receipt.Reward, "capped reward must equal the payment")
+}
+
 func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 	db := muxdb.NewMem()
 	fc := thor.SoloFork
