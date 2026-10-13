@@ -134,7 +134,7 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 	}
 
 	// Build the transaction
-	builder := new(tx.Builder).
+	builder := tx.NewBuilder(txType).
 		Clause(clause).
 		Gas(*opts.Gas).
 		ChainTag(chainTag).
