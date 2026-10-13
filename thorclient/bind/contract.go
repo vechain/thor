@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/test"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
@@ -50,30 +51,47 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 	if err != nil {
 		return nil, err
 	}
+	clause := tx.NewClause(nil).WithData(bc)
 
 	tag, err := client.ChainTag()
 	if err != nil {
 		return nil, err
 	}
+	best, err := client.Block("best")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get best block: %w", err)
+	}
 
-	trx := tx.NewBuilder(tx.TypeLegacy).
+	// Estimate gas from intrinsic gas plus simulated execution gas.
+	gas, err := tx.IntrinsicGas(clause)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate intrinsic gas: %w", err)
+	}
+	caller := signer.Address()
+	simulation, err := simulateClause(client, caller, clause)
+	if err != nil {
+		return nil, fmt.Errorf("failed to simulate deployment clause: %w", err)
+	}
+	if simulation.Reverted || simulation.VMError != "" {
+		return nil, fmt.Errorf("unable to deploy contract: %+v", simulation)
+	}
+	gas += simulation.GasUsed
+
+	builder := tx.NewBuilder(tx.TypeLegacy)
+	if best.BaseFeePerGas != nil {
+		builder = tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas((*big.Int)(best.BaseFeePerGas))
+	}
+	trx := builder.
 		ChainTag(tag).
-		Clause(tx.NewClause(nil).WithData(bc)).
+		Clause(clause).
 		Expiration(10000).
-		Gas(10_000_000).
+		BlockRef(tx.NewBlockRef(best.Number)).
+		Nonce(datagen.RandUint64()).
+		Gas(gas).
 		Build()
 	trx, err = signer.SignTransaction(trx)
 	if err != nil {
 		return nil, err
-	}
-
-	signerAddr := signer.Address()
-	clauses, err := client.InspectTxClauses(trx, &signerAddr)
-	if err != nil {
-		return nil, err
-	}
-	if len(clauses) != 1 || clauses[0].Reverted || clauses[0].VMError != "" {
-		return nil, fmt.Errorf("unable to deploy contract: %+v", clauses)
 	}
 
 	res, err := client.SendTransaction(trx)

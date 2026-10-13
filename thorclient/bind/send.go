@@ -12,13 +12,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -98,18 +94,11 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 			return nil, fmt.Errorf("failed to calculate intrinsic gas: %w", err)
 		}
 		caller := b.signer.Address()
-		simulation, err := b.op.contract.client.InspectClauses(
-			&api.BatchCallData{
-				Caller:  &caller,
-				Clauses: api.Clauses{{To: b.op.contract.addr, Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
-			}, thorclient.Revision("best"))
+		simulation, err := simulateClause(b.op.contract.client, caller, clause)
 		if err != nil {
 			return nil, fmt.Errorf("failed to simulate clauses (%s): %w", b.op.String(), err)
 		}
-		if len(simulation) != 1 {
-			return nil, fmt.Errorf("expected 1 simulation result, got %d", len(simulation))
-		}
-		gas += simulation[0].GasUsed
+		gas += simulation.GasUsed
 		if clause.To() != nil && len(clause.Data()) > 0 {
 			gas += 15_000 // buffer required for OP_CALL
 		}
@@ -134,7 +123,7 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 	}
 
 	// Build the transaction
-	builder := new(tx.Builder).
+	builder := tx.NewBuilder(txType).
 		Clause(clause).
 		Gas(*opts.Gas).
 		ChainTag(chainTag).
