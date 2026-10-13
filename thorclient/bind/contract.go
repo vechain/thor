@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/thor/v2/api"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/test"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -69,21 +68,14 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 		return nil, fmt.Errorf("failed to calculate intrinsic gas: %w", err)
 	}
 	caller := signer.Address()
-	simulation, err := client.InspectClauses(
-		&api.BatchCallData{
-			Caller:  &caller,
-			Clauses: api.Clauses{{Data: hexutil.Encode(clause.Data()), Value: (*math.HexOrDecimal256)(clause.Value())}},
-		}, thorclient.Revision("best"))
+	simulation, err := simulateClause(client, caller, clause)
 	if err != nil {
 		return nil, fmt.Errorf("failed to simulate deployment clause: %w", err)
 	}
-	if len(simulation) != 1 {
-		return nil, fmt.Errorf("expected 1 simulation result, got %d", len(simulation))
-	}
-	if simulation[0].Reverted || simulation[0].VMError != "" {
+	if simulation.Reverted || simulation.VMError != "" {
 		return nil, fmt.Errorf("unable to deploy contract: %+v", simulation)
 	}
-	gas += simulation[0].GasUsed
+	gas += simulation.GasUsed
 
 	builder := tx.NewBuilder(tx.TypeLegacy)
 	if best.BaseFeePerGas != nil {
