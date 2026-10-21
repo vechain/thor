@@ -34,7 +34,7 @@ func TestMockBlocklist(t *testing.T) {
 		"0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 		"0xfeedbeeffeedbeeffeedbeeffeedbeeffeedbeef",
 	}
-	MockBlocklist(mockAddresses)
+	t.Cleanup(MockBlocklist(mockAddresses))
 
 	// Test to ensure the mock blocklist is now in effect
 	tests := []struct {
@@ -52,5 +52,21 @@ func TestMockBlocklist(t *testing.T) {
 		if IsOriginBlocked(addr) != tt.blocked {
 			t.Errorf("MockBlocklist failed for %v: expected blocked=%v, got blocked=%v", tt.address, tt.blocked, !tt.blocked)
 		}
+	}
+}
+
+func TestMockBlocklistRestores(t *testing.T) {
+	original := MustParseAddress("0x4427be8010dd870395975a8fbaa7afa9439b5332")
+	mocked := MustParseAddress("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+
+	t.Run("mock", func(t *testing.T) {
+		t.Cleanup(MockBlocklist([]string{mocked.String()}))
+		if !IsOriginBlocked(mocked) || IsOriginBlocked(original) {
+			t.Fatal("mock blocklist not in effect")
+		}
+	})
+
+	if IsOriginBlocked(mocked) || !IsOriginBlocked(original) {
+		t.Fatal("blocklist not restored after the test finished")
 	}
 }

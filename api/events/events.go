@@ -60,6 +60,11 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err := filter.Range.Validate(); err != nil {
 		return restutil.BadRequest(err)
 	}
+	order, err := api.NormalizeOrder(filter.Order)
+	if err != nil {
+		return restutil.BadRequest(err)
+	}
+	filter.Order = order
 	// reject null element in CriteriaSet, {} will be unmarshaled to default value and will be accepted/handled by the filter engine
 	for i, criterion := range filter.CriteriaSet {
 		if criterion == nil {

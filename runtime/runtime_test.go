@@ -880,12 +880,12 @@ func TestEVMFunction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := muxdb.NewMem()
-			forkConfig := &thor.SoloFork
+			forkConfig := thor.SoloFork
 			forkConfig.HAYABUSA = 1
 			hayabusaTP := uint32(1)
 			cfg := genesis.SoloConfig
 			cfg.HayabusaTP = &hayabusaTP
-			g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: forkConfig, Config: &cfg})
+			g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &forkConfig, Config: &cfg})
 			stater := state.NewStater(db)
 			b0, _, _, _ := g.Build(stater)
 			repo, _ := chain.NewRepository(db, b0)
@@ -1123,13 +1123,13 @@ func TestExecuteTransactionFailure(t *testing.T) {
 
 func TestExecuteTransaction(t *testing.T) {
 	db := muxdb.NewMem()
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	fc.HAYABUSA = math.MaxUint32
 	fc.GALACTICA = 1
 	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
-		ForkConfig: fc,
+		ForkConfig: &fc,
 	})
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
@@ -1175,7 +1175,7 @@ func TestExecuteTransaction(t *testing.T) {
 		prevEndorsorEnergy, err := builtin.Energy.Native(st, b0.Header().Timestamp()).Get(thor.Address{})
 		assert.Nil(t, err)
 
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, &fc)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
 
@@ -1213,7 +1213,7 @@ func TestExecuteTransaction(t *testing.T) {
 			repo.NewChain(b0.Header().ID()),
 			st,
 			&xenv.BlockContext{GasLimit: b0.Header().GasLimit(), BaseFee: big.NewInt(thor.InitialBaseFee)},
-			fc,
+			&fc,
 		)
 		receipt, err := rt.ExecuteTransaction(legacyTx)
 		assert.Nil(t, err)
@@ -1252,7 +1252,7 @@ func TestExecuteTransaction(t *testing.T) {
 			repo.NewChain(b0.Header().ID()),
 			st,
 			&xenv.BlockContext{GasLimit: b0.Header().GasLimit(), BaseFee: big.NewInt(thor.InitialBaseFee)},
-			fc,
+			&fc,
 		)
 		receipt, err := rt.ExecuteTransaction(dynTx)
 		assert.Nil(t, err)
@@ -1382,7 +1382,10 @@ func TestExecuteTransactionPreHayabusa(t *testing.T) {
 
 	db := muxdb.NewMem()
 
-	g, forkConfig := genesis.NewDevnet()
+	forkConfig := thor.SoloFork
+	forkConfig.HAYABUSA = math.MaxUint32
+	forkConfig.GALACTICA = 1
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &forkConfig, Config: &genesis.SoloConfig})
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
@@ -1400,7 +1403,7 @@ func TestExecuteTransactionPreHayabusa(t *testing.T) {
 
 	tx := GetMockTx(repo, t)
 
-	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, forkConfig)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{GasLimit: b0.Header().GasLimit()}, &forkConfig)
 
 	receipt, err := rt.ExecuteTransaction(tx)
 	if err != nil {
@@ -1457,14 +1460,86 @@ func TestExecuteTransactionAfterHayabusa(t *testing.T) {
 	assert.Equal(t, receipt.Reward, beneficiaryEnergyBalance)
 }
 
+// TestLegacyRewardCapNoMint executes a post-GALACTICA legacy tx whose proved-work bonus
+// exceeds the base fee: the beneficiary must not receive more energy than the payer pays.
+func TestLegacyRewardCapNoMint(t *testing.T) {
+	origin := genesis.DevAccounts()[0]
+	beneficiary := thor.BytesToAddress([]byte("beneficiary"))
+	baseGasPrice := big.NewInt(1e15)
+	baseFee := big.NewInt(thor.InitialBaseFee)
+
+	db := muxdb.NewMem()
+	g, _ := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	require.NoError(t, err)
+	repo, err := chain.NewRepository(db, b0)
+	require.NoError(t, err)
+
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
+	require.NoError(t, builtin.Params.Native(st).Set(thor.KeyLegacyTxBaseGasPrice, baseGasPrice))
+
+	// work 1e6 gives wgas >= 1000, a bonus of at least 1e15*1000/21000 > baseFee
+	builder := tx.NewBuilder(tx.TypeLegacy).
+		ChainTag(repo.ChainTag()).
+		BlockRef(tx.NewBlockRefFromID(b0.Header().ID())).
+		Expiration(100).
+		Gas(21000).
+		GasPriceCoef(128)
+	evalWork := builder.Build().EvaluateWork(origin.Address)
+	nonce := uint64(0)
+	for evalWork(nonce).Cmp(big.NewInt(1_000_000)) < 0 {
+		nonce++
+	}
+	trx := tx.MustSign(builder.Nonce(nonce).Build(), origin.PrivateKey)
+
+	fc := thor.NoFork
+	fc.GALACTICA = 0
+	ctx := &xenv.BlockContext{
+		Beneficiary: beneficiary,
+		Number:      1,
+		Time:        b0.Header().Timestamp() + thor.BlockInterval(),
+		GasLimit:    b0.Header().GasLimit(),
+		BaseFee:     baseFee,
+	}
+	bestChain := repo.NewChain(b0.Header().ID())
+	rt := runtime.New(bestChain, st, ctx, &fc)
+
+	energy := builtin.Energy.Native(st, ctx.Time)
+	payerBefore, err := energy.Get(origin.Address)
+	require.NoError(t, err)
+	beneficiaryBefore, err := energy.Get(beneficiary)
+	require.NoError(t, err)
+
+	receipt, err := rt.ExecuteTransaction(trx)
+	require.NoError(t, err)
+
+	// the cap binds: the uncapped reward would exceed what the payer is charged
+	provedWork, err := trx.ProvedWork(ctx.Number, bestChain.GetBlockID)
+	require.NoError(t, err)
+	uncapped := new(big.Int).Sub(trx.OverallGasPrice(baseGasPrice, provedWork), baseFee)
+	uncapped.Mul(uncapped, new(big.Int).SetUint64(receipt.GasUsed))
+	require.Equal(t, 1, uncapped.Cmp(receipt.Paid))
+
+	payerAfter, err := energy.Get(origin.Address)
+	require.NoError(t, err)
+	beneficiaryAfter, err := energy.Get(beneficiary)
+	require.NoError(t, err)
+
+	paid := new(big.Int).Sub(payerBefore, payerAfter)
+	rewarded := new(big.Int).Sub(beneficiaryAfter, beneficiaryBefore)
+	assert.Equal(t, receipt.Paid, paid)
+	assert.Equal(t, receipt.Reward, rewarded)
+	assert.Equal(t, receipt.Paid, receipt.Reward, "capped reward must equal the payment")
+}
+
 func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 	db := muxdb.NewMem()
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	hayabusaTP := uint32(math.MaxUint32)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	fc.HAYABUSA = math.MaxUint32
 
-	g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: fc})
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{ForkConfig: &fc})
 	b0, _, _, err := g.Build(state.NewStater(db))
 	assert.Nil(t, err)
 	repo, _ := chain.NewRepository(db, b0)
@@ -1483,7 +1558,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 			GasLimit: thor.MaxTxGasLimit + 100,
 			Number:   1,
 		}
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, &fc)
 		_, err := rt.ExecuteTransaction(trx)
 		assert.ErrorContains(t, err, "tx gas limit exceeds the maximum allowed")
 	})
@@ -1503,7 +1578,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 			Number:   1,
 			BaseFee:  big.NewInt(thor.InitialBaseFee),
 		}
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, &fc)
 		receipt, err := rt.ExecuteTransaction(trx)
 		assert.NoError(t, err)
 		assert.NotNil(t, receipt)
@@ -1553,7 +1628,7 @@ func TestExecuteTransactionMaxTxGasLimit(t *testing.T) {
 			Number:   1,
 			BaseFee:  big.NewInt(thor.InitialBaseFee),
 		}
-		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, fc)
+		rt := runtime.New(repo.NewChain(b0.Header().ID()), st, bc, &fc)
 		_, err := rt.ExecuteTransaction(trx)
 		assert.ErrorContains(t, err, "tx gas limit exceeds the maximum allowed")
 	})

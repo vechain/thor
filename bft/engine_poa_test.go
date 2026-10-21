@@ -31,13 +31,13 @@ type TestBFT struct {
 
 const MaxBlockProposers = 11
 
-var (
-	devAccounts = genesis.DevAccounts()
-	defaultFC   = &thor.NoFork
-)
+var devAccounts = genesis.DevAccounts()
 
-func init() {
-	defaultFC.FINALITY = 0
+// defaultFC returns a fresh copy of NoFork with FINALITY active from genesis.
+func defaultFC() *thor.ForkConfig {
+	fc := thor.NoFork
+	fc.FINALITY = 0
+	return &fc
 }
 
 func newTestBft(forkCfg *thor.ForkConfig) (*TestBFT, error) {
@@ -293,7 +293,7 @@ func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, asBest bool) (
 }
 
 func TestNewEngine(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
+	testBFT, err := newTestBft(defaultFC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestNewEngine(t *testing.T) {
 }
 
 func TestNewBlock(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
+	testBFT, err := newTestBft(defaultFC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestNewBlock(t *testing.T) {
 }
 
 func TestNeverReachJustified(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
+	testBFT, err := newTestBft(defaultFC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestNeverReachJustified(t *testing.T) {
 }
 
 func TestReCreate(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
+	testBFT, err := newTestBft(defaultFC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ func TestReCreate(t *testing.T) {
 }
 
 func TestFinalized(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
+	testBFT, err := newTestBft(defaultFC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +468,7 @@ func TestFinalized(t *testing.T) {
 }
 
 func TestAccepts(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
+	testBFT, err := newTestBft(defaultFC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,7 +509,7 @@ func TestGetVote(t *testing.T) {
 	}{
 		{
 			"early stage, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -522,7 +522,7 @@ func TestGetVote(t *testing.T) {
 			},
 		}, {
 			"never justified, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -536,7 +536,7 @@ func TestGetVote(t *testing.T) {
 			},
 		}, {
 			"never voted other checkpoint, vote COM", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -550,7 +550,7 @@ func TestGetVote(t *testing.T) {
 			},
 		}, {
 			"voted other checkpoint but not conflict with recent justified, vote COM", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -595,7 +595,7 @@ func TestGetVote(t *testing.T) {
 			},
 		}, {
 			"voted another non-justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -657,7 +657,7 @@ func TestGetVote(t *testing.T) {
 			},
 		}, {
 			"voted another justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -702,7 +702,7 @@ func TestGetVote(t *testing.T) {
 			},
 		}, {
 			"test findCheckpointByQuality edge case, should not fail", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -731,7 +731,7 @@ func TestJustifier(t *testing.T) {
 	}{
 		{
 			"newJustifier", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
@@ -746,7 +746,7 @@ func TestJustifier(t *testing.T) {
 			},
 		}, {
 			"fork in the middle of checkpoint", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
@@ -762,7 +762,7 @@ func TestJustifier(t *testing.T) {
 			},
 		}, {
 			"the second bft round", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
@@ -783,7 +783,7 @@ func TestJustifier(t *testing.T) {
 			},
 		}, {
 			"add votes: commits", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
@@ -814,7 +814,7 @@ func TestJustifier(t *testing.T) {
 			},
 		}, {
 			"add votes: justifies", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
@@ -838,7 +838,7 @@ func TestJustifier(t *testing.T) {
 			},
 		}, {
 			"add votes: one votes WIT then changes to COM", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				fc.VIP214 = thor.EpochLength() / 2
 				testBft, err := newTestBft(fc)
 				if err != nil {
@@ -879,7 +879,7 @@ func TestJustifier(t *testing.T) {
 			},
 		}, {
 			"vote both WIT and COM in one round", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
@@ -942,7 +942,7 @@ func TestJustified(t *testing.T) {
 	}{
 		{
 			"first several rounds, never justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -960,7 +960,7 @@ func TestJustified(t *testing.T) {
 			},
 		}, {
 			"first several rounds, get justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -986,7 +986,7 @@ func TestJustified(t *testing.T) {
 			},
 		}, {
 			"first three not justified rounds, then justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1010,7 +1010,7 @@ func TestJustified(t *testing.T) {
 			},
 		}, {
 			"get finalized, then justified", func(t *testing.T) {
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1040,7 +1040,7 @@ func TestJustified(t *testing.T) {
 		}, {
 			"get finalized, not justified, then justified", func(t *testing.T) {
 				type tJustified = justified
-				testBFT, err := newTestBft(defaultFC)
+				testBFT, err := newTestBft(defaultFC())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1069,7 +1069,7 @@ func TestJustified(t *testing.T) {
 			},
 		}, {
 			"fork in the middle, get justified", func(t *testing.T) {
-				fc := defaultFC
+				fc := defaultFC()
 				fc.FINALITY = thor.EpochLength()
 
 				testBFT, err := newTestBft(fc)

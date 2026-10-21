@@ -397,9 +397,9 @@ func TestEnergyNative(t *testing.T) {
 
 	abi := builtin.Energy.ABI
 
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	fc.HAYABUSA = 4
-	thorChain, _ = testchain.NewWithFork(fc, 10)
+	thorChain, _ = testchain.NewWithFork(&fc, 10)
 
 	var stringOutput string
 	_, err := callContractAndGetOutput(abi, "name", toAddr, &stringOutput)
@@ -1622,12 +1622,12 @@ func TestStakerContract_Native(t *testing.T) {
 }
 
 func TestStakerContract_Native_Revert(t *testing.T) {
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	fc.HAYABUSA = 2
 	hayabusaTP := uint32(2)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	var err error
-	thorChain, err = testchain.NewWithFork(fc, 180)
+	thorChain, err = testchain.NewWithFork(&fc, 180)
 	assert.NoError(t, err)
 
 	mbp := TestTxDescription{
@@ -1771,12 +1771,12 @@ func TestStakerContract_Native_Revert(t *testing.T) {
 }
 
 func TestStakerContract_Native_WithdrawQueued(t *testing.T) {
-	fc := &thor.SoloFork
+	fc := thor.SoloFork
 	fc.HAYABUSA = 1
 	hayabusaTP := uint32(2)
 	thor.SetConfig(thor.Config{HayabusaTP: &hayabusaTP})
 	var err error
-	thorChain, err = testchain.NewWithFork(fc, 180)
+	thorChain, err = testchain.NewWithFork(&fc, 180)
 	assert.NoError(t, err)
 	assert.NoError(t, thorChain.MintBlock())
 	assert.NoError(t, thorChain.MintBlock())

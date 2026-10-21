@@ -646,7 +646,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"TxOriginBlocked", func(t *testing.T) {
-				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+				t.Cleanup(thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()}))
 				trx := tx.MustSign(txBuilder(tc.tag, tx.TypeLegacy).Build(), genesis.DevAccounts()[9].PrivateKey)
 
 				blk, err := tc.sign(
@@ -664,7 +664,7 @@ func TestConsent(t *testing.T) {
 		},
 		{
 			"TxDelegatorBlocked", func(t *testing.T) {
-				thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+				t.Cleanup(thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()}))
 				builder := txBuilder(tc.tag, tx.TypeLegacy)
 				builder = builder.Features(tx.Features(0x01))
 				trx := tx.MustSignDelegated(builder.Build(), genesis.DevAccounts()[8].PrivateKey, genesis.DevAccounts()[9].PrivateKey)

@@ -27,7 +27,6 @@ import (
 )
 
 func newHayabusaSetup(t *testing.T, fork, tp uint32, forked bool) *testchain.Chain {
-	thor.MockBlocklist([]string{})
 	chain, err := testchain.NewWithFork(&thor.ForkConfig{
 		HAYABUSA: fork,
 	}, tp)
@@ -229,7 +228,6 @@ func TestConsensus_Updates(t *testing.T) {
 }
 
 func TestConsensus_TransitionPeriodBalanceCheck(t *testing.T) {
-	thor.MockBlocklist([]string{})
 	fc := &thor.ForkConfig{
 		HAYABUSA: 2,
 	}
