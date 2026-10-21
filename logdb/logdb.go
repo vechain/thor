@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/vechain/thor/v2/block"
@@ -290,17 +291,13 @@ func buildEventFilterSubQuery(filter *EventFilter) (string, []any, error) {
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		subQuery += " AND ("
-
-		for i, c := range filter.CriteriaSet {
+		conds := make([]string, 0, len(filter.CriteriaSet))
+		for _, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
-			if i > 0 {
-				subQuery += " OR"
-			}
-			subQuery += " (" + cond + ")"
+			conds = append(conds, " ("+cond+")")
 			args = append(args, cargs...)
 		}
-		subQuery += ")"
+		subQuery += " AND (" + strings.Join(conds, " OR") + ")"
 	}
 
 	// Options set: order and LIMIT are applied together in the subquery, so LIMIT takes the ordered window.
