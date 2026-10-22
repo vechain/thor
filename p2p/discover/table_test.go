@@ -225,6 +225,8 @@ func TestTable_closest(t *testing.T) {
 		tab, _ := newTable(transport, test.Self, &net.UDPAddr{}, "", nil)
 		defer tab.Close()
 		tab.stuff(test.All)
+		tab.mutex.Lock()
+		defer tab.mutex.Unlock()
 
 		// check that doClosest(Target, N) returns nodes
 		result := tab.closest(test.Target, test.N).entries
@@ -291,8 +293,11 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 			tab.stuff([]*Node{nodeAtDistance(tab.self.sha, ld)})
 		}
 		gotN := tab.ReadRandomNodes(buf)
-		if gotN != tab.len() {
-			t.Errorf("wrong number of nodes, got %d, want %d", gotN, tab.len())
+		tab.mutex.Lock()
+		wantN := tab.len()
+		tab.mutex.Unlock()
+		if gotN != wantN {
+			t.Errorf("wrong number of nodes, got %d, want %d", gotN, wantN)
 			return false
 		}
 		if hasDuplicates(buf[:gotN]) {
