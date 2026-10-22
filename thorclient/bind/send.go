@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -67,12 +68,46 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 		return nil, err
 	}
 
-	// Build the transaction
-	best, err := b.op.contract.client.Block("best")
+	// Copy the options so that the defaults set below never leak into the
+	// caller's TxOptions, and a reused builder gets a fresh nonce and blockRef.
+	var opts TxOptions
+	if b.opts != nil {
+		opts = *b.opts
+	}
+
+	if opts.Gas == nil {
+		gas, _, err := estimateGas(b.op.contract.client, b.signer.Address(), clause)
+		if err != nil {
+			return nil, fmt.Errorf("failed to estimate gas (%s): %w", b.op.String(), err)
+		}
+		opts.Gas = &gas
+	}
+
+	transaction, err := buildTx(b.op.contract.client, clause, opts)
+	if err != nil {
+		return nil, err
+	}
+	transaction, err = b.signer.SignTransaction(transaction)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
+	if _, err = b.op.contract.client.SendTransaction(transaction); err != nil {
+		return nil, fmt.Errorf("failed to send transaction (%s): %w", b.op.String(), err)
+	}
+
+	return transaction, nil
+}
+
+// buildTx builds an unsigned tx for clause on top of the best block. opts.Gas
+// must be set. Every other unset option gets a default. The tx is dynamic-fee
+// when the best block has a base fee, and legacy otherwise.
+func buildTx(client *thorclient.Client, clause *tx.Clause, opts TxOptions) (*tx.Transaction, error) {
+	best, err := client.Block("best")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get best block: %w", err)
 	}
-	chainTag, err := b.op.contract.client.ChainTag()
+	chainTag, err := client.ChainTag()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain tag: %w", err)
 	}
@@ -82,30 +117,6 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 		txType = tx.TypeDynamicFee
 	}
 
-	opts := b.opts
-	if opts == nil {
-		opts = &TxOptions{}
-	}
-
-	// Calculate gas if not provided
-	if opts.Gas == nil {
-		gas, err := tx.IntrinsicGas(clause)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate intrinsic gas: %w", err)
-		}
-		caller := b.signer.Address()
-		simulation, err := simulateClause(b.op.contract.client, caller, clause)
-		if err != nil {
-			return nil, fmt.Errorf("failed to simulate clauses (%s): %w", b.op.String(), err)
-		}
-		gas += simulation.GasUsed
-		if clause.To() != nil && len(clause.Data()) > 0 {
-			gas += 15_000 // buffer required for OP_CALL
-		}
-		opts.Gas = &gas
-	}
-
-	// Set default options if not provided
 	if opts.Expiration == nil {
 		expiration := uint32(60) // 60 blocks ~10 minutes
 		opts.Expiration = &expiration
@@ -118,11 +129,7 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 		nonce := datagen.RandUint64()
 		opts.Nonce = &nonce
 	}
-	if txType == tx.TypeDynamicFee && opts.MaxFeePerGas == nil {
-		opts.MaxFeePerGas = (*big.Int)(best.BaseFeePerGas)
-	}
 
-	// Build the transaction
 	builder := tx.NewBuilder(txType).
 		Clause(clause).
 		Gas(*opts.Gas).
@@ -136,23 +143,30 @@ func (b *SendBuilder) Submit() (*tx.Transaction, error) {
 	case tx.TypeLegacy:
 		builder.GasPriceCoef(0)
 	case tx.TypeDynamicFee:
-		builder.MaxFeePerGas(opts.MaxFeePerGas)
+		maxFee := opts.MaxFeePerGas
+		if maxFee == nil {
+			maxFee = defaultMaxFeePerGas((*big.Int)(best.BaseFeePerGas), opts.MaxPriorityFeePerGas)
+		}
+		builder.MaxFeePerGas(maxFee)
 		if opts.MaxPriorityFeePerGas != nil {
 			builder.MaxPriorityFeePerGas(opts.MaxPriorityFeePerGas)
 		}
 	}
 
-	transaction := builder.Build()
-	transaction, err = b.signer.SignTransaction(transaction)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign transaction: %w", err)
-	}
+	return builder.Build(), nil
+}
 
-	if _, err = b.op.contract.client.SendTransaction(transaction); err != nil {
-		return nil, fmt.Errorf("failed to send transaction (%s): %w", b.op.String(), err)
+// defaultMaxFeePerGas returns 2*baseFee + tip. The txpool and the packer price a
+// tx against the next block's base fee, which can be up to 12.5% higher per
+// block. Doubling the base fee covers several increases, and adding the tip
+// keeps it fully payable. The tx pays min(maxFee, baseFee+tip), so the extra
+// headroom costs nothing.
+func defaultMaxFeePerGas(baseFee, tip *big.Int) *big.Int {
+	maxFee := new(big.Int).Lsh(baseFee, 1)
+	if tip != nil {
+		maxFee.Add(maxFee, tip)
 	}
-
-	return transaction, nil
+	return maxFee
 }
 
 // SubmitAndConfirm implements SendBuilder.Receipt.

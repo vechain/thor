@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/vechain/thor/v2/test"
-	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tx"
@@ -53,42 +52,19 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 	}
 	clause := tx.NewClause(nil).WithData(bc)
 
-	tag, err := client.ChainTag()
+	// Unlike Submit, a deployment whose simulation fails is not sent.
+	gas, simulation, err := estimateGas(client, signer.Address(), clause)
 	if err != nil {
-		return nil, err
-	}
-	best, err := client.Block("best")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get best block: %w", err)
-	}
-
-	// Estimate gas from intrinsic gas plus simulated execution gas.
-	gas, err := tx.IntrinsicGas(clause)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate intrinsic gas: %w", err)
-	}
-	caller := signer.Address()
-	simulation, err := simulateClause(client, caller, clause)
-	if err != nil {
-		return nil, fmt.Errorf("failed to simulate deployment clause: %w", err)
+		return nil, fmt.Errorf("failed to estimate deployment gas: %w", err)
 	}
 	if simulation.Reverted || simulation.VMError != "" {
 		return nil, fmt.Errorf("unable to deploy contract: %+v", simulation)
 	}
-	gas += simulation.GasUsed
 
-	builder := tx.NewBuilder(tx.TypeLegacy)
-	if best.BaseFeePerGas != nil {
-		builder = tx.NewBuilder(tx.TypeDynamicFee).MaxFeePerGas((*big.Int)(best.BaseFeePerGas))
+	trx, err := buildTx(client, clause, TxOptions{Gas: &gas, Expiration: new(uint32(10000))})
+	if err != nil {
+		return nil, err
 	}
-	trx := builder.
-		ChainTag(tag).
-		Clause(clause).
-		Expiration(10000).
-		BlockRef(tx.NewBlockRef(best.Number)).
-		Nonce(datagen.RandUint64()).
-		Gas(gas).
-		Build()
 	trx, err = signer.SignTransaction(trx)
 	if err != nil {
 		return nil, err

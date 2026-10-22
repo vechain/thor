@@ -23,6 +23,7 @@ import (
 	"github.com/vechain/thor/v2/test/testnode"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // testEnv holds the test environment including chain and contract
@@ -149,6 +150,56 @@ func TestContract_Send(t *testing.T) {
 			ExecuteInto(&out)
 		require.NoError(t, err)
 		assert.Equal(t, env.user.Address(), thor.Address(out))
+	})
+}
+
+func TestContract_SubmitTxConstruction(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.testNode.Stop()
+
+	// The test node mints a block only when a tx arrives, so the best block read
+	// here is the one Submit builds on.
+	bestBaseFee := func() *big.Int {
+		best, err := env.client.Block("best")
+		require.NoError(t, err)
+		require.NotNil(t, best.BaseFeePerGas, "test chain must be past GALACTICA")
+		return (*big.Int)(best.BaseFeePerGas)
+	}
+	send := func(opts *TxOptions) *tx.Transaction {
+		trx, err := env.bindContract.Method("setValue", big.NewInt(7)).
+			Send().
+			WithSigner(env.owner).
+			WithOptions(opts).
+			Submit()
+		require.NoError(t, err)
+		return trx
+	}
+
+	t.Run("dynamic fee tx with base fee headroom", func(t *testing.T) {
+		baseFee := bestBaseFee()
+		trx := send(nil)
+
+		assert.Equal(t, tx.TypeDynamicFee, trx.Type())
+		assert.Equal(t, new(big.Int).Lsh(baseFee, 1), trx.MaxFeePerGas())
+	})
+
+	t.Run("default max fee covers the priority fee", func(t *testing.T) {
+		baseFee := bestBaseFee()
+		tip := big.NewInt(1_000)
+		trx := send(&TxOptions{MaxPriorityFeePerGas: tip})
+
+		want := new(big.Int).Add(new(big.Int).Lsh(baseFee, 1), tip)
+		assert.Equal(t, want, trx.MaxFeePerGas())
+		assert.Equal(t, tip, trx.MaxPriorityFeePerGas())
+	})
+
+	t.Run("defaults do not leak into the caller's options", func(t *testing.T) {
+		opts := &TxOptions{}
+		first := send(opts)
+		second := send(opts)
+
+		assert.Equal(t, TxOptions{}, *opts)
+		assert.NotEqual(t, first.ID(), second.ID())
 	})
 }
 
