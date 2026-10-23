@@ -33,6 +33,21 @@ type blockExecContext struct {
 	startTime  mclock.AbsTime
 }
 
+// bandwidthLogGate throttles "bandwidth updated" logs: a new line needs both
+// >10% relative change and >10s since the last one; the first update always logs.
+type bandwidthLogGate struct {
+	gps uint64
+	at  mclock.AbsTime
+}
+
+func (g *bandwidthLogGate) allow(gps uint64, now mclock.AbsTime) bool {
+	if g.gps != 0 && (now-g.at < mclock.AbsTime(10*time.Second) || max(gps, g.gps)-min(gps, g.gps) <= g.gps/10) {
+		return false
+	}
+	g.gps, g.at = gps, now
+	return true
+}
+
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
 func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) (err error) {
 	n.processLock.Lock()
@@ -201,8 +216,9 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 
 	if v, updated := n.bandwidth.Update(ctx.newBlock.Header(), time.Duration(realElapsed)); updated {
 		metricBandwidthGasPerSecond().Set(int64(v))
-
-		logger.Trace("bandwidth updated", "gps", v)
+		if n.bwLog.allow(v, mclock.Now()) {
+			logger.Trace("bandwidth updated", "gps", v)
+		}
 	}
 
 	if ctx.stats != nil {

@@ -62,6 +62,7 @@ type Node struct {
 	logDBFailed       bool
 	initialSynced     bool // true if the initial synchronization process is done
 	bandwidth         bandwidth.Bandwidth
+	bwLog             bandwidthLogGate
 	maxBlockNum       uint32
 	processLock       sync.Mutex
 	logWorker         *worker
