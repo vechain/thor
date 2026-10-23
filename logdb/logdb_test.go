@@ -10,12 +10,15 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"math/big"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
@@ -318,6 +321,165 @@ func TestEvents(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestAdditionalEventIndexes(t *testing.T) {
+	tests := []struct {
+		name                    string
+		existingAdditionalIndex string
+		createAdditionalIndexes bool
+		wantEventI5             bool
+		wantEventI6             bool
+	}{
+		{
+			name:        "fresh database creates all additional indexes",
+			wantEventI5: true,
+			wantEventI6: true,
+		},
+		{
+			name:                    "existing database does not create missing indexes when disabled",
+			existingAdditionalIndex: "event_i5",
+			wantEventI5:             true,
+		},
+		{
+			name:                    "existing database creates event_i6 when event_i5 already exists",
+			existingAdditionalIndex: "event_i5",
+			createAdditionalIndexes: true,
+			wantEventI5:             true,
+			wantEventI6:             true,
+		},
+		{
+			name:                    "existing database creates event_i5 when event_i6 already exists",
+			existingAdditionalIndex: "event_i6",
+			createAdditionalIndexes: true,
+			wantEventI5:             true,
+			wantEventI6:             true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "logs.db")
+			if tt.existingAdditionalIndex != "" {
+				seedDB, err := sql.Open("sqlite3", path)
+				require.NoError(t, err)
+
+				_, err = seedDB.Exec(refTableScheme + eventTableSchema + transferTableSchema)
+				require.NoError(t, err)
+
+				switch tt.existingAdditionalIndex {
+				case "event_i5":
+					_, err = seedDB.Exec("CREATE INDEX event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL")
+				case "event_i6":
+					_, err = seedDB.Exec("CREATE INDEX event_i6 ON event (topic0)")
+				}
+				require.NoError(t, err)
+				require.NoError(t, seedDB.Close())
+			}
+
+			db, err := New(path, tt.createAdditionalIndexes, 4)
+			require.NoError(t, err)
+			defer db.Close()
+
+			assert.Equal(t, tt.wantEventI5, indexExists(t, db.readDB, "event_i5"))
+			assert.Equal(t, tt.wantEventI6, indexExists(t, db.readDB, "event_i6"))
+		})
+	}
+}
+
+func TestTopicOnlyQueryPlanUsesSequenceBounds(t *testing.T) {
+	db, err := NewMem()
+	require.NoError(t, err)
+	defer db.Close()
+
+	singleTopic := randBytes32()
+	multipleTopics := []thor.Bytes32{randBytes32(), randBytes32(), randBytes32()}
+	showAPITopics := []thor.Bytes32{
+		thor.MustParseBytes32("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+		thor.MustParseBytes32("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"),
+		thor.MustParseBytes32("0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"),
+		thor.MustParseBytes32("0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65"),
+		thor.MustParseBytes32("0xda9fa7c1b00402c17d0161b249b1ab8bbec047c5a52207b9c112deffd817036b"),
+		thor.MustParseBytes32("0xc6a377bfc4eb120024a8ac08eef205be16b817020812c73223e81d1bdb9708ec"),
+	}
+
+	tests := []struct {
+		name             string
+		filter           *EventFilter
+		wantOrderedIndex bool
+	}{
+		{
+			name: "single topic",
+			filter: &EventFilter{
+				Range:       &Range{From: 100, To: 100},
+				CriteriaSet: topicOnlyCriteria(singleTopic),
+				Options:     &Options{Limit: 1000},
+			},
+			wantOrderedIndex: true,
+		},
+		{
+			name: "multiple topics",
+			filter: &EventFilter{
+				Range:       &Range{From: 100, To: 100},
+				CriteriaSet: topicOnlyCriteria(multipleTopics...),
+				Options:     &Options{Limit: 1000},
+			},
+		},
+		{
+			name: "show-api request",
+			filter: &EventFilter{
+				Range:       &Range{From: 25_769_599, To: 25_769_599},
+				CriteriaSet: topicOnlyCriteria(showAPITopics...),
+				Order:       ASC,
+				Options:     &Options{Offset: 0, Limit: 1000},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query, args, err := buildEventFilterSubQuery(tt.filter)
+			require.NoError(t, err)
+
+			rows, err := db.readDB.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+query, args...)
+			require.NoError(t, err)
+			defer rows.Close()
+
+			var details []string
+			for rows.Next() {
+				var id, parent, notUsed int
+				var detail string
+				require.NoError(t, rows.Scan(&id, &parent, &notUsed, &detail))
+				details = append(details, detail)
+			}
+			require.NoError(t, rows.Err())
+
+			plan := strings.Join(details, "\n")
+			assert.Contains(t, plan, "USING COVERING INDEX event_i6")
+			assert.Contains(t, plan, "rowid>?")
+			assert.Contains(t, plan, "rowid<?")
+			if tt.wantOrderedIndex {
+				assert.NotContains(t, plan, "USE TEMP B-TREE FOR ORDER BY")
+			}
+		})
+	}
+}
+
+func topicOnlyCriteria(topics ...thor.Bytes32) []*EventCriteria {
+	criteria := make([]*EventCriteria, len(topics))
+	for i := range topics {
+		criteria[i] = &EventCriteria{Topics: [5]*thor.Bytes32{&topics[i]}}
+	}
+	return criteria
+}
+
+func indexExists(t *testing.T, db *sql.DB, name string) bool {
+	t.Helper()
+
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name=?)", name).Scan(&exists)
+	require.NoError(t, err)
+	return exists
 }
 
 // TestLogDB_NewestBlockID performs a series of read/write tests on the NewestBlockID functionality of the

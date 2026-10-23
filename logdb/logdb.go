@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/vechain/thor/v2/block"
@@ -24,8 +25,9 @@ import (
 )
 
 const (
-	refIDQuery  = "(SELECT id FROM ref WHERE data=?)"
-	journalSize = 52428800 // 50MB
+	refIDQuery                = "(SELECT id FROM ref WHERE data=?)"
+	journalSize               = 52428800 // 50MB
+	additionalEventIndexCount = 2
 )
 
 var logger = log.WithContext("pkg", "logdb")
@@ -69,7 +71,7 @@ func New(path string, createAdditionalIndexes bool, maxReadConns uint64) (logDB 
 
 	dbSchema := refTableScheme + eventTableSchema + transferTableSchema
 	if !hasValues {
-		dbSchema += additionalEventIndexSchema
+		dbSchema += additionalEventIndexesSchema
 	}
 	if _, err := writeDB.Exec(dbSchema); err != nil {
 		return nil, err
@@ -78,17 +80,17 @@ func New(path string, createAdditionalIndexes bool, maxReadConns uint64) (logDB 
 	if hasValues && createAdditionalIndexes {
 		// Check if index already exists
 		var indexExists int
-		row := writeDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='event_i5'")
+		row := writeDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('event_i5', 'event_i6')")
 		if err = row.Scan(&indexExists); err != nil {
 			return nil, err
 		}
 
-		if indexExists == 0 {
-			logger.Info("creating additional event index, this may take several minutes on large databases...")
-			if _, err := writeDB.Exec(additionalEventIndexSchema); err != nil {
+		if indexExists < additionalEventIndexCount {
+			logger.Info("creating additional event indexes, this may take several minutes on large databases...")
+			if _, err := writeDB.Exec(additionalEventIndexesSchema); err != nil {
 				return nil, err
 			}
-			logger.Info("additional event index created successfully")
+			logger.Info("additional event indexes created successfully")
 		}
 	}
 
@@ -173,7 +175,7 @@ func NewMem() (*LogDB, error) {
 		return nil, err
 	}
 
-	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS event_i5 ON event (topic4, address) WHERE topic4 IS NOT NULL;"); err != nil {
+	if _, err := db.Exec(additionalEventIndexesSchema); err != nil {
 		return nil, err
 	}
 
@@ -248,6 +250,25 @@ FROM (%v) e
 
 	metricsHandleEventsFilter(filter)
 
+	subQuery, args, err := buildEventFilterSubQuery(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN event e ON s.seq = e.seq"
+
+	eventQuery := fmt.Sprintf(query, subQuery)
+	if filter.Options == nil {
+		if filter.Order == DESC {
+			eventQuery += " ORDER BY seq DESC "
+		} else {
+			eventQuery += " ORDER BY seq ASC "
+		}
+	}
+	return db.queryEvents(ctx, eventQuery, args...)
+}
+
+func buildEventFilterSubQuery(filter *EventFilter) (string, []any, error) {
 	var (
 		subQuery = "SELECT seq FROM event WHERE 1"
 		args     []any
@@ -256,11 +277,11 @@ FROM (%v) e
 	if filter.Range != nil {
 		from, err := newSequence(filter.Range.From, 0, 0)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		// Always bind both bounds. For an inverted range (To < From) this yields
 		// seq >= from AND seq <= to with to < from — an empty result — instead of
@@ -270,17 +291,13 @@ FROM (%v) e
 	}
 
 	if len(filter.CriteriaSet) > 0 {
-		subQuery += " AND ("
-
-		for i, c := range filter.CriteriaSet {
+		conds := make([]string, 0, len(filter.CriteriaSet))
+		for _, c := range filter.CriteriaSet {
 			cond, cargs := c.toWhereCondition()
-			if i > 0 {
-				subQuery += " OR"
-			}
-			subQuery += " (" + cond + ")"
+			conds = append(conds, " ("+cond+")")
 			args = append(args, cargs...)
 		}
-		subQuery += ")"
+		subQuery += " AND (" + strings.Join(conds, " OR") + ")"
 	}
 
 	// Options set: order and LIMIT are applied together in the subquery, so LIMIT takes the ordered window.
@@ -297,17 +314,7 @@ FROM (%v) e
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
-	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN event e ON s.seq = e.seq"
-
-	eventQuery := fmt.Sprintf(query, subQuery)
-	if filter.Options == nil {
-		if filter.Order == DESC {
-			eventQuery += " ORDER BY seq DESC "
-		} else {
-			eventQuery += " ORDER BY seq ASC "
-		}
-	}
-	return db.queryEvents(ctx, eventQuery, args...)
+	return subQuery, args, nil
 }
 
 func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([]*Transfer, error) {
