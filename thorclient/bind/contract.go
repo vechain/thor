@@ -50,30 +50,24 @@ func DeployContract(client *thorclient.Client, signer Signer, abiData []byte, by
 	if err != nil {
 		return nil, err
 	}
+	clause := tx.NewClause(nil).WithData(bc)
 
-	tag, err := client.ChainTag()
+	// Unlike Submit, a deployment whose simulation fails is not sent.
+	gas, simulation, err := estimateGas(client, signer.Address(), clause)
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate deployment gas: %w", err)
+	}
+	if simulation.Reverted || simulation.VMError != "" {
+		return nil, fmt.Errorf("unable to deploy contract: %+v", simulation)
+	}
+
+	trx, err := buildTx(client, clause, TxOptions{Gas: &gas, Expiration: new(uint32(10000))})
 	if err != nil {
 		return nil, err
 	}
-
-	trx := tx.NewBuilder(tx.TypeLegacy).
-		ChainTag(tag).
-		Clause(tx.NewClause(nil).WithData(bc)).
-		Expiration(10000).
-		Gas(10_000_000).
-		Build()
 	trx, err = signer.SignTransaction(trx)
 	if err != nil {
 		return nil, err
-	}
-
-	signerAddr := signer.Address()
-	clauses, err := client.InspectTxClauses(trx, &signerAddr)
-	if err != nil {
-		return nil, err
-	}
-	if len(clauses) != 1 || clauses[0].Reverted || clauses[0].VMError != "" {
-		return nil, fmt.Errorf("unable to deploy contract: %+v", clauses)
 	}
 
 	res, err := client.SendTransaction(trx)
