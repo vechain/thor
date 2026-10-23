@@ -125,3 +125,16 @@ func TestLogWorker_MultipleTasks(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "first error", err.Error())
 }
+
+func TestBandwidthLogGate(t *testing.T) {
+	var g bandwidthLogGate
+	t0 := mclock.Now()
+	sec := mclock.AbsTime(time.Second)
+
+	assert.True(t, g.allow(1000, t0))         // first always logs
+	assert.False(t, g.allow(1200, t0+5*sec))  // too soon
+	assert.False(t, g.allow(1100, t0+11*sec)) // exactly +10%, not enough
+	assert.True(t, g.allow(1101, t0+11*sec))
+	assert.False(t, g.allow(2000, t0+20*sec)) // 9s after the last log
+	assert.True(t, g.allow(900, t0+22*sec))   // -18%, 11s later
+}
