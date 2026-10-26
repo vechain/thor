@@ -64,7 +64,26 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
+// maxScanBlocks bounds the block span over which topic0-only criteria are evaluated by a seq
+// range scan rather than the topic0 index; past this width the scan stops paying off for sparse topics.
+const maxScanBlocks = 100_000
+
+// topic0Only reports whether the criterion constrains nothing but topic0.
+func (c *EventCriteria) topic0Only() bool {
+	if c.Address != nil || c.Topics[0] == nil {
+		return false
+	}
+	for _, t := range c.Topics[1:] {
+		if t != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// toWhereCondition renders the criterion. With noTopic0Index set, topic0 is written as +topic0 so
+// SQLite cannot use it for an index lookup and falls back to the seq range.
+func (c *EventCriteria) toWhereCondition(noTopic0Index bool) (cond string, args []any) {
 	cond = "1"
 	if c.Address != nil {
 		cond += " AND address = " + refIDQuery
@@ -72,7 +91,11 @@ func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
 	}
 	for i, topic := range c.Topics {
 		if topic != nil {
-			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			if i == 0 && noTopic0Index {
+				cond += " AND +topic0 = " + refIDQuery
+			} else {
+				cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			}
 			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}
