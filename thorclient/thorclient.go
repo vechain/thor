@@ -991,7 +991,7 @@ func (c *Client) Peers() ([]*api.PeerStats, error) {
 //	}
 //
 //	// Use chain tag when building transaction
-//	tx := tx.NewBuilder(chainTag).
+//	tx := tx.NewBuilder(tx.TypeDynamicFee).
 //		ChainTag(chainTag).
 //		BlockRef(blockRef).
 //		// ... other transaction fields
