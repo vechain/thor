@@ -62,9 +62,7 @@ func TestEventQueryPlanPerCriteriaShape(t *testing.T) {
 	}
 
 	plan := func(t *testing.T, set []*EventCriteria, r *Range) string {
-		narrow, err := db.narrowRange(context.Background(), r)
-		require.NoError(t, err)
-		sub, args, err := buildEventFilterSubQuery(&EventFilter{CriteriaSet: set, Range: r}, narrow)
+		sub, args, err := buildEventFilterSubQuery(&EventFilter{CriteriaSet: set, Range: r}, narrowRange(r))
 		require.NoError(t, err)
 		rows, err := db.readDB.Query("EXPLAIN QUERY PLAN "+sub, args...)
 		require.NoError(t, err)
@@ -107,31 +105,6 @@ func TestEventQueryPlanPerCriteriaShape(t *testing.T) {
 }
 
 func TestNarrowRange(t *testing.T) {
-	db, err := NewMem()
-	require.NoError(t, err)
-	defer db.Close()
-
-	ctx := context.Background()
-	check := func(t *testing.T, r *Range, want bool) {
-		got, err := db.narrowRange(ctx, r)
-		require.NoError(t, err)
-		assert.Equal(t, want, got, "%+v", r)
-	}
-
-	t.Run("empty db uses requested span", func(t *testing.T) {
-		check(t, &Range{From: 0, To: maxScanBlocks - 1}, true)
-		check(t, &Range{From: 0, To: MaxBlockNumber}, false)
-	})
-
-	// events at block 0 and block 150,000: the newest block caps open-ended ranges
-	const newest = 150_000
-	for _, n := range []uint32{0, newest} {
-		seq, err := newSequence(n, 0, 0)
-		require.NoError(t, err)
-		_, err = db.readDB.Exec("INSERT INTO event(seq, blockID, blockTime, txID, txOrigin, clauseIndex, address) VALUES(?, 0, 0, 0, 0, 0, 0)", seq)
-		require.NoError(t, err)
-	}
-
 	for _, c := range []struct {
 		name string
 		rng  *Range
@@ -140,13 +113,10 @@ func TestNarrowRange(t *testing.T) {
 		{"nil", nil, false},
 		{"inverted", &Range{From: 10, To: 5}, false},
 		{"narrow", &Range{From: 0, To: maxScanBlocks - 1}, true},
-		{"wide below newest", &Range{From: 0, To: maxScanBlocks}, false},
-		{"open-ended, capped span narrow", &Range{From: newest - maxScanBlocks + 1, To: MaxBlockNumber}, true},
-		{"open-ended, capped span wide", &Range{From: newest - maxScanBlocks, To: MaxBlockNumber}, false},
-		{"open-ended from genesis", &Range{From: 0, To: MaxBlockNumber}, false},
-		{"starts past newest", &Range{From: newest + 1, To: MaxBlockNumber}, true},
+		{"wide", &Range{From: 0, To: maxScanBlocks}, false},
+		{"single block", &Range{From: 5, To: 5}, true},
 	} {
-		t.Run(c.name, func(t *testing.T) { check(t, c.rng, c.want) })
+		t.Run(c.name, func(t *testing.T) { assert.Equal(t, c.want, narrowRange(c.rng)) })
 	}
 }
 
@@ -212,14 +182,12 @@ func TestEventFilterScanEquivalence(t *testing.T) {
 	}
 	for name, set := range sets {
 		for _, order := range []Order{ASC, DESC} {
-			for _, rng := range []Range{{5, 5}, {3, 12}, {0, 100}, {5, MaxBlockNumber}} {
+			for _, rng := range []Range{{5, 5}, {3, 12}, {0, 100}} {
 				for _, opt := range []Options{{0, 1000}, {2, 5}, {1000, 5}} {
 					f := &EventFilter{CriteriaSet: set, Range: &rng, Options: &opt, Order: order}
 					t.Run(fmt.Sprintf("%s/%v/%v/%v", name, order, rng, opt), func(t *testing.T) {
-						narrow, err := db.narrowRange(context.Background(), f.Range)
-						require.NoError(t, err)
-						require.True(t, narrow)
-						sub, _, err := buildEventFilterSubQuery(f, narrow)
+						require.True(t, narrowRange(f.Range))
+						sub, _, err := buildEventFilterSubQuery(f, true)
 						require.NoError(t, err)
 						require.Contains(t, sub, "+topic")
 

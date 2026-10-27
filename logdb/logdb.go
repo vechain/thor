@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"slices"
 	"strings"
 	"time"
 
@@ -231,26 +230,9 @@ func (db *LogDB) Path() string {
 	return db.path
 }
 
-// narrowRange reports whether r spans fewer than maxScanBlocks blocks once To is capped at the
-// newest block holding events, so an open-ended range near the head counts as narrow. The cap only
-// picks the plan; the query still binds the requested bounds, so a block written meanwhile cannot
-// change the result.
-func (db *LogDB) narrowRange(ctx context.Context, r *Range) (bool, error) {
-	if r == nil || r.To < r.From {
-		return false, nil
-	}
-	if r.To-r.From < maxScanBlocks {
-		return true, nil
-	}
-	var newest sql.NullInt64
-	if err := db.readDB.QueryRowContext(ctx, "SELECT MAX(seq) FROM event").Scan(&newest); err != nil {
-		return false, err
-	}
-	if !newest.Valid {
-		return false, nil
-	}
-	last := sequence(newest.Int64).BlockNumber()
-	return last < r.From || last-r.From < maxScanBlocks, nil
+// narrowRange reports whether r spans fewer than maxScanBlocks blocks.
+func narrowRange(r *Range) bool {
+	return r != nil && r.To >= r.From && r.To-r.From < maxScanBlocks
 }
 
 // buildEventFilterSubQuery builds the seq-selecting subquery for a non-nil filter. With narrow set,
@@ -327,15 +309,7 @@ FROM (%v) e
 
 	metricsHandleEventsFilter(filter)
 
-	var narrow bool
-	if slices.ContainsFunc(filter.CriteriaSet, func(c *EventCriteria) bool { return !c.seqBounded() }) {
-		var err error
-		if narrow, err = db.narrowRange(ctx, filter.Range); err != nil {
-			return nil, err
-		}
-	}
-
-	subQuery, args, err := buildEventFilterSubQuery(filter, narrow)
+	subQuery, args, err := buildEventFilterSubQuery(filter, narrowRange(filter.Range))
 	if err != nil {
 		return nil, err
 	}

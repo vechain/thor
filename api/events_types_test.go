@@ -105,8 +105,7 @@ func testConvertRangeWithBlockRangeTypeWithSwitchedFromAndTo(t *testing.T, chain
 	convertedRng, err := ConvertRange(chain.Repo().NewBestChain(), rng)
 
 	assert.NoError(t, err)
-	assert.Equal(t, emptyRange.From, convertedRng.From)
-	assert.Equal(t, uint32(*rng.To), convertedRng.To)
+	assert.Equal(t, &emptyRange, convertedRng)
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *testchain.Chain) {
@@ -169,6 +168,7 @@ func TestConvertRange_Matrix(t *testing.T) {
 	bestChain := chain.Repo().NewBestChain()
 	genesis := chain.GenesisBlock().Header()
 	bestBlock := chain.Repo().BestBlockSummary().Header
+	head := bestBlock.Number()
 
 	// Cases here focus on what TestEventsTypes (which builds ranges via newRange
 	// with non-nil fields) does not cover: the JSON path, omitted-field defaulting,
@@ -186,7 +186,7 @@ func TestConvertRange_Matrix(t *testing.T) {
 		{
 			name:     "empty object returns full block range",
 			json:     `{}`,
-			expected: &logdb.Range{From: 0, To: uint32(logdb.MaxBlockNumber)},
+			expected: &logdb.Range{From: 0, To: head + 6},
 		},
 
 		// Block range - omitted-field defaulting and boundary capping.
@@ -196,19 +196,34 @@ func TestConvertRange_Matrix(t *testing.T) {
 			expected: &logdb.Range{From: 0, To: 10},
 		},
 		{
-			name:     "block range with omitted to defaults to MaxBlockNumber",
+			name:     "block range with omitted to defaults to head+6",
 			json:     `{"unit": "block", "from": 5}`,
-			expected: &logdb.Range{From: 5, To: uint32(logdb.MaxBlockNumber)},
+			expected: &logdb.Range{From: 5, To: head + 6},
 		},
 		{
 			name:     "block range at MaxBlockNumber",
 			json:     `{"unit": "block", "from": 268435455, "to": 268435455}`,
-			expected: &logdb.Range{From: uint32(logdb.MaxBlockNumber), To: uint32(logdb.MaxBlockNumber)},
+			expected: &emptyRange,
 		},
 		{
 			name:     "block range to exceeds MaxBlockNumber is capped",
 			json:     `{"unit": "block", "from": 5, "to": 999999999999}`,
-			expected: &logdb.Range{From: 5, To: uint32(logdb.MaxBlockNumber)},
+			expected: &logdb.Range{From: 5, To: head + 6},
+		},
+		{
+			name:     "block range to above head+6 is capped",
+			json:     fmt.Sprintf(`{"unit": "block", "from": 0, "to": %d}`, head+7),
+			expected: &logdb.Range{From: 0, To: head + 6},
+		},
+		{
+			name:     "block range from above head+6 is empty",
+			json:     fmt.Sprintf(`{"unit": "block", "from": %d}`, head+7),
+			expected: &emptyRange,
+		},
+		{
+			name:     "block range to below head is kept",
+			json:     `{"unit": "block", "from": 0, "to": 0}`,
+			expected: &logdb.Range{From: 0, To: 0},
 		},
 
 		// Time range - omitted-field defaulting.
