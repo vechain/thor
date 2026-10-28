@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -23,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/middleware"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
@@ -607,6 +609,27 @@ func batchCallClauseLimit(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "clauses over the limit")
 	assert.Equal(t, fmt.Sprintf("clauses: exceeds limit of %d\n", tx.MaxClausesPerTx), string(res))
+}
+
+func TestBatchCallTimeout(t *testing.T) {
+	thorChain, err := testchain.NewDefault()
+	require.NoError(t, err)
+
+	router := mux.NewRouter()
+	New(thorChain.Repo(), thorChain.Stater(), uint64(gasLimit), 5*1024*1024/2, &thor.NoFork, thorChain.Engine(), false).
+		Mount(router, "/accounts")
+	router.Use(middleware.HandleAPITimeout(50 * time.Millisecond))
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	// JUMPDEST PUSH1 0 JUMP: loops until the gas runs out, far past the timeout.
+	body := []byte(`{"clauses":[{"data":"0x5b600056"}]}`)
+	start := time.Now()
+	res, statusCode, err := thorclient.New(server.URL).RawHTTPClient().RawHTTPPost("/accounts/*", body)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusServiceUnavailable, statusCode)
+	assert.Equal(t, "request timed out\n", string(res))
+	assert.Less(t, time.Since(start), 5*time.Second)
 }
 
 func TestGetRawStorage(t *testing.T) {

@@ -7,6 +7,7 @@ package restutil
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -79,9 +80,15 @@ func Forbidden(cause error) error {
 	}
 }
 
+// statusClientClosedRequest is the non-standard status (nginx's) recorded for a
+// request whose client went away before the handler finished.
+const statusClientClosedRequest = 499
+
 // HandlerFunc like http.HandlerFunc, bu it returns an error.
-// If the returned error is httpError type, httpError.status will be responded,
-// otherwise http.StatusInternalServerError responded.
+// If the returned error is httpError type, httpError.status will be responded.
+// Otherwise, if the request's context is done, the failure is attributed to it:
+// http.StatusServiceUnavailable when the API timeout fired, 499 when the client
+// went away. Any other error is responded with http.StatusInternalServerError.
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
 // WrapHandlerFunc convert HandlerFunc to http.HandlerFunc.
@@ -99,7 +106,16 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 			} else {
 				w.WriteHeader(he.status)
 			}
-		} else {
+			return
+		}
+		// Layers below report a done context in their own words (a raw ctx.Err(),
+		// a driver error), so the context's state decides, not the error value.
+		switch r.Context().Err() {
+		case context.DeadlineExceeded:
+			http.Error(w, "request timed out", http.StatusServiceUnavailable)
+		case context.Canceled:
+			http.Error(w, "client closed request", statusClientClosedRequest)
+		default:
 			logger.Debug("all errors should be wrapped in httpError", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
