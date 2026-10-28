@@ -64,26 +64,20 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-// maxScanBlocks bounds the block span over which topic0-only criteria are evaluated by a seq
-// range scan rather than the topic0 index; past this width the scan stops paying off for sparse topics.
+// maxScanBlocks bounds the block span over which address-less criteria are evaluated by a seq
+// range scan rather than a topic index; past this width the scan stops paying off for sparse topics.
 const maxScanBlocks = 100_000
 
-// topic0Only reports whether the criterion constrains nothing but topic0.
-func (c *EventCriteria) topic0Only() bool {
-	if c.Address != nil || c.Topics[0] == nil {
-		return false
-	}
-	for _, t := range c.Topics[1:] {
-		if t != nil {
-			return false
-		}
-	}
-	return true
+// seqBounded reports whether an index lookup for the criterion can be bounded by the seq range.
+// Every event index except event_i0 has address between its topic columns and seq, so without an
+// address the lookup reads every matching entry chain-wide before the seq filter applies.
+func (c *EventCriteria) seqBounded() bool {
+	return c.Address != nil
 }
 
-// toWhereCondition renders the criterion. With noTopic0Index set, topic0 is written as +topic0 so
-// SQLite cannot use it for an index lookup and falls back to the seq range.
-func (c *EventCriteria) toWhereCondition(noTopic0Index bool) (cond string, args []any) {
+// toWhereCondition renders the criterion. With rangeScan set, topics are written as +topicN so
+// SQLite cannot use them for an index lookup and falls back to the seq range.
+func (c *EventCriteria) toWhereCondition(rangeScan bool) (cond string, args []any) {
 	cond = "1"
 	if c.Address != nil {
 		cond += " AND address = " + refIDQuery
@@ -91,11 +85,11 @@ func (c *EventCriteria) toWhereCondition(noTopic0Index bool) (cond string, args 
 	}
 	for i, topic := range c.Topics {
 		if topic != nil {
-			if i == 0 && noTopic0Index {
-				cond += " AND +topic0 = " + refIDQuery
-			} else {
-				cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			col := fmt.Sprintf("topic%v", i)
+			if rangeScan {
+				col = "+" + col
 			}
+			cond += " AND " + col + " = " + refIDQuery
 			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}

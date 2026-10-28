@@ -230,8 +230,14 @@ func (db *LogDB) Path() string {
 	return db.path
 }
 
-// buildEventFilterSubQuery builds the seq-selecting subquery for a non-nil filter.
-func buildEventFilterSubQuery(filter *EventFilter) (string, []any, error) {
+// narrowRange reports whether r spans fewer than maxScanBlocks blocks.
+func narrowRange(r *Range) bool {
+	return r != nil && r.To >= r.From && r.To-r.From < maxScanBlocks
+}
+
+// buildEventFilterSubQuery builds the seq-selecting subquery for a non-nil filter. With narrow set,
+// criteria whose index lookup the seq range cannot bound are evaluated by a seq range scan instead.
+func buildEventFilterSubQuery(filter *EventFilter, narrow bool) (string, []any, error) {
 	var (
 		subQuery = "SELECT seq FROM event WHERE 1"
 		args     []any
@@ -256,10 +262,8 @@ func buildEventFilterSubQuery(filter *EventFilter) (string, []any, error) {
 	if len(filter.CriteriaSet) > 0 {
 		var sb strings.Builder
 		sb.WriteString(" AND (")
-
-		narrow := filter.Range != nil && filter.Range.To-filter.Range.From < maxScanBlocks
 		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.toWhereCondition(narrow && c.topic0Only())
+			cond, cargs := c.toWhereCondition(narrow && !c.seqBounded())
 			if i > 0 {
 				sb.WriteString(" OR")
 			}
@@ -305,7 +309,7 @@ FROM (%v) e
 
 	metricsHandleEventsFilter(filter)
 
-	subQuery, args, err := buildEventFilterSubQuery(filter)
+	subQuery, args, err := buildEventFilterSubQuery(filter, narrowRange(filter.Range))
 	if err != nil {
 		return nil, err
 	}

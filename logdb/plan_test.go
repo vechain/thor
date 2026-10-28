@@ -27,7 +27,7 @@ func TestEventQueryPlanPerCriteriaShape(t *testing.T) {
 	defer db.Close()
 
 	addr := randAddress()
-	t0, t1, t2, t3 := randBytes32(), randBytes32(), randBytes32(), randBytes32()
+	t0, t1, t2, t3, t4 := randBytes32(), randBytes32(), randBytes32(), randBytes32(), randBytes32()
 	crit := func(a *thor.Address, topics ...*thor.Bytes32) *EventCriteria {
 		c := &EventCriteria{Address: a}
 		copy(c.Topics[:], topics)
@@ -52,15 +52,17 @@ func TestEventQueryPlanPerCriteriaShape(t *testing.T) {
 		{"six topic0", six, expect{scanPlan, "MULTI-INDEX OR", "MULTI-INDEX OR"}},
 		{"address", []*EventCriteria{crit(&addr)}, expect{"INDEX event_i0 ", "INDEX event_i0 ", "INDEX event_i0 "}},
 		{"address+topic0", []*EventCriteria{crit(&addr, &t0)}, expect{"INDEX event_i1 ", "INDEX event_i1 ", "INDEX event_i1 "}},
-		{"topic0+topic1", []*EventCriteria{crit(nil, &t0, &t1)}, expect{"INDEX event_i2 ", "INDEX event_i2 ", "INDEX event_i2 "}},
-		{"topic0+topic2", []*EventCriteria{crit(nil, &t0, nil, &t2)}, expect{"INDEX event_i3 ", "INDEX event_i3 ", "INDEX event_i3 "}},
-		{"topic0+topic3", []*EventCriteria{crit(nil, &t0, nil, nil, &t3)}, expect{"INDEX event_i4 ", "INDEX event_i4 ", "INDEX event_i4 "}},
+		{"topic1", []*EventCriteria{crit(nil, nil, &t1)}, expect{scanPlan, "INDEX event_i2 ", "INDEX event_i2 "}},
+		{"topic4", []*EventCriteria{crit(nil, nil, nil, nil, nil, &t4)}, expect{scanPlan, "INDEX event_i5 ", "INDEX event_i5 "}},
+		{"topic0+topic1", []*EventCriteria{crit(nil, &t0, &t1)}, expect{scanPlan, "INDEX event_i2 ", "INDEX event_i2 "}},
+		{"topic0+topic2", []*EventCriteria{crit(nil, &t0, nil, &t2)}, expect{scanPlan, "INDEX event_i3 ", "INDEX event_i3 "}},
+		{"topic0+topic3", []*EventCriteria{crit(nil, &t0, nil, nil, &t3)}, expect{scanPlan, "INDEX event_i4 ", "INDEX event_i4 "}},
 		{"address+topic0+topic1", []*EventCriteria{crit(&addr, &t0, &t1)}, expect{"INDEX event_i2 ", "INDEX event_i2 ", "INDEX event_i2 "}},
 		{"mixed", []*EventCriteria{crit(nil, &t0), crit(&addr, &t0)}, expect{scanPlan, "MULTI-INDEX OR", "MULTI-INDEX OR"}},
 	}
 
 	plan := func(t *testing.T, set []*EventCriteria, r *Range) string {
-		sub, args, err := buildEventFilterSubQuery(&EventFilter{CriteriaSet: set, Range: r})
+		sub, args, err := buildEventFilterSubQuery(&EventFilter{CriteriaSet: set, Range: r}, narrowRange(r))
 		require.NoError(t, err)
 		rows, err := db.readDB.Query("EXPLAIN QUERY PLAN "+sub, args...)
 		require.NoError(t, err)
@@ -102,12 +104,29 @@ func TestEventQueryPlanPerCriteriaShape(t *testing.T) {
 	})
 }
 
+func TestNarrowRange(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		rng  *Range
+		want bool
+	}{
+		{"nil", nil, false},
+		{"inverted", &Range{From: 10, To: 5}, false},
+		{"narrow", &Range{From: 0, To: maxScanBlocks - 1}, true},
+		{"wide", &Range{From: 0, To: maxScanBlocks}, false},
+		{"single block", &Range{From: 5, To: 5}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) { assert.Equal(t, c.want, narrowRange(c.rng)) })
+	}
+}
+
 func TestEventFilterScanEquivalence(t *testing.T) {
 	db, err := NewMem()
 	require.NoError(t, err)
 	defer db.Close()
 
 	topics := []thor.Bytes32{randBytes32(), randBytes32(), randBytes32()}
+	topics1 := []thor.Bytes32{randBytes32(), randBytes32()}
 	addrs := []thor.Address{randAddress(), randAddress()}
 
 	b := new(block.Builder).Build()
@@ -118,8 +137,8 @@ func TestEventFilterScanEquivalence(t *testing.T) {
 			bb.Transaction(newTx(tx.TypeLegacy))
 			k := n*4 + j
 			receipts = append(receipts, &tx.Receipt{Outputs: []*tx.Output{{Events: tx.Events{
-				{Address: addrs[k%2], Topics: []thor.Bytes32{topics[k%3]}, Data: []byte{1}},
-				{Address: addrs[(k+1)%2], Topics: []thor.Bytes32{topics[(k+1)%3]}, Data: []byte{2}},
+				{Address: addrs[k%2], Topics: []thor.Bytes32{topics[k%3], topics1[k%2]}, Data: []byte{1}},
+				{Address: addrs[(k+1)%2], Topics: []thor.Bytes32{topics[(k+1)%3], topics1[(k+1)%2]}, Data: []byte{2}},
 			}}}})
 		}
 		b = bb.Build()
@@ -129,35 +148,17 @@ func TestEventFilterScanEquivalence(t *testing.T) {
 	}
 
 	type key [3]uint32
-	crit := func(i int) *EventCriteria { return &EventCriteria{Topics: [5]*thor.Bytes32{&topics[i]}} }
+	crit := func(a *thor.Address, ts ...*thor.Bytes32) *EventCriteria {
+		c := &EventCriteria{Address: a}
+		copy(c.Topics[:], ts)
+		return c
+	}
 
-	// index path: same subquery shape, criteria rendered without the unary plus
+	// index path: the same subquery with the range scan disabled
 	indexPath := func(f *EventFilter) []key {
-		var (
-			sub  = "SELECT seq FROM event WHERE 1"
-			args []any
-		)
-		from, _ := newSequence(f.Range.From, 0, 0)
-		to, _ := newSequence(f.Range.To, txIndexMask, logIndexMask)
-		args = append(args, from, to)
-		var sb strings.Builder
-		sb.WriteString(" AND seq >= ? AND seq <= ? AND (")
-		for i, c := range f.CriteriaSet {
-			cond, cargs := c.toWhereCondition(false)
-			if i > 0 {
-				sb.WriteString(" OR")
-			}
-			sb.WriteString(" (" + cond + ")")
-			args = append(args, cargs...)
-		}
-		sb.WriteString(")")
-		sub += sb.String() //nolint:gosec // test query from fixed fragments
-		if f.Order == DESC {
-			sub += " ORDER BY seq DESC LIMIT ?, ?"
-		} else {
-			sub += " ORDER BY seq ASC LIMIT ?, ?"
-		}
-		args = append(args, f.Options.Offset, f.Options.Limit)
+		sub, args, err := buildEventFilterSubQuery(f, false)
+		require.NoError(t, err)
+		require.NotContains(t, sub, "+topic")
 		rows, err := db.readDB.Query(sub, args...)
 		require.NoError(t, err)
 		defer rows.Close()
@@ -171,16 +172,24 @@ func TestEventFilterScanEquivalence(t *testing.T) {
 		return out
 	}
 
-	for _, set := range [][]*EventCriteria{{crit(0)}, {crit(1), crit(2)}, {crit(0), crit(1), crit(2)}} {
+	sets := map[string][]*EventCriteria{
+		"topic0":        {crit(nil, &topics[0])},
+		"two topic0":    {crit(nil, &topics[1]), crit(nil, &topics[2])},
+		"three topic0":  {crit(nil, &topics[0]), crit(nil, &topics[1]), crit(nil, &topics[2])},
+		"topic0+topic1": {crit(nil, &topics[0], &topics1[0])},
+		"topic1":        {crit(nil, nil, &topics1[1])},
+		"mixed":         {crit(nil, &topics[0]), crit(&addrs[0], &topics[1])},
+	}
+	for name, set := range sets {
 		for _, order := range []Order{ASC, DESC} {
 			for _, rng := range []Range{{5, 5}, {3, 12}, {0, 100}} {
 				for _, opt := range []Options{{0, 1000}, {2, 5}, {1000, 5}} {
 					f := &EventFilter{CriteriaSet: set, Range: &rng, Options: &opt, Order: order}
-					name := fmt.Sprintf("%d/%v/%v/%v", len(set), order, rng, opt)
-					t.Run(name, func(t *testing.T) {
-						sub, _, err := buildEventFilterSubQuery(f)
+					t.Run(fmt.Sprintf("%s/%v/%v/%v", name, order, rng, opt), func(t *testing.T) {
+						require.True(t, narrowRange(f.Range))
+						sub, _, err := buildEventFilterSubQuery(f, true)
 						require.NoError(t, err)
-						require.Contains(t, sub, "+topic0")
+						require.Contains(t, sub, "+topic")
 
 						evs, err := db.FilterEvents(context.Background(), f)
 						require.NoError(t, err)
@@ -188,9 +197,8 @@ func TestEventFilterScanEquivalence(t *testing.T) {
 						for _, e := range evs {
 							got = append(got, key{e.BlockNumber, e.TxIndex, e.LogIndex})
 						}
-						want := indexPath(f)
-						assert.Equal(t, want, got)
-						if rng.To-rng.From == 0 && opt.Offset == 0 && opt.Limit == 1000 {
+						assert.Equal(t, indexPath(f), got)
+						if rng == (Range{0, 100}) && opt == (Options{0, 1000}) {
 							assert.NotEmpty(t, got)
 						}
 					})
