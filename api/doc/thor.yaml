@@ -2087,10 +2087,11 @@ components:
       properties:
         clauses:
           type: array
+          maxItems: 2500
           items:
             $ref: '#/components/schemas/Clause'
           description: |
-            An array of clauses to be executed.
+            An array of clauses to be executed. At most 2500, the clause limit of a transaction.
           nullable: true
         gas:
           type: integer

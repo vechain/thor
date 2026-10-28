@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -130,6 +131,7 @@ func TestAccount(t *testing.T) {
 		"batchCall":                           batchCall,
 		"batchCallWithNonExistingRevision":    batchCallWithNonExistingRevision,
 		"batchCallWithNullClause":             batchCallWithNullClause,
+		"batchCallClauseLimit":                batchCallClauseLimit,
 	} {
 		t.Run(name, tt)
 	}
@@ -590,6 +592,21 @@ func batchCallWithNullClause(t *testing.T) {
 	_, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/accounts/*", []byte("{\"clauses\":[] }"))
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "null clause")
+}
+
+func batchCallClauseLimit(t *testing.T) {
+	clauses := func(n int) []byte {
+		return []byte(`{"clauses":[` + strings.TrimSuffix(strings.Repeat(`{},`, n), ",") + `]}`)
+	}
+
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", clauses(tx.MaxClausesPerTx))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "clauses at the limit")
+
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", clauses(tx.MaxClausesPerTx+1))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "clauses over the limit")
+	assert.Equal(t, fmt.Sprintf("clauses: exceeds limit of %d\n", tx.MaxClausesPerTx), string(res))
 }
 
 func TestGetRawStorage(t *testing.T) {

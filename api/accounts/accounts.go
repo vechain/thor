@@ -262,6 +262,11 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 			return restutil.BadRequest(fmt.Errorf("clauses[%d]: null not allowed", i))
 		}
 	}
+	// A batch call simulates one transaction, so it takes no more clauses than one.
+	// Gas does not bound the count: a clause that runs no code uses none.
+	if len(batchCallData.Clauses) > tx.MaxClausesPerTx {
+		return restutil.BadRequest(fmt.Errorf("clauses: exceeds limit of %d", tx.MaxClausesPerTx))
+	}
 	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))
