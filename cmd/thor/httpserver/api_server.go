@@ -45,6 +45,7 @@ const (
 	defaultRequestBodyLimit = 200 * 1024 // 200KB
 	defaultMaxCriteriaCount = 10
 	defaultIdleTimeout      = 10 * time.Second
+	defaultWriteTimeout     = 10 * time.Second
 )
 
 type APIConfig struct {
@@ -132,6 +133,8 @@ func StartAPIServer(
 	subs.Mount(router, "/subscriptions")
 
 	// middlewares
+	// write deadline first, so it wraps the connection's own ResponseWriter
+	router.Use(middleware.HandleWriteDeadline(defaultWriteTimeout))
 	// body limit and timeout
 	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
 	if config.Timeout > 0 {
@@ -158,7 +161,8 @@ func StartAPIServer(
 	// IdleTimeout is set explicitly because http.Server otherwise falls back to
 	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read
 	// budget. No WriteTimeout: it would abort honest large responses (/logs,
-	// expanded blocks) mid-transfer on slow links.
+	// expanded blocks) mid-transfer on slow links. HandleWriteDeadline bounds
+	// stalled writes instead.
 	srv := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: time.Second,
