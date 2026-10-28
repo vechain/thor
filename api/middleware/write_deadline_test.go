@@ -6,7 +6,6 @@
 package middleware
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -90,45 +90,55 @@ func TestHandleWriteDeadlineCutsOffStalledReader(t *testing.T) {
 	}
 }
 
+// slowConn stands in for the connection under a ResponseWriter: it drains rate
+// bytes per second, and a write that finishes past its deadline fails, as on a
+// net.Conn. Unlike a real socket, its pace does not depend on the platform's TCP
+// buffering.
+type slowConn struct {
+	header   http.Header
+	rate     int // bytes per second
+	deadline time.Time
+	written  int
+}
+
+func (c *slowConn) Header() http.Header { return c.header }
+
+func (c *slowConn) WriteHeader(int) {}
+
+func (c *slowConn) Write(b []byte) (int, error) {
+	time.Sleep(time.Duration(len(b)) * time.Second / time.Duration(c.rate))
+	if !c.deadline.IsZero() && time.Now().After(c.deadline) {
+		return 0, os.ErrDeadlineExceeded
+	}
+	c.written += len(b)
+	return len(b), nil
+}
+
+func (c *slowConn) SetWriteDeadline(t time.Time) error {
+	c.deadline = t
+	return nil
+}
+
 // TestHandleWriteDeadlineServesSlowReader pins the per-chunk deadline: the response
 // takes several times the timeout to deliver, so it only completes if the deadline
 // moves with each chunk instead of bounding the whole write.
 func TestHandleWriteDeadlineServesSlowReader(t *testing.T) {
 	const (
-		timeout = 200 * time.Millisecond
-		size    = 2 * 1024 * 1024
+		timeout = 100 * time.Millisecond
+		size    = 1024 * 1024
 	)
-	body := bytes.Repeat([]byte("x"), size)
+	// One chunk drains in a fifth of the timeout; the whole body needs several.
+	conn := &slowConn{header: http.Header{}, rate: writeChunkSize * 5 * int(time.Second/timeout)}
 
-	writeErr := make(chan error, 1)
-	ts := newWriteDeadlineServer(t, timeout, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", "2097152")
-		_, err := w.Write(body) // one call, as WriteJSON makes
-		writeErr <- err
-	})
-
-	conn := dialSmallBuffer(t, ts, "/")
-	resp, err := http.ReadResponse(bufio.NewReaderSize(conn, 4*1024), nil)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	// ~3 MB/s: well above the floor of one chunk per timeout, well below what
-	// the whole body needs to arrive within a single timeout.
+	var writeErr error
 	start := time.Now()
-	buf := make([]byte, 32*1024)
-	var got int
-	for {
-		n, err := resp.Body.Read(buf)
-		got += n
-		if err == io.EOF {
-			break
-		}
-		require.NoError(t, err)
-		time.Sleep(10 * time.Millisecond)
-	}
-	require.Greater(t, time.Since(start), timeout, "the reader was not slow enough to exercise the deadline")
-	assert.Equal(t, size, got)
-	assert.NoError(t, <-writeErr)
+	HandleWriteDeadline(timeout)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, writeErr = w.Write(bytes.Repeat([]byte("x"), size)) // one call, as WriteJSON makes
+	})).ServeHTTP(conn, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.Greater(t, time.Since(start), 2*timeout, "the write was not slow enough to exercise the deadline")
+	require.NoError(t, writeErr)
+	assert.Equal(t, size, conn.written)
 }
 
 // TestHandleWriteDeadlineArmedByFirstWrite pins that time before the response starts
