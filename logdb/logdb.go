@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/vechain/thor/v2/block"
@@ -229,6 +230,66 @@ func (db *LogDB) Path() string {
 	return db.path
 }
 
+// narrowRange reports whether r spans fewer than maxScanBlocks blocks.
+func narrowRange(r *Range) bool {
+	return r != nil && r.To >= r.From && r.To-r.From < maxScanBlocks
+}
+
+// buildEventFilterSubQuery builds the seq-selecting subquery for a non-nil filter. With narrow set,
+// criteria whose index lookup the seq range cannot bound are evaluated by a seq range scan instead.
+func buildEventFilterSubQuery(filter *EventFilter, narrow bool) (string, []any, error) {
+	var (
+		subQuery = "SELECT seq FROM event WHERE 1"
+		args     []any
+	)
+
+	if filter.Range != nil {
+		from, err := newSequence(filter.Range.From, 0, 0)
+		if err != nil {
+			return "", nil, err
+		}
+		to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
+		if err != nil {
+			return "", nil, err
+		}
+		// Always bind both bounds. For an inverted range (To < From) this yields
+		// seq >= from AND seq <= to with to < from — an empty result — instead of
+		// silently dropping the upper bound and returning everything from `from` on.
+		subQuery += " AND seq >= ? AND seq <= ?"
+		args = append(args, from, to)
+	}
+
+	if len(filter.CriteriaSet) > 0 {
+		var sb strings.Builder
+		sb.WriteString(" AND (")
+		for i, c := range filter.CriteriaSet {
+			cond, cargs := c.toWhereCondition(narrow && !c.seqBounded())
+			if i > 0 {
+				sb.WriteString(" OR")
+			}
+			sb.WriteString(" (" + cond + ")")
+			args = append(args, cargs...)
+		}
+		sb.WriteString(")")
+		subQuery += sb.String()
+	}
+
+	// Options set: order and LIMIT are applied together in the subquery, so LIMIT takes the ordered window.
+	// The outer query keeps that order because s is a co-routine on the left side of a LEFT JOIN, so SQLite
+	// always drives the join from it. An outer ORDER BY would add a temp b-tree sort (~4%) for no change;
+	// test case "query events with limit with desc" guards this.
+	if filter.Options != nil {
+		if filter.Order == DESC {
+			subQuery += " ORDER BY seq DESC "
+		} else {
+			subQuery += " ORDER BY seq ASC "
+		}
+		subQuery += " LIMIT ?, ?"
+		args = append(args, filter.Options.Offset, filter.Options.Limit)
+	}
+	return subQuery, args, nil
+}
+
 func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
 	const query = `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
 FROM (%v) e
@@ -248,53 +309,9 @@ FROM (%v) e
 
 	metricsHandleEventsFilter(filter)
 
-	var (
-		subQuery = "SELECT seq FROM event WHERE 1"
-		args     []any
-	)
-
-	if filter.Range != nil {
-		from, err := newSequence(filter.Range.From, 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		to, err := newSequence(filter.Range.To, txIndexMask, logIndexMask)
-		if err != nil {
-			return nil, err
-		}
-		// Always bind both bounds. For an inverted range (To < From) this yields
-		// seq >= from AND seq <= to with to < from — an empty result — instead of
-		// silently dropping the upper bound and returning everything from `from` on.
-		subQuery += " AND seq >= ? AND seq <= ?"
-		args = append(args, from, to)
-	}
-
-	if len(filter.CriteriaSet) > 0 {
-		subQuery += " AND ("
-
-		for i, c := range filter.CriteriaSet {
-			cond, cargs := c.toWhereCondition()
-			if i > 0 {
-				subQuery += " OR"
-			}
-			subQuery += " (" + cond + ")"
-			args = append(args, cargs...)
-		}
-		subQuery += ")"
-	}
-
-	// Options set: order and LIMIT are applied together in the subquery, so LIMIT takes the ordered window.
-	// The outer query keeps that order because s is a co-routine on the left side of a LEFT JOIN, so SQLite
-	// always drives the join from it. An outer ORDER BY would add a temp b-tree sort (~4%) for no change;
-	// test case "query events with limit with desc" guards this.
-	if filter.Options != nil {
-		if filter.Order == DESC {
-			subQuery += " ORDER BY seq DESC "
-		} else {
-			subQuery += " ORDER BY seq ASC "
-		}
-		subQuery += " LIMIT ?, ?"
-		args = append(args, filter.Options.Offset, filter.Options.Limit)
+	subQuery, args, err := buildEventFilterSubQuery(filter, narrowRange(filter.Range))
+	if err != nil {
+		return nil, err
 	}
 
 	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN event e ON s.seq = e.seq"

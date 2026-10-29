@@ -233,18 +233,17 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		return &emptyRange, nil
 	}
 
+	// open-ended and oversized ranges end a few blocks above the head
+	to := block.Number(chain.HeadID()) + 6
+	if r.To != nil && *r.To < uint64(to) {
+		to = uint32(*r.To)
+	}
 	from := uint32(0)
 	if r.From != nil {
 		from = uint32(*r.From)
 	}
-
-	to := uint32(logdb.MaxBlockNumber)
-	if r.To != nil && *r.To < logdb.MaxBlockNumber {
-		to = uint32(*r.To)
+	if from > to {
+		return &emptyRange, nil
 	}
-
-	return &logdb.Range{
-		From: from,
-		To:   to,
-	}, nil
+	return &logdb.Range{From: from, To: to}, nil
 }

@@ -64,7 +64,20 @@ type EventCriteria struct {
 	Topics  [5]*thor.Bytes32
 }
 
-func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
+// maxScanBlocks bounds the block span over which address-less criteria are evaluated by a seq
+// range scan rather than a topic index; past this width the scan stops paying off for sparse topics.
+const maxScanBlocks = 100_000
+
+// seqBounded reports whether an index lookup for the criterion can be bounded by the seq range.
+// Every event index except event_i0 has address between its topic columns and seq, so without an
+// address the lookup reads every matching entry chain-wide before the seq filter applies.
+func (c *EventCriteria) seqBounded() bool {
+	return c.Address != nil
+}
+
+// toWhereCondition renders the criterion. With rangeScan set, topics are written as +topicN so
+// SQLite cannot use them for an index lookup and falls back to the seq range.
+func (c *EventCriteria) toWhereCondition(rangeScan bool) (cond string, args []any) {
 	cond = "1"
 	if c.Address != nil {
 		cond += " AND address = " + refIDQuery
@@ -72,7 +85,11 @@ func (c *EventCriteria) toWhereCondition() (cond string, args []any) {
 	}
 	for i, topic := range c.Topics {
 		if topic != nil {
-			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			col := fmt.Sprintf("topic%v", i)
+			if rangeScan {
+				col = "+" + col
+			}
+			cond += " AND " + col + " = " + refIDQuery
 			args = append(args, removeLeadingZeros(topic.Bytes()))
 		}
 	}
