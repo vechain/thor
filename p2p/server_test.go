@@ -861,3 +861,104 @@ func TestServerInboundLANExempt(t *testing.T) {
 		conn.Close()
 	}
 }
+
+func TestInboundSource(t *testing.T) {
+	tests := []struct {
+		ip   string
+		want string
+	}{
+		{"95.33.21.2", "95.33.21.2"},
+		{"::ffff:95.33.21.2", "95.33.21.2"}, // IPv4-mapped counts as the IPv4 address
+		{"2a01:4f8:1:2::1", "2a01:4f8:1:2::"},
+		{"2a01:4f8:1:2:ffff:ffff:ffff:ffff", "2a01:4f8:1:2::"}, // same /64
+		{"2a01:4f8:1:3::1", "2a01:4f8:1:3::"},                  // next /64
+	}
+	for _, tt := range tests {
+		if got := inboundSource(net.ParseIP(tt.ip)); got != tt.want {
+			t.Errorf("inboundSource(%s) = %q, want %q", tt.ip, got, tt.want)
+		}
+	}
+}
+
+// seqAddrListener hands out accepted connections with the next mocked remote
+// address from addrs.
+type seqAddrListener struct {
+	net.Listener
+	addrs []net.Addr
+	next  int
+}
+
+func (l *seqAddrListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	addr := l.addrs[l.next%len(l.addrs)]
+	l.next++
+	return &fakeAddrConn{c, addr}, nil
+}
+
+// TestServerInboundThrottleIPv6Prefix pins that the throttle counts an IPv6 /64
+// as one source: a second address in the same /64 is rejected, while an address
+// in another /64 is accepted.
+func TestServerInboundThrottleIPv6Prefix(t *testing.T) {
+	const timeout = 5 * time.Second
+	addr := func(s string) net.Addr { return &net.TCPAddr{IP: net.ParseIP(s), Port: 4444} }
+	newTransportCalled := make(chan struct{}, 3)
+	srv := &Server{
+		Config: Config{
+			PrivateKey:  newkey(),
+			ListenAddr:  "127.0.0.1:0",
+			MaxPeers:    10,
+			NoDial:      true,
+			NoDiscovery: true,
+			Protocols:   []Protocol{discard},
+		},
+		newTransport: func(fd net.Conn) transport {
+			newTransportCalled <- struct{}{}
+			return newRLPX(fd)
+		},
+		listenFunc: func(network, laddr string) (net.Listener, error) {
+			l, err := net.Listen(network, laddr)
+			if err != nil {
+				return nil, err
+			}
+			return &seqAddrListener{Listener: l, addrs: []net.Addr{
+				addr("2a01:4f8:1:2::1"),    // accepted
+				addr("2a01:4f8:1:2::beef"), // same /64: rejected
+				addr("2a01:4f8:1:3::1"),    // another /64: accepted
+			}}, nil
+		},
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal("can't start:", err)
+	}
+	defer srv.Stop()
+
+	for i, wantAccepted := range []bool{true, false, true} {
+		conn, err := net.DialTimeout("tcp", srv.ListenAddr, timeout)
+		if err != nil {
+			t.Fatalf("dial %d failed: %v", i, err)
+		}
+		closed := make(chan struct{})
+		go func() {
+			defer close(closed)
+			_ = conn.SetReadDeadline(time.Now().Add(timeout))
+			_, _ = conn.Read(make([]byte, 1))
+		}()
+		select {
+		case <-newTransportCalled:
+			if !wantAccepted {
+				t.Errorf("conn %d: accepted, want rejected", i)
+			}
+		case <-closed:
+			if wantAccepted {
+				t.Errorf("conn %d: closed, want accepted", i)
+			}
+		case <-time.After(timeout):
+			t.Fatalf("conn %d: neither accepted nor closed", i)
+		}
+		conn.Close()
+		<-closed
+	}
+}

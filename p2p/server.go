@@ -45,9 +45,12 @@ const (
 	defaultMaxPendingPeers = 50
 	defaultDialRatio       = 3
 
-	// inboundThrottleTime is the minimum time between inbound
-	// connection attempts from a single (non-LAN) IP address.
+	// inboundThrottleTime is the minimum time between inbound connection
+	// attempts from a single (non-LAN) source, see inboundSource.
 	inboundThrottleTime = 30 * time.Second
+
+	// inboundIPv6PrefixBits is the IPv6 prefix treated as one inbound source.
+	inboundIPv6PrefixBits = 64
 
 	// Maximum time allowed for reading a complete message.
 	// This is effectively the amount of time a connection can be idle.
@@ -880,16 +883,17 @@ func (srv *Server) listenLoop() {
 		if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
 			now := srv.clock.Now()
 			srv.inboundHistory.expire(now, nil)
-			// Per-IP inbound throttle (LAN exempt). Runs after the
+			// Per-source inbound throttle (LAN exempt). Runs after the
 			// NetRestrict check so rejected IPs don't pollute the history.
 			if !netutil.IsLAN(tcp.IP) {
-				if srv.inboundHistory.contains(tcp.IP.String()) {
+				source := inboundSource(tcp.IP)
+				if srv.inboundHistory.contains(source) {
 					srv.log.Debug("Rejected conn (too many attempts)", "addr", fd.RemoteAddr())
 					fd.Close()
 					slots <- struct{}{}
 					continue
 				}
-				srv.inboundHistory.add(tcp.IP.String(), now.Add(inboundThrottleTime))
+				srv.inboundHistory.add(source, now.Add(inboundThrottleTime))
 			}
 		}
 
@@ -899,6 +903,16 @@ func (srv *Server) listenLoop() {
 			slots <- struct{}{}
 		}()
 	}
+}
+
+// inboundSource returns the key the inbound throttle counts attempts under: the
+// address itself for IPv4 (IPv4-mapped IPv6 included), and the enclosing /64 for
+// IPv6, since a single host is usually assigned a whole /64.
+func inboundSource(ip net.IP) string {
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.Mask(net.CIDRMask(inboundIPv6PrefixBits, 8*net.IPv6len)).String()
 }
 
 // SetupConn runs the handshakes and attempts to add the connection
