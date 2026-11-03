@@ -7,11 +7,13 @@ package restutil_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -43,6 +45,39 @@ func TestWrapHandlerFuncWithGenericError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, response.Code)
 	assert.Equal(t, genericErrorMsg, strings.TrimSpace(response.Body.String()))
+}
+
+func TestWrapHandlerFuncWithDoneContext(t *testing.T) {
+	expired, cancelExpired := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer cancelExpired()
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	for name, tt := range map[string]struct {
+		ctx        context.Context
+		err        error
+		wantStatus int
+		wantBody   string
+	}{
+		"timeout, raw ctx error":       {expired, context.DeadlineExceeded, http.StatusServiceUnavailable, "request timed out"},
+		"timeout, wrapped ctx error":   {expired, errors.WithMessage(context.DeadlineExceeded, "query"), http.StatusServiceUnavailable, "request timed out"},
+		"timeout, unrelated error":     {expired, errors.New("sql: Rows are closed"), http.StatusServiceUnavailable, "request timed out"},
+		"client gone, raw ctx error":   {canceled, context.Canceled, 499, "client closed request"},
+		"client gone, unrelated error": {canceled, errors.New("interrupted"), 499, "client closed request"},
+		"timeout, http error kept":     {expired, restutil.BadRequest(errors.New("bad")), http.StatusBadRequest, "bad"},
+		"live context, ctx error":      {context.Background(), context.DeadlineExceeded, http.StatusInternalServerError, "context deadline exceeded"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			wrapped := restutil.WrapHandlerFunc(func(http.ResponseWriter, *http.Request) error { return tt.err })
+
+			req := httptest.NewRequestWithContext(tt.ctx, http.MethodGet, "http://example.com", nil)
+			res := httptest.NewRecorder()
+			wrapped.ServeHTTP(res, req)
+
+			assert.Equal(t, tt.wantStatus, res.Code)
+			assert.Equal(t, tt.wantBody, strings.TrimSpace(res.Body.String()))
+		})
+	}
 }
 
 func TestWrapHandlerFuncWithBadRequestError(t *testing.T) {
