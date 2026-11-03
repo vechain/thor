@@ -37,6 +37,7 @@ type Communicator struct {
 	peerSet        *PeerSet
 	syncedCh       chan struct{}
 	newBlockFeed   event.Feed
+	blockMailbox   *blockMailbox
 	announcementCh chan *announcement
 	feedScope      event.SubscriptionScope
 	goes           sync.WaitGroup
@@ -53,6 +54,7 @@ func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 		cancel:         cancel,
 		peerSet:        newPeerSet(),
 		syncedCh:       make(chan struct{}),
+		blockMailbox:   newBlockMailbox(),
 		announcementCh: make(chan *announcement),
 	}
 }
@@ -148,6 +150,30 @@ func (c *Communicator) DiscTopic() discv5.Topic {
 func (c *Communicator) Start() {
 	c.goes.Go(c.txsLoop)
 	c.goes.Go(c.announcementLoop)
+	c.goes.Go(c.deliverBlocksLoop)
+}
+
+// deliverBlocksLoop forwards blocks queued in blockMailbox to newBlockFeed
+// subscribers, off the peer read loop, so a slow subscriber never blocks p2p.
+func (c *Communicator) deliverBlocksLoop() {
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-c.blockMailbox.signal:
+		}
+		batch := c.blockMailbox.take()
+		blocks := make([]*block.Block, 0, len(batch))
+		for _, blk := range batch {
+			blocks = append(blocks, blk)
+		}
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i].Header().Number() < blocks[j].Header().Number()
+		})
+		for _, blk := range blocks {
+			c.newBlockFeed.Send(&NewBlockEvent{Block: blk})
+		}
+	}
 }
 
 // Stop stop the communicator.
@@ -177,6 +203,7 @@ func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 func (c *Communicator) runPeer(peer *Peer) {
 	defer peer.Disconnect(p2p.DiscRequested)
+	defer c.blockMailbox.remove(peer)
 
 	// 5sec timeout for handshake
 	ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)

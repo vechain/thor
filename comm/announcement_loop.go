@@ -92,7 +92,7 @@ func (c *Communicator) fetchBlockByID(peer *Peer, newBlockID thor.Bytes32) {
 
 	metricFetchedBlockCount().Add(1)
 
-	c.newBlockFeed.Send(&NewBlockEvent{
-		Block: blk,
-	})
+	if c.blockMailbox.put(peer, blk) {
+		metricBlockMailboxOverwriteCount().Add(1)
+	}
 }

@@ -73,18 +73,11 @@ func fetchBlockByIDResult(t *testing.T, served rlp.RawValue, want thor.Bytes32) 
 	peer := newPeer(p2p.NewPeer(discover.NodeID{}, "test", nil), rw)
 	go peer.Serve(func(*p2p.Msg, func(any)) error { return nil }, proto.MaxMsgSize)
 
-	events := make(chan *NewBlockEvent, 1)
-	sub := c.SubscribeBlock(events)
-	defer sub.Unsubscribe()
-
 	c.fetchBlockByID(peer, want)
 
-	select {
-	case ev := <-events:
-		return ev.Block
-	default:
-		return nil
-	}
+	// fetchBlockByID now hands the block to the mailbox instead of the feed;
+	// inspect the mailbox directly rather than a subscription.
+	return c.blockMailbox.take()[peer]
 }
 
 func TestFetchBlockByID(t *testing.T) {

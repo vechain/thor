@@ -56,7 +56,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(any), txsT
 
 		peer.MarkBlock(newBlock.Header().ID())
 		peer.UpdateHead(newBlock.Header().ID(), newBlock.Header().TotalScore())
-		c.newBlockFeed.Send(&NewBlockEvent{Block: newBlock})
+		if c.blockMailbox.put(peer, newBlock) {
+			metricBlockMailboxOverwriteCount().Add(1)
+		}
 		write(&struct{}{})
 	case proto.MsgNewBlockID:
 		var newBlockID thor.Bytes32
