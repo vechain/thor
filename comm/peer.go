@@ -6,6 +6,7 @@
 package comm
 
 import (
+	"context"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -13,16 +14,21 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	lru "github.com/hashicorp/golang-lru"
 
+	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2p"
 	"github.com/vechain/thor/v2/p2p/discover"
 	"github.com/vechain/thor/v2/p2psrv/rpc"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (
 	maxKnownTxs    = 65536 // Maximum transactions IDs to keep in the known list (prevent DOS)
 	maxKnownBlocks = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
+	// Per-peer tx broadcast queue; covers the burst of a one-shot wash upgrade
+	// (20% of the default txpool-limit 10000 for non-executable txs = 2000).
+	maxQueuedTxs = 2048
 )
 
 // Peer extends p2p.Peer with RPC integrated.
@@ -34,6 +40,7 @@ type Peer struct {
 	createdTime mclock.AbsTime
 	knownTxs    *lru.Cache
 	knownBlocks *lru.Cache
+	queuedTxs   chan *tx.Transaction
 	head        struct {
 		sync.Mutex
 		id         thor.Bytes32
@@ -59,6 +66,35 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		createdTime: mclock.Now(),
 		knownTxs:    knownTxs,
 		knownBlocks: knownBlocks,
+		queuedTxs:   make(chan *tx.Transaction, maxQueuedTxs),
+	}
+}
+
+// asyncSendTx queues the tx for broadcast without blocking. It returns false
+// and leaves the tx unmarked if the queue is full, so a later re-broadcast can retry.
+func (p *Peer) asyncSendTx(tx *tx.Transaction) bool {
+	select {
+	case p.queuedTxs <- tx:
+		p.MarkTransaction(tx.Hash())
+		return true
+	default:
+		return false
+	}
+}
+
+// broadcastTxs is the single writer of queued txs, it returns when ctx is done or the peer disconnects.
+func (p *Peer) broadcastTxs(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-p.Done():
+			return
+		case tx := <-p.queuedTxs:
+			if err := proto.NotifyNewTx(ctx, p, tx); err != nil {
+				p.logger.Debug("failed to broadcast tx", "err", err)
+			}
+		}
 	}
 }
 

@@ -193,6 +193,9 @@ func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	c.goes.Go(func() {
 		c.runPeer(peer)
 	})
+	c.goes.Go(func() {
+		peer.broadcastTxs(c.ctx)
+	})
 
 	var txsToSync txsToSync
 

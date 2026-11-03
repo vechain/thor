@@ -118,6 +118,12 @@ var (
 		Usage:   "enable deprecated API endpoints (POST /accounts/{address}, POST /accounts, WS /subscriptions/beat",
 		Sources: envVar("API_ENABLE_DEPRECATED"),
 	}
+	apiLocalTxPrivilegesFlag = &cli.BoolFlag{
+		Name:    "api-local-tx-privileges",
+		Local:   true,
+		Usage:   "submit API transactions with the pool's local tier (no MaxLifetime, exempt from trim, re-broadcast every wash); default off — API txs are treated as remote, which is what public nodes want",
+		Sources: envVar("API_LOCAL_TX_PRIVILEGES"),
+	}
 	enableAPILogsFlag = &cli.BoolFlag{
 		Name:    "enable-api-logs",
 		Local:   true,

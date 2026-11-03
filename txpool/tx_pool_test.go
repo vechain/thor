@@ -1218,6 +1218,35 @@ func TestExecutableAndNonExecutableLimits(t *testing.T) {
 	assert.Equal(t, "tx rejected: non executable pool is full", err.Error())
 }
 
+// TestLocalSubmissionCapExemption pins the tier semantics as restored per
+// review: with the API ingress routed by --api-local-tx-privileges (default
+// off — api/transactions submits via pool.Add), local-tier submissions are
+// exempt from the pool admission caps again, so flag-on equals the previous
+// behaviour. Remote submissions stay capped.
+func TestLocalSubmissionCapExemption(t *testing.T) {
+	// small pool: Limit 10 -> hard cap 15 for remote submissions
+	pool := newPool(10, 100, &thor.SoloFork)
+	defer pool.Close()
+
+	maxFee := new(big.Int).Add(big.NewInt(thor.InitialBaseFee), big.NewInt(1_000_000_000))
+	mk := func(prio int64) *tx.Transaction {
+		b := txBuilder(tx.TypeDynamicFee, pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(0), 100, nil, tx.Features(0)).
+			MaxFeePerGas(maxFee).
+			MaxPriorityFeePerGas(big.NewInt(prio))
+		return tx.MustSign(b.Build(), devAccounts[0].PrivateKey)
+	}
+
+	// locals skip the caps entirely: 20 pooled against a remote cap of 15
+	for i := range 20 {
+		assert.NoError(t, pool.AddLocal(mk(int64(100+i))))
+	}
+	assert.Equal(t, 20, pool.Len())
+
+	// remote submissions are rejected at the hard cap
+	err := pool.Add(mk(1000))
+	assert.Equal(t, "tx rejected: pool is full", err.Error())
+}
+
 func TestNonExecutables(t *testing.T) {
 	pool := newPoolWithParams(100, 100, "", "", uint64(time.Now().Unix()), &thor.NoFork)
 

@@ -342,7 +342,11 @@ func (p *TxPool) addWhenSynced(
 		candidatePGP = pricing.priorityGasPrice
 	}
 
-	// Check pool limits and priority for remote transactions
+	// Pool admission caps apply to remote transactions only: with the API
+	// ingress now routed by --api-local-tx-privileges (default off), local
+	// tier means exactly the historical privileges — flag-on nodes opt into
+	// that knowingly, and the 20% non-executable cap below still bounds
+	// every tier.
 	if !txObj.localSubmitted() {
 		if p.all.Len() >= p.options.Limit*15/10 {
 			return false, txRejectedError{"pool is full"}

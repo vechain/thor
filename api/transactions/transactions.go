@@ -16,18 +16,26 @@ import (
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
 
 type Transactions struct {
-	repo *chain.Repository
-	pool txpool.Pool
+	repo              *chain.Repository
+	pool              txpool.Pool
+	localTxPrivileges bool
 }
 
-func New(repo *chain.Repository, pool txpool.Pool) *Transactions {
+// New builds the /transactions API. With localTxPrivileges set, submissions
+// enter the pool's local tier (no MaxLifetime, exempt from trim, re-broadcast
+// every wash) — intended for private wallet backends. The default treats API
+// submissions like any remote peer's, which is the safe posture for nodes
+// with a public API.
+func New(repo *chain.Repository, pool txpool.Pool, localTxPrivileges bool) *Transactions {
 	return &Transactions{
-		repo,
-		pool,
+		repo:              repo,
+		pool:              pool,
+		localTxPrivileges: localTxPrivileges,
 	}
 }
 
@@ -116,6 +124,14 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 	return api.ConvertReceipt(receipt, header, tx)
 }
 
+// submit passes the tx to the pool under the configured trust tier.
+func (t *Transactions) submit(tx *tx.Transaction) error {
+	if t.localTxPrivileges {
+		return t.pool.AddLocal(tx)
+	}
+	return t.pool.Add(tx)
+}
+
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *api.RawTx
 	if err := restutil.ParseJSON(req.Body, &rawTx); err != nil {
@@ -129,7 +145,8 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return restutil.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
-	if err := t.pool.AddLocal(tx); err != nil {
+	err = t.submit(tx)
+	if err != nil {
 		if txpool.IsBadTx(err) {
 			return restutil.BadRequest(err)
 		}

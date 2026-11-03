@@ -272,6 +272,7 @@ func makeAPIConfig(ctx *cli.Command, logAPIRequests *atomic.Bool, enableTxPool *
 		LogsLimit:                  ctx.Uint64(apiLogsLimitFlag.Name),
 		AllowedTracers:             parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 		EnableDeprecated:           ctx.Bool(apiEnableDeprecatedFlag.Name),
+		LocalTxPrivileges:          ctx.Bool(apiLocalTxPrivilegesFlag.Name),
 		SoloMode:                   soloMode,
 		EnableTxPool:               enableTxPool,
 		Timeout:                    int(ctx.Uint64(apiTimeoutFlag.Name)),

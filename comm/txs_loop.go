@@ -6,7 +6,6 @@
 package comm
 
 import (
-	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -27,12 +26,9 @@ func (c *Communicator) txsLoop() {
 				})
 
 				for _, peer := range peers {
-					peer.MarkTransaction(tx.Hash())
-					c.goes.Go(func() {
-						if err := proto.NotifyNewTx(c.ctx, peer, tx); err != nil {
-							peer.logger.Debug("failed to broadcast tx", "err", err)
-						}
-					})
+					if !peer.asyncSendTx(tx) {
+						peer.logger.Debug("tx broadcast queue full, dropping", "id", tx.ID())
+					}
 				}
 			}
 		}

@@ -60,6 +60,7 @@ type APIConfig struct {
 	AllowedTracers             []string
 	SoloMode                   bool
 	EnableDeprecated           bool
+	LocalTxPrivileges          bool
 	EnableTxPool               *atomic.Bool
 	APIBacktraceLimit          int
 	PriorityIncreasePercentage int
@@ -115,7 +116,7 @@ func StartAPIServer(
 		transfers.New(repo, logDB, config.LogsLimit, config.MaxLogsOffset, defaultMaxCriteriaCount).Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).Mount(router, "/blocks")
-	transactions.New(repo, txPool).Mount(router, "/transactions")
+	transactions.New(repo, txPool, config.LocalTxPrivileges).Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, bft,
 		config.CallGasLimit,
 		config.AllowCustomTracer,

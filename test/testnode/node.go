@@ -81,7 +81,7 @@ func (n *node) Start() error {
 	events.New(repo, logDB, 1000, 100_000, 10).Mount(router, "/logs/event")
 	transfers.New(repo, logDB, 1000, 100_000, 10).Mount(router, "/logs/transfer")
 	blocks.New(repo, engine).Mount(router, "/blocks")
-	transactions.New(repo, n.txPool).Mount(router, "/transactions")
+	transactions.New(repo, n.txPool, false).Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, engine,
 		40_000_000,
 		true,

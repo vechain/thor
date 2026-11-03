@@ -6,15 +6,19 @@
 package comm
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/p2p"
 	"github.com/vechain/thor/v2/p2p/discover"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 type stubMsgReadWriter struct{}
@@ -99,4 +103,53 @@ func TestPeerSetAddFindRemoveSliceLen(t *testing.T) {
 	ps.Add(peer3)
 	slice := ps.Slice()
 	assert.Len(t, slice, 2)
+}
+
+func TestAsyncSendTx(t *testing.T) {
+	peer := newPeer(p2p.NewPeer(discover.NodeID{}, "test", nil), stubMsgReadWriter{})
+	for i := range maxQueuedTxs {
+		trx := tx.NewBuilder(tx.TypeLegacy).Nonce(uint64(i)).Build()
+		assert.True(t, peer.asyncSendTx(trx))
+		assert.True(t, peer.IsTransactionKnown(trx.Hash()))
+	}
+
+	full := tx.NewBuilder(tx.TypeLegacy).Nonce(maxQueuedTxs).Build()
+	assert.False(t, peer.asyncSendTx(full))
+	assert.False(t, peer.IsTransactionKnown(full.Hash()))
+}
+
+func TestBroadcastTxsExit(t *testing.T) {
+	newRunning := func(ctx context.Context) (*Peer, func(), <-chan struct{}) {
+		rw1, rw2 := p2p.MsgPipe()
+		peer := newPeer(p2p.NewPeer(discover.NodeID{}, "test", nil), rw1)
+		go peer.Serve(func(*p2p.Msg, func(any)) error { return nil }, proto.MaxMsgSize)
+		exited := make(chan struct{})
+		go func() {
+			peer.broadcastTxs(ctx)
+			close(exited)
+		}()
+		return peer, func() { rw2.Close() }, exited
+	}
+
+	t.Run("ctx cancel", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		_, closePipe, exited := newRunning(ctx)
+		defer closePipe()
+		cancel()
+		select {
+		case <-exited:
+		case <-time.After(5 * time.Second):
+			t.Fatal("writer did not exit on ctx cancel")
+		}
+	})
+
+	t.Run("peer done", func(t *testing.T) {
+		_, closePipe, exited := newRunning(t.Context())
+		closePipe()
+		select {
+		case <-exited:
+		case <-time.After(5 * time.Second):
+			t.Fatal("writer did not exit on peer done")
+		}
+	})
 }

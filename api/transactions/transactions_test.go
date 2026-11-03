@@ -433,7 +433,7 @@ func initTransactionServer(t *testing.T) {
 	}
 
 	router := mux.NewRouter()
-	transactions.New(thorChain.Repo(), mempool).Mount(router, "/transactions")
+	transactions.New(thorChain.Repo(), mempool, false).Mount(router, "/transactions")
 
 	ts = httptest.NewServer(router)
 }
