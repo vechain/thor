@@ -90,6 +90,9 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 	if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
 		return err
 	}
+	if len(alpha) > 64 {
+		return errors.New("rlp: alpha exceeds 64 bytes")
+	}
 
 	// only alpha, make sure it's trimmed
 	if len(raws) == 1 {
@@ -128,6 +131,9 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 	var baseFee big.Int
 	if err := rlp.DecodeBytes(raws[2], &baseFee); err != nil {
 		return err
+	}
+	if baseFee.BitLen() > 256 {
+		return errors.New("rlp: baseFee exceeds 256 bits")
 	}
 
 	*ex = extension{

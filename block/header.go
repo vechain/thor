@@ -288,7 +288,7 @@ func (h *Header) String() string {
 	Beneficiary:    %v
 	GasLimit:       %v
 	GasUsed:        %v
-	BaseFee:		%v
+	BaseFee:		%s
 	TotalScore:     %v
 	TxsRoot:        %v
 	TxsFeatures:    %v
@@ -305,7 +305,7 @@ func (h *Header) String() string {
 		h.body.Beneficiary,
 		h.body.GasLimit,
 		h.body.GasUsed,
-		h.body.Extension.BaseFee,
+		thor.BigIntToString(h.body.Extension.BaseFee),
 		h.body.TotalScore,
 		h.body.TxsRootFeatures.Root,
 		h.body.TxsRootFeatures.Features,

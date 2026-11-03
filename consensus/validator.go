@@ -161,7 +161,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		expectedBaseFee := galactica.CalcBaseFee(parent, c.forkConfig)
 		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
 			return consensusError(fmt.Sprintf("block baseFee invalid: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-				header.BaseFee(), expectedBaseFee, parent.BaseFee(), parent.GasUsed()))
+				thor.BigIntToString(header.BaseFee()), expectedBaseFee, thor.BigIntToString(parent.BaseFee()), parent.GasUsed()))
 		}
 	}
 

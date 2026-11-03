@@ -139,6 +139,6 @@ func (c *Clause) String() string {
 	}
 	return fmt.Sprintf(`
 		(To:	%v
-		 Value:	%v
-		 Data:	0x%x)`, to, c.body.Value, c.body.Data)
+		 Value:	%s
+		 Data:	0x%x)`, to, thor.BigIntToString(c.body.Value), c.body.Data)
 }

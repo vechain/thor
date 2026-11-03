@@ -467,3 +467,9 @@ func signingHash(h *Header, t *testing.T) thor.Bytes32 {
 		assert.Nil(t, rlp.Encode(w, fields))
 	})
 }
+
+func TestHeaderStringOversizedBaseFee(t *testing.T) {
+	huge := new(big.Int).Lsh(big.NewInt(1), 8*1024*1024)
+	h := new(Builder).BaseFee(huge).Build().Header()
+	assert.Less(t, len(h.String()), 4096)
+}

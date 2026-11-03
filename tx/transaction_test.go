@@ -984,3 +984,17 @@ func TestValidateSignatureLength(t *testing.T) {
 		})
 	}
 }
+
+func TestStringBoundsOversizedBigInts(t *testing.T) {
+	huge := new(big.Int).Lsh(big.NewInt(1), 1024*1024)
+
+	clause := NewClause(nil).WithValue(huge)
+	assert.Less(t, len(clause.String()), 4096)
+
+	trx := NewBuilder(TypeDynamicFee).
+		Clause(clause).
+		MaxFeePerGas(huge).
+		MaxPriorityFeePerGas(huge).
+		Build()
+	assert.Less(t, len(trx.String()), 8192)
+}

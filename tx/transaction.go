@@ -640,9 +640,9 @@ func (t *Transaction) String() string {
 	}
 
 	return fmt.Sprintf(`%v
-		MaxFeePerGas:   %v
-		MaxPriorityFeePerGas: %v
-		`, s, t.body.maxFeePerGas(), t.body.maxPriorityFeePerGas())
+		MaxFeePerGas:   %s
+		MaxPriorityFeePerGas: %s
+		`, s, thor.BigIntToString(t.body.maxFeePerGas()), thor.BigIntToString(t.body.maxPriorityFeePerGas()))
 }
 
 // ValidateSignatureLength checks the signature has the length implied by the

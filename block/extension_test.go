@@ -129,3 +129,43 @@ func TestExtensionDecodeRLP_Boundary(t *testing.T) {
 		assert.NotEqual(t, "rlp: unexpected extension", err.Error())
 	})
 }
+
+func TestExtensionDecodeRLP_WidthLimit(t *testing.T) {
+	baseFeeOfBytes := func(n int) *big.Int {
+		b := make([]byte, n)
+		for i := range b {
+			b[i] = 0xff
+		}
+		return new(big.Int).SetBytes(b)
+	}
+
+	t.Run("baseFee 32 bytes is accepted", func(t *testing.T) {
+		enc, err := rlp.EncodeToBytes(&extension{Alpha: []byte{0xff}, COM: true, BaseFee: baseFeeOfBytes(32)})
+		require.NoError(t, err)
+		var ex extension
+		require.NoError(t, rlp.DecodeBytes(enc, &ex))
+		assert.Equal(t, baseFeeOfBytes(32), ex.BaseFee)
+	})
+
+	t.Run("baseFee 33 bytes is rejected", func(t *testing.T) {
+		enc, err := rlp.EncodeToBytes(&extension{Alpha: []byte{0xff}, COM: true, BaseFee: baseFeeOfBytes(33)})
+		require.NoError(t, err)
+		var ex extension
+		assert.EqualError(t, rlp.DecodeBytes(enc, &ex), "rlp: baseFee exceeds 256 bits")
+	})
+
+	t.Run("alpha 64 bytes is accepted", func(t *testing.T) {
+		enc, err := rlp.EncodeToBytes(&extension{Alpha: make([]byte, 64)})
+		require.NoError(t, err)
+		var ex extension
+		require.NoError(t, rlp.DecodeBytes(enc, &ex))
+		assert.Len(t, ex.Alpha, 64)
+	})
+
+	t.Run("alpha 65 bytes is rejected", func(t *testing.T) {
+		enc, err := rlp.EncodeToBytes(&extension{Alpha: make([]byte, 65)})
+		require.NoError(t, err)
+		var ex extension
+		assert.EqualError(t, rlp.DecodeBytes(enc, &ex), "rlp: alpha exceeds 64 bytes")
+	})
+}
