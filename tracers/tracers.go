@@ -128,6 +128,19 @@ func (d *directory) IsJS(name string) bool {
 	return true
 }
 
+// IsNative reports whether name resolves, as in New, to a registered tracer
+// implemented in Go. Unlike IsJS, it also resolves names given without the
+// "Tracer" suffix. It is not in go-ethereum: keep it when porting.
+func (d *directory) IsNative(name string) bool {
+	if elem, ok := d.elems[name]; ok {
+		return !elem.isJS
+	}
+	if elem, ok := d.elems[name+"Tracer"]; ok {
+		return !elem.isJS
+	}
+	return false
+}
+
 const (
 	memoryPadLimit = 1024 * 1024
 )

@@ -120,8 +120,21 @@ func (d *Debug) prepareClauseEnv(
 			if tx.ID() == txID && clauseIndex == clauseCounter {
 				return rt, txExec, txID, nil
 			}
-			exec, _ := txExec.PrepareNext()
-			if _, err := exec(); err != nil {
+			// Replaying the clauses before the target can cost up to a block's gas,
+			// so each one stops when ctx does, as the traced clause does. A late
+			// interrupt is harmless: it only cancels this clause's EVM, which is
+			// not used again.
+			exec, interrupt := txExec.PrepareNext()
+			stop := context.AfterFunc(ctx, interrupt)
+			interrupted, err := exec()
+			stop()
+			if interrupted {
+				if ctx.Err() != nil {
+					return nil, nil, thor.Bytes32{}, ctx.Err()
+				}
+				return nil, nil, thor.Bytes32{}, errors.New("execution interrupted")
+			}
+			if err != nil {
 				return nil, nil, thor.Bytes32{}, err
 			}
 			clauseCounter++
@@ -141,7 +154,7 @@ func (d *Debug) prepareClauseEnv(
 }
 
 // trace an existed clause
-func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *block.Block, txID thor.Bytes32, clauseIndex uint32) (any, error) {
+func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, native bool, block *block.Block, txID thor.Bytes32, clauseIndex uint32) (any, error) {
 	rt, txExec, txID, err := d.prepareClauseEnv(ctx, block, txID, clauseIndex)
 	if err != nil {
 		return nil, err
@@ -166,7 +179,27 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 	rt.SetVMConfig(vm.Config{Tracer: budget})
 
 	exec, interrupt := txExec.PrepareNext()
-	return traceExecution(ctx, budget, interrupt, exec)
+	return traceExecution(ctx, budget, native, interrupt, exec)
+}
+
+// watchContext runs onDone if ctx is done before the returned release is
+// called. release returns only once the watcher has exited, so onDone never
+// runs after it.
+func watchContext(ctx context.Context, onDone func()) (release func()) {
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		select {
+		case <-ctx.Done():
+			onDone()
+		case <-done:
+		}
+	}()
+	return func() {
+		close(done)
+		<-stopped
+	}
 }
 
 // traceExecution runs one traced clause execution under ctx and returns the
@@ -174,28 +207,20 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 // tracer; GetResult is reached only while ctx is still live, so a request
 // whose deadline fired or whose client disconnected gets an error instead of
 // a marshalled trace. A trace that exceeded its data budget is discarded the
-// same way.
+// same way. native reports whether the tracer is implemented in Go.
 func traceExecution(
 	ctx context.Context,
 	tracer *dataBudgetTracer,
+	native bool,
 	interrupt func(),
 	exec func() (interrupted bool, err error),
 ) (any, error) {
-	done := make(chan struct{})
-	stopped := make(chan struct{})
-	go func() {
-		defer close(stopped)
-		select {
-		case <-ctx.Done():
-			interrupt()
-			tracer.Stop(ctx.Err())
-		case <-done:
-		}
-	}()
-
+	release := watchContext(ctx, func() {
+		interrupt()
+		tracer.Stop(ctx.Err())
+	})
 	interrupted, err := exec()
-	close(done)
-	<-stopped // join the watchdog: no tracer.Stop may run past this point
+	release() // no tracer.Stop may run past this point
 
 	switch {
 	case ctx.Err() != nil:
@@ -209,7 +234,21 @@ func traceExecution(
 	case err != nil:
 		return nil, err
 	}
-	return tracer.GetResult()
+
+	// A JS tracer's result function can be caller-supplied code that never
+	// returns, so it runs under ctx too. Stop interrupts the JS runtime, which is
+	// safe while GetResult runs. A native tracer's Stop is not, and its result is
+	// bounded by the data budget.
+	if native {
+		return tracer.GetResult()
+	}
+	release = watchContext(ctx, func() { tracer.Stop(ctx.Err()) })
+	res, err := tracer.GetResult()
+	release()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return res, err
 }
 
 func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) error {
@@ -218,7 +257,7 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
 
-	tracer, err := d.createTracer(opt.Name, opt.Config)
+	tracer, native, err := d.createTracer(opt.Name, opt.Config)
 	if err != nil {
 		return restutil.Forbidden(err)
 	}
@@ -227,7 +266,7 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 	if err != nil {
 		return err
 	}
-	res, err := d.traceClause(req.Context(), tracer, block, txID, clauseIndex)
+	res, err := d.traceClause(req.Context(), tracer, native, block, txID, clauseIndex)
 	if err != nil {
 		return err
 	}
@@ -251,7 +290,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	tracer, err := d.createTracer(opt.Name, opt.Config)
+	tracer, native, err := d.createTracer(opt.Name, opt.Config)
 	if err != nil {
 		return restutil.Forbidden(err)
 	}
@@ -261,7 +300,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	res, err := d.traceCall(req.Context(), tracer, summary.Header, st, txCtx, gas, clause)
+	res, err := d.traceCall(req.Context(), tracer, native, summary.Header, st, txCtx, gas, clause)
 	if err != nil {
 		return err
 	}
@@ -269,7 +308,8 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	return restutil.WriteJSON(w, res)
 }
 
-func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, error) {
+// createTracer returns the requested tracer and whether it is implemented in Go.
+func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, bool, error) {
 	tracerName := strings.TrimSpace(name)
 	// compatible with old API specs
 	if tracerName == "" {
@@ -281,21 +321,24 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 		_, allowAll := d.allowedTracers["all"]
 		// fail if the requested tracer is not allowed OR "all" not set
 		if _, allowed := d.allowedTracers[tracerName]; !allowAll && !allowed {
-			return nil, fmt.Errorf("creating tracer is not allowed: %s", name)
+			return nil, false, fmt.Errorf("creating tracer is not allowed: %s", name)
 		}
-		return tracers.DefaultDirectory.New(tracerName, config, false)
+		tracer, err := tracers.DefaultDirectory.New(tracerName, config, false)
+		return tracer, tracers.DefaultDirectory.IsNative(tracerName), err
 	}
 
 	if d.allowCustomTracer {
-		return tracers.DefaultDirectory.New(tracerName, config, true)
+		tracer, err := tracers.DefaultDirectory.New(tracerName, config, true)
+		return tracer, false, err
 	}
 
-	return nil, errors.New("tracer is not defined")
+	return nil, false, errors.New("tracer is not defined")
 }
 
 func (d *Debug) traceCall(
 	ctx context.Context,
 	tracer tracers.Tracer,
+	native bool,
 	header *block.Header,
 	st *state.State,
 	txCtx *xenv.TransactionContext,
@@ -327,7 +370,7 @@ func (d *Debug) traceCall(
 	rt.SetVMConfig(vm.Config{Tracer: budget})
 
 	exec, interrupt := rt.PrepareClause(clause, 0, gas, txCtx)
-	return traceExecution(ctx, budget, interrupt, func() (bool, error) {
+	return traceExecution(ctx, budget, native, interrupt, func() (bool, error) {
 		_, interrupted, err := exec()
 		return interrupted, err
 	})

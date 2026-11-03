@@ -633,23 +633,34 @@ func TestCreateTracer(t *testing.T) {
 
 	// all
 	debug.allowedTracers = map[string]struct{}{"all": {}}
-	tr, err := debug.createTracer("", nil)
+	tr, native, err := debug.createTracer("", nil)
 	assert.Nil(t, err)
 	assert.IsType(t, &logger.StructLogger{}, tr)
-	_, err = debug.createTracer("{result:()=>{}, fault:()=>{}}", nil)
+	assert.True(t, native)
+	_, _, err = debug.createTracer("{result:()=>{}, fault:()=>{}}", nil)
 	assert.EqualError(t, err, "tracer is not defined")
 
-	tr, err = debug.createTracer("structLogger", nil)
+	tr, native, err = debug.createTracer("structLogger", nil)
 	assert.Nil(t, err)
 	assert.IsType(t, &logger.StructLogger{}, tr)
+	assert.True(t, native)
+
+	_, native, err = debug.createTracer("call", nil)
+	assert.Nil(t, err)
+	assert.True(t, native)
+
+	_, native, err = debug.createTracer("bigram", nil)
+	assert.Nil(t, err)
+	assert.False(t, native)
 
 	// none
 	debug.allowedTracers = map[string]struct{}{}
-	_, err = debug.createTracer("structLogger", nil)
+	_, _, err = debug.createTracer("structLogger", nil)
 	assert.EqualError(t, err, "creating tracer is not allowed: structLogger")
 
 	// custom tracer
 	debug.allowCustomTracer = true
-	_, err = debug.createTracer("{result:()=>{}, fault:()=>{}}", nil)
+	_, native, err = debug.createTracer("{result:()=>{}, fault:()=>{}}", nil)
 	assert.Nil(t, err)
+	assert.False(t, native)
 }

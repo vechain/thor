@@ -155,7 +155,7 @@ func TestTraceDataBudget(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		tracer, err := d.createTracer("call", nil)
+		tracer, native, err := d.createTracer("call", nil)
 		require.NoError(t, err)
 		rev, err := restutil.ParseRevision("best", true)
 		require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestTraceDataBudget(t *testing.T) {
 
 		// Even if execution completes, a fired deadline must prevent the
 		// GetResult/WriteJSON tail from running.
-		res, err := d.traceCall(ctx, tracer, summary.Header, st, txCtx, gas, clause)
+		res, err := d.traceCall(ctx, tracer, native, summary.Header, st, txCtx, gas, clause)
 		assert.Nil(t, res)
 		assert.ErrorIs(t, err, context.Canceled)
 	})
