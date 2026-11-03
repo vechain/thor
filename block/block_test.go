@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -138,17 +139,67 @@ func TestBlockDecodeRLP_TxCountLimit(t *testing.T) {
 
 	t.Run("at the limit is accepted", func(t *testing.T) {
 		var blk Block
-		require.NoError(t, rlp.DecodeBytes(makeBlockRLP(t, MaxTxsPerBlock), &blk))
-		assert.Len(t, blk.Transactions(), MaxTxsPerBlock)
+		require.NoError(t, rlp.DecodeBytes(makeBlockRLP(t, thor.MaxTxsPerBlock), &blk))
+		assert.Len(t, blk.Transactions(), thor.MaxTxsPerBlock)
 	})
 
 	t.Run("one over the limit is rejected", func(t *testing.T) {
 		var blk Block
-		err := rlp.DecodeBytes(makeBlockRLP(t, MaxTxsPerBlock+1), &blk)
+		err := rlp.DecodeBytes(makeBlockRLP(t, thor.MaxTxsPerBlock+1), &blk)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(),
-			fmt.Sprintf("tx count exceeds limit: > %d", MaxTxsPerBlock))
+			fmt.Sprintf("tx count exceeds limit: > %d", thor.MaxTxsPerBlock))
 	})
+}
+
+func TestBlockDecodeRLP_ClauseCountLimit(t *testing.T) {
+	clauseErr := fmt.Sprintf("block clause count exceeds limit: > %d", thor.MaxClausesPerBlock)
+
+	for _, txType := range []tx.Type{tx.TypeLegacy, tx.TypeDynamicFee} {
+		t.Run(fmt.Sprintf("txType-%d", txType), func(t *testing.T) {
+			t.Run("at the limit across txs is accepted", func(t *testing.T) {
+				var blk Block
+				require.NoError(t, rlp.DecodeBytes(encodeBlockWithClauses(t, txType, 2048, 2048, 2048, 2048), &blk))
+				assert.Len(t, blk.Transactions(), 4)
+			})
+
+			t.Run("one over the limit across txs is rejected", func(t *testing.T) {
+				var blk Block
+				err := rlp.DecodeBytes(encodeBlockWithClauses(t, txType, 2048, 2048, 2048, 2048, 1), &blk)
+				assert.ErrorContains(t, err, clauseErr)
+				assert.Nil(t, blk.header, "a rejected body must not produce a block")
+			})
+		})
+	}
+
+	t.Run("both limits at the boundary are accepted", func(t *testing.T) {
+		var blk Block
+		data := encodeBlockWithClauses(t, tx.TypeLegacy, spreadClauses(t, thor.MaxClausesPerBlock, thor.MaxTxsPerBlock)...)
+		require.NoError(t, rlp.DecodeBytes(data, &blk))
+		assert.Len(t, blk.Transactions(), thor.MaxTxsPerBlock)
+	})
+
+	// The extra tx crosses both limits at once, so only the check order decides
+	// which error is returned.
+	t.Run("tx count is checked before clause count", func(t *testing.T) {
+		var blk Block
+		counts := append(spreadClauses(t, thor.MaxClausesPerBlock, thor.MaxTxsPerBlock), 1)
+		err := rlp.DecodeBytes(encodeBlockWithClauses(t, tx.TypeLegacy, counts...), &blk)
+		assert.ErrorContains(t, err, fmt.Sprintf("tx count exceeds limit: > %d", thor.MaxTxsPerBlock))
+	})
+}
+
+// VEC-617 shape: clauses fill a 10 MiB body. Rejection must stop after about
+// thor.MaxClausesPerBlock clauses rather than decoding all ~2.6M.
+func TestBlockDecodeRLP_ClauseAllocDecoupledFromInput(t *testing.T) {
+	const wantErr = "block clause count exceeds limit"
+	justOver := allocsForDecodeBlock(t, makeBlockRLPWithClauses(t, 2048, 2048, 2048, 2048, 1), wantErr)
+	wayOver := allocsForDecodeBlock(t, makeBlockRLPWithClauses(t, slices.Repeat([]int{thor.MaxClausesPerTx}, 1039)...), wantErr)
+
+	t.Logf("just-over=%d B  way-over=%d B", justOver, wayOver)
+
+	assert.Less(t, wayOver, justOver*2,
+		"allocation tracks input size; the clause limit is not short-circuiting the decode")
 }
 
 // Block.DecodeRLP hand-rolls the outer [header, txs] list, so "exactly two
@@ -286,29 +337,34 @@ func TestBlockDecodeRLP_OuterListElementCount(t *testing.T) {
 // Once the limit is exceeded, allocation must not track input size: rejecting
 // a list far beyond the limit costs about what rejecting one just over it does.
 func TestBlockDecodeRLP_AllocDecoupledFromInput(t *testing.T) {
-	measure := func(data []byte) uint64 {
-		var m0, m1 runtime.MemStats
-		runtime.GC()
-		runtime.ReadMemStats(&m0)
-
-		var blk Block
-		_ = rlp.DecodeBytes(data, &blk) // expected to fail; we only measure allocations
-
-		runtime.ReadMemStats(&m1)
-		runtime.KeepAlive(&blk)
-		return m1.TotalAlloc - m0.TotalAlloc
-	}
-
-	justOver := measure(makeBlockRLP(t, MaxTxsPerBlock+1))
+	const wantErr = "tx count exceeds limit"
+	justOver := allocsForDecodeBlock(t, makeBlockRLP(t, thor.MaxTxsPerBlock+1), wantErr)
 	// 953_234 minimal txs is 10,485,758 bytes — 2 short of proto.MaxMsgSize
 	// (10 MiB), the largest such payload one p2p message can carry. A literal
 	// because block cannot import comm/proto.
-	wayOver := measure(makeBlockRLP(t, 953_234))
+	wayOver := allocsForDecodeBlock(t, makeBlockRLP(t, 953_234), wantErr)
 
 	t.Logf("just-over=%d B  way-over=%d B", justOver, wayOver)
 
 	assert.Less(t, wayOver, justOver*2,
 		"allocation tracks input size; the limit is not short-circuiting the decode")
+}
+
+// allocsForDecodeBlock returns the bytes allocated decoding data into a Block.
+// The decode must fail with wantErr, or the measurement is not of the limit.
+func allocsForDecodeBlock(t *testing.T, data []byte, wantErr string) uint64 {
+	t.Helper()
+	var m0, m1 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&m0)
+
+	var blk Block
+	err := rlp.DecodeBytes(data, &blk)
+
+	runtime.ReadMemStats(&m1)
+	runtime.KeepAlive(&blk)
+	require.ErrorContains(t, err, wantErr)
+	return m1.TotalAlloc - m0.TotalAlloc
 }
 
 // unboundedBlockPayload is the struct shape Block.DecodeRLP used to decode
@@ -341,11 +397,11 @@ func benchmarkBlockDecodeRLPUnbounded(b *testing.B, txCount int) {
 }
 
 func BenchmarkBlockDecodeRLP_Bounded_AtLimit(b *testing.B) {
-	benchmarkBlockDecodeRLPBound(b, MaxTxsPerBlock)
+	benchmarkBlockDecodeRLPBound(b, thor.MaxTxsPerBlock)
 }
 
 func BenchmarkBlockDecodeRLP_Bounded_JustOver(b *testing.B) {
-	benchmarkBlockDecodeRLPBound(b, MaxTxsPerBlock+1)
+	benchmarkBlockDecodeRLPBound(b, thor.MaxTxsPerBlock+1)
 }
 
 func BenchmarkBlockDecodeRLP_Bounded_WayOver(b *testing.B) {
@@ -353,11 +409,11 @@ func BenchmarkBlockDecodeRLP_Bounded_WayOver(b *testing.B) {
 }
 
 func BenchmarkBlockDecodeRLP_Unbounded_AtLimit(b *testing.B) {
-	benchmarkBlockDecodeRLPUnbounded(b, MaxTxsPerBlock)
+	benchmarkBlockDecodeRLPUnbounded(b, thor.MaxTxsPerBlock)
 }
 
 func BenchmarkBlockDecodeRLP_Unbounded_JustOver(b *testing.B) {
-	benchmarkBlockDecodeRLPUnbounded(b, MaxTxsPerBlock+1)
+	benchmarkBlockDecodeRLPUnbounded(b, thor.MaxTxsPerBlock+1)
 }
 
 func BenchmarkBlockDecodeRLP_Unbounded_WayOver(b *testing.B) {
@@ -377,11 +433,36 @@ func TestDecode_HeaviestMainnetBlock(t *testing.T) {
 		var blk Block
 		require.NoError(t, rlp.DecodeBytes(raw, &blk))
 		t.Logf("height=%d txs=%d", blk.Header().Number(), len(blk.Transactions()))
-		assert.Less(t, len(blk.Transactions()), MaxTxsPerBlock,
-			"the heaviest historical block is at or over the limit; MaxTxsPerBlock must be raised")
+		assert.Less(t, len(blk.Transactions()), thor.MaxTxsPerBlock,
+			"the heaviest historical block is at or over the limit; thor.MaxTxsPerBlock must be raised")
 		assert.EqualValues(t, len(raw), blk.Size())
 		assert.Equal(t, blk.Header().TxsRoot(), blk.Transactions().RootHash())
 	})
+}
+
+// Fixture: testnet block 9239749, 199 txs / 7761 clauses — the highest clause
+// count in mainnet and testnet history as of 2026-10, at 94.7% of
+// thor.MaxClausesPerBlock.
+// Verify: GET https://testnet.vechain.org/blocks/9239749
+// (id 0x008cfcc5016bb87fb0e919e7c26efeb64a095b286bdbb961fc5e887d3786b5d4)
+func TestDecode_HeaviestClauseBlock(t *testing.T) {
+	raw, err := os.ReadFile("testdata/maxclause-block-testnet.rlp")
+	require.NoError(t, err)
+
+	var blk Block
+	require.NoError(t, rlp.DecodeBytes(raw, &blk))
+
+	clauses := 0
+	for _, trx := range blk.Transactions() {
+		clauses += len(trx.Clauses())
+	}
+	assert.Equal(t, thor.MustParseBytes32("0x008cfcc5016bb87fb0e919e7c26efeb64a095b286bdbb961fc5e887d3786b5d4"), blk.Header().ID())
+	assert.Len(t, blk.Transactions(), 199)
+	assert.Equal(t, 7761, clauses)
+	assert.Less(t, clauses, thor.MaxClausesPerBlock,
+		"the heaviest historical block is at or over the limit; thor.MaxClausesPerBlock must be raised")
+	assert.EqualValues(t, len(raw), blk.Size())
+	assert.Equal(t, blk.Header().TxsRoot(), blk.Transactions().RootHash())
 }
 
 func buildTestBlock(txCount int) *Block {
@@ -455,4 +536,62 @@ func makeBlockRLP(t testing.TB, txCount int) []byte {
 	data, err := rlp.EncodeToBytes([]rlp.RawValue{headerRaw, makeTxsRLP(txCount)})
 	require.NoError(t, err)
 	return data
+}
+
+// minimalClauseRLP is an empty clause: [to=nil, value=0, data=""].
+var minimalClauseRLP = []byte{0xc3, 0x80, 0x80, 0x80}
+
+// makeBlockRLPWithClauses builds a wire-format block whose body holds one
+// minimal legacy tx per entry, each carrying that many empty clauses. Raw bytes
+// keep multi-megabyte bodies cheap to build.
+func makeBlockRLPWithClauses(t testing.TB, clausesPerTx ...int) []byte {
+	t.Helper()
+	var txs []byte
+	for _, n := range clausesPerTx {
+		clauses := slices.Repeat(minimalClauseRLP, n)
+		// chainTag, blockRef, expiration | clauses | gasPriceCoef, gas, dependsOn, nonce, reserved, signature
+		fields := slices.Concat([]byte{0x80, 0x80, 0x80}, extRLPListHeader(len(clauses)), clauses,
+			[]byte{0x80, 0x80, 0x80, 0x80, 0xc0, 0x80})
+		txs = append(txs, extRLPListHeader(len(fields))...)
+		txs = append(txs, fields...)
+	}
+	headerRaw, err := rlp.EncodeToBytes(buildTestBlock(0).Header())
+	require.NoError(t, err)
+	data, err := rlp.EncodeToBytes([]rlp.RawValue{headerRaw, append(extRLPListHeader(len(txs)), txs...)})
+	require.NoError(t, err)
+	return data
+}
+
+// encodeBlockWithClauses encodes a block with buildTestBlock's header and one
+// unsigned tx of txType per entry, each carrying that many clauses.
+func encodeBlockWithClauses(t testing.TB, txType tx.Type, clausesPerTx ...int) []byte {
+	t.Helper()
+	txs := make(tx.Transactions, 0, len(clausesPerTx))
+	for _, n := range clausesPerTx {
+		b := tx.NewBuilder(txType)
+		for range n {
+			b.Clause(tx.NewClause(&thor.Address{}))
+		}
+		txs = append(txs, b.Build())
+	}
+	headerRaw, err := rlp.EncodeToBytes(buildTestBlock(0).Header())
+	require.NoError(t, err)
+	txsRaw, err := rlp.EncodeToBytes(txs)
+	require.NoError(t, err)
+	data, err := rlp.EncodeToBytes([]rlp.RawValue{headerRaw, txsRaw})
+	require.NoError(t, err)
+	return data
+}
+
+// spreadClauses returns per-tx clause counts that put total clauses into
+// txCount txs, filling each tx up to thor.MaxClausesPerTx; the rest carry none.
+func spreadClauses(t testing.TB, total, txCount int) []int {
+	t.Helper()
+	counts := make([]int, txCount)
+	for i := range counts {
+		counts[i] = min(total, thor.MaxClausesPerTx)
+		total -= counts[i]
+	}
+	require.Zero(t, total, "total clauses do not fit in txCount txs")
+	return counts
 }

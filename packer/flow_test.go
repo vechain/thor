@@ -14,9 +14,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus/upgrade/galactica"
@@ -318,7 +320,7 @@ func TestAdoptErr(t *testing.T) {
 
 	// Test exceeded gas limit
 	tx3 := createTx(tx.TypeLegacy, repo.ChainTag(), 1, 0, 1, 1, nil, clause, tx.NewBlockRef(1))
-	expectedErrorMessage = "gas limit reached"
+	expectedErrorMessage = "block limit reached: gas"
 	if err := flow.Adopt(tx3); err.Error() != expectedErrorMessage {
 		t.Fatalf("Expected error message: '%s', but got: '%s'", expectedErrorMessage, err.Error())
 	}
@@ -643,4 +645,124 @@ func TestBlockSizeBufferZoneSufficiency(t *testing.T) {
 
 	assert.LessOrEqual(t, uint64(blk.Size()), thor.MaxRLPBlockSize,
 		"packed block RLP size %d exceeds MaxRLPBlockSize %d", blk.Size(), thor.MaxRLPBlockSize)
+}
+
+// newHighGasLimitFlow schedules a flow whose gas limit exceeds what
+// thor.MaxTxsPerBlock minimum-gas txs consume. INTERSTELLAR is inactive, so
+// the EIP-7825 per-tx gas cap does not apply.
+func newHighGasLimitFlow(t *testing.T) (*packer.Flow, *chain.Repository) {
+	t.Helper()
+
+	cfg := thor.NoFork
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnetWithConfig(genesis.DevConfig{
+		ForkConfig: &cfg,
+		GasLimit:   200_000_000,
+	})
+	b, _, _, err := g.Build(stater)
+	require.NoError(t, err)
+	repo, err := chain.NewRepository(db, b)
+	require.NoError(t, err)
+
+	proposer := genesis.DevAccounts()[0]
+	pkr := packer.New(repo, stater, proposer.Address, &proposer.Address, &cfg, 0)
+	sum, err := repo.GetBlockSummary(b.Header().ID())
+	require.NoError(t, err)
+	flow, err := pkr.Schedule(sum, uint64(time.Now().Unix()))
+	require.NoError(t, err)
+	return flow, repo
+}
+
+func newClausesTx(t *testing.T, repo *chain.Repository, nonce uint64, clauseCount int) *tx.Transaction {
+	t.Helper()
+
+	addr := thor.BytesToAddress([]byte("to"))
+	clauses := make([]*tx.Clause, clauseCount)
+	for i := range clauses {
+		clauses[i] = tx.NewClause(&addr)
+	}
+	gas, err := tx.IntrinsicGas(clauses...)
+	require.NoError(t, err)
+
+	builder := new(tx.Builder).
+		ChainTag(repo.ChainTag()).
+		Expiration(1000).
+		Gas(gas).
+		Nonce(nonce)
+	for _, c := range clauses {
+		builder.Clause(c)
+	}
+	return tx.MustSign(builder.Build(), genesis.DevAccounts()[0].PrivateKey)
+}
+
+func requireBlockRoundTrip(t *testing.T, blk *block.Block) *block.Block {
+	t.Helper()
+
+	raw, err := rlp.EncodeToBytes(blk)
+	require.NoError(t, err)
+	var decoded block.Block
+	require.NoError(t, rlp.DecodeBytes(raw, &decoded))
+	return &decoded
+}
+
+func TestAdoptStopsAtClauseLimit(t *testing.T) {
+	flow, repo := newHighGasLimitFlow(t)
+
+	nonce := uint64(0)
+	next := func(clauses int) *tx.Transaction {
+		nonce++
+		return newClausesTx(t, repo, nonce, clauses)
+	}
+
+	// 3 * 2048 + 2047 = thor.MaxClausesPerBlock - 1
+	for _, n := range []int{2048, 2048, 2048, 2047} {
+		require.NoError(t, flow.Adopt(next(n)))
+	}
+
+	// a tx with fewer clauses may still fit
+	err := flow.Adopt(next(2))
+	require.Error(t, err)
+	assert.True(t, packer.IsTxNotAdoptableNow(err), err)
+	assert.Contains(t, err.Error(), "block clause limit reached")
+
+	require.NoError(t, flow.Adopt(next(1)))
+
+	// clause budget exhausted: even a 1-clause tx cannot fit
+	err = flow.Adopt(next(1))
+	require.Error(t, err)
+	assert.True(t, packer.IsBlockLimitReached(err), err)
+	assert.Contains(t, err.Error(), "clauses")
+
+	require.NoError(t, flow.Adopt(next(0)))
+
+	blk, _, _, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
+	require.NoError(t, err)
+
+	decoded := requireBlockRoundTrip(t, blk)
+	assert.Len(t, decoded.Transactions(), 6)
+	clauses := 0
+	for _, trx := range decoded.Transactions() {
+		clauses += len(trx.Clauses())
+	}
+	assert.Equal(t, thor.MaxClausesPerBlock, clauses)
+}
+
+func TestAdoptStopsAtTxCountLimit(t *testing.T) {
+	flow, repo := newHighGasLimitFlow(t)
+
+	for nonce := range uint64(thor.MaxTxsPerBlock) {
+		require.NoError(t, flow.Adopt(newClausesTx(t, repo, nonce, 0)))
+	}
+
+	err := flow.Adopt(newClausesTx(t, repo, thor.MaxTxsPerBlock, 0))
+	require.Error(t, err)
+	assert.True(t, packer.IsBlockLimitReached(err), err)
+	assert.Contains(t, err.Error(), "tx count")
+
+	blk, _, _, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
+	require.NoError(t, err)
+
+	decoded := requireBlockRoundTrip(t, blk)
+	assert.Len(t, decoded.Transactions(), thor.MaxTxsPerBlock)
 }

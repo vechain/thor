@@ -149,7 +149,7 @@ func TestHandleRPC_MsgNewTx(t *testing.T) {
 			GasPriceCoef(0).
 			Gas(21000).
 			Nonce(2)
-		for i := 0; i <= tx.MaxClausesPerTx; i++ {
+		for i := 0; i <= thor.MaxClausesPerTx; i++ {
 			b = b.Clause(tx.NewClause(nil))
 		}
 		manyClauseTx := b.Build()

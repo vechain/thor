@@ -18,9 +18,6 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-// gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
-const gasLimitSoftLimit uint64 = 40_000_000
-
 // txAdopter is the subset of *packer.Flow that adoptTxs uses.
 type txAdopter interface {
 	Adopt(*tx.Transaction) error
@@ -44,7 +41,7 @@ func adoptTxs(flow txAdopter, txs tx.Transactions, now func() uint64) []*tx.Tran
 			break
 		}
 		if err := flow.Adopt(t); err != nil {
-			if packer.IsGasLimitReached(err) || packer.IsBlockSizeLimitReached(err) {
+			if packer.IsBlockLimitReached(err) || packer.IsBlockSizeLimitReached(err) {
 				break
 			}
 			if packer.IsTxNotAdoptableNow(err) {
@@ -82,7 +79,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		if n.options.TargetGasLimit == 0 {
 			// no preset, use suggested
 			// apply soft limit in adaptive mode
-			suggested := min(n.bandwidth.SuggestGasLimit(), gasLimitSoftLimit)
+			suggested := min(n.bandwidth.SuggestGasLimit(), thor.GasLimitSoftLimit)
 			n.packer.SetTargetGasLimit(suggested)
 		}
 

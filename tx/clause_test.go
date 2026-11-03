@@ -29,7 +29,7 @@ func makeClausesRLP(n int) []byte {
 	return data
 }
 
-// Benchmarks for Clauses (custom type with MaxClausesPerTx enforcement).
+// Benchmarks for Clauses (custom type with thor.MaxClausesPerTx enforcement).
 
 func BenchmarkClausesDecodeRLP_Few(b *testing.B) {
 	data := makeClausesRLP(3)
@@ -50,7 +50,7 @@ func BenchmarkClausesDecodeRLP_Some20(b *testing.B) {
 }
 
 func BenchmarkClausesDecodeRLP_AtLimit(b *testing.B) {
-	data := makeClausesRLP(MaxClausesPerTx)
+	data := makeClausesRLP(thor.MaxClausesPerTx)
 	b.ResetTimer()
 	for b.Loop() {
 		var cs Clauses
@@ -59,7 +59,7 @@ func BenchmarkClausesDecodeRLP_AtLimit(b *testing.B) {
 }
 
 func BenchmarkClausesDecodeRLP_OverLimit(b *testing.B) {
-	data := makeClausesRLP(MaxClausesPerTx + 1)
+	data := makeClausesRLP(thor.MaxClausesPerTx + 1)
 	b.ResetTimer()
 	for b.Loop() {
 		var cs Clauses
@@ -88,7 +88,7 @@ func BenchmarkRawClauseSliceDecodeRLP_Some20(b *testing.B) {
 }
 
 func BenchmarkRawClauseSliceDecodeRLP_AtLimit(b *testing.B) {
-	data := makeClausesRLP(MaxClausesPerTx)
+	data := makeClausesRLP(thor.MaxClausesPerTx)
 	b.ResetTimer()
 	for b.Loop() {
 		var cs []*Clause
@@ -97,7 +97,7 @@ func BenchmarkRawClauseSliceDecodeRLP_AtLimit(b *testing.B) {
 }
 
 func BenchmarkRawClauseSliceDecodeRLP_OverLimit(b *testing.B) {
-	data := makeClausesRLP(MaxClausesPerTx + 1)
+	data := makeClausesRLP(thor.MaxClausesPerTx + 1)
 	b.ResetTimer()
 	for b.Loop() {
 		var cs []*Clause
@@ -128,7 +128,7 @@ func allocsForDecodeClauses(data []byte) uint64 {
 }
 
 func TestClausesDecodeRLP_AllocDecoupledFromInput(t *testing.T) {
-	justOver := allocsForDecodeClauses(makeClauseList(MaxClausesPerTx + 1))
+	justOver := allocsForDecodeClauses(makeClauseList(thor.MaxClausesPerTx + 1))
 	// 2.5M minimal clauses = 10 MB on the wire
 	wayOver := allocsForDecodeClauses(makeClauseList(2_500_000))
 

@@ -22,11 +22,6 @@ const (
 	ComplexSigSize = 81 + 65
 )
 
-// MaxTxsPerBlock bounds the transactions decoded from one block body. A valid
-// block cannot hold more than gasLimit/21000 txs, so 8192 covers a 172M gas
-// limit — 4.3x the current 40M.
-const MaxTxsPerBlock = 8192
-
 // Block is an immutable block type.
 type Block struct {
 	header *Header
@@ -118,13 +113,17 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// decodeTxs decodes a transaction list, stopping as soon as MaxTxsPerBlock is
-// exceeded so that a malformed list costs no more than the limit allows.
+// decodeTxs decodes a transaction list, stopping as soon as thor.MaxTxsPerBlock or
+// thor.MaxClausesPerBlock is exceeded so that a malformed list costs no more than
+// the limits allow.
 func decodeTxs(s *rlp.Stream) (tx.Transactions, error) {
 	if _, err := s.List(); err != nil {
 		return nil, err
 	}
-	var txs tx.Transactions
+	var (
+		txs     tx.Transactions
+		clauses int
+	)
 	for {
 		var t tx.Transaction
 		err := s.Decode(&t)
@@ -134,8 +133,12 @@ func decodeTxs(s *rlp.Stream) (tx.Transactions, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(txs) == MaxTxsPerBlock {
-			return nil, fmt.Errorf("tx count exceeds limit: > %d", MaxTxsPerBlock)
+		if len(txs) == thor.MaxTxsPerBlock {
+			return nil, fmt.Errorf("tx count exceeds limit: > %d", thor.MaxTxsPerBlock)
+		}
+		clauses += len(t.Clauses())
+		if clauses > thor.MaxClausesPerBlock {
+			return nil, fmt.Errorf("block clause count exceeds limit: > %d", thor.MaxClausesPerBlock)
 		}
 		txs = append(txs, &t)
 	}

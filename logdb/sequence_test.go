@@ -9,7 +9,10 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/vechain/thor/v2/thor"
 )
 
 func TestSequence(t *testing.T) {
@@ -106,4 +109,15 @@ func TestSequenceValue(t *testing.T) {
 
 func TestBitDistribution(t *testing.T) {
 	assert.Less(t, blockNumBits+txIndexBits+logIndexBits, 64, "total bits in sequence should be less than 64")
+}
+
+// Every tx index in a decodable block must fit the txIndex field.
+func TestTxIndexFitsMaxTxsPerBlock(t *testing.T) {
+	assert.LessOrEqual(t, thor.MaxTxsPerBlock, txIndexMask)
+}
+
+// Every event index in a block must fit the logIndex field. The cheapest event
+// is a bare LOG0 at LogGas; every other event source costs more.
+func TestLogIndexFitsGasLimitSoftLimit(t *testing.T) {
+	assert.LessOrEqual(t, thor.GasLimitSoftLimit/params.LogGas, uint64(logIndexMask))
 }

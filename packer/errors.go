@@ -8,16 +8,16 @@ package packer
 import "errors"
 
 var (
-	errGasLimitReached       = errors.New("gas limit reached")
+	errBlockLimitReached     = errors.New("block limit reached")
 	errBlockSizeLimitReached = errors.New("block size limit reached")
 	errTxNotAdoptableNow     = errors.New("tx not adoptable now")
 	errTxNotAdoptableForever = errors.New("tx not adoptable forever")
 	errKnownTx               = errors.New("known tx")
 )
 
-// IsGasLimitReached block if full of txs.
-func IsGasLimitReached(err error) bool {
-	return errors.Is(err, errGasLimitReached)
+// IsBlockLimitReached reports that the block is full: its gas, tx count or clause limit is reached.
+func IsBlockLimitReached(err error) bool {
+	return errors.Is(err, errBlockLimitReached)
 }
 
 // IsBlockSizeLimitReached block RLP size limit reached.

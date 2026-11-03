@@ -925,9 +925,9 @@ func rawLegacyTxWithClauses(t *testing.T, n int) []byte {
 func TestClausesDecodeLimit(t *testing.T) {
 	for _, txType := range []Type{TypeLegacy, TypeDynamicFee} {
 		t.Run(fmt.Sprintf("txType-%d", txType), func(t *testing.T) {
-			// Build an unsigned tx with MaxClausesPerTx+1 clauses.
+			// Build an unsigned tx with thor.MaxClausesPerTx+1 clauses.
 			b := NewBuilder(txType).ChainTag(1).Gas(21000)
-			for range MaxClausesPerTx + 1 {
+			for range thor.MaxClausesPerTx + 1 {
 				b.Clause(&Clause{})
 			}
 			data, err := b.Build().MarshalBinary()
@@ -942,8 +942,8 @@ func TestClausesDecodeLimit(t *testing.T) {
 }
 
 func TestClausesDecodeAtLimit(t *testing.T) {
-	// Exactly MaxClausesPerTx clauses must be accepted.
-	data := rawLegacyTxWithClauses(t, MaxClausesPerTx)
+	// Exactly thor.MaxClausesPerTx clauses must be accepted.
+	data := rawLegacyTxWithClauses(t, thor.MaxClausesPerTx)
 	var trx Transaction
 	assert.NoError(t, trx.UnmarshalBinary(data))
 }

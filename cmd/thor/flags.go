@@ -9,6 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func envVar(name string) cli.ValueSourceChain {
@@ -356,7 +357,7 @@ var (
 	gasLimitFlag = &cli.Uint64Flag{
 		Name:    "gas-limit",
 		Local:   true,
-		Value:   40_000_000,
+		Value:   thor.GasLimitSoftLimit,
 		Usage:   "block gas limit(adaptive if set to 0)",
 		Sources: envVar("GAS_LIMIT"),
 	}

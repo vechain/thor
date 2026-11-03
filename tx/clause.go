@@ -18,7 +18,7 @@ import (
 
 // Clauses is a slice of *Clause with a limit on RLP decode.
 // DecodeRLP streams the list one element at a time and stops as soon as
-// MaxClausesPerTx is exceeded, so a malformed list costs no more than the
+// thor.MaxClausesPerTx is exceeded, so a malformed list costs no more than the
 // limit allows regardless of how large it is on the wire.
 type Clauses []*Clause
 
@@ -38,8 +38,8 @@ func (cs *Clauses) DecodeRLP(s *rlp.Stream) error {
 		if err != nil {
 			return err
 		}
-		if len(result) == MaxClausesPerTx {
-			return fmt.Errorf("clause count exceeds limit: > %d", MaxClausesPerTx)
+		if len(result) == thor.MaxClausesPerTx {
+			return fmt.Errorf("clause count exceeds limit: > %d", thor.MaxClausesPerTx)
 		}
 		result = append(result, &c)
 	}

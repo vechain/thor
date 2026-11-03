@@ -35,6 +35,7 @@ type Flow struct {
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
 	gasUsed      uint64
 	blockSize    uint64 // accumulated block size by adopting txs
+	clauses      int    // accumulated clause count by adopting txs
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
@@ -164,13 +165,23 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 		return errTxNotAdoptableNow
 	case t.IsExpired(f.Number()):
 		return badTxError{"expired"}
+	// Followers reject bodies above thor.MaxTxsPerBlock txs or
+	// thor.MaxClausesPerBlock clauses at decode (block.decodeTxs), so never pack one.
+	case len(f.txs) >= thor.MaxTxsPerBlock:
+		return fmt.Errorf("%w: tx count", errBlockLimitReached)
 	case f.gasUsed+t.Gas() > f.runtime.Context().GasLimit:
 		// has enough space to adopt minimum tx
 		if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
 			// try to find a lower gas tx
 			return errTxNotAdoptableNow
 		}
-		return errGasLimitReached
+		return fmt.Errorf("%w: gas", errBlockLimitReached)
+	case f.clauses+len(t.Clauses()) > thor.MaxClausesPerBlock:
+		if f.clauses < thor.MaxClausesPerBlock {
+			// a tx with fewer clauses may still fit
+			return fmt.Errorf("%w: block clause limit reached", errTxNotAdoptableNow)
+		}
+		return fmt.Errorf("%w: clauses", errBlockLimitReached)
 	}
 
 	if thor.IsForked(f.Number(), f.packer.forkConfig.INTERSTELLAR) && !f.txFitsBlockSize(t) {
@@ -218,6 +229,7 @@ func (f *Flow) Adopt(t *tx.Transaction) error {
 	f.processedTxs[t.ID()] = receipt.Reverted
 	f.gasUsed += receipt.GasUsed
 	f.blockSize += uint64(t.Size())
+	f.clauses += len(t.Clauses())
 	f.receipts = append(f.receipts, receipt)
 	f.txs = append(f.txs, t)
 	return nil

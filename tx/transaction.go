@@ -52,12 +52,6 @@ const (
 )
 
 const (
-	// MaxClausesPerTx is the maximum number of clauses allowed in a transaction.
-	// This is a DoS-protection limit enforced during RLP decode of Clauses.
-	// Derived from current mainnet block gas limit (~40M) / ClauseGas (16000).
-	// Will be superseded by MaxTxGasLimit (EIP-7825) once activated.
-	MaxClausesPerTx = 2500
-
 	// MaxUnusedReservedFields is the maximum number of unused reserved fields
 	// allowed in a transaction. DoS-protection enforced during RLP decode of reserved.
 	// This limit is a DoS-protection measure and does not apply to wallet clients constructing

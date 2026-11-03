@@ -93,7 +93,7 @@ func (c *Core) Pack(pendingTxs tx.Transactions, onDemand bool) ([]*tx.Transactio
 	startTime := mclock.Now()
 	for _, tx := range pendingTxs {
 		if err := flow.Adopt(tx); err != nil {
-			if packer.IsGasLimitReached(err) {
+			if packer.IsBlockLimitReached(err) {
 				break
 			}
 			if packer.IsTxNotAdoptableNow(err) {
