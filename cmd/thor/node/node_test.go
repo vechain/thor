@@ -174,18 +174,19 @@ func TestNode_Run(t *testing.T) {
 	assert.NoError(t, node.Run(ctx), "Node run should not return an error")
 }
 
-func TestNode_GuardBlockProcessing_NormalNewBlock(t *testing.T) {
+func TestNode_GuardBlockProcessing_NormalNewBlock_NotAdvancedByGuard(t *testing.T) {
 	node, err := testNode(t)
 	assert.NoError(t, err, "Failed to create test node")
 
 	node.maxBlockNum = uint32(1000)
 	newBlockNum := uint32(1001)
 	err = node.guardBlockProcessing(newBlockNum, func(conflicts uint32) error {
-		// mock process function and return no error
+		// mock process function that doesn't persist anything
 		return nil
 	})
 	assert.NoError(t, err, "Normal new block should be processed without error")
-	assert.Equal(t, node.maxBlockNum, newBlockNum, "maxBlockNum should be updated to new block number")
+	// maxBlockNum is advanced only by commitBlock at persistence, not by the guard itself.
+	assert.Equal(t, uint32(1000), node.maxBlockNum, "maxBlockNum should remain unchanged")
 }
 
 func TestNode_GuardBlockProcessing_FutureBlock(t *testing.T) {

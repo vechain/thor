@@ -61,13 +61,8 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 			return errBlockTemporaryUnprocessable
 		}
 
-		// don't increase maxBlockNum if the block is unprocessable
-		if e := process(0); e != nil {
-			return e
-		}
-
-		n.maxBlockNum = blockNum
-		return nil
+		// maxBlockNum is advanced in commitBlock once the block is persisted
+		return process(0)
 	}
 
 	conflicts, err := n.repo.ScanConflicts(blockNum)
@@ -197,6 +192,11 @@ func (n *Node) commitBlock(ctx *blockExecContext) error {
 	// add the new block into repository
 	if err := n.repo.AddBlock(ctx.newBlock, ctx.receipts, ctx.conflicts, ctx.becomeBest); err != nil {
 		return errors.Wrap(err, "add block")
+	}
+
+	// maxBlockNum tracks the highest persisted block
+	if num := ctx.newBlock.Header().Number(); num > n.maxBlockNum {
+		n.maxBlockNum = num
 	}
 
 	// commit block in bft engine
