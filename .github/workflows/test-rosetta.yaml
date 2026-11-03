@@ -128,4 +128,4 @@ jobs:
 
       - name: Run e2e tests
         working-directory: rosetta
-        run: npm run test:e2e:custom
+        run: npm run test:e2e
