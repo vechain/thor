@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/comm/proto"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/p2p"
@@ -195,4 +196,37 @@ func TestHandleRPC_MsgNewTx(t *testing.T) {
 		assert.True(t, writeCalled, "write function should be called")
 		assert.Equal(t, &struct{}{}, writtenData, "write should be called with empty struct")
 	})
+}
+
+// TestHandleRPC_MsgNewBlockOrigin checks that a pushed block reaches
+// subscribers, through the mailbox, naming the peer that pushed it.
+func TestHandleRPC_MsgNewBlockOrigin(t *testing.T) {
+	chain, err := testchain.NewWithFork(&thor.SoloFork, 180)
+	require.NoError(t, err)
+	pool := txpool.New(chain.Repo(), chain.Stater(), txpool.Options{Limit: 10, LimitPerAccount: 2, MaxLifetime: time.Minute}, &thor.SoloFork)
+	defer pool.Close()
+
+	c := New(chain.Repo(), pool)
+	events := make(chan *NewBlockEvent, 1)
+	sub := c.SubscribeBlock(events)
+	defer sub.Unsubscribe()
+
+	peerID := discover.NodeID{7}
+	peer := newPeer(p2p.NewPeer(peerID, "test", nil), stubMsgReadWriter{})
+	blk := new(block.Builder).ParentID(thor.Bytes32{1}).Build()
+	raw, err := rlp.EncodeToBytes(blk)
+	require.NoError(t, err)
+	msg := &p2p.Msg{Code: proto.MsgNewBlock, Size: uint32(len(raw)), Payload: bytes.NewReader(raw)}
+	require.NoError(t, c.handleRPC(peer, msg, func(any) {}, &txsToSync{}))
+
+	c.Start()
+	defer c.Stop()
+
+	select {
+	case ev := <-events:
+		assert.Equal(t, blk.Header().ID(), ev.Header().ID())
+		assert.Equal(t, peerID, ev.Origin)
+	case <-time.After(time.Second):
+		t.Fatal("no block event")
+	}
 }

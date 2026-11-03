@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus"
+	"github.com/vechain/thor/v2/p2p/discover"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -64,17 +65,37 @@ func (n *Node) houseKeeping(ctx context.Context) {
 // block intervals; malicious timestamps have no bound at all.
 const futureBlockWindow = 4
 
+// maxFutureBlocksPerPeer caps the future block cache entries one peer may
+// hold, so a single peer cannot evict everyone else's. An honest peer can
+// supply at most one block per height across the window, plus forks.
+const maxFutureBlocksPerPeer = 2 * futureBlockWindow
+
+// futureBlock is a future block cache entry.
+type futureBlock struct {
+	blk    *block.Block
+	origin discover.NodeID
+}
+
 func (n *Node) handleNewBlock(newBlockEvent *comm.NewBlockEvent) {
 	var stats blockStats
 	newBlock := newBlockEvent.Block
 	if isTrunk, err := n.processBlock(newBlock, &stats); err != nil {
 		if consensus.IsFutureBlock(err) ||
 			((err == errParentMissing || err == errBlockTemporaryUnprocessable) && n.futureBlocksCache.Contains(newBlock.Header().ParentID())) {
-			if !n.shouldCacheFutureBlock(newBlock) {
+			// Keep the first copy of an ID. Its txs root binds its body to the ID,
+			// but the ID does not cover the VRF proof: a copy with a forged proof
+			// that arrives first fails consensus later, and the honest block then
+			// comes from another peer or the next sync round. Verifying proofs
+			// here would cost a VRF verify per copy.
+			if n.futureBlocksCache.Contains(newBlock.Header().ID()) || !n.shouldCacheFutureBlock(newBlock) {
+				return
+			}
+			if n.countFutureBlocksFrom(newBlockEvent.Origin) >= maxFutureBlocksPerPeer {
+				logger.Debug("future block rejected, peer holds too many", "id", newBlock.Header().ID(), "peer", newBlockEvent.Origin)
 				return
 			}
 			logger.Debug("future block added", "id", newBlock.Header().ID())
-			n.futureBlocksCache.Set(newBlock.Header().ID(), newBlock)
+			n.futureBlocksCache.Set(newBlock.Header().ID(), &futureBlock{blk: newBlock, origin: newBlockEvent.Origin})
 		}
 	} else if isTrunk {
 		n.comm.BroadcastBlock(newBlock)
@@ -107,10 +128,22 @@ func (n *Node) shouldCacheFutureBlock(blk *block.Block) bool {
 	return true
 }
 
+// countFutureBlocksFrom returns how many future block cache entries came from origin.
+func (n *Node) countFutureBlocksFrom(origin discover.NodeID) int {
+	count := 0
+	n.futureBlocksCache.ForEach(func(ent *cache.Entry) bool {
+		if ent.Value.(*futureBlock).origin == origin {
+			count++
+		}
+		return true
+	})
+	return count
+}
+
 func (n *Node) handleFutureBlocks() {
 	var blocks []*block.Block
 	n.futureBlocksCache.ForEach(func(ent *cache.Entry) bool {
-		blocks = append(blocks, ent.Value.(*block.Block))
+		blocks = append(blocks, ent.Value.(*futureBlock).blk)
 		return true
 	})
 	sort.Slice(blocks, func(i, j int) bool {

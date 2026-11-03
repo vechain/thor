@@ -11,14 +11,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/comm"
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/p2p/discover"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -222,7 +226,7 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 				// Create a block whose parent is in the future blocks cache
 				// bestBlock := node.repo.BestBlockSummary()
 				cacheBlock := createTestBlock(thor.MustParseBytes32("0x0000000100000000000000000000000000000000000000000000000000000000"))
-				node.futureBlocksCache.Set(cacheBlock.Header().ID(), cacheBlock)
+				node.futureBlocksCache.Set(cacheBlock.Header().ID(), &futureBlock{blk: cacheBlock})
 
 				builder := new(block.Builder)
 				header := builder.
@@ -261,7 +265,7 @@ func TestNode_HouseKeeping_Newblock(t *testing.T) {
 					Build().Header()
 
 				parentBlock := block.Compose(header, nil)
-				node.futureBlocksCache.Set(parentBlock.Header().ID(), parentBlock)
+				node.futureBlocksCache.Set(parentBlock.Header().ID(), &futureBlock{blk: parentBlock})
 
 				builder2 := new(block.Builder)
 				header2 := builder2.
@@ -320,13 +324,13 @@ func TestNode_HouseKeeping_FutureTicker(t *testing.T) {
 
 	normalBlock := createTestBlock(node.repo.BestBlockSummary().Header.ID())
 
-	futureBlock := createTestBlock(normalBlock.Header().ID())
-	futureBlockID := futureBlock.Header().ID()
+	futureBlk := createTestBlock(normalBlock.Header().ID())
+	futureBlockID := futureBlk.Header().ID()
 
 	normalBlockEvent := &comm.NewBlockEvent{Block: normalBlock}
 	node.handleNewBlock(normalBlockEvent)
 
-	node.futureBlocksCache.Set(futureBlockID, futureBlock)
+	node.futureBlocksCache.Set(futureBlockID, &futureBlock{blk: futureBlk})
 
 	assert.True(t, node.futureBlocksCache.Contains(futureBlockID), "Future blocks cache should contain the future block before processing")
 
@@ -491,11 +495,75 @@ func TestNode_HandleFutureBlocks_Eviction(t *testing.T) {
 				ParentID(node.repo.BestBlockSummary().Header.ID()).
 				Timestamp(tt.timestamp).
 				Build()
-			node.futureBlocksCache.Set(blk.Header().ID(), blk)
+			node.futureBlocksCache.Set(blk.Header().ID(), &futureBlock{blk: blk})
 
 			node.handleFutureBlocks()
 
 			assert.Equal(t, tt.expectRetain, node.futureBlocksCache.Contains(blk.Header().ID()))
 		})
 	}
+}
+
+// signedChildOf returns a signed block on top of parentID. Signing gives each
+// salt a distinct ID; an unsigned header's ID depends on its number alone.
+func signedChildOf(t *testing.T, parentID thor.Bytes32, salt uint64) *block.Block {
+	t.Helper()
+	blk := new(block.Builder).
+		ParentID(parentID).
+		Timestamp(uint64(time.Now().Unix())).
+		GasLimit(thor.InitialGasLimit).
+		GasUsed(salt).
+		TotalScore(11).
+		Build()
+	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	require.NoError(t, err)
+	return blk.WithSignature(sig)
+}
+
+// cacheUnknownParent puts a parent the chain does not know into the future
+// block cache, so its children take the cache admission path in handleNewBlock.
+func cacheUnknownParent(t *testing.T, node *mockableNode) thor.Bytes32 {
+	t.Helper()
+	parent := signedChildOf(t, thor.Bytes32{0, 0, 0, 0x10}, 0)
+	node.futureBlocksCache.Set(parent.Header().ID(), &futureBlock{blk: parent, origin: discover.NodeID{9}})
+	return parent.Header().ID()
+}
+
+func TestNode_FutureBlockCachePerPeerCap(t *testing.T) {
+	node, _ := setupTestNodeForHousekeeping(t)
+	parentID := cacheUnknownParent(t, node)
+	peerA, peerB := discover.NodeID{1}, discover.NodeID{2}
+
+	for i := range maxFutureBlocksPerPeer {
+		node.handleNewBlock(&comm.NewBlockEvent{Block: signedChildOf(t, parentID, uint64(i+1)), Origin: peerA})
+	}
+	require.Equal(t, maxFutureBlocksPerPeer, node.countFutureBlocksFrom(peerA))
+
+	node.handleNewBlock(&comm.NewBlockEvent{Block: signedChildOf(t, parentID, 100), Origin: peerA})
+	assert.Equal(t, maxFutureBlocksPerPeer, node.countFutureBlocksFrom(peerA), "a peer at the cap adds nothing")
+
+	node.handleNewBlock(&comm.NewBlockEvent{Block: signedChildOf(t, parentID, 101), Origin: peerB})
+	assert.Equal(t, 1, node.countFutureBlocksFrom(peerB), "other peers are unaffected")
+}
+
+func TestNode_FutureBlockCacheKeepsFirstCopy(t *testing.T) {
+	node, _ := setupTestNodeForHousekeeping(t)
+	parentID := cacheUnknownParent(t, node)
+	peerA, peerB := discover.NodeID{1}, discover.NodeID{2}
+
+	blk := signedChildOf(t, parentID, 1)
+	node.handleNewBlock(&comm.NewBlockEvent{Block: blk, Origin: peerA})
+
+	// A second copy under the same ID, even with another body, does not replace the first.
+	// The mocked PrevalidateStateless lets the other body through; the real one
+	// rejects it on the txs root.
+	other := block.Compose(blk.Header(), tx.Transactions{tx.NewBuilder(tx.TypeLegacy).Build()})
+	require.Equal(t, blk.Header().ID(), other.Header().ID())
+	node.handleNewBlock(&comm.NewBlockEvent{Block: other, Origin: peerB})
+
+	v, ok := node.futureBlocksCache.Get(blk.Header().ID())
+	require.True(t, ok)
+	assert.Same(t, blk, v.(*futureBlock).blk)
+	assert.Equal(t, peerA, v.(*futureBlock).origin)
+	assert.Zero(t, node.countFutureBlocksFrom(peerB))
 }

@@ -163,15 +163,15 @@ func (c *Communicator) deliverBlocksLoop() {
 		case <-c.blockMailbox.signal:
 		}
 		batch := c.blockMailbox.take()
-		blocks := make([]*block.Block, 0, len(batch))
-		for _, blk := range batch {
-			blocks = append(blocks, blk)
+		events := make([]*NewBlockEvent, 0, len(batch))
+		for peer, blk := range batch {
+			events = append(events, &NewBlockEvent{Block: blk, Origin: peer.ID()})
 		}
-		sort.Slice(blocks, func(i, j int) bool {
-			return blocks[i].Header().Number() < blocks[j].Header().Number()
+		sort.Slice(events, func(i, j int) bool {
+			return events[i].Header().Number() < events[j].Header().Number()
 		})
-		for _, blk := range blocks {
-			c.newBlockFeed.Send(&NewBlockEvent{Block: blk})
+		for _, ev := range events {
+			c.newBlockFeed.Send(ev)
 		}
 	}
 }

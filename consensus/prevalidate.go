@@ -78,5 +78,11 @@ func (c *Consensus) PrevalidateStateless(blk *block.Block, ceilingGasLimit uint6
 		}
 	}
 
+	// The block ID covers only the header, so a body that does not match the
+	// header's txs root could otherwise enter under an honest block's ID.
+	if root := blk.Transactions().RootHash(); root != header.TxsRoot() {
+		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), root))
+	}
+
 	return nil
 }

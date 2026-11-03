@@ -174,6 +174,18 @@ func TestPrevalidateStateless(t *testing.T) {
 					expectErr: true,
 				},
 				{
+					// The block ID covers only the header, so another body under the
+					// same header would share an honest block's ID.
+					name:      "body not matching txs root rejected",
+					blk:       block.Compose(build(10_000_000, scn.sig, manyTxs(2)).Header(), manyTxs(1)),
+					expectErr: true,
+				},
+				{
+					name:      "empty body under a header with txs rejected",
+					blk:       block.Compose(build(10_000_000, scn.sig, manyTxs(2)).Header(), nil),
+					expectErr: true,
+				},
+				{
 					name:      "wrong header signature length rejected",
 					blk:       build(10_000_000, make([]byte, 4096), nil),
 					expectErr: true,
