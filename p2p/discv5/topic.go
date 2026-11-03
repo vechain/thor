@@ -52,6 +52,9 @@ type topicInfo struct {
 
 // removes tail element from the fifo
 func (t *topicInfo) getFifoTail() *topicEntry {
+	if len(t.entries) == 0 {
+		return nil
+	}
 	for t.entries[t.fifoTail] == nil {
 		t.fifoTail++
 	}
@@ -185,7 +188,13 @@ func (t *topicTable) addEntry(node *Node, topic Topic) {
 	}
 
 	if t.globalEntries == maxEntries {
-		t.deleteEntry(t.leastRequested()) // not empty, no need to check for nil
+		if e := t.leastRequested(); e != nil {
+			t.deleteEntry(e)
+		}
+		// The eviction above may have deleted this same topic when it held
+		// the single least-requested entry; never reuse the pre-eviction
+		// topic pointer.
+		te = t.getOrNewTopic(topic)
 	}
 
 	fifoIdx := te.fifoHead
@@ -207,17 +216,30 @@ func (t *topicTable) addEntry(node *Node, topic Topic) {
 
 // removes least requested element from the fifo
 func (t *topicTable) leastRequested() *topicEntry {
-	for t.requested.Len() > 0 && t.topics[t.requested[0].topic] == nil {
-		heap.Pop(&t.requested)
+	for t.requested.Len() > 0 {
+		topic := t.requested[0].topic
+		ti := t.topics[topic]
+		if ti == nil || len(ti.entries) == 0 {
+			// The heap root cannot donate an eviction victim. Drop it from
+			// both indexes together so heap membership stays equivalent to
+			// topic-map presence; an empty topic's adaptive wait state is
+			// discarded with it.
+			heap.Pop(&t.requested)
+			if ti != nil {
+				delete(t.topics, topic)
+			}
+			continue
+		}
+		return ti.getFifoTail()
 	}
-	if t.requested.Len() == 0 {
-		return nil
-	}
-	return t.topics[t.requested[0].topic].getFifoTail()
+	return nil
 }
 
 // entry should exist
 func (t *topicTable) deleteEntry(e *topicEntry) {
+	if e == nil {
+		return
+	}
 	if printTestImgLogs {
 		fmt.Printf("*- %d %v %016x %016x\n", mclock.Now()/1000000, e.topic, t.self.sha[:8], e.node.sha[:8])
 	}
@@ -226,10 +248,11 @@ func (t *topicTable) deleteEntry(e *topicEntry) {
 	if len(ne) == 0 {
 		t.checkDeleteNode(e.node)
 	}
-	te := t.topics[e.topic]
-	delete(te.entries, e.fifoIdx)
-	if len(te.entries) == 0 {
-		t.checkDeleteTopic(e.topic)
+	if te := t.topics[e.topic]; te != nil {
+		delete(te.entries, e.fifoIdx)
+		if len(te.entries) == 0 {
+			t.checkDeleteTopic(e.topic)
+		}
 	}
 	t.globalEntries--
 }
