@@ -1,0 +1,105 @@
+// Copyright (c) 2026 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+package httpserver
+
+import (
+	"bufio"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vechain/thor/v2/comm"
+	"github.com/vechain/thor/v2/test/testchain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/txpool"
+)
+
+type noPeers struct{}
+
+func (noPeers) PeersStats() []*comm.PeerStats { return nil }
+
+// pipelineAndStall sends n copies of req on one connection and reads nothing for
+// stall, then counts the responses that still arrive. The server stops reading
+// requests once its writes block, so fewer than n responses means it cut the
+// stalled connection; n means a blocked write outlived the deadline.
+func pipelineAndStall(t *testing.T, addr, req string, n int, stall time.Duration) int {
+	t.Helper()
+	conn, err := net.Dial("tcp", addr)
+	require.NoError(t, err)
+	defer conn.Close()
+	_ = conn.(*net.TCPConn).SetReadBuffer(4 * 1024)
+	go func() { _, _ = io.WriteString(conn, strings.Repeat(req, n)) }()
+
+	time.Sleep(stall)
+	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	br := bufio.NewReader(conn)
+	got := 0
+	for ; got < n; got++ {
+		resp, err := http.ReadResponse(br, nil)
+		if err != nil {
+			break
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+	return got
+}
+
+// TestAPIServerWriteDeadlineCoversUnroutedReplies pins that the write deadline
+// wraps the whole API handler: replies that never reach a router middleware
+// (mux's 404 and 405, CORS preflights) must be cut off for a client that stops
+// reading, like a matched route's.
+func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
+	saved := writeTimeout
+	writeTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { writeTimeout = saved })
+
+	chain, err := testchain.NewDefault()
+	require.NoError(t, err)
+	pool := txpool.New(chain.Repo(), chain.Stater(), txpool.Options{
+		Limit: 100, LimitPerAccount: 16, MaxLifetime: time.Minute,
+	}, &thor.NoFork)
+	t.Cleanup(pool.Close)
+
+	enableTxPool := &atomic.Bool{}
+	url, closeSrv, err := StartAPIServer("127.0.0.1:0", chain.Repo(), chain.Stater(), pool, chain.LogDB(),
+		chain.Engine(), noPeers{}, chain.GetForkConfig(), APIConfig{
+			AllowedOrigins:   "*",
+			BacktraceLimit:   1000,
+			CallGasLimit:     50_000_000,
+			BatchDataMaxSize: 1 << 20,
+			TraceDataMaxSize: 1 << 20,
+			EnableReqLogger:  &atomic.Bool{},
+			LogsLimit:        1000,
+			EnableTxPool:     enableTxPool,
+			Timeout:          10_000,
+			MaxLogsOffset:    100_000,
+		})
+	require.NoError(t, err)
+	t.Cleanup(closeSrv)
+	addr := strings.TrimSuffix(strings.TrimPrefix(url, "http://"), "/")
+
+	const n = 20_000
+	for name, req := range map[string]string{
+		"matched route":  "GET /blocks/best HTTP/1.1\r\nHost: test\r\n\r\n",
+		"404 not found":  "GET /no-such-route HTTP/1.1\r\nHost: test\r\n\r\n",
+		"405 wrong verb": "POST /blocks/best HTTP/1.1\r\nHost: test\r\nContent-Length: 0\r\n\r\n",
+		"CORS preflight": "OPTIONS /blocks/best HTTP/1.1\r\nHost: test\r\nOrigin: http://a.test\r\nAccess-Control-Request-Method: GET\r\n\r\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := pipelineAndStall(t, addr, req, n, 2*time.Second)
+			assert.Less(t, got, n, "a stalled write outlived the %s write deadline", writeTimeout)
+		})
+	}
+}

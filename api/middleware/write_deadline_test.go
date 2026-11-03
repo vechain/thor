@@ -6,6 +6,7 @@
 package middleware
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"io"
@@ -186,6 +187,58 @@ func TestHandleWriteDeadlineArmedByFirstWrite(t *testing.T) {
 	body, reused := get("/slow")
 	assert.Equal(t, "slow", body)
 	assert.True(t, reused, "the second request should reuse the connection")
+}
+
+// deadlineRecorder is a ResponseWriter that records each write deadline set on it
+// and can be hijacked.
+type deadlineRecorder struct {
+	header    http.Header
+	deadlines []time.Time
+	hijacked  bool
+}
+
+func (r *deadlineRecorder) Header() http.Header         { return r.header }
+func (r *deadlineRecorder) WriteHeader(int)             {}
+func (r *deadlineRecorder) Write(b []byte) (int, error) { return len(b), nil }
+
+func (r *deadlineRecorder) SetWriteDeadline(t time.Time) error {
+	r.deadlines = append(r.deadlines, t)
+	return nil
+}
+
+func (r *deadlineRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	r.hijacked = true
+	return nil, nil, nil
+}
+
+// TestHandleWriteDeadlineArmsBeforeFinalFlush pins the arm when the handler
+// returns: net/http sends a response that only set a status, and any buffered
+// tail, after the handler returns, so that send must be bounded too. A hijacked
+// connection is left alone, since net/http's SetWriteDeadline does not refuse it.
+func TestHandleWriteDeadlineArmsBeforeFinalFlush(t *testing.T) {
+	const timeout = time.Minute
+
+	t.Run("status only", func(t *testing.T) {
+		rec := &deadlineRecorder{header: http.Header{}}
+		before := time.Now()
+		HandleWriteDeadline(timeout)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		})).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		require.Len(t, rec.deadlines, 1)
+		assert.False(t, rec.deadlines[0].Before(before.Add(timeout)))
+	})
+
+	t.Run("hijacked", func(t *testing.T) {
+		rec := &deadlineRecorder{header: http.Header{}}
+		HandleWriteDeadline(timeout)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _, err := w.(http.Hijacker).Hijack()
+			require.NoError(t, err)
+		})).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.True(t, rec.hijacked)
+		assert.Empty(t, rec.deadlines, "no deadline may be set on a hijacked connection")
+	})
 }
 
 func TestHandleWriteDeadlinePassesWebsocketUpgrade(t *testing.T) {

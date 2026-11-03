@@ -45,8 +45,10 @@ const (
 	defaultRequestBodyLimit = 200 * 1024 // 200KB
 	defaultMaxCriteriaCount = 10
 	defaultIdleTimeout      = 10 * time.Second
-	defaultWriteTimeout     = 10 * time.Second
 )
+
+// writeTimeout bounds each stalled response write; a variable so tests can shorten it.
+var writeTimeout = 10 * time.Second
 
 type APIConfig struct {
 	AllowedOrigins             string
@@ -136,8 +138,6 @@ func StartAPIServer(
 	subs.Mount(router, "/subscriptions")
 
 	// middlewares
-	// write deadline first, so it wraps the connection's own ResponseWriter
-	router.Use(middleware.HandleWriteDeadline(defaultWriteTimeout))
 	// body limit and timeout
 	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
 	if config.Timeout > 0 {
@@ -161,6 +161,10 @@ func StartAPIServer(
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(router)
+	// Outermost, so it wraps the connection's own ResponseWriter and also bounds
+	// the replies mux and CORS write without reaching a router middleware:
+	// 404, 405 and preflights.
+	handler = middleware.HandleWriteDeadline(writeTimeout)(handler)
 	// IdleTimeout is set explicitly because http.Server otherwise falls back to
 	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read
 	// budget. No WriteTimeout: it would abort honest large responses (/logs,
