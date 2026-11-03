@@ -37,6 +37,11 @@ type Subscriptions struct {
 	wg                sync.WaitGroup
 	beat2Cache        *messageCache[api.Beat2Message]
 	beatCache         *messageCache[api.BeatMessage]
+
+	// pongWait is the read-watchdog silence budget, refreshed on every pong.
+	pongWait time.Duration
+	// writeWait is the per-frame write deadline for every websocket write.
+	writeWait time.Duration
 }
 
 type msgReader interface {
@@ -46,10 +51,12 @@ type msgReader interface {
 var logger = log.WithContext("pkg", "subscriptions")
 
 const (
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 7) / 10
+	defaultPongWait = 60 * time.Second
+	// defaultWriteWait bounds every websocket write. Without a deadline a
+	// subscriber that stops reading blocks the handler inside its write
+	// forever: the pong watchdog only closes a channel the blocked writer
+	// never selects on, and nothing else closes the connection.
+	defaultWriteWait = 10 * time.Second
 )
 
 func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool txpool.Pool, enabledDeprecated bool) *Subscriptions {
@@ -76,6 +83,8 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		done:       make(chan struct{}),
 		beat2Cache: newMessageCache[api.Beat2Message](backtraceLimit),
 		beatCache:  newMessageCache[api.BeatMessage](backtraceLimit),
+		pongWait:   defaultPongWait,
+		writeWait:  defaultWriteWait,
 	}
 	sub.wg.Go(func() {
 		sub.pendingTx.DispatchLoop(sub.done)
@@ -184,9 +193,9 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 		// websocket connection do not return errors to the wrapHandler
 		return nil
 	}
-	defer s.closeConn(conn, err)
+	defer closeConn(conn, err, s.writeWait)
 
-	pingTicker := time.NewTicker(pingPeriod)
+	pingTicker := time.NewTicker(s.pingPeriod())
 	defer pingTicker.Stop()
 
 	txCh := make(chan *tx.Transaction, txQueueSize)
@@ -199,7 +208,7 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	for {
 		select {
 		case tx := <-txCh:
-			if err = conn.WriteJSON(&api.PendingTxIDMessage{ID: tx.ID()}); err != nil {
+			if err = writeJSON(conn, &api.PendingTxIDMessage{ID: tx.ID()}, s.writeWait); err != nil {
 				// likely conn has failed
 				return nil
 			}
@@ -208,7 +217,7 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 		case <-closed:
 			return nil
 		case <-pingTicker.C:
-			if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err = writeMessage(conn, websocket.PingMessage, nil, s.writeWait); err != nil {
 				// likely conn has failed
 				return nil
 			}
@@ -216,59 +225,31 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	}
 }
 
+// setupConn upgrades the request and starts the read watchdog. The returned
+// channel closes when the watchdog gives up on the peer (read deadline
+// expired or connection failed); a handler blocked in a write never observes
+// it. The watchdog runs on the service's WaitGroup: Close() waits for it,
+// and closeConn's socket teardown unblocks its pending read.
 func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*websocket.Conn, chan struct{}, error) {
 	conn, err := s.upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-	conn.SetReadLimit(100 * 1024) // 100 KB
 
 	closed := make(chan struct{})
-	s.wg.Go(func() {
-		// close connections if not closed already
-		defer close(closed)
-
-		if err = conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-			logger.Debug("failed to set initial read deadline", "err", err)
-			return
-		}
-		conn.SetPongHandler(func(string) error {
-			if err = conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-				logger.Debug("failed to set pong read deadline", "err", err)
-			}
-			return nil
-		})
-		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
-				logger.Debug("websocket read err", "err", err)
-				break
-			}
-		}
-	})
-
+	s.wg.Go(readWatchdog(conn, closed, s.pongWait))
 	return conn, closed, nil
 }
 
-func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
-	var closeMsg []byte
-	if err != nil {
-		closeMsg = websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error())
-	} else {
-		closeMsg = websocket.FormatCloseMessage(websocket.CloseGoingAway, "")
-	}
-
-	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-		logger.Debug("write close message", "err", err)
-	}
-
-	if err := conn.Close(); err != nil {
-		logger.Debug("close websocket", "err", err)
-	}
+// pingPeriod returns the ping interval, kept below pongWait (7/10) so pings
+// arrive before the watchdog expires.
+func (s *Subscriptions) pingPeriod() time.Duration {
+	return s.pongWait * 7 / 10
 }
 
 func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan struct{}) error {
 	ticker := s.repo.NewTicker()
-	pingTicker := time.NewTicker(pingPeriod)
+	pingTicker := time.NewTicker(s.pingPeriod())
 	defer pingTicker.Stop()
 	for {
 		msgs, hasMore, err := reader.Read()
@@ -276,7 +257,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 			return fmt.Errorf("unable to read subscription message: %w", err)
 		}
 		for _, msg := range msgs {
-			if err := conn.WriteJSON(msg); err != nil {
+			if err := writeJSON(conn, msg, s.writeWait); err != nil {
 				return fmt.Errorf("unable to write subscription json: %w", err)
 			}
 		}
@@ -287,7 +268,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 			case <-closed:
 				return nil
 			case <-pingTicker.C:
-				if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				if err = writeMessage(conn, websocket.PingMessage, nil, s.writeWait); err != nil {
 					return fmt.Errorf("failed to write ping message: %w", err)
 				}
 			default:
@@ -300,7 +281,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan
 				return nil
 			case <-ticker.C():
 			case <-pingTicker.C:
-				if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				if err = writeMessage(conn, websocket.PingMessage, nil, s.writeWait); err != nil {
 					return fmt.Errorf("failed to write ping message: %w", err)
 				}
 			}
@@ -369,7 +350,7 @@ func (s *Subscriptions) websocket(readerFunc func(http.ResponseWriter, *http.Req
 			// websocket connection do not return errors to the wrapHandler
 			return nil
 		}
-		defer s.closeConn(conn, err)
+		defer closeConn(conn, err, s.writeWait)
 
 		// Stream messages
 		err = s.pipe(conn, reader, closed)
