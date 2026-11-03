@@ -615,7 +615,7 @@ func initDebugServer(t *testing.T) {
 	blk = allBlocks[1]
 
 	router := mux.NewRouter()
-	debug = New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), 21000, true, []string{"all"}, false)
+	debug = New(thorChain.Repo(), thorChain.Stater(), thorChain.GetForkConfig(), thorChain.Engine(), 21000, true, []string{"all"}, false, 5*1024*1024/2)
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }

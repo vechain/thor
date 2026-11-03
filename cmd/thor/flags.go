@@ -85,6 +85,13 @@ var (
 		Usage:   "maximum accumulated raw EVM output data per batch call in bytes",
 		Sources: envVar("API_BATCH_DATA_MAX_SIZE"),
 	}
+	apiTraceDataMaxSizeFlag = &cli.Uint64Flag{
+		Name:    "api-trace-data-max-size",
+		Local:   true,
+		Value:   5 * 1024 * 1024 / 2,
+		Usage:   "maximum accumulated call input and output data per trace in bytes",
+		Sources: envVar("API_TRACE_DATA_MAX_SIZE"),
+	}
 	apiBacktraceLimitFlag = &cli.Uint64Flag{
 		Name:    "api-backtrace-limit",
 		Local:   true,

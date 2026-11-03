@@ -87,6 +87,7 @@ func (n *node) Start() error {
 		true,
 		[]string{"all"},
 		true,
+		5*1024*1024/2,
 	).Mount(router, "/debug")
 	enableTxpool := &atomic.Bool{}
 	enableTxpool.Store(true)

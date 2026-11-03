@@ -52,6 +52,7 @@ type APIConfig struct {
 	BacktraceLimit             uint32
 	CallGasLimit               uint64
 	BatchDataMaxSize           uint64
+	TraceDataMaxSize           uint64
 	SkipLogs                   bool
 	AllowCustomTracer          bool
 	EnableReqLogger            *atomic.Bool
@@ -122,6 +123,7 @@ func StartAPIServer(
 		config.AllowCustomTracer,
 		config.AllowedTracers,
 		config.SoloMode,
+		config.TraceDataMaxSize,
 	).Mount(router, "/debug")
 	node.New(nw, txPool, config.EnableTxPool).Mount(router, "/node")
 	fees.New(repo, bft, forkConfig, stater, fees.Config{

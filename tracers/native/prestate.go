@@ -52,6 +52,7 @@ func (a *account) exists() bool {
 
 type accountMarshaling struct {
 	Balance *hexutil.Big
+	Energy  *hexutil.Big
 	Code    hexutil.Bytes
 }
 

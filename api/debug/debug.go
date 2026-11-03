@@ -48,6 +48,7 @@ type Debug struct {
 	bft               bft.Committer
 	allowedTracers    map[string]struct{}
 	skipPoA           bool
+	traceDataMaxSize  uint64
 }
 
 func New(
@@ -59,6 +60,7 @@ func New(
 	allowCustomTracer bool,
 	allowedTracers []string,
 	soloMode bool,
+	traceDataMaxSize uint64,
 ) *Debug {
 	allowedMap := make(map[string]struct{})
 	for _, t := range allowedTracers {
@@ -74,6 +76,7 @@ func New(
 		bft,
 		allowedMap,
 		soloMode,
+		traceDataMaxSize,
 	}
 }
 
@@ -159,35 +162,53 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, block *b
 		ClauseIndex: clauseIndex,
 		State:       rt.State(),
 	})
-	rt.SetVMConfig(vm.Config{Tracer: tracer})
+	budget := newDataBudgetTracer(tracer, d.traceDataMaxSize)
+	rt.SetVMConfig(vm.Config{Tracer: budget})
 
 	exec, interrupt := txExec.PrepareNext()
+	return traceExecution(ctx, budget, interrupt, exec)
+}
+
+// traceExecution runs one traced clause execution under ctx and returns the
+// tracer's result. When ctx is done it interrupts the EVM and stops the
+// tracer; GetResult is reached only while ctx is still live, so a request
+// whose deadline fired or whose client disconnected gets an error instead of
+// a marshalled trace. A trace that exceeded its data budget is discarded the
+// same way.
+func traceExecution(
+	ctx context.Context,
+	tracer *dataBudgetTracer,
+	interrupt func(),
+	exec func() (interrupted bool, err error),
+) (any, error) {
 	done := make(chan struct{})
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		select {
 		case <-ctx.Done():
 			interrupt()
-			return
+			tracer.Stop(ctx.Err())
 		case <-done:
-			return
 		}
 	}()
 
 	interrupted, err := exec()
 	close(done)
+	<-stopped // join the watchdog: no tracer.Stop may run past this point
 
-	if interrupted {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
+	switch {
+	case ctx.Err() != nil:
+		return nil, ctx.Err()
+	case tracer.err != nil:
+		return nil, restutil.BadRequest(tracer.err)
+	case interrupted:
+		// Unreachable via the watchdog (ctx.Err() would be set above);
+		// covers an interrupt() caller that is not tied to ctx.
 		return nil, errors.New("execution interrupted")
-	}
-
-	// errors other than interrupted
-	if err != nil {
+	case err != nil:
 		return nil, err
 	}
-
 	return tracer.GetResult()
 }
 
@@ -302,36 +323,14 @@ func (d *Debug) traceCall(
 		BlockTime: header.Timestamp(),
 		State:     st,
 	})
-	rt.SetVMConfig(vm.Config{Tracer: tracer})
+	budget := newDataBudgetTracer(tracer, d.traceDataMaxSize)
+	rt.SetVMConfig(vm.Config{Tracer: budget})
 
 	exec, interrupt := rt.PrepareClause(clause, 0, gas, txCtx)
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			interrupt()
-			return
-		case <-done:
-			return
-		}
-	}()
-
-	_, interrupted, err := exec()
-	close(done)
-
-	if interrupted {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, errors.New("execution interrupted")
-	}
-
-	// errors other than interrupted
-	if err != nil {
-		return nil, err
-	}
-
-	return tracer.GetResult()
+	return traceExecution(ctx, budget, interrupt, func() (bool, error) {
+		_, interrupted, err := exec()
+		return interrupted, err
+	})
 }
 
 func (d *Debug) debugStorage(
