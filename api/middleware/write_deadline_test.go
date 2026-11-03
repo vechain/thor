@@ -192,9 +192,13 @@ func TestHandleWriteDeadlineArmedByFirstWrite(t *testing.T) {
 // deadlineRecorder is a ResponseWriter that records each write deadline set on it
 // and can be hijacked.
 type deadlineRecorder struct {
-	header    http.Header
-	deadlines []time.Time
-	hijacked  bool
+	header        http.Header
+	deadlines     []time.Time
+	hijackedAfter int // number of deadlines set before Hijack; -1 until hijacked
+}
+
+func newDeadlineRecorder() *deadlineRecorder {
+	return &deadlineRecorder{header: http.Header{}, hijackedAfter: -1}
 }
 
 func (r *deadlineRecorder) Header() http.Header         { return r.header }
@@ -207,37 +211,44 @@ func (r *deadlineRecorder) SetWriteDeadline(t time.Time) error {
 }
 
 func (r *deadlineRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	r.hijacked = true
+	r.hijackedAfter = len(r.deadlines)
 	return nil, nil, nil
 }
 
-// TestHandleWriteDeadlineArmsBeforeFinalFlush pins the arm when the handler
-// returns: net/http sends a response that only set a status, and any buffered
-// tail, after the handler returns, so that send must be bounded too. A hijacked
-// connection is left alone, since net/http's SetWriteDeadline does not refuse it.
-func TestHandleWriteDeadlineArmsBeforeFinalFlush(t *testing.T) {
+// TestHandleWriteDeadlineArmsAroundHandler pins the arms that are not tied to a
+// handler write: one before the handler runs, for what net/http writes on its own
+// before the first write (the 100 Continue sent when the body is first read), and
+// one when it returns, for what net/http sends afterwards (a response that only
+// set a status, any buffered tail). No deadline is set once the connection is
+// hijacked, since net/http's SetWriteDeadline does not refuse it.
+func TestHandleWriteDeadlineArmsAroundHandler(t *testing.T) {
 	const timeout = time.Minute
 
 	t.Run("status only", func(t *testing.T) {
-		rec := &deadlineRecorder{header: http.Header{}}
+		rec := newDeadlineRecorder()
 		before := time.Now()
+		var armedOnEntry int
 		HandleWriteDeadline(timeout)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			armedOnEntry = len(rec.deadlines)
 			w.WriteHeader(http.StatusNoContent)
 		})).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
-		require.Len(t, rec.deadlines, 1)
-		assert.False(t, rec.deadlines[0].Before(before.Add(timeout)))
+		assert.Equal(t, 1, armedOnEntry, "the deadline must be armed before the handler runs")
+		require.Len(t, rec.deadlines, 2, "and again when it returns")
+		for _, d := range rec.deadlines {
+			assert.False(t, d.Before(before.Add(timeout)))
+		}
 	})
 
 	t.Run("hijacked", func(t *testing.T) {
-		rec := &deadlineRecorder{header: http.Header{}}
+		rec := newDeadlineRecorder()
 		HandleWriteDeadline(timeout)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, _, err := w.(http.Hijacker).Hijack()
 			require.NoError(t, err)
 		})).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
-		assert.True(t, rec.hijacked)
-		assert.Empty(t, rec.deadlines, "no deadline may be set on a hijacked connection")
+		require.NotEqual(t, -1, rec.hijackedAfter, "the handler must have hijacked")
+		assert.Len(t, rec.deadlines, rec.hijackedAfter, "no deadline may be set after a hijack")
 	})
 }
 
