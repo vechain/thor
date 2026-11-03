@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -88,6 +89,69 @@ func TestAdminToggleAffectsNodeAPI(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	assert.Equal(t, http.StatusOK, getStatus(t, nodeTS.URL+"/node/txpool"))
+}
+
+func TestAdminRequiresJSONContentType(t *testing.T) {
+	apiLogs := &atomic.Bool{}
+	txpoolOn := &atomic.Bool{}
+	txpoolOn.Store(true)
+	logLevel := &slog.LevelVar{}
+
+	h := admin.NewHTTPHandler(
+		logLevel,
+		nil,
+		admin.NewGate("apilogs", apiLogs),
+		admin.NewGate("txpool-api", txpoolOn),
+		admin.NewGate("pprof", &atomic.Bool{}),
+		nil,
+	)
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	post := func(path, contentType, body string) int {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPost, ts.URL+path, strings.NewReader(body))
+		require.NoError(t, err)
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		res, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer res.Body.Close()
+		_, _ = io.Copy(io.Discard, res.Body)
+		return res.StatusCode
+	}
+
+	t.Run("features", func(t *testing.T) {
+		const path = "/admin/features/txpool-api"
+		const off = `{"enabled":false}`
+
+		assert.Equal(t, http.StatusUnsupportedMediaType, post(path, "text/plain", off))
+		assert.Equal(t, http.StatusUnsupportedMediaType, post(path, "", off))
+		assert.True(t, txpoolOn.Load(), "gate must not change on rejected request")
+
+		assert.Equal(t, http.StatusOK, post(path, "application/json", off))
+		assert.False(t, txpoolOn.Load())
+
+		assert.Equal(t, http.StatusOK, post(path, "application/json; charset=utf-8", `{"enabled":true}`))
+		assert.True(t, txpoolOn.Load())
+	})
+
+	t.Run("features GET unaffected", func(t *testing.T) {
+		assert.Equal(t, http.StatusOK, getStatus(t, ts.URL+"/admin/features"))
+	})
+
+	t.Run("legacy apilogs", func(t *testing.T) {
+		assert.Equal(t, http.StatusUnsupportedMediaType, post("/admin/apilogs", "text/plain", `{"enabled":true}`))
+		assert.False(t, apiLogs.Load())
+	})
+
+	t.Run("loglevel", func(t *testing.T) {
+		assert.Equal(t, http.StatusUnsupportedMediaType, post("/admin/loglevel", "text/plain", `{"level":"debug"}`))
+		assert.NotEqual(t, slog.LevelDebug, logLevel.Level())
+
+		assert.Equal(t, http.StatusOK, post("/admin/loglevel", "application/json", `{"level":"debug"}`))
+	})
 }
 
 func getStatus(t *testing.T, url string) int {

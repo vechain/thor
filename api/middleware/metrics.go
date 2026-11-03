@@ -8,6 +8,7 @@ package middleware
 import (
 	"bufio"
 	"errors"
+	"mime"
 	"net"
 	"net/http"
 	"strconv"
@@ -29,6 +30,8 @@ var (
 	metricWebsocketDuration    = metrics.LazyLoadHistogramVec("api_websocket_duration", []string{"name", "code"}, websocketDurations)
 	metricActiveWebsocketGauge = metrics.LazyLoadGaugeVec("api_active_websocket_gauge", []string{"name"})
 	metricWebsocketCounter     = metrics.LazyLoadCounterVec("api_websocket_counter", []string{"name"})
+	// observes body-carrying requests whose Content-Type is not application/json
+	metricHTTPNonJSONBodyCounter = metrics.LazyLoadCounterVec("api_non_json_request_body_count", []string{"name", "media_type"})
 )
 
 // statusCodeCaptor is a wrapper around http.ResponseWriter that captures the status code.
@@ -70,6 +73,30 @@ func (s *statusCodeCaptor) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return h.Hijack()
 }
 
+// nonJSONMediaType maps a Content-Type header to a closed set of labels to bound
+// metric cardinality. It returns "" for application/json.
+func nonJSONMediaType(contentType string) string {
+	if strings.TrimSpace(contentType) == "" {
+		return "missing"
+	}
+	mt, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return "invalid"
+	}
+	switch mt {
+	case "application/json":
+		return ""
+	case "application/x-www-form-urlencoded":
+		return "form"
+	case "text/plain":
+		return "text"
+	case "multipart/form-data":
+		return "multipart"
+	default:
+		return "other"
+	}
+}
+
 // MetricsMiddleware is a middleware that records metrics for each request.
 func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +114,15 @@ func MetricsMiddleware(next http.Handler) http.Handler {
 			name = rt.GetName()
 			if strings.HasPrefix(name, "WS") {
 				subscription = true
+			}
+		}
+
+		if enabled && !subscription {
+			switch r.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch:
+				if mt := nonJSONMediaType(r.Header.Get("Content-Type")); mt != "" {
+					metricHTTPNonJSONBodyCounter().AddWithLabel(1, map[string]string{"name": name, "media_type": mt})
+				}
 			}
 		}
 

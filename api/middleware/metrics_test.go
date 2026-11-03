@@ -252,6 +252,73 @@ func TestStatusCodeCaptorExposesFlusherAndHijacker(t *testing.T) {
 	assert.True(t, gotHijacker, "Hijacker must be visible through statusCodeCaptor")
 }
 
+func TestNonJSONMediaType(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"", "missing"},
+		{"  ", "missing"},
+		{"application/json", ""},
+		{"application/json; charset=utf-8", ""},
+		{"Application/JSON", ""},
+		{"text/plain; charset=utf-8", "text"},
+		{"application/x-www-form-urlencoded", "form"},
+		{"multipart/form-data; boundary=x", "multipart"},
+		{"application/xml", "other"},
+		{"application/jsonx", "other"},
+		{"application/json;;", "invalid"},
+		{"not a media type", "invalid"},
+	} {
+		assert.Equal(t, tc.want, nonJSONMediaType(tc.in), tc.in)
+	}
+}
+
+func TestNonJSONBodyMetric(t *testing.T) {
+	router := mux.NewRouter()
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	router.Handle("/nonjson", ok).Methods("GET", "POST").Name("nonjson-test")
+	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+	router.Use(MetricsMiddleware)
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	do := func(method, contentType string) {
+		req, err := http.NewRequest(method, ts.URL+"/nonjson", strings.NewReader("{}"))
+		require.NoError(t, err)
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		res, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		res.Body.Close()
+	}
+	do("POST", "application/json")
+	do("POST", "application/json; charset=utf-8")
+	do("POST", "text/plain")
+	do("POST", "")
+	do("GET", "")
+
+	body, _ := httpGet(t, ts.URL+"/metrics")
+	parser := expfmt.TextParser{}
+	families, err := parser.TextToMetricFamilies(bytes.NewReader(body))
+	require.NoError(t, err)
+
+	got := map[string]float64{}
+	for _, m := range families["thor_metrics_api_non_json_request_body_count"].GetMetric() {
+		var name, mt string
+		for _, l := range m.GetLabel() {
+			switch l.GetName() {
+			case "name":
+				name = l.GetValue()
+			case "media_type":
+				mt = l.GetValue()
+			}
+		}
+		if name == "nonjson-test" {
+			got[mt] = m.GetCounter().GetValue()
+		}
+	}
+	assert.Equal(t, map[string]float64{"text": 1, "missing": 1}, got)
+}
+
 func httpGet(t *testing.T, url string) ([]byte, int) {
 	res, err := http.Get(url) //#nosec G107
 	if err != nil {

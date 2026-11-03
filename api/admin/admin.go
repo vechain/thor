@@ -7,6 +7,7 @@ package admin
 
 import (
 	"log/slog"
+	"mime"
 	"net/http"
 	"sync/atomic"
 
@@ -31,6 +32,7 @@ func NewHTTPHandler(
 ) http.HandlerFunc {
 	router := mux.NewRouter()
 	subRouter := router.PathPrefix("/admin").Subrouter()
+	subRouter.Use(requireJSONContentType)
 
 	loglevel.New(logLevel).Mount(subRouter, "/loglevel")
 	healthAPI.NewAPI(health, master).Mount(subRouter, "/health")
@@ -51,6 +53,24 @@ func NewHTTPHandler(
 
 	handler := handlers.CompressHandler(router)
 	return handler.ServeHTTP
+}
+
+// requireJSONContentType rejects state-changing requests whose Content-Type is
+// not application/json. HTML forms and CORS "simple requests" cannot send that
+// type, and a JSON content-type forces a preflight the admin server never
+// answers, so this closes the browser path for cross-site form posts.
+func requireJSONContentType(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch:
+			mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if err != nil || mt != "application/json" {
+				http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // NewGate builds a featuregate.Gate pre-wired with the admin audit metric.
