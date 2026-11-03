@@ -206,15 +206,17 @@ func testGetExpandedBlockByID(t *testing.T) {
 
 func testInvalidBlockNumber(t *testing.T) {
 	invalidNumberRevision := "4294967296" // invalid block number
-	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidNumberRevision)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidNumberRevision)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(string(res)))
 }
 
 func testInvalidBlockID(t *testing.T) {
-	_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidBytes32)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/blocks/" + invalidBytes32)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Contains(t, string(res), "revision: encoding/hex: invalid byte")
 }
 
 func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {

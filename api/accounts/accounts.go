@@ -213,6 +213,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err := restutil.ParseJSON(req.Body, &callData); err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "body"))
 	}
+	if callData == nil {
+		return restutil.BadRequest(errors.New("body: null not allowed"))
+	}
 	revision, err := restutil.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
 		return restutil.BadRequest(errors.WithMessage(err, "revision"))

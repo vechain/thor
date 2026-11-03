@@ -129,11 +129,13 @@ func testGetTransactionsWithOrigin(t *testing.T) {
 }
 
 func testGetTransactionsWithBadExpanded(t *testing.T) {
-	httpGetAndCheckResponseStatus(t, "/node/txpool?expanded=notboolean", 400)
+	res := httpGetAndCheckResponseStatus(t, "/node/txpool?expanded=notboolean", 400)
+	assert.Contains(t, string(res), "expanded: should be boolean")
 }
 
 func testGetTransactionsWithBadOrigin(t *testing.T) {
-	httpGetAndCheckResponseStatus(t, "/node/txpool?origin=0xinvalid", 400)
+	res := httpGetAndCheckResponseStatus(t, "/node/txpool?origin=0xinvalid", 400)
+	assert.Contains(t, string(res), "origin: invalid length")
 }
 
 func testTxpoolDisabled(t *testing.T) {

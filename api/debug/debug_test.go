@@ -78,7 +78,7 @@ func TestDebug(t *testing.T) {
 		"testHandleTraceCallWithRevisionAsNonExistingHeight": testHandleTraceCallWithRevisionAsNonExistingHeight,
 		"testHandleTraceCallWithRevisionAsNonExistingID":     testHandleTraceCallWithRevisionAsNonExistingID,
 		"testHandleTraceCallWithMalfomredRevision":           testHandleTraceCallWithMalfomredRevision,
-		"testHandleTraceCallWithInsufficientGas":             testHandleTraceCallWithInsufficientGas,
+		"testHandleTraceCallWithGasExceedingLimit":           testHandleTraceCallWithGasExceedingLimit,
 		"testHandleTraceCallWithBadBlockRef":                 testHandleTraceCallWithBadBlockRef,
 		"testHandleTraceCallWithInvalidLengthBlockRef":       testHandleTraceCallWithInvalidLengthBlockRef,
 		"testTraceCallNextBlock":                             testTraceCallNextBlock,
@@ -182,7 +182,8 @@ func testTraceClauseWithNonExistingBlockID(t *testing.T) {
 		Name:   "structLogger",
 		Target: fmt.Sprintf("%s/x/x", datagen.RandomHash()),
 	}
-	httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers", traceClauseOption, 400)
+	assert.Equal(t, "target[0]: leveldb: not found", strings.TrimSpace(res))
 }
 
 func testTraceClauseWithBadTxID(t *testing.T) {
@@ -313,7 +314,8 @@ func testTraceClauseWithClauseIndexOutOfBound(t *testing.T) {
 
 func testHandleTraceCallWithMalformedBodyRequest(t *testing.T) {
 	badBodyRequest := "badBodyRequest"
-	httpPostAndCheckResponseStatus(t, "/debug/tracers/call", badBodyRequest, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/tracers/call", badBodyRequest, 400)
+	assert.Contains(t, res, "body: ")
 }
 
 func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
@@ -431,7 +433,7 @@ func testHandleTraceCallWithMalfomredRevision(t *testing.T) {
 	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(res))
 }
 
-func testHandleTraceCallWithInsufficientGas(t *testing.T) {
+func testHandleTraceCallWithGasExceedingLimit(t *testing.T) {
 	addr := datagen.RandAddress()
 	traceCallOption := &api.TraceCallOption{
 		Name:       "structLogger",
@@ -494,14 +496,17 @@ func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
 func testStorageRangeWithError(t *testing.T) {
 	// Error case 1: empty StorageRangeOption
 	opt := &api.StorageRangeOption{}
-	httpPostAndCheckResponseStatus(t, "/debug/storage-range", opt, 400)
+	res := httpPostAndCheckResponseStatus(t, "/debug/storage-range", opt, 400)
+	assert.Equal(t, "target: unsupported", strings.TrimSpace(res))
 
 	// Error case 2: bad StorageRangeOption
 	badBodyRequest := 123
-	httpPostAndCheckResponseStatus(t, "/debug/storage-range", badBodyRequest, 400)
+	res = httpPostAndCheckResponseStatus(t, "/debug/storage-range", badBodyRequest, 400)
+	assert.Contains(t, res, "body: ")
 
 	badMaxResult := &api.StorageRangeOption{MaxResult: 1001}
-	httpPostAndCheckResponseStatus(t, "/debug/storage-range", badMaxResult, 400)
+	res = httpPostAndCheckResponseStatus(t, "/debug/storage-range", badMaxResult, 400)
+	assert.Equal(t, "maxResult: exceeds limit of 1000", strings.TrimSpace(res))
 }
 
 func testStorageRangeWithNonExistingBlockID(t *testing.T) {

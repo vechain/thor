@@ -529,9 +529,10 @@ func getRewardsInvalidPercentiles(t *testing.T, tclient *thorclient.Client, best
 	}
 
 	for _, percentiles := range testCases {
-		_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
+		res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
 		require.NoError(t, err)
 		require.Equal(t, 400, statusCode, "should fail with invalid percentiles: %s", percentiles)
+		require.Contains(t, string(res), "invalid rewardPercentiles value", percentiles)
 	}
 }
 
@@ -543,9 +544,10 @@ func getRewardsOutOfRangePercentiles(t *testing.T, tclient *thorclient.Client, b
 	}
 
 	for _, percentiles := range testCases {
-		_, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
+		res, statusCode, err := tclient.RawHTTPClient().RawHTTPGet("/fees/history?blockCount=3&newestBlock=4&rewardPercentiles=" + percentiles)
 		require.NoError(t, err)
 		require.Equal(t, 400, statusCode, "should fail with percentiles out of range: %s", percentiles)
+		require.Equal(t, "rewardPercentiles values must be between 0 and 100", strings.TrimSpace(string(res)), percentiles)
 	}
 }
 

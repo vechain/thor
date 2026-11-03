@@ -173,7 +173,8 @@ func sendLegacyTx(t *testing.T) {
 }
 
 func sendNullTx(t *testing.T) {
-	httpPostAndCheckResponseStatus(t, "/transactions", nil, 400)
+	res := httpPostAndCheckResponseStatus(t, "/transactions", nil, 400)
+	assert.Equal(t, "body", strings.TrimSpace(string(res)))
 }
 
 func sendDynamicFeeTx(t *testing.T) {
@@ -256,7 +257,8 @@ func txWithBadHeader(t *testing.T) {
 func getReceiptWithBadID(t *testing.T) {
 	txBadID := "0x123"
 
-	httpGetAndCheckResponseStatus(t, "/transactions/"+txBadID+"/receipt", 400)
+	res := httpGetAndCheckResponseStatus(t, "/transactions/"+txBadID+"/receipt", 400)
+	assert.Contains(t, string(res), "id: invalid length")
 }
 
 func getNonExistingRawTransactionWhenTxStillInMempool(t *testing.T) {

@@ -311,9 +311,10 @@ func TestNullCriteriaSet(t *testing.T) {
 func testEventsBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}
 
-	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", badBody)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/event", badBody)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Contains(t, string(res), "body: ")
 }
 
 func testEventWithEmptyDb(t *testing.T) {

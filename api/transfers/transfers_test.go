@@ -234,9 +234,10 @@ func TestNullCriteriaSet(t *testing.T) {
 func testTransferBadRequest(t *testing.T) {
 	badBody := []byte{0x00, 0x01, 0x02}
 
-	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", badBody)
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", badBody)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Contains(t, string(res), "body: ")
 
 	criteriaSet := make([]*logdb.TransferCriteria, 11)
 	origin := thor.BytesToAddress([]byte("address"))
@@ -253,7 +254,7 @@ func testTransferBadRequest(t *testing.T) {
 		Order:       logdb.DESC,
 	}
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
+	res, statusCode, err = tclient.RawHTTPClient().RawHTTPPost("/logs/transfer", emptyFilter)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	assert.Equal(t, "number of criteria in criteriaSet: 11 cannot be greater than: 10\n", string(res))
