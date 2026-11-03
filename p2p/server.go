@@ -45,11 +45,11 @@ const (
 	defaultMaxPendingPeers = 50
 	defaultDialRatio       = 3
 
-	// inboundThrottleTime is the minimum time between inbound connection
-	// attempts from a single (non-LAN) source, see inboundSource.
+	// inboundThrottleTime is the minimum time between two inbound connections
+	// from one non-LAN source.
 	inboundThrottleTime = 30 * time.Second
 
-	// inboundIPv6PrefixBits is the IPv6 prefix treated as one inbound source.
+	// inboundIPv6PrefixBits is the IPv6 prefix length of one inbound source.
 	inboundIPv6PrefixBits = 64
 
 	// Maximum time allowed for reading a complete message.
@@ -163,9 +163,9 @@ type Server struct {
 	newPeerHook  func(*Peer)
 	listenFunc   func(network, addr string) (net.Listener, error)
 
-	// inboundHistory is only accessed by listenLoop's goroutine; no lock needed.
+	// Only the listenLoop goroutine uses inboundHistory. It has no lock.
 	inboundHistory expHeap
-	clock          mclock.Clock // for testing; Start() defaults it to mclock.System{}
+	clock          mclock.Clock // Tests can replace it. Start() uses mclock.System{} if it is nil.
 
 	lock    sync.Mutex // protects running
 	running bool
@@ -883,8 +883,8 @@ func (srv *Server) listenLoop() {
 		if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
 			now := srv.clock.Now()
 			srv.inboundHistory.expire(now, nil)
-			// Per-source inbound throttle (LAN exempt). Runs after the
-			// NetRestrict check so rejected IPs don't pollute the history.
+			// The throttle applies only to non-LAN sources. It occurs after
+			// NetRestrict, thus the history does not get rejected addresses.
 			if !netutil.IsLAN(tcp.IP) {
 				source := inboundSource(tcp.IP)
 				if srv.inboundHistory.contains(source) {
@@ -905,9 +905,9 @@ func (srv *Server) listenLoop() {
 	}
 }
 
-// inboundSource returns the key the inbound throttle counts attempts under: the
-// address itself for IPv4 (IPv4-mapped IPv6 included), and the enclosing /64 for
-// IPv6, since a single host is usually assigned a whole /64.
+// inboundSource returns the throttle key of ip: the IPv4 address (also for
+// IPv4-mapped IPv6), or the /64 prefix for IPv6, because one host usually gets
+// a full /64.
 func inboundSource(ip net.IP) string {
 	if v4 := ip.To4(); v4 != nil {
 		return v4.String()

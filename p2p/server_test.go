@@ -738,7 +738,7 @@ func listenFakeAddr(network, laddr string, remoteAddr net.Addr) (net.Listener, e
 	return l, err
 }
 
-// fakeAddrListener creates connections with a mocked remote address.
+// fakeAddrListener gives each connection a mock remote address.
 type fakeAddrListener struct {
 	net.Listener
 	remoteAddr net.Addr
@@ -787,7 +787,7 @@ func TestServerInboundThrottle(t *testing.T) {
 	}
 	defer srv.Stop()
 
-	// First connection: should reach newTransport.
+	// First connection: the server must call newTransport.
 	conn, err := net.DialTimeout("tcp", srv.ListenAddr, timeout)
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
@@ -799,8 +799,8 @@ func TestServerInboundThrottle(t *testing.T) {
 	}
 	conn.Close()
 
-	// Second connection (same spoofed IP, within the 30s window): should be
-	// closed immediately without reaching newTransport.
+	// Second connection, same IP in the 30s window: the server must close it
+	// without a call to newTransport.
 	connClosed := make(chan struct{}, 1)
 	conn, err = net.DialTimeout("tcp", srv.ListenAddr, timeout)
 	if err != nil {
@@ -846,8 +846,7 @@ func TestServerInboundLANExempt(t *testing.T) {
 	}
 	defer srv.Stop()
 
-	// Two connections from a real loopback address should both be accepted
-	// (LAN exempt).
+	// Loopback is LAN, thus the server must accept the two connections.
 	for i := range 2 {
 		conn, err := net.DialTimeout("tcp", srv.ListenAddr, timeout)
 		if err != nil {
@@ -868,7 +867,7 @@ func TestInboundSource(t *testing.T) {
 		want string
 	}{
 		{"95.33.21.2", "95.33.21.2"},
-		{"::ffff:95.33.21.2", "95.33.21.2"}, // IPv4-mapped counts as the IPv4 address
+		{"::ffff:95.33.21.2", "95.33.21.2"}, // IPv4-mapped: the key is the IPv4 address
 		{"2a01:4f8:1:2::1", "2a01:4f8:1:2::"},
 		{"2a01:4f8:1:2:ffff:ffff:ffff:ffff", "2a01:4f8:1:2::"}, // same /64
 		{"2a01:4f8:1:3::1", "2a01:4f8:1:3::"},                  // next /64
@@ -880,8 +879,7 @@ func TestInboundSource(t *testing.T) {
 	}
 }
 
-// seqAddrListener hands out accepted connections with the next mocked remote
-// address from addrs.
+// seqAddrListener gives each accepted connection the next address from addrs.
 type seqAddrListener struct {
 	net.Listener
 	addrs []net.Addr
@@ -898,9 +896,8 @@ func (l *seqAddrListener) Accept() (net.Conn, error) {
 	return &fakeAddrConn{c, addr}, nil
 }
 
-// TestServerInboundThrottleIPv6Prefix pins that the throttle counts an IPv6 /64
-// as one source: a second address in the same /64 is rejected, while an address
-// in another /64 is accepted.
+// TestServerInboundThrottleIPv6Prefix makes sure that the server rejects a second
+// address in the same /64, and accepts an address in a different /64.
 func TestServerInboundThrottleIPv6Prefix(t *testing.T) {
 	const timeout = 5 * time.Second
 	addr := func(s string) net.Addr { return &net.TCPAddr{IP: net.ParseIP(s), Port: 4444} }
@@ -926,7 +923,7 @@ func TestServerInboundThrottleIPv6Prefix(t *testing.T) {
 			return &seqAddrListener{Listener: l, addrs: []net.Addr{
 				addr("2a01:4f8:1:2::1"),    // accepted
 				addr("2a01:4f8:1:2::beef"), // same /64: rejected
-				addr("2a01:4f8:1:3::1"),    // another /64: accepted
+				addr("2a01:4f8:1:3::1"),    // a different /64: accepted
 			}}, nil
 		},
 	}

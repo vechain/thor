@@ -47,7 +47,8 @@ const (
 	defaultIdleTimeout      = 10 * time.Second
 )
 
-// writeTimeout bounds each stalled response write; a variable so tests can shorten it.
+// writeTimeout is the maximum time for each response write. Tests make it
+// shorter.
 var writeTimeout = 10 * time.Second
 
 type APIConfig struct {
@@ -161,9 +162,8 @@ func StartAPIServer(
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(router)
-	// Outermost, so it wraps the connection's own ResponseWriter and also bounds
-	// the replies mux and CORS write without reaching a router middleware:
-	// 404, 405 and preflights.
+	// This middleware wraps all handlers. Thus, its deadline also applies to the
+	// 404, 405, and preflight replies of mux and CORS.
 	handler = middleware.HandleWriteDeadline(writeTimeout)(handler)
 	// IdleTimeout is set explicitly because http.Server otherwise falls back to
 	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read

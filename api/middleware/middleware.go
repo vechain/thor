@@ -70,29 +70,24 @@ const writeChunkSize = 32 * 1024
 // to writeChunkSize bytes must reach the connection within timeout. A client that
 // stops reading is cut off, while a slow one still receives a large response.
 //
-// The deadline is armed when the request reaches the handler, again before every
-// write, and once more when the handler returns:
-//   - the first arm covers what net/http writes on its own before the handler's
-//     first write, such as the 100 Continue sent when the body is first read;
-//   - each write moves the deadline forward, so time a handler spends before
-//     responding is left to HandleAPITimeout, not charged here;
-//   - the last arm covers what net/http sends after the handler returns, in
-//     finishRequest: whatever is still buffered, or the whole of a response
-//     that only set a status.
+// The middleware arms the deadline at three points:
+//   - Before the handler, for the data that net/http writes first, for example
+//     100 Continue.
+//   - Before each write. Thus, the time before the handler writes is not part
+//     of this deadline. HandleAPITimeout applies to that time.
+//   - After the handler, for the data that net/http sends in finishRequest,
+//     for example a response that has only a status.
 //
-// net/http clears it once the response is finished, before the connection serves
-// its next request.
+// net/http removes the deadline before the next request on the connection.
 //
-// It must wrap the server's whole handler, not be a router middleware: mux runs
-// router middlewares only on matched routes, so its 404/405 replies and CORS
-// preflights answered outside the router would go out unbounded.
+// This middleware must wrap the full server handler, not only the router. mux
+// does not use router middlewares for its 404 and 405 replies, and the router
+// does not get CORS preflight requests.
 //
-// Every request is wrapped, websocket upgrades included: request headers are
-// client-controlled, so they cannot opt a response out. An upgrade takes the
-// connection through Hijack, after which its writes are outside this middleware's
-// reach: Hijack clears the connection's deadlines, including the first arm, and
-// the last arm is skipped, since net/http's SetWriteDeadline does not check for a
-// hijack and would set the deadline on the upgraded connection.
+// A request header cannot remove a response from the deadline, also for a
+// websocket upgrade. Hijack removes the deadlines of the connection. After a
+// hijack, the middleware does not do the last arm, because SetWriteDeadline
+// does not examine if the connection is hijacked.
 func HandleWriteDeadline(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +109,7 @@ type deadlineWriter struct {
 	http.ResponseWriter
 	rc       *http.ResponseController
 	timeout  time.Duration
-	hijacked bool // set by Hijack; read after the handler returns, on the same goroutine
+	hijacked bool // Hijack writes it. The same goroutine reads it after the handler returns.
 }
 
 // extend pushes the write deadline out by timeout. Writers without deadline

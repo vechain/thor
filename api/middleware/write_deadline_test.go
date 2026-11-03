@@ -189,12 +189,12 @@ func TestHandleWriteDeadlineArmedByFirstWrite(t *testing.T) {
 	assert.True(t, reused, "the second request should reuse the connection")
 }
 
-// deadlineRecorder is a ResponseWriter that records each write deadline set on it
-// and can be hijacked.
+// deadlineRecorder is a ResponseWriter that records its write deadlines and its
+// hijack.
 type deadlineRecorder struct {
 	header        http.Header
 	deadlines     []time.Time
-	hijackedAfter int // number of deadlines set before Hijack; -1 until hijacked
+	hijackedAfter int // Deadlines before the hijack, or -1 if no hijack occurred.
 }
 
 func newDeadlineRecorder() *deadlineRecorder {
@@ -215,12 +215,8 @@ func (r *deadlineRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, nil
 }
 
-// TestHandleWriteDeadlineArmsAroundHandler pins the arms that are not tied to a
-// handler write: one before the handler runs, for what net/http writes on its own
-// before the first write (the 100 Continue sent when the body is first read), and
-// one when it returns, for what net/http sends afterwards (a response that only
-// set a status, any buffered tail). No deadline is set once the connection is
-// hijacked, since net/http's SetWriteDeadline does not refuse it.
+// TestHandleWriteDeadlineArmsAroundHandler makes sure that the middleware arms
+// the deadline before and after the handler, and not after a hijack.
 func TestHandleWriteDeadlineArmsAroundHandler(t *testing.T) {
 	const timeout = time.Minute
 

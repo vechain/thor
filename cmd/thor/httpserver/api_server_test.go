@@ -28,10 +28,9 @@ type noPeers struct{}
 
 func (noPeers) PeersStats() []*comm.PeerStats { return nil }
 
-// pipelineAndStall sends n copies of req on one connection and reads nothing for
-// stall, then counts the responses that still arrive. The server stops reading
-// requests once its writes block, so fewer than n responses means it cut the
-// stalled connection; n means a blocked write outlived the deadline.
+// pipelineAndStall sends req n times on one connection, waits for stall, and
+// then counts the responses. Less than n shows that the server closed the
+// connection.
 func pipelineAndStall(t *testing.T, addr, req string, n int, stall time.Duration) int {
 	t.Helper()
 	conn, err := net.Dial("tcp", addr)
@@ -55,10 +54,9 @@ func pipelineAndStall(t *testing.T, addr, req string, n int, stall time.Duration
 	return got
 }
 
-// TestAPIServerWriteDeadlineCoversUnroutedReplies pins that the write deadline
-// wraps the whole API handler: replies that never reach a router middleware
-// (mux's 404 and 405, CORS preflights) must be cut off for a client that stops
-// reading, like a matched route's.
+// TestAPIServerWriteDeadlineCoversUnroutedReplies makes sure that the server
+// closes the connection to a client that does not read, also for the 404, 405,
+// and preflight replies.
 func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
 	saved := writeTimeout
 	writeTimeout = 300 * time.Millisecond
