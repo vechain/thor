@@ -368,3 +368,14 @@ func TestAdoptTxs_BadTxsRemovedContinues(t *testing.T) {
 	assert.Len(t, removed, 10)   // every bad tx collected, none stops the loop early
 	assert.Equal(t, 15, f.calls) // whole slice attempted
 }
+
+func TestAdaptiveGasLimit(t *testing.T) {
+	// 0 means no bandwidth sample yet; keep it so the packer retains the parent gas limit
+	assert.Zero(t, adaptiveGasLimit(0))
+	// below the floor clamps up to the hard floor
+	assert.Equal(t, gasLimitHardFloor, adaptiveGasLimit(5_000_000))
+	// within the band passes through
+	assert.Equal(t, uint64(35_000_000), adaptiveGasLimit(35_000_000))
+	// above the soft limit clamps down
+	assert.Equal(t, thor.GasLimitSoftLimit, adaptiveGasLimit(100_000_000))
+}

@@ -18,6 +18,20 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
+// gasLimitHardFloor is the lower bound of the adaptive gas-limit band: a chosen
+// value for the minimum network bandwidth a proposer is expected to sustain.
+const gasLimitHardFloor uint64 = 30_000_000
+
+// adaptiveGasLimit clamps the bandwidth-suggested gas limit to the adaptive band
+// [gasLimitHardFloor, thor.GasLimitSoftLimit]. A zero suggestion is passed through
+// unchanged, it means no bandwidth sample yet.
+func adaptiveGasLimit(suggested uint64) uint64 {
+	if suggested == 0 {
+		return 0 // no bandwidth sample yet: keep the parent's gas limit
+	}
+	return max(gasLimitHardFloor, min(suggested, thor.GasLimitSoftLimit))
+}
+
 // txAdopter is the subset of *packer.Flow that adoptTxs uses.
 type txAdopter interface {
 	Adopt(*tx.Transaction) error
@@ -78,8 +92,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		if n.options.TargetGasLimit == 0 {
 			// no preset, use suggested
-			// apply soft limit in adaptive mode
-			suggested := min(n.bandwidth.SuggestGasLimit(), thor.GasLimitSoftLimit)
+			// clamp to the adaptive band [gasLimitHardFloor, thor.GasLimitSoftLimit]
+			suggested := adaptiveGasLimit(n.bandwidth.SuggestGasLimit())
 			n.packer.SetTargetGasLimit(suggested)
 		}
 

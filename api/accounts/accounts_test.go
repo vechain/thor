@@ -633,14 +633,14 @@ func batchCallClauseLimit(t *testing.T) {
 		return []byte(`{"clauses":[` + strings.TrimSuffix(strings.Repeat(`{},`, n), ",") + `]}`)
 	}
 
-	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", clauses(tx.MaxClausesPerTx))
+	_, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", clauses(thor.MaxClausesPerTx))
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "clauses at the limit")
 
-	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", clauses(tx.MaxClausesPerTx+1))
+	res, statusCode, err := tclient.RawHTTPClient().RawHTTPPost("/accounts/*", clauses(thor.MaxClausesPerTx+1))
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "clauses over the limit")
-	assert.Equal(t, fmt.Sprintf("clauses: exceeds limit of %d\n", tx.MaxClausesPerTx), string(res))
+	assert.Equal(t, fmt.Sprintf("clauses: exceeds limit of %d\n", thor.MaxClausesPerTx), string(res))
 }
 
 func TestBatchCallTimeout(t *testing.T) {
