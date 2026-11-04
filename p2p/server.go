@@ -45,6 +45,13 @@ const (
 	defaultMaxPendingPeers = 50
 	defaultDialRatio       = 3
 
+	// inboundThrottleTime is the minimum time between two inbound connections
+	// from one non-LAN source.
+	inboundThrottleTime = 30 * time.Second
+
+	// inboundIPv6PrefixBits is the IPv6 prefix length of one inbound source.
+	inboundIPv6PrefixBits = 64
+
 	// Maximum time allowed for reading a complete message.
 	// This is effectively the amount of time a connection can be idle.
 	frameReadTimeout = 30 * time.Second
@@ -154,6 +161,11 @@ type Server struct {
 	// the whole protocol stack.
 	newTransport func(net.Conn) transport
 	newPeerHook  func(*Peer)
+	listenFunc   func(network, addr string) (net.Listener, error)
+
+	// Only the listenLoop goroutine uses inboundHistory. It has no lock.
+	inboundHistory expHeap
+	clock          mclock.Clock // Tests can replace it. Start() uses mclock.System{} if it is nil.
 
 	lock    sync.Mutex // protects running
 	running bool
@@ -436,6 +448,12 @@ func (srv *Server) Start() (err error) {
 	if srv.newTransport == nil {
 		srv.newTransport = newRLPX
 	}
+	if srv.listenFunc == nil {
+		srv.listenFunc = net.Listen
+	}
+	if srv.clock == nil {
+		srv.clock = mclock.System{}
+	}
 	if srv.Dialer == nil {
 		srv.Dialer = TCPDialer{&net.Dialer{Timeout: defaultDialTimeout}}
 	}
@@ -545,7 +563,7 @@ func (srv *Server) Start() (err error) {
 
 func (srv *Server) startListening() error {
 	// Launch the TCP listener.
-	listener, err := net.Listen("tcp", srv.ListenAddr)
+	listener, err := srv.listenFunc("tcp", srv.ListenAddr)
 	if err != nil {
 		return err
 	}
@@ -862,12 +880,39 @@ func (srv *Server) listenLoop() {
 			}
 		}
 
+		if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
+			now := srv.clock.Now()
+			srv.inboundHistory.expire(now, nil)
+			// The throttle applies only to non-LAN sources. It occurs after
+			// NetRestrict, thus the history does not get rejected addresses.
+			if !netutil.IsLAN(tcp.IP) {
+				source := inboundSource(tcp.IP)
+				if srv.inboundHistory.contains(source) {
+					srv.log.Debug("Rejected conn (too many attempts)", "addr", fd.RemoteAddr())
+					fd.Close()
+					slots <- struct{}{}
+					continue
+				}
+				srv.inboundHistory.add(source, now.Add(inboundThrottleTime))
+			}
+		}
+
 		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}
+}
+
+// inboundSource returns the throttle key of ip: the IPv4 address (also for
+// IPv4-mapped IPv6), or the /64 prefix for IPv6, because one host usually gets
+// a full /64.
+func inboundSource(ip net.IP) string {
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.Mask(net.CIDRMask(inboundIPv6PrefixBits, 8*net.IPv6len)).String()
 }
 
 // SetupConn runs the handshakes and attempts to add the connection

@@ -40,7 +40,10 @@ type Subscriptions struct {
 
 	// pongWait is the read-watchdog silence budget, refreshed on every pong.
 	pongWait time.Duration
-	// writeWait is the per-frame write deadline for every websocket write.
+	// writeWait is the write deadline of a websocket message, set once per
+	// message and so bounding all its frames. Without it a subscriber that
+	// stops reading blocks the handler in its write forever; after hijack the
+	// API's connection-level deadline no longer applies.
 	writeWait time.Duration
 }
 
@@ -52,14 +55,16 @@ var logger = log.WithContext("pkg", "subscriptions")
 
 const (
 	defaultPongWait = 60 * time.Second
-	// defaultWriteWait bounds every websocket write. Without a deadline a
-	// subscriber that stops reading blocks the handler inside its write
-	// forever: the pong watchdog only closes a channel the blocked writer
-	// never selects on, and nothing else closes the connection.
-	defaultWriteWait = 10 * time.Second
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool txpool.Pool, enabledDeprecated bool) *Subscriptions {
+func New(
+	repo *chain.Repository,
+	allowedOrigins []string,
+	backtraceLimit uint32,
+	txpool txpool.Pool,
+	enabledDeprecated bool,
+	writeWait time.Duration,
+) *Subscriptions {
 	sub := &Subscriptions{
 		backtraceLimit:    backtraceLimit,
 		repo:              repo,
@@ -84,7 +89,7 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		beat2Cache: newMessageCache[api.Beat2Message](backtraceLimit),
 		beatCache:  newMessageCache[api.BeatMessage](backtraceLimit),
 		pongWait:   defaultPongWait,
-		writeWait:  defaultWriteWait,
+		writeWait:  writeWait,
 	}
 	sub.wg.Go(func() {
 		sub.pendingTx.DispatchLoop(sub.done)

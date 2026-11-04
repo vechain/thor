@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -186,7 +187,7 @@ func TestPendingTx_UnsubscribeOnWebSocketClose(t *testing.T) {
 	}, &thor.NoFork)
 
 	// Subscriptions setup
-	sub := New(thorChain.Repo(), []string{"*"}, 100, txPool, false)
+	sub := New(thorChain.Repo(), []string{"*"}, 100, txPool, false, api.DefaultWriteTimeout)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		restutil.WrapHandlerFunc(sub.handlePendingTransactions)(w, r)
 	}))

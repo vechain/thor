@@ -45,7 +45,6 @@ const (
 	defaultRequestBodyLimit = 200 * 1024 // 200KB
 	defaultMaxCriteriaCount = 10
 	defaultIdleTimeout      = 10 * time.Second
-	defaultWriteTimeout     = 10 * time.Second
 )
 
 type APIConfig struct {
@@ -70,6 +69,8 @@ type APIConfig struct {
 	SlowQueriesThreshold       int
 	Log5XXErrors               bool
 	MaxLogsOffset              uint64
+	// WriteTimeout zero means api.DefaultWriteTimeout.
+	WriteTimeout time.Duration
 }
 
 func StartAPIServer(
@@ -132,12 +133,14 @@ func StartAPIServer(
 		PriorityIncreasePercentage: config.PriorityIncreasePercentage,
 		FixedCacheSize:             defaultFeeCacheSize,
 	}).Mount(router, "/fees")
-	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
+	writeTimeout := config.WriteTimeout
+	if writeTimeout == 0 {
+		writeTimeout = api.DefaultWriteTimeout
+	}
+	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated, writeTimeout)
 	subs.Mount(router, "/subscriptions")
 
 	// middlewares
-	// write deadline first, so it wraps the connection's own ResponseWriter
-	router.Use(middleware.HandleWriteDeadline(defaultWriteTimeout))
 	// body limit and timeout
 	router.Use(middleware.HandleRequestBodyLimit(defaultRequestBodyLimit))
 	if config.Timeout > 0 {
@@ -164,7 +167,7 @@ func StartAPIServer(
 	// IdleTimeout is set explicitly because http.Server otherwise falls back to
 	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read
 	// budget. No WriteTimeout: it would abort honest large responses (/logs,
-	// expanded blocks) mid-transfer on slow links. HandleWriteDeadline bounds
+	// expanded blocks) mid-transfer on slow links. withWriteDeadline bounds
 	// stalled writes instead.
 	srv := &http.Server{
 		Handler:           handler,
@@ -172,9 +175,11 @@ func StartAPIServer(
 		ReadTimeout:       5 * time.Second,
 		IdleTimeout:       defaultIdleTimeout,
 	}
+	// Wrap before Serve starts: withWriteDeadline sets srv.ConnState.
+	bounded := withWriteDeadline(srv, listener, writeTimeout)
 	var goes sync.WaitGroup
 	goes.Go(func() {
-		srv.Serve(listener)
+		srv.Serve(bounded)
 	})
 	return "http://" + listener.Addr().String() + "/", func() {
 		srv.Close()

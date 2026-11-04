@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -97,7 +98,7 @@ func (n *node) Start() error {
 		PriorityIncreasePercentage: 5,
 		FixedCacheSize:             1000,
 	}).Mount(router, "/fees")
-	subs := subscriptions.New(repo, []string{"*"}, 1000, n.txPool, true)
+	subs := subscriptions.New(repo, []string{"*"}, 1000, n.txPool, true, api.DefaultWriteTimeout)
 	subs.Mount(router, "/subscriptions")
 
 	n.apiServer = httptest.NewServer(router)

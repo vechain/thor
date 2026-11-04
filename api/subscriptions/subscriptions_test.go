@@ -278,7 +278,7 @@ func initSubscriptionsServer(t *testing.T, enabledDeprecated bool) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), []string{}, 5, txPool, enabledDeprecated).
+	New(thorChain.Repo(), []string{}, 5, txPool, enabledDeprecated, api.DefaultWriteTimeout).
 		Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
 }
@@ -334,7 +334,7 @@ func TestSubscriptionsBacktrace(t *testing.T) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	New(thorChain.Repo(), []string{}, 5, txPool, true).Mount(router, "/subscriptions")
+	New(thorChain.Repo(), []string{}, 5, txPool, true, api.DefaultWriteTimeout).Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
 
 	defer ts.Close()
