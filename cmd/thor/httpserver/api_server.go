@@ -164,23 +164,21 @@ func StartAPIServer(
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(router)
-	// This middleware wraps all handlers. Thus, its deadline also applies to the
-	// 404, 405, and preflight replies of mux and CORS.
-	handler = middleware.HandleWriteDeadline(writeTimeout)(handler)
 	// IdleTimeout is set explicitly because http.Server otherwise falls back to
 	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read
 	// budget. No WriteTimeout: it would abort honest large responses (/logs,
-	// expanded blocks) mid-transfer on slow links. HandleWriteDeadline bounds
+	// expanded blocks) mid-transfer on slow links. writeDeadlineListener bounds
 	// stalled writes instead.
 	srv := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: time.Second,
 		ReadTimeout:       5 * time.Second,
 		IdleTimeout:       defaultIdleTimeout,
+		ConnState:         markHijacked,
 	}
 	var goes sync.WaitGroup
 	goes.Go(func() {
-		srv.Serve(listener)
+		srv.Serve(writeDeadlineListener{listener, writeTimeout})
 	})
 	return "http://" + listener.Addr().String() + "/", func() {
 		srv.Close()

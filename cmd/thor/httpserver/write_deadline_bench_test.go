@@ -7,14 +7,13 @@ package httpserver
 
 import (
 	"io"
-	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/gorilla/handlers"
 
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/middleware"
 	"github.com/vechain/thor/v2/api/restutil"
 )
 
@@ -31,14 +30,12 @@ const (
 // newBenchServer starts a real TCP server with the write deadline applied and returns its URL.
 func newBenchServer(b *testing.B, h http.Handler) string {
 	b.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		b.Fatal(err)
-	}
-	srv := &http.Server{Handler: middleware.HandleWriteDeadline(api.DefaultWriteTimeout)(h), ReadHeaderTimeout: api.DefaultWriteTimeout}
-	go srv.Serve(l)
-	b.Cleanup(func() { srv.Close() })
-	return "http://" + l.Addr().String()
+	ts := httptest.NewUnstartedServer(h)
+	ts.Listener = writeDeadlineListener{ts.Listener, api.DefaultWriteTimeout}
+	ts.Config.ConnState = markHijacked
+	ts.Start()
+	b.Cleanup(ts.Close)
+	return ts.URL
 }
 
 func BenchmarkWriteDeadline(b *testing.B) {

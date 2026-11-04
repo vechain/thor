@@ -40,7 +40,10 @@ type Subscriptions struct {
 
 	// pongWait is the read-watchdog silence budget, refreshed on every pong.
 	pongWait time.Duration
-	// writeWait is the per-frame write deadline for every websocket write.
+	// writeWait is the write deadline of a websocket message, set once per
+	// message and so bounding all its frames. Without it a subscriber that
+	// stops reading blocks the handler in its write forever; after hijack the
+	// API's connection-level deadline no longer applies.
 	writeWait time.Duration
 }
 
