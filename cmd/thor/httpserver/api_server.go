@@ -47,10 +47,6 @@ const (
 	defaultIdleTimeout      = 10 * time.Second
 )
 
-// writeTimeout is the maximum time for each response write. Tests make it
-// shorter.
-var writeTimeout = 10 * time.Second
-
 type APIConfig struct {
 	AllowedOrigins             string
 	BacktraceLimit             uint32
@@ -73,6 +69,8 @@ type APIConfig struct {
 	SlowQueriesThreshold       int
 	Log5XXErrors               bool
 	MaxLogsOffset              uint64
+	// WriteTimeout zero means api.DefaultWriteTimeout.
+	WriteTimeout time.Duration
 }
 
 func StartAPIServer(
@@ -135,7 +133,11 @@ func StartAPIServer(
 		PriorityIncreasePercentage: config.PriorityIncreasePercentage,
 		FixedCacheSize:             defaultFeeCacheSize,
 	}).Mount(router, "/fees")
-	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated)
+	writeTimeout := config.WriteTimeout
+	if writeTimeout == 0 {
+		writeTimeout = api.DefaultWriteTimeout
+	}
+	subs := subscriptions.New(repo, origins, config.BacktraceLimit, txPool, config.EnableDeprecated, writeTimeout)
 	subs.Mount(router, "/subscriptions")
 
 	// middlewares

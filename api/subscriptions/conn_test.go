@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/restutil"
 	"github.com/vechain/thor/v2/test/testchain"
 	"github.com/vechain/thor/v2/thor"
@@ -102,7 +103,7 @@ func TestStalledSubscriberDoesNotBlockClose(t *testing.T) {
 		MaxLifetime:     time.Hour,
 	}, &thor.NoFork)
 
-	sub := New(thorChain.Repo(), []string{}, 5, txPool, true)
+	sub := New(thorChain.Repo(), []string{}, 5, txPool, true, api.DefaultWriteTimeout)
 	sub.writeWait = 300 * time.Millisecond
 
 	// A subscription route whose reader never runs out of data.

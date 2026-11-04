@@ -10,10 +10,10 @@ import (
 	"net"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/gorilla/handlers"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/api/middleware"
 	"github.com/vechain/thor/v2/api/restutil"
 )
@@ -35,7 +35,7 @@ func newBenchServer(b *testing.B, h http.Handler) string {
 	if err != nil {
 		b.Fatal(err)
 	}
-	srv := &http.Server{Handler: middleware.HandleWriteDeadline(10 * time.Second)(h), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: middleware.HandleWriteDeadline(api.DefaultWriteTimeout)(h), ReadHeaderTimeout: api.DefaultWriteTimeout}
 	go srv.Serve(l)
 	b.Cleanup(func() { srv.Close() })
 	return "http://" + l.Addr().String()

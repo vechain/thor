@@ -58,9 +58,7 @@ func pipelineAndStall(t *testing.T, addr, req string, n int, stall time.Duration
 // closes the connection to a client that does not read, also for the 404, 405,
 // and preflight replies.
 func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
-	saved := writeTimeout
-	writeTimeout = 300 * time.Millisecond
-	t.Cleanup(func() { writeTimeout = saved })
+	const writeTimeout = 300 * time.Millisecond
 
 	chain, err := testchain.NewDefault()
 	require.NoError(t, err)
@@ -82,6 +80,7 @@ func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
 			EnableTxPool:     enableTxPool,
 			Timeout:          10_000,
 			MaxLogsOffset:    100_000,
+			WriteTimeout:     writeTimeout,
 		})
 	require.NoError(t, err)
 	t.Cleanup(closeSrv)

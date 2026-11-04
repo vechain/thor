@@ -52,14 +52,16 @@ var logger = log.WithContext("pkg", "subscriptions")
 
 const (
 	defaultPongWait = 60 * time.Second
-	// defaultWriteWait bounds every websocket write. Without a deadline a
-	// subscriber that stops reading blocks the handler inside its write
-	// forever: the pong watchdog only closes a channel the blocked writer
-	// never selects on, and nothing else closes the connection.
-	defaultWriteWait = 10 * time.Second
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool txpool.Pool, enabledDeprecated bool) *Subscriptions {
+func New(
+	repo *chain.Repository,
+	allowedOrigins []string,
+	backtraceLimit uint32,
+	txpool txpool.Pool,
+	enabledDeprecated bool,
+	writeWait time.Duration,
+) *Subscriptions {
 	sub := &Subscriptions{
 		backtraceLimit:    backtraceLimit,
 		repo:              repo,
@@ -84,7 +86,7 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		beat2Cache: newMessageCache[api.Beat2Message](backtraceLimit),
 		beatCache:  newMessageCache[api.BeatMessage](backtraceLimit),
 		pongWait:   defaultPongWait,
-		writeWait:  defaultWriteWait,
+		writeWait:  writeWait,
 	}
 	sub.wg.Go(func() {
 		sub.pendingTx.DispatchLoop(sub.done)

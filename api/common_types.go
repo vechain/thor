@@ -5,12 +5,19 @@
 package api
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
+
+// DefaultWriteTimeout bounds each API response chunk write and each websocket
+// message write. The semantics differ, see cmd/thor/httpserver and
+// api/subscriptions.
+const DefaultWriteTimeout = 10 * time.Second
 
 // Common types used across multiple API modules
 
