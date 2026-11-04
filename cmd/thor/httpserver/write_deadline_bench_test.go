@@ -31,8 +31,7 @@ const (
 func newBenchServer(b *testing.B, h http.Handler) string {
 	b.Helper()
 	ts := httptest.NewUnstartedServer(h)
-	ts.Listener = writeDeadlineListener{ts.Listener, api.DefaultWriteTimeout}
-	ts.Config.ConnState = markHijacked
+	ts.Listener = withWriteDeadline(ts.Config, ts.Listener, api.DefaultWriteTimeout)
 	ts.Start()
 	b.Cleanup(ts.Close)
 	return ts.URL

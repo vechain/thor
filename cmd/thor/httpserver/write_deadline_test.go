@@ -43,53 +43,77 @@ func (l smallBufferListener) Accept() (net.Conn, error) {
 func newDeadlineServer(t *testing.T, timeout time.Duration, h http.Handler) *httptest.Server {
 	t.Helper()
 	ts := httptest.NewUnstartedServer(h)
-	ts.Listener = writeDeadlineListener{smallBufferListener{ts.Listener}, timeout}
-	ts.Config.ConnState = markHijacked
+	ts.Listener = withWriteDeadline(ts.Config, smallBufferListener{ts.Listener}, timeout)
 	ts.Start()
 	t.Cleanup(ts.Close)
 	return ts
 }
 
 // dialSmallBuffer opens a raw connection with a pinned receive buffer and sends a
-// GET for path.
-func dialSmallBuffer(t *testing.T, ts *httptest.Server, path string) net.Conn {
+// GET for path with the extra header lines (each ending in CRLF).
+func dialSmallBuffer(t *testing.T, ts *httptest.Server, path, headers string) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 	_ = conn.(*net.TCPConn).SetReadBuffer(4 * 1024)
-	_, err = io.WriteString(conn, "GET "+path+" HTTP/1.1\r\nHost: test\r\n\r\n")
+	_, err = io.WriteString(conn, "GET "+path+" HTTP/1.1\r\nHost: test\r\n"+headers+"\r\n")
 	require.NoError(t, err)
 	return conn
 }
 
 func TestWriteDeadlineCutsOffStalledReader(t *testing.T) {
-	type result struct {
-		err     error
-		elapsed time.Duration
-	}
-	done := make(chan result, 1)
-	ts := newDeadlineServer(t, testWriteTimeout, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		start := time.Now()
-		chunk := bytes.Repeat([]byte("x"), 1024*1024)
-		for range 64 {
-			if _, err := w.Write(chunk); err != nil {
-				done <- result{err, time.Since(start)}
-				return
+	for name, headers := range map[string]string{
+		"plain request": "",
+		// Only a real Hijack lifts the bound: upgrade headers on a regular route must not.
+		"forged websocket upgrade headers": "Connection: Upgrade\r\nUpgrade: websocket\r\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			type result struct {
+				err     error
+				elapsed time.Duration
 			}
-		}
-		done <- result{nil, time.Since(start)}
-	}))
+			done := make(chan result, 1)
+			ts := newDeadlineServer(t, testWriteTimeout, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				start := time.Now()
+				chunk := bytes.Repeat([]byte("x"), 1024*1024)
+				for range 64 {
+					if _, err := w.Write(chunk); err != nil {
+						done <- result{err, time.Since(start)}
+						return
+					}
+				}
+				done <- result{nil, time.Since(start)}
+			}))
 
-	dialSmallBuffer(t, ts, "/") // never read
+			dialSmallBuffer(t, ts, "/", headers) // never read
 
-	select {
-	case res := <-done:
-		require.Error(t, res.err, "a write to a peer that never reads must fail")
-		assert.Less(t, res.elapsed, 3*time.Second)
-	case <-time.After(5 * time.Second):
-		t.Fatal("handler write still blocked on a stalled reader")
+			select {
+			case res := <-done:
+				require.Error(t, res.err, "a write to a peer that never reads must fail")
+				assert.Less(t, res.elapsed, 3*time.Second)
+			case <-time.After(5 * time.Second):
+				t.Fatal("handler write still blocked on a stalled reader")
+			}
+		})
 	}
+}
+
+// TestWithWriteDeadlineKeepsConnStateHook pins that withWriteDeadline chains an
+// existing ConnState hook instead of replacing it.
+func TestWithWriteDeadlineKeepsConnStateHook(t *testing.T) {
+	var states []http.ConnState
+	srv := &http.Server{
+		ReadHeaderTimeout: time.Second,
+		ConnState:         func(_ net.Conn, s http.ConnState) { states = append(states, s) },
+	}
+	withWriteDeadline(srv, nil, time.Second)
+
+	c := &writeDeadlineConn{}
+	srv.ConnState(c, http.StateHijacked)
+
+	assert.True(t, c.hijacked.Load())
+	assert.Equal(t, []http.ConnState{http.StateHijacked}, states)
 }
 
 // slowConn stands in for a connection: it drains rate bytes per second, and a

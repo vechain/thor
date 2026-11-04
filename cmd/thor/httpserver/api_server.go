@@ -167,18 +167,19 @@ func StartAPIServer(
 	// IdleTimeout is set explicitly because http.Server otherwise falls back to
 	// ReadTimeout for idle keep-alives, tying connection reuse to the body-read
 	// budget. No WriteTimeout: it would abort honest large responses (/logs,
-	// expanded blocks) mid-transfer on slow links. writeDeadlineListener bounds
+	// expanded blocks) mid-transfer on slow links. withWriteDeadline bounds
 	// stalled writes instead.
 	srv := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: time.Second,
 		ReadTimeout:       5 * time.Second,
 		IdleTimeout:       defaultIdleTimeout,
-		ConnState:         markHijacked,
 	}
+	// Wrap before Serve starts: withWriteDeadline sets srv.ConnState.
+	bounded := withWriteDeadline(srv, listener, writeTimeout)
 	var goes sync.WaitGroup
 	goes.Go(func() {
-		srv.Serve(writeDeadlineListener{listener, writeTimeout})
+		srv.Serve(bounded)
 	})
 	return "http://" + listener.Addr().String() + "/", func() {
 		srv.Close()

@@ -38,6 +38,21 @@ import (
 
 const writeChunkSize = 32 * 1024
 
+// withWriteDeadline returns l wrapped so that each write to an accepted conn is
+// bounded by timeout, and installs on srv the ConnState hook that ends the bound
+// at hijack; a ConnState hook already set on srv still runs. Without the hook, a
+// hijacked conn would keep re-arming per chunk and override writeWait.
+func withWriteDeadline(srv *http.Server, l net.Listener, timeout time.Duration) net.Listener {
+	prev := srv.ConnState
+	srv.ConnState = func(c net.Conn, s http.ConnState) {
+		markHijacked(c, s)
+		if prev != nil {
+			prev(c, s)
+		}
+	}
+	return writeDeadlineListener{l, timeout}
+}
+
 type writeDeadlineListener struct {
 	net.Listener
 	timeout time.Duration
@@ -83,9 +98,9 @@ func (c *writeDeadlineConn) CloseWrite() error {
 	return nil
 }
 
-// markHijacked is the http.Server.ConnState hook. net/http reports StateHijacked
-// before Hijack returns, and only for a real Hijack call, so a request header
-// cannot trigger it.
+// markHijacked is the ConnState hook that withWriteDeadline installs. net/http
+// reports StateHijacked before Hijack returns, and only for a real Hijack call,
+// so a request header cannot trigger it.
 func markHijacked(c net.Conn, s http.ConnState) {
 	if s != http.StateHijacked {
 		return
