@@ -7,6 +7,7 @@ package httpserver
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"net"
 	"net/http"
@@ -54,14 +55,9 @@ func pipelineAndStall(t *testing.T, addr, req string, n int, stall time.Duration
 	return got
 }
 
-// TestAPIServerWriteDeadlineCoversUnroutedReplies makes sure that the server
-// closes the connection to a client that does not read, also for the 404, 405,
-// and preflight replies.
-func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
-	saved := writeTimeout
-	writeTimeout = 300 * time.Millisecond
-	t.Cleanup(func() { writeTimeout = saved })
-
+// startTestAPIServer starts StartAPIServer on a testchain and returns its host:port.
+func startTestAPIServer(t *testing.T, cfg APIConfig) string {
+	t.Helper()
 	chain, err := testchain.NewDefault()
 	require.NoError(t, err)
 	pool := txpool.New(chain.Repo(), chain.Stater(), txpool.Options{
@@ -69,23 +65,29 @@ func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
 	}, &thor.NoFork)
 	t.Cleanup(pool.Close)
 
-	enableTxPool := &atomic.Bool{}
+	cfg.AllowedOrigins = "*"
+	cfg.BacktraceLimit = 1000
+	cfg.CallGasLimit = 50_000_000
+	cfg.BatchDataMaxSize = 1 << 20
+	cfg.TraceDataMaxSize = 1 << 20
+	cfg.EnableReqLogger = &atomic.Bool{}
+	cfg.LogsLimit = 1000
+	cfg.EnableTxPool = &atomic.Bool{}
+	cfg.Timeout = 10_000
+	cfg.MaxLogsOffset = 100_000
 	url, closeSrv, err := StartAPIServer("127.0.0.1:0", chain.Repo(), chain.Stater(), pool, chain.LogDB(),
-		chain.Engine(), noPeers{}, chain.GetForkConfig(), APIConfig{
-			AllowedOrigins:   "*",
-			BacktraceLimit:   1000,
-			CallGasLimit:     50_000_000,
-			BatchDataMaxSize: 1 << 20,
-			TraceDataMaxSize: 1 << 20,
-			EnableReqLogger:  &atomic.Bool{},
-			LogsLimit:        1000,
-			EnableTxPool:     enableTxPool,
-			Timeout:          10_000,
-			MaxLogsOffset:    100_000,
-		})
+		chain.Engine(), noPeers{}, chain.GetForkConfig(), cfg)
 	require.NoError(t, err)
 	t.Cleanup(closeSrv)
-	addr := strings.TrimSuffix(strings.TrimPrefix(url, "http://"), "/")
+	return strings.TrimSuffix(strings.TrimPrefix(url, "http://"), "/")
+}
+
+// TestAPIServerWriteDeadlineCoversUnroutedReplies makes sure that the server
+// closes the connection to a client that does not read, also for the 404, 405,
+// and preflight replies.
+func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
+	const writeTimeout = 300 * time.Millisecond
+	addr := startTestAPIServer(t, APIConfig{WriteTimeout: writeTimeout})
 
 	const n = 20_000
 	for name, req := range map[string]string{
@@ -100,4 +102,17 @@ func TestAPIServerWriteDeadlineCoversUnroutedReplies(t *testing.T) {
 			assert.Less(t, got, n, "a stalled write outlived the %s write deadline", writeTimeout)
 		})
 	}
+}
+
+// TestAPIServerOversizedBodyGetsResponse is an end-to-end smoke check that an
+// oversized request body through the wrapped conn still gets a complete reply. The
+// status is 400, not 413: the handler maps the body limit error to Bad Request.
+func TestAPIServerOversizedBodyGetsResponse(t *testing.T) {
+	addr := startTestAPIServer(t, APIConfig{})
+
+	resp, err := http.Post("http://"+addr+"/accounts/*", "application/json",
+		bytes.NewReader(bytes.Repeat([]byte("x"), 300*1024)))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }

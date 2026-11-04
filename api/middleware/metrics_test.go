@@ -112,7 +112,14 @@ func TestWebsocketMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
-	sub := subscriptions.New(thorChain.Repo(), []string{"*"}, 10, txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{}, &thor.NoFork), true)
+	sub := subscriptions.New(
+		thorChain.Repo(),
+		[]string{"*"},
+		10,
+		txpool.New(thorChain.Repo(), thorChain.Stater(), txpool.Options{}, &thor.NoFork),
+		true,
+		api.DefaultWriteTimeout,
+	)
 	sub.Mount(router, "/subscriptions")
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	router.Use(MetricsMiddleware)
